@@ -3,6 +3,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <WinSock2.h>
+#endif
+
 __attribute__ ((format(printf, 1, 2)))
 static void log_info(const char* fmt, ...)
 {
@@ -94,12 +100,94 @@ void drawCircle(SDL_Renderer* renderer, SDL_Point center, int radius)
 		free(points);
 }
 
+struct args
+{
+    const char* ip;
+    const char* port;
+};
+
+static void print_help(const char* prog_name)
+{
+    fprintf(stderr, "Usage: %s [options]\n", prog_name);
+    fprintf(stderr,
+        "Example: Start a dedicated server (headless mode):\n"
+        "  %s --server\n"
+        "  %s --server --ip 0.0.0.0 --port 5678  # change bind port\n"
+        "\n",
+        prog_name, prog_name
+    );
+    fprintf(stderr,
+        "Example: Host a server, then start the client and join the server.\n"
+        "The server will stop when the client stops, since it is a child process.\n"
+        "  %s --host\n"
+        "  %s --host --ip 0.0.0.0 --port 5678  # change bind port\n"
+        "\n",
+        prog_name, prog_name
+    );
+    fprintf(stderr,
+        "Example: Join a server\n"
+        "  %s --ip 192.168.1.2\n"
+        "\n",
+        prog_name
+    );
+    fprintf(stderr,
+        "  -h, --help           Print this help text\n"
+        "  -h, --host           Spawn both the server and client, and join the\n"
+        "                       server. The server will stop when the client is\n"
+        "                       closed because the server is a child process.\n"
+        "      --ip <address>   Server address to connect to. Can be a URL or\n"
+        "                       an IP address. If --host or --server is used,\n"
+        "                       then this sets the bind address rather than the\n"
+        "                       address to connect to. The client will always\n"
+        "                       use localhost or 127.0.0.1 in this case.\n"
+        "  -p, --port <port>    Port number of server to connect to\n"
+        "      --server         Run in headless mode. This only starts the\n"
+        "                       server.\n"
+    );
+}
+
+static int parse_args(struct args* args, int argc, char** argv)
+{
+    args->ip = "127.0.0.1";
+}
+
 int main(int argc, char** argv)
 {
     int running;
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Event event;
+
+struct args args;
+    args.ip = "127.0.0.1";
+    args.port = "5555";
+
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        printf("WSAStartup failed\n");
+        goto wsa_startup_failed;
+    }
+
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+    {
+        printf("Version 2.2 of Winsock is not available\n");
+        goto wsa_version_fail;
+    }
+
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_USNPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    getaddrinfo(args.ip, args.port, &hints);
+
+    WSACleanup();
+
+    return 0;
+
+    wsa_version_fail : WSACleanup();
+    wsa_startup_failed : return -1;
 
     if (SDL_Init(0) < 0)
     {
