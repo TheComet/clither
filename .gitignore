@@ -1,0 +1,8 @@
+# build files
+/build*
+
+# IDE files
+CMakeLists.txt.user
+
+# temporary files
+*.swp
