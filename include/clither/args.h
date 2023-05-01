@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+C_BEGIN
+
 enum mode
 {
     MODE_HEADLESS,
@@ -32,3 +34,5 @@ struct args
  */
 int
 args_parse(struct args* a, int argc, char* argv[]);
+
+C_END

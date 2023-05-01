@@ -2,6 +2,8 @@
 
 #include "clither/config.h"
 
+C_BEGIN
+
 void
 log_set_prefix(const char* prefix);
 void
@@ -25,3 +27,5 @@ void log_err(const char* fmt, ...);
 
 __attribute__ ((format(printf, 1, 2)))
 void log_dbg(const char* fmt, ...);
+
+C_END
