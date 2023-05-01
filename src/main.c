@@ -1,274 +1,162 @@
-#include <SDL.h>
+#include "clither/args.h"
+#include "clither/cli_colors.h"
+#include "clither/net.h"
+#include "clither/log.h"
 
-#include <stdarg.h>
-#include <stdio.h>
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <WinSock2.h>
+#if defined(CLITHER_LINUX) || defined(CLITHER_OSX)
+#   include <unistd.h>
+#   include <errno.h>
+#   include <string.h>
+#   include <signal.h>
+#   include <sys/types.h>
+#   include <sys/wait.h>
+#else
+#   define _WIN32_LEAN_AND_MEAN
+#   include <Windows.h>
 #endif
 
-__attribute__ ((format(printf, 1, 2)))
-static void log_info(const char* fmt, ...)
+/* ------------------------------------------------------------------------- */
+static volatile char ctrl_c_pressed = 0;
+static void handle_ctrl_c(int sig)
 {
-    va_list va;
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-}
-__attribute__ ((format(printf, 1, 2)))
-static void log_warn(const char* fmt, ...)
-{
-    va_list va;
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-}
-__attribute__ ((format(printf, 1, 2)))
-static void log_err(const char* fmt, ...)
-{
-    va_list va;
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-}
-__attribute__ ((format(printf, 1, 2)))
-static void log_dbg(const char* fmt, ...)
-{
-    va_list va;
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
+    (void)sig;
+    ctrl_c_pressed = 1;
 }
 
-// rounding helper, simplified version of the function I use
-int roundUpToMultipleOfEight( int v )
+/* ------------------------------------------------------------------------- */
+static void
+run_server(const struct args* a)
 {
-    return (v + (8 - 1)) & -8;
-}
+    struct sigaction act, old_act;
+    struct net_sockets sockets;
 
-void drawCircle(SDL_Renderer* renderer, SDL_Point center, int radius)
-{
-	SDL_Point* points;
-	SDL_Point pointBuf[128];
+    log_set_prefix("Server: ");
+    log_set_colors(COL_B_CYAN, COL_RESET);
 
-    /* 35 / 49 is a slightly biased approximation of 1/sqrt(2) */
-    const int arrSize = roundUpToMultipleOfEight( radius * 8 * 35 / 49 );
-    points = arrSize <= 128 ? pointBuf : malloc(sizeof(SDL_Point) * arrSize);
-    int drawCount = 0;
+    act.sa_handler = handle_ctrl_c;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGINT, &act, &old_act);
 
-    const int32_t diameter = (radius * 2);
+    if (net_bind_server_sockets(&sockets, a) < 0)
+        goto bind_sockets_failed;
 
-    int32_t x = (radius - 1);
-    int32_t y = 0;
-    int32_t tx = 1;
-    int32_t ty = 1;
-    int32_t error = (tx - diameter);
-
-    while( x >= y )
+    log_info("Server started\n");
+    while (ctrl_c_pressed == 0)
     {
-        /* Each of the following renders an octant of the circle */
-        points[drawCount+0] = (SDL_Point){ center.x + x, center.y - y };
-        points[drawCount+1] = (SDL_Point){ center.x + x, center.y + y };
-        points[drawCount+2] = (SDL_Point){ center.x - x, center.y - y };
-        points[drawCount+3] = (SDL_Point){ center.x - x, center.y + y };
-        points[drawCount+4] = (SDL_Point){ center.x + y, center.y - x };
-        points[drawCount+5] = (SDL_Point){ center.x + y, center.y + x };
-        points[drawCount+6] = (SDL_Point){ center.x - y, center.y - x };
-        points[drawCount+7] = (SDL_Point){ center.x - y, center.y + x };
+    }
+    log_info("Stopping server\n");
 
-        drawCount += 8;
+    net_close_sockets(&sockets);
+    sigaction(SIGINT, &old_act, NULL);
 
-        if(error <= 0)
+    return;
+
+    bind_sockets_failed : sigaction(SIGINT, &old_act, NULL);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+run_client(const struct args* a)
+{
+    struct sigaction act;
+
+    log_set_prefix("Client: ");
+    log_set_colors(COL_B_GREEN, COL_RESET);
+
+    act.sa_handler = handle_ctrl_c;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGINT, &act, NULL);
+
+    log_info("Client started\n");
+    while (ctrl_c_pressed == 0)
+    {
+    }
+    log_info("Stopping client\n");
+}
+
+/* ------------------------------------------------------------------------- */
+static uint64_t
+start_background_server(const struct args* a)
+{
+#if defined(CLITHER_LINUX) || defined(CLITHER_OSX)
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        log_err("Failed to fork server process: %s\n", strerror(errno));
+        return (uint64_t)-1;
+    }
+    if (pid == 0)
+    {
+        /* Change to a unique process group so ctrl+c only signals the client
+         * process */
+        setpgid(0, 0);
+        run_server(a);
+        return 0;
+    }
+
+    log_dbg("Forked server process %d\n", pid);
+    return (uint64_t)pid;
+#else
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+stop_background_server(uint64_t pid)
+{
+    int status;
+    log_dbg("Sending SIGINT to server process %d\n", (int)pid);
+    kill((pid_t)pid, SIGINT);
+    if (waitpid((pid_t)pid, &status, 0) < 0)
+    {
+        log_warn("Server process is not responding, sending SIGTERM\n");
+        kill((pid_t)pid, SIGTERM);
+        if (waitpid((pid_t)pid, &status, 0) < 0)
         {
-            ++y;
-            error += ty;
-            ty += 2;
-        }
-
-        if(error > 0)
-        {
-            --x;
-            tx += 2;
-            error += (tx - diameter);
+            log_warn("Server process is still not responding, sending SIGKILL\n");
+            kill((pid_t)pid, SIGKILL);
         }
     }
-
-    SDL_RenderDrawPoints(renderer, points, drawCount);
-	if (arrSize > 128)
-		free(points);
 }
 
-struct args
+/* ------------------------------------------------------------------------- */
+int main(int argc, char* argv[])
 {
-    const char* ip;
-    const char* port;
-};
+    struct args args;
+    switch (args_parse(&args, argc, argv))
+    {
+        case 0: break;
+        case 1: return 0;
+        default: return -1;
+    }
 
-static void print_help(const char* prog_name)
-{
-    fprintf(stderr, "Usage: %s [options]\n", prog_name);
-    fprintf(stderr,
-        "Example: Start a dedicated server (headless mode):\n"
-        "  %s --server\n"
-        "  %s --server --ip 0.0.0.0 --port 5678  # change bind port\n"
-        "\n",
-        prog_name, prog_name
-    );
-    fprintf(stderr,
-        "Example: Host a server, then start the client and join the server.\n"
-        "The server will stop when the client stops, since it is a child process.\n"
-        "  %s --host\n"
-        "  %s --host --ip 0.0.0.0 --port 5678  # change bind port\n"
-        "\n",
-        prog_name, prog_name
-    );
-    fprintf(stderr,
-        "Example: Join a server\n"
-        "  %s --ip 192.168.1.2\n"
-        "\n",
-        prog_name
-    );
-    fprintf(stderr,
-        "  -h, --help           Print this help text\n"
-        "  -h, --host           Spawn both the server and client, and join the\n"
-        "                       server. The server will stop when the client is\n"
-        "                       closed because the server is a child process.\n"
-        "      --ip <address>   Server address to connect to. Can be a URL or\n"
-        "                       an IP address. If --host or --server is used,\n"
-        "                       then this sets the bind address rather than the\n"
-        "                       address to connect to. The client will always\n"
-        "                       use localhost or 127.0.0.1 in this case.\n"
-        "  -p, --port <port>    Port number of server to connect to\n"
-        "      --server         Run in headless mode. This only starts the\n"
-        "                       server.\n"
-    );
+#if defined(CLITHER_LOGGING)
+    if (*args.log_file)
+        log_file_open(args.log_file);
+#endif
+
+    switch (args.mode)
+    {
+        case MODE_HEADLESS:
+            run_server(&args);
+            break;
+        case MODE_CLIENT:
+            run_client(&args);
+            break;
+        case MODE_CLIENT_AND_SERVER: {
+            uint64_t subprocess = start_background_server(&args);
+            if (subprocess == (uint64_t)-1 || subprocess == 0)
+                break;
+
+            args.ip = "127.0.0.1";
+            run_client(&args);
+            stop_background_server(subprocess);
+        } break;
+    }
+
+#if defined(CLITHER_LOGGING)
+    log_file_close();
+#endif
 }
-
-static int parse_args(struct args* args, int argc, char** argv)
-{
-    args->ip = "127.0.0.1";
-}
-
-int main(int argc, char** argv)
-{
-    int running;
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_Event event;
-
-struct args args;
-    args.ip = "127.0.0.1";
-    args.port = "5555";
-
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    {
-        printf("WSAStartup failed\n");
-        goto wsa_startup_failed;
-    }
-
-    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
-    {
-        printf("Version 2.2 of Winsock is not available\n");
-        goto wsa_version_fail;
-    }
-
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_USNPEC;
-    hints.ai_socktype = SOCK_DGRAM;
-
-    getaddrinfo(args.ip, args.port, &hints);
-
-    WSACleanup();
-
-    return 0;
-
-    wsa_version_fail : WSACleanup();
-    wsa_startup_failed : return -1;
-
-    if (SDL_Init(0) < 0)
-    {
-        log_err("Failed to initialize SDL: %s\n", SDL_GetError());
-        goto sdl_init_failed;
-    }
-
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0)
-    {
-        log_err("Failed to initialize SDL video subsystem: %s\n", SDL_GetError());
-        goto sdl_init_video_failed;
-    }
-
-    window = SDL_CreateWindow("clither",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        1920, 1080,
-        SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
-    );
-    if (window == NULL)
-    {
-        log_warn("Failed to create OpenGL window: %s\n", SDL_GetError());
-        log_warn("Falling back to software window\n");
-        window = SDL_CreateWindow("clither",
-            SDL_WINDOWPOS_CENTERED,
-            SDL_WINDOWPOS_CENTERED,
-            1920, 1080,
-            SDL_WINDOW_RESIZABLE
-        );
-    }
-    if (window == NULL)
-    {
-        log_err("Failed to create window: %s\n", SDL_GetError());
-        goto create_window_failed;
-    }
-
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (renderer == NULL)
-    {
-        log_warn("Failed to create renderer: %s\n", SDL_GetError());
-        log_warn("Falling back to a software renderer\n");
-        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-    }
-    if (renderer == NULL)
-    {
-        log_err("Failed to create renderer: %s\n", SDL_GetError());
-        goto create_renderer_failed;
-    }
-
-    running = 1;
-    while (running)
-    {
-        while (SDL_PollEvent(&event))
-        {
-            switch (event.type)
-            {
-                case SDL_QUIT:
-                    running = 0;
-                    break;
-            }
-        }
-
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-
-		SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-       	drawCircle(renderer, (SDL_Point){200, 200}, 20);
-
-        SDL_RenderPresent(renderer);
-    }
-
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    SDL_Quit();
-
-    return 0;
-
-    create_renderer_failed : SDL_DestroyWindow(window);
-    create_window_failed   : SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    sdl_init_video_failed  : SDL_Quit();
-    sdl_init_failed        : return -1;
-}
-
