@@ -5,10 +5,7 @@
 
 /* Config ------------------------------------------------------------------ */
 #cmakedefine CLITHER_LOGGING
-#cmakedefine CLITHER_MEMORY_DEBUGGING
 #cmakedefine CLITHER_RENDERER
-
-#define CLITHER_${CLITHER_PLATFORM}
 
 #if defined(CLITHER_RENDERER)
 #   define CLITHER_RENDERER_${CLITHER_RENDERER}

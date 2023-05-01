@@ -3,16 +3,16 @@
 #include "clither/net.h"
 #include "clither/log.h"
 
-#if defined(CLITHER_LINUX) || defined(CLITHER_OSX)
+#if defined(_WIN32)
+#   define _WIN32_LEAN_AND_MEAN
+#   include <Windows.h>
+#else
 #   include <unistd.h>
 #   include <errno.h>
 #   include <string.h>
 #   include <signal.h>
 #   include <sys/types.h>
 #   include <sys/wait.h>
-#else
-#   define _WIN32_LEAN_AND_MEAN
-#   include <Windows.h>
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -80,7 +80,8 @@ run_client(const struct args* a)
 static uint64_t
 start_background_server(const struct args* a)
 {
-#if defined(CLITHER_LINUX) || defined(CLITHER_OSX)
+#if defined(_WIN32)
+#else
     pid_t pid = fork();
     if (pid < 0)
     {
@@ -98,7 +99,6 @@ start_background_server(const struct args* a)
 
     log_dbg("Forked server process %d\n", pid);
     return (uint64_t)pid;
-#else
 #endif
 }
 

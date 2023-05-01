@@ -1,4 +1,5 @@
 #include "clither/render.h"
+#include "clither/log.h"
 
 #include <SDL.h>
 
