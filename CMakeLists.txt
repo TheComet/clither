@@ -20,6 +20,7 @@ option (CLITHER_LOGGING "Enable logging functionality" ON)
 cmake_dependent_option (CLITHER_MEMORY_DEBUGGING "Enable tracking malloc/free to find memory bugs" ON "${CMAKE_BUILD_TYPE} STREQUAL Debug" OFF)
 set (CLITHER_RENDERER "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
 set_property (CACHE CLITHER_RENDERER PROPERTY STRINGS "OFF;SDL")
+option (CLITHER_TESTS "Build unit tests" ON)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
 set (CLITHER_BUILD_LIBDIR "${CLITHER_BUILD_BINDIR}/lib")
@@ -102,3 +103,36 @@ endif ()
 install (
     TARGETS clither
     RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
+
+###############################################################################
+# Unit tests
+###############################################################################
+
+if (CLITHER_TESTS)
+    enable_language (CXX)
+    add_subdirectory ("thirdparty/googletest")
+    add_executable (clither_tests
+        "src/args.c"
+        "src/log.c"
+
+        "tests/src/test_args.cpp"
+        "tests/src/main.cpp"
+
+        "include/clither/args.h"
+        "include/clither/log.h")
+    target_include_directories (clither_tests
+        PRIVATE
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+            $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
+            $<INSTALL_INTERFACE:include>)
+    target_link_libraries (clither_tests
+        PRIVATE
+            gmock)
+    set_target_properties (clither_tests
+        PROPERTIES
+            VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CLITHER_BUILD_BINDIR}
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CLITHER_BUILD_BINDIR}
+            INSTALL_RPATH ${CLITHER_INSTALL_LIBDIR})
+endif ()

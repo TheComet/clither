@@ -74,7 +74,7 @@ print_help(const char* prog_name)
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">   Port to bind server to.\n"
 #endif
 #if defined(CLITHER_LOGGING)
-        "  " ARG2 "-o" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">    Write log output to a custom file. The default file is\n"
+        "  " ARG2 "-l" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">    Write log output to a custom file. The default file is\n"
         "                      \"clither.txt\".  To disable logging to a file, set this\n"
         "                      to an empty string.\n"
 #endif
@@ -142,7 +142,7 @@ args_parse(struct args* a, int argc, char* argv[])
                 else if (strcmp(arg, "log") == 0)
                 {
                     ++i;
-                    if (i >= argc || !*argv[i])
+                    if (i >= argc /*|| !*argv[i] empty string is valid*/)
                     {
                         log_err("Missing argument for --log\n");
                         return -1;
@@ -169,19 +169,19 @@ args_parse(struct args* a, int argc, char* argv[])
                     else if (*p == 'p')
                     {
                         ++i;
-                        if (!p[1] || i >= argc || !*argv[i])
+                        if (p[1] || i >= argc || !*argv[i])
                         {
                             log_err("Missing argument for -p\n");
                             return -1;
                         }
                         a->port = argv[i];
                     }
-                    else if (*p == 'o')
+                    else if (*p == 'l')
                     {
                         ++i;
-                        if (!p[1] || i >= argc || !*argv[i])
+                        if (p[1] || i >= argc /*|| !*argv[i] empty string is valid*/)
                         {
-                            log_err("Missing argument for -o\n");
+                            log_err("Missing argument for -l\n");
                             return -1;
                         }
                         a->log_file = argv[i];
