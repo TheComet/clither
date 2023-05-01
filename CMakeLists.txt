@@ -45,6 +45,7 @@ add_library (clither_lib STATIC
     "include/clither/event.h"
     "include/clither/log.h"
     "include/clither/net.h"
+    "include/clither/q.h"
     "include/clither/render.h"
     "include/clither/snake.h"
 
