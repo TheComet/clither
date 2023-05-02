@@ -106,6 +106,8 @@ start_background_server(const struct args* a)
 static void
 stop_background_server(uint64_t pid)
 {
+#if defined(_WIN32)
+#else
     int status;
     log_dbg("Sending SIGINT to server process %d\n", (int)pid);
     kill((pid_t)pid, SIGINT);
@@ -119,6 +121,7 @@ stop_background_server(uint64_t pid)
             kill((pid_t)pid, SIGKILL);
         }
     }
+#endif
 }
 
 /* ------------------------------------------------------------------------- */
