@@ -2,12 +2,12 @@
 
 struct event
 {
-
+    char x;
 };
 
 struct event_queue
 {
-
+    char x;
 };
 
 void

@@ -1,13 +1,15 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/q.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
 
-struct pos2
+struct qpos2
 {
-
+    q x;
+    q y;
 };
 
 struct snake

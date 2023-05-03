@@ -9,7 +9,7 @@ C_BEGIN
 enum mode
 {
     MODE_HEADLESS,
-#if defined(CLITHER_RENDERER)
+#if defined(CLITHER_GFX)
     MODE_CLIENT,
     MODE_CLIENT_AND_SERVER
 #endif
@@ -34,5 +34,11 @@ struct args
  */
 int
 args_parse(struct args* a, int argc, char* argv[]);
+
+char*
+args_to_string(const char* prog_name, const struct args* a);
+
+void
+args_free_string(char* s);
 
 C_END

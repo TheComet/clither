@@ -11,6 +11,12 @@ struct net_sockets
 };
 
 int
+net_init(void);
+
+void
+net_deinit(void);
+
+int
 net_bind_server_sockets(struct net_sockets* sockets, const struct args* a);
 
 void

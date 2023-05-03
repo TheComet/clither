@@ -55,7 +55,27 @@ log_file_close()
 #endif
 
 /* ------------------------------------------------------------------------- */
-__attribute__ ((format(printf, 1, 2)))
+void log_dbg(const char* fmt, ...)
+{
+    va_list va;
+    fprintf(stderr, "[" COL_N_YELLOW "Debug" COL_RESET "] %s%s%s", g_col_set, g_prefix, g_col_clr);
+    va_start(va, fmt);
+    vfprintf(stderr, fmt, va);
+    va_end(va);
+
+#if defined(CLITHER_LOGGING)
+    if (g_log)
+    {
+        fprintf(g_log, "[Debug] %s", g_prefix);
+        va_start(va, fmt);
+        vfprintf(g_log, fmt, va);
+        va_end(va);
+        fflush(g_log);
+    }
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
 void log_info(const char* fmt, ...)
 {
     va_list va;
@@ -77,7 +97,6 @@ void log_info(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
-__attribute__ ((format(printf, 1, 2)))
 void log_warn(const char* fmt, ...)
 {
     va_list va;
@@ -99,7 +118,6 @@ void log_warn(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
-__attribute__ ((format(printf, 1, 2)))
 void log_err(const char* fmt, ...)
 {
     va_list va;
@@ -121,14 +139,14 @@ void log_err(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
-__attribute__ ((format(printf, 1, 2)))
-void log_dbg(const char* fmt, ...)
+void log_note(const char* fmt, ...)
 {
     va_list va;
-    fprintf(stderr, "[" COL_N_YELLOW "Debug" COL_RESET "] %s%s%s", g_col_set, g_prefix, g_col_clr);
+    fprintf(stderr, "[" COL_B_MAGENTA "NOTE " COL_RESET "] %s%s%s" COL_B_YELLOW, g_col_set, g_prefix, g_col_clr);
     va_start(va, fmt);
     vfprintf(stderr, fmt, va);
     va_end(va);
+    fprintf(stderr, COL_RESET);
 
 #if defined(CLITHER_LOGGING)
     if (g_log)

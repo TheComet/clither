@@ -2,6 +2,8 @@
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 
+#include "cstructures/memory.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +16,9 @@
 #define VERSION_TEXT   COL_B_WHITE
 #define VERSION_NUMBER COL_B_CYAN
 #define RESET          COL_RESET
+
+#define DEFAULT_LOG_FILE "clither.txt"
+#define DEFAULT_PORT     "5555"
 
 /* ------------------------------------------------------------------------- */
 /*!
@@ -33,7 +38,7 @@ print_help(const char* prog_name)
         prog_name, prog_name
     );
 
-#if defined(CLITHER_RENDERER)
+#if defined(CLITHER_GFX)
     fprintf(stderr,
         TEXT "  Host a server, then start the client  and join the server. The server will\n"
         "  stop when the client stops, since it is a child process.\n" RESET
@@ -54,13 +59,13 @@ print_help(const char* prog_name)
     fprintf(stderr,
         SECTION "Available options:\n" RESET
         "  "      "  "       " " ARG1 " --help  " RESET "        Print this help text.\n"
-#if defined(CLITHER_RENDERER)
+#if defined(CLITHER_GFX)
         "  " ARG2 "-s" RESET "," ARG1 " --server" RESET "        Run  in  headless  mode.  This only  starts the server\n"
         "  " ARG2 "-h" RESET "," ARG1 " --host  " RESET "        Spawn both the server and client, and join the server.\n"
         "                      The server will stop when the client is closed because\n"
         "                      the server is a child process of the client.\n"
 #endif
-#if defined(CLITHER_RENDERER)
+#if defined(CLITHER_GFX)
         "  "      "  "       " " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">  Server  address  to  connect to. Can be a URL or an IP\n"
         "                      address. If --host or --server is used, then this sets\n"
         "                      the bind address  rather than the  address to  connect\n"
@@ -86,22 +91,24 @@ int
 args_parse(struct args* a, int argc, char* argv[])
 {
     int i;
+#if defined(CLITHER_GFX)
     char server_flag = 0;
     char host_flag = 0;
+#endif
 
     /* Set defaults */
 #if defined(CLITHER_LOGGING)
-    a->log_file = "clither.txt";
+    a->log_file = DEFAULT_LOG_FILE;
 #endif
 
-#if defined(CLITHER_RENDERER)
+#if defined(CLITHER_GFX)
     a->mode = MODE_CLIENT;
 #else
     a->mode = MODE_HEADLESS;
 #endif
 
     a->ip = "";
-    a->port = "5555";
+    a->port = DEFAULT_PORT;
 
     for (i = 1; i < argc; ++i)
     {
@@ -115,10 +122,12 @@ args_parse(struct args* a, int argc, char* argv[])
                     print_help(argv[0]);
                     return 1;
                 }
+#if defined(CLITHER_GFX)
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
                 else if (strcmp(arg, "host") == 0)
                     host_flag = 1;
+#endif
                 else if (strcmp(arg, "ip") == 0)
                 {
                     ++i;
@@ -139,6 +148,7 @@ args_parse(struct args* a, int argc, char* argv[])
                     }
                     a->port = argv[i];
                 }
+#if defined(CLITHER_LOGGING)
                 else if (strcmp(arg, "log") == 0)
                 {
                     ++i;
@@ -149,6 +159,7 @@ args_parse(struct args* a, int argc, char* argv[])
                     }
                     a->log_file = argv[i];
                 }
+#endif
                 else if (strcmp(argv[i], "--") == 0)
                     break;
                 else
@@ -162,11 +173,7 @@ args_parse(struct args* a, int argc, char* argv[])
                 const char* p;
                 for (p = &argv[i][1]; *p; ++p)
                 {
-                    if (*p == 's')
-                        server_flag = 1;
-                    else if (*p == 'h')
-                        host_flag = 1;
-                    else if (*p == 'p')
+                    if (*p == 'p')
                     {
                         ++i;
                         if (p[1] || i >= argc || !*argv[i])
@@ -176,6 +183,12 @@ args_parse(struct args* a, int argc, char* argv[])
                         }
                         a->port = argv[i];
                     }
+#if defined(CLITHER_GFX)
+                    else if (*p == 's')
+                        server_flag = 1;
+                    else if (*p == 'h')
+                        host_flag = 1;
+#endif
                     else if (*p == 'l')
                     {
                         ++i;
@@ -207,6 +220,7 @@ args_parse(struct args* a, int argc, char* argv[])
         }
     }
 
+#if defined(CLITHER_GFX)
     if (server_flag && host_flag)
     {
         log_err("Can't use \"--server\" and \"--host\" at the same time\n");
@@ -216,6 +230,85 @@ args_parse(struct args* a, int argc, char* argv[])
         a->mode = MODE_HEADLESS;
     else if (host_flag)
         a->mode = MODE_CLIENT_AND_SERVER;
+#endif
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+args_to_string(const char* prog_name, const struct args* a)
+{
+    char* s;
+    int len = strlen(prog_name) + 3;  /* null terminator + quotes */
+
+#if defined(CLITHER_LOGGING)
+    if (strcmp(a->log_file, DEFAULT_LOG_FILE) != 0)
+    {
+        len += sizeof(" -l \"");
+        len += strlen(a->log_file);
+        len += sizeof("\"");
+    }
+#endif
+    
+    if (*a->ip)
+    {
+        len += sizeof(" --ip \"");
+        len += strlen(a->ip);
+        len += sizeof("\"");
+    }
+
+    if (strcmp(a->port, DEFAULT_PORT) != 0)
+    {
+        len += sizeof(" -p ");
+        len += strlen(a->port);
+    }
+
+#if defined(CLITHER_GFX)
+    if (a->mode == MODE_HEADLESS)
+        len += sizeof(" -s");
+    else if (a->mode == MODE_CLIENT_AND_SERVER)
+        len += sizeof(" -h");
+#endif
+
+    s = MALLOC(len);
+    *s = '"';
+    strcpy(s+1, prog_name);
+    strcat(s, "\"");
+
+    if (strcmp(a->log_file, DEFAULT_LOG_FILE) != 0)
+    {
+        strcat(s, " -l \"");
+        strcat(s, a->log_file);
+        strcat(s, "\"");
+    }
+
+    if (*a->ip)
+    {
+        strcat(s, " --ip \"");
+        strcat(s, a->ip);
+        strcat(s, "\"");
+    }
+
+    if (strcmp(a->port, DEFAULT_PORT) != 0)
+    {
+        strcat(s, " -p ");
+        strcat(s, a->port);
+    }
+
+#if defined(CLITHER_GFX)
+    if (a->mode == MODE_HEADLESS)
+        strcat(s, " -s");
+    else if (a->mode == MODE_CLIENT_AND_SERVER)
+        strcat(s, " -h");
+#endif
+
+    return s;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+args_free_string(char* s)
+{
+    FREE(s);
 }

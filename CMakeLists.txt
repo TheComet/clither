@@ -18,8 +18,8 @@ project ("clither"
 include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
-set (CLITHER_RENDERER "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
-set_property (CACHE CLITHER_RENDERER PROPERTY STRINGS "OFF;SDL")
+set (CLITHER_GFX "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
+set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL")
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
@@ -43,20 +43,25 @@ add_library (clither_lib STATIC
     "include/clither/args.h"
     "include/clither/bezier.h"
     "include/clither/event.h"
+    "include/clither/gfx.h"
     "include/clither/log.h"
     "include/clither/net.h"
     "include/clither/q.h"
-    "include/clither/render.h"
+    "include/clither/signals.h"
     "include/clither/snake.h"
 
     "src/args.c"
     "src/bezier.c"
     "src/event.c"
+    $<$<STREQUAL:${CLITHER_GFX},SDL>:src/gfx_sdl.c>
     "src/log.c"
-    $<$<PLATFORM_ID:Windows>:src/net_win32.c>
-    $<$<PLATFORM_ID:Linux>:src/net_posix.c>
-    $<$<PLATFORM_ID:Darwin>:src/net_posix.c>
-    $<$<STREQUAL:${CLITHER_RENDERER},SDL>:src/render_sdl.c>
+    "src/net.c"
+    $<$<PLATFORM_ID:Windows>:
+        src/signals_win32.c>
+    $<$<PLATFORM_ID:Linux>:
+        src/signals_posix.c>
+    $<$<PLATFORM_ID:Darwin>:
+        src/signals_posix.c>
     "src/snake.c")
 target_include_directories (clither_lib
     PUBLIC
@@ -76,15 +81,27 @@ set_target_properties (clither_lib
 ###############################################################################
 
 add_subdirectory ("cstructures")
-target_link_libraries (clither_lib PUBLIC cstructures)
 
-if (CLITHER_RENDERER STREQUAL "SDL")
+target_link_libraries (clither_lib
+    PUBLIC
+        cstructures
+    PRIVATE
+        $<$<PLATFORM_ID:Windows>:ws2_32>)
+
+if (CLITHER_GFX STREQUAL "SDL")
     find_package (SDL2 REQUIRED)
-    find_package (SDL2_gfx REQUIRED)
+    #find_package (SDL2_gfx REQUIRED)
     target_link_libraries (clither_lib
         PUBLIC
-            SDL2::Core
-            SDL2::GFX)
+            SDL2::Core)
+            #SDL2::GFX)
+
+    if (WIN32 OR CYGWIN)
+        add_custom_command (TARGET clither_lib POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SDL2_PATH}/lib/$<IF:$<EQUAL:${CMAKE_SIZEOF_VOID_P},8>,x64,x86>/SDL2.dll ${CLITHER_BUILD_BINDIR}/SDL2.dll
+            COMMENT "Copying SDL2 DLLs to bin directory"
+            VERBATIM)
+    endif ()
 endif ()
 
 ###############################################################################
