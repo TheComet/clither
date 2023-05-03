@@ -5,10 +5,10 @@
 
 /* Config ------------------------------------------------------------------ */
 #cmakedefine CLITHER_LOGGING
-#cmakedefine CLITHER_RENDERER
+#cmakedefine CLITHER_GFX
 
-#if defined(CLITHER_RENDERER)
-#   define CLITHER_RENDERER_${CLITHER_RENDERER}
+#if defined(CLITHER_GFX)
+#   define CLITHER_GFX_${CLITHER_GFX}
 #endif
 
 /* Version string ---------------------------------------------------------- */
@@ -28,4 +28,11 @@
 #else
 #   define C_BEGIN
 #   define C_END
+#endif
+
+/* printf formatting ------------------------------------------------------- */
+#if defined(__GNUC__) || defined(__clang__)
+#   define PRINTF_FORMAT(fmt, params) __attribute__((format(printf, fmt, params)))
+#else
+#   define PRINTF_FORMAT(fmt, params)
 #endif

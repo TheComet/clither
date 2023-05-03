@@ -2,14 +2,19 @@
 
 #include <stdint.h>
 
+/*
+ * Since the world size is fixed, we use a Q19.5 (24-bit) fixed point representation
+ * for world position.
+ */
 typedef uint32_t q;
 
-int16_t q_add(int16_t a, int16_t b)
+#if 0
+static inline int16_t q_add(int16_t a, int16_t b)
 {
     return a + b;
 }
 
-int16_t q_add_sat(int16_t a, int16_t b)
+static inline int16_t q_add_sat(int16_t a, int16_t b)
 {
     int16_t result;
     int32_t tmp;
@@ -24,7 +29,7 @@ int16_t q_add_sat(int16_t a, int16_t b)
     return result;
 }
 
-int16_t q_sub(int16_t a, int16_t b)
+static inline int16_t q_sub(int16_t a, int16_t b)
 {
     return a - b;
 }
@@ -33,14 +38,14 @@ int16_t q_sub(int16_t a, int16_t b)
 #define K   (1 << (Q - 1))
 
 // saturate to range of int16_t
-int16_t sat16(int32_t x)
+static inline int16_t sat16(int32_t x)
 {
     if (x > 0x7FFF) return 0x7FFF;
     else if (x < -0x8000) return -0x8000;
     else return (int16_t)x;
 }
 
-int16_t q_mul(int16_t a, int16_t b)
+static inline int16_t q_mul(int16_t a, int16_t b)
 {
     int16_t result;
     int32_t temp;
@@ -54,7 +59,7 @@ int16_t q_mul(int16_t a, int16_t b)
     return result;
 }
 
-int16_t q_div(int16_t a, int16_t b)
+static inline int16_t q_div(int16_t a, int16_t b)
 {
     /* pre-multiply by the base (Upscale to Q16 so that the result will be in Q8 format) */
     int32_t temp = (int32_t)a << Q;
@@ -67,3 +72,4 @@ int16_t q_div(int16_t a, int16_t b)
     }
     return (int16_t)(temp / b);
 }
+#endif

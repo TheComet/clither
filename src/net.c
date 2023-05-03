@@ -3,11 +3,54 @@
 #include "clither/net.h"
 
 #include <string.h>
+
+#if defined(_WIN32)
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+#   include <winsock2.h>
+#   include <ws2ipdef.h>
+#   include <WS2tcpip.h>
+#else
 #include <errno.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#endif
+
+/* ------------------------------------------------------------------------- */
+int
+net_init(void)
+{
+#if defined(_WIN32)
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        log_err("WSAStartup failed\n");
+        return -1;
+    }
+
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+    {
+        log_err("Version 2.2 of Winsock is not available\n");
+        WSACleanup();
+        return -1;
+    }
+
+    return 0;
+#else
+    return 0;
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
+void
+net_deinit(void)
+{
+#if defined(_WIN32)
+    WSACleanup();
+#endif
+}
 
 /* ------------------------------------------------------------------------- */
 static void get_addrinfo_ip_address_str(char* ipstr, const struct addrinfo* info, int maxlen)
@@ -119,6 +162,11 @@ void
 net_close_sockets(struct net_sockets* sockets)
 {
     log_dbg("Closing sockets\n");
+#if defined(_WIN32)
+    closesocket(sockets->tcp);
+    closesocket(sockets->udp);
+#else
     close(sockets->tcp);
     close(sockets->udp);
+#endif
 }
