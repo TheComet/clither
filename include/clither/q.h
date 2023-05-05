@@ -6,7 +6,14 @@
  * Since the world size is fixed, we use a Q19.5 (24-bit) fixed point representation
  * for world position.
  */
-typedef uint32_t q;
+typedef uint32_t q19_5;
+typedef uint8_t q2_6;
+
+struct qpos2
+{
+    q19_5 x;
+    q19_5 y;
+};
 
 #if 0
 static inline int16_t q_add(int16_t a, int16_t b)

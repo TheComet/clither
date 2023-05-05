@@ -151,7 +151,7 @@ void log_note(const char* fmt, ...)
 #if defined(CLITHER_LOGGING)
     if (g_log)
     {
-        fprintf(g_log, "[Debug] %s", g_prefix);
+        fprintf(g_log, "[NOTE ] %s", g_prefix);
         va_start(va, fmt);
         vfprintf(g_log, fmt, va);
         va_end(va);

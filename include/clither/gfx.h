@@ -1,14 +1,10 @@
 #pragma once
 
-struct event_queue;
+struct controls;
 
 struct gfx
 {
-    struct {
-        int mousex, mousey;
-        unsigned boost : 1;
-        unsigned quit  : 1;
-    } input;
+    char unused;
 };
 
 int
@@ -24,7 +20,7 @@ void
 gfx_destroy(struct gfx* g);
 
 void
-gfx_poll_input(struct gfx* g);
+gfx_poll_input(struct gfx* g, struct controls* c);
 
 void
 gfx_update(struct gfx* g);
