@@ -1,6 +1,6 @@
-#include "clither/args.h"
 #include "clither/log.h"
 #include "clither/net.h"
+#include "clither/protocol.h"
 
 #include <string.h>
 
@@ -16,7 +16,15 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 #endif
+
+/* 
+ * 576 = minimum maximum reassembly buffer size
+ * 60  = maximum IP header size
+ * 8   = UDP header size
+ */
+#define MAX_UDP_PACKET_SIZE (576 - 60 - 8)
 
 /* ------------------------------------------------------------------------- */
 int
@@ -53,6 +61,37 @@ net_deinit(void)
 }
 
 /* ------------------------------------------------------------------------- */
+void
+net_log_host_ips(void)
+{
+#if defined(_WIN32)
+    log_note("Your local IP address is: (todo)\n");
+    log_note("Your external IP address is: (todo)\n");
+#else
+    struct ifaddrs* ifaddr;
+    struct ifaddrs* p;
+    int family, s;
+    char host[NI_MAXHOST];
+
+    if (getifaddrs(&ifaddr) < 0)
+    {
+        log_warn("Failed to get host IP using getifaddrs()\n");
+        return;
+    }
+
+    for (p = ifaddr; *p; p = p->ifa_next)
+    {
+        if (p->ifa_addr == NULL)
+            continue;
+
+        s = getnameinfo(p->ifa_addr, sizeof(sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    }
+
+    freeifaddrs(ifaddr);
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
 static void get_addrinfo_ip_address_str(char* ipstr, const struct addrinfo* info, int maxlen)
 {
     void* addr = NULL;
@@ -69,12 +108,11 @@ static void get_addrinfo_ip_address_str(char* ipstr, const struct addrinfo* info
 
 /* ------------------------------------------------------------------------- */
 int
-net_bind_server_sockets(struct net_sockets* sockets, const struct args* a)
+server_init(struct server* server, const char* bind_address, const char* port)
 {
     struct addrinfo hints;
     struct addrinfo* candidates;
     struct addrinfo* p;
-    const char* addr;
     char ipstr[INET6_ADDRSTRLEN];
     int ret;
 
@@ -85,88 +123,163 @@ net_bind_server_sockets(struct net_sockets* sockets, const struct args* a)
      */
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;     /* IPv4 or IPv6 */
-    if (*a->ip)
-        addr = a->ip;
+    hints.ai_socktype = SOCK_DGRAM;  /* UDP */
+    if (*bind_address)
+        ret = getaddrinfo(bind_address, port, &hints, &candidates);
     else
     {
-        addr = NULL;
         hints.ai_flags = AI_PASSIVE;
+        ret = getaddrinfo(NULL, port, &hints, &candidates);
     }
-
-    /* TCP candidates */
-    hints.ai_socktype = SOCK_STREAM;
-    if ((ret = getaddrinfo(addr, a->port, &hints, &candidates)) != 0)
+    if (ret != 0)
     {
         log_err("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
     }
+
     for (p = candidates; p != NULL; p = p->ai_next)
     {
         get_addrinfo_ip_address_str(ipstr, p, sizeof ipstr);
 
-        log_dbg("Attempting to bind TCP %s:%s...\n", ipstr, a->port);
-        sockets->tcp = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockets->tcp == -1)
+        log_dbg("Attempting to bind UDP %s:%s...\n", ipstr, port);
+        server->udp_sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (server->udp_sock == -1)
             continue;
 
-        if (bind(sockets->tcp, p->ai_addr, p->ai_addrlen) == 0)
+        if (bind(server->udp_sock, p->ai_addr, p->ai_addrlen) == 0)
             break;
-        log_warn("bind() failed for TCP %s:%s: %s\n", ipstr, a->port, strerror(errno));
+        log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
 
-        close(sockets->tcp);
+        close(server->udp_sock);
     }
     freeaddrinfo(candidates);
     if (p == NULL)
     {
-        log_err("Failed to bind TCP socket\n");
+        log_err("Failed to bind UDP socket\n");
+        close(server->udp_sock);
         return -1;
     }
 
-    /* UDP candidates */
-    hints.ai_socktype = SOCK_DGRAM;
-    if ((ret = getaddrinfo(addr, a->port, &hints, &candidates)) != 0)
-    {
-        log_err("getaddrinfo: %s\n", gai_strerror(ret));
-        return -1;
-    }
-    for (p = candidates; p != NULL; p = p->ai_next)
-    {
-        get_addrinfo_ip_address_str(ipstr, p, sizeof ipstr);
+    log_dbg("Bound UDP socket to %s:%s\n", ipstr, port);
 
-        log_dbg("Attempting to bind UDP %s:%s...\n", ipstr, a->port);
-        sockets->udp = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockets->udp == -1)
-            continue;
-
-        if (bind(sockets->udp, p->ai_addr, p->ai_addrlen) == 0)
-            break;
-        log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, a->port, strerror(errno));
-
-        close(sockets->udp);
-    }
-    freeaddrinfo(candidates);
-    if (p == NULL)
-    {
-        log_err("Failed to bind TCP socket\n");
-        close(sockets->tcp);
-        return -1;
-    }
-
-    log_info("Bound TCP and UDP sockets to %s:%s\n", ipstr, a->port);
+    net_msg_queue_init(&server->pending_reliable);
 
     return 0;
 }
 
 /* ------------------------------------------------------------------------- */
 void
-net_close_sockets(struct net_sockets* sockets)
+server_deinit(struct server* server)
 {
-    log_dbg("Closing sockets\n");
+    log_dbg("Closing socket\n");
 #if defined(_WIN32)
-    closesocket(sockets->tcp);
-    closesocket(sockets->udp);
+    closesocket(server->udp_sock);
 #else
-    close(sockets->tcp);
-    close(sockets->udp);
+    close(conn->udp_sock);
 #endif
+
+    net_msg_queue_deinit(&server->pending_reliable);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+server_send_pending_data(struct server* server)
+{
+
+}
+
+/* ------------------------------------------------------------------------- */
+void
+server_recv(struct server* server)
+{
+    char buf[MAX_UDP_PACKET_SIZE];
+    struct sockaddr_storage client_addr;
+    socklen_t client_addr_len;
+    int len = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
+    if (len > 0)
+    {
+        log_dbg("Received data\n");
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+int
+client_init(struct client* client, const char* server_address, const char* port)
+{
+    struct addrinfo hints;
+    struct addrinfo* candidates;
+    struct addrinfo* p;
+    char ipstr[INET6_ADDRSTRLEN];
+    int ret;
+
+    if (!*server_address)
+    {
+        log_err("No server IP address was specified! Can't init client socket\n");
+        log_err("You can use --ip <address> to specify an address to connect to\n");
+        return -1;
+    }
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;     /* IPv4 or IPv6 */
+    hints.ai_socktype = SOCK_DGRAM;  /* UDP */
+
+    if ((ret = getaddrinfo(server_address, port, &hints, &candidates)) != 0)
+    {
+        log_err("getaddrinfo: %s\n", gai_strerror(ret));
+        return -1;
+    }
+    for (p = candidates; p != NULL; p = p->ai_next)
+    {
+        get_addrinfo_ip_address_str(ipstr, p, sizeof ipstr);
+
+        log_dbg("Attempting to connect UDP socket %s:%s...\n", ipstr, port);
+        client->udp_sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (client->udp_sock == -1)
+            continue;
+
+        /* 
+         * When connecting a UDP socket, we can use send() instead of sendto()
+         * This way, the server address (socketaddr_storage) doens't need to be
+         * saved in the client structure
+         */
+        if (connect(client->udp_sock, p->ai_addr, p->ai_addrlen) == 0)
+            break;
+        log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
+
+        close(client->udp_sock);
+    }
+    freeaddrinfo(candidates);
+    if (p == NULL)
+    {
+        log_err("Failed to connect UDP socket\n");
+        close(client->udp_sock);
+        return -1;
+    }
+
+    log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
+
+    net_msg_queue_init(&client->pending_reliable);
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_deinit(struct client* client)
+{
+    log_dbg("Closing socket\n");
+#if defined(_WIN32)
+    closesocket(client->udp_sock);
+#else
+    close(client->udp_sock);
+#endif
+
+    net_msg_queue_deinit(&client->pending_reliable);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_send_pending_data(struct client* client)
+{
+
 }

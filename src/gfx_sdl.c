@@ -1,3 +1,4 @@
+#include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/log.h"
 
@@ -168,7 +169,7 @@ gfx_destroy(struct gfx* gb)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_poll_input(struct gfx* g)
+gfx_poll_input(struct gfx* g, struct controls* c)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e))
@@ -176,19 +177,23 @@ gfx_poll_input(struct gfx* g)
         switch (e.type)
         {
         case SDL_QUIT:
-            g->input.quit = 1;
+            c->quit = 1;
+            break;
+        case SDL_KEYDOWN:
+            if (e.key.keysym.sym == SDLK_ESCAPE)
+                c->quit = 1;
             break;
         case SDL_MOUSEBUTTONDOWN:
             if (e.button.button == 0)
-                g->input.boost = 1;
+                c->boost = 1;
             break;
         case SDL_MOUSEBUTTONUP:
             if (e.button.button == 0)
-                g->input.boost = 0;
+                c->boost = 0;
             break;
         case SDL_MOUSEMOTION:
-            g->input.mousex = e.motion.x;
-            g->input.mousey = e.motion.y;
+            c->mousex = e.motion.x;
+            c->mousey = e.motion.y;
         }
     }
 }

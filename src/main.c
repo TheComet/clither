@@ -1,9 +1,12 @@
 #include "clither/args.h"
 #include "clither/cli_colors.h"
+#include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/net.h"
 #include "clither/log.h"
+#include "clither/protocol.h"
 #include "clither/signals.h"
+#include "clither/world.h"
 
 #include "cstructures/init.h"
 
@@ -22,7 +25,8 @@
 static void
 run_server(const struct args* a)
 {
-    struct net_sockets sockets;
+    struct world world;
+    struct server server;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -31,26 +35,32 @@ run_server(const struct args* a)
     /* Install signal handlers for CTRL+C and (on windows) console close events */
     signals_install();
 
-    /* Init networking and bind server sockets */
-    if (net_init() != 0)
-        goto net_init_failed;
-    if (net_bind_server_sockets(&sockets, a) < 0)
-        goto bind_sockets_failed;
+    world_init(&world);
 
-    log_info("Server started\n");
+    /* Init networking and bind server sockets */
+    if (net_init() < 0)
+        goto net_init_failed;
+    if (server_init(&server, a->ip, a->port) < 0)
+        goto net_init_connection_failed;
+    net_log_host_ips();
+
     while (signals_exit_requested() == 0)
     {
+        server_recv(&server);
     }
     log_info("Stopping server\n");
 
-    net_close_sockets(&sockets);
+    server_deinit(&server);
     net_deinit();
+    world_deinit(&world);
     signals_remove();
 
     return;
 
-    bind_sockets_failed : net_deinit();
-    net_init_failed     : signals_remove();
+net_init_connection_failed:
+    net_deinit();
+net_init_failed: 
+    signals_remove();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -58,7 +68,10 @@ run_server(const struct args* a)
 static void
 run_client(const struct args* a)
 {
+    struct world world;
+    struct controls controls = { 0 };
     struct gfx* gfx;
+    struct client client;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -67,6 +80,8 @@ run_client(const struct args* a)
     /* Install signal handlers for CTRL+C and (on windows) console close events */
     //signals_install();
 
+    world_init(&world);
+
     /* Init all graphics and create window */
     if (gfx_init() < 0)
         goto init_gfx_failed;
@@ -74,22 +89,37 @@ run_client(const struct args* a)
     if (gfx == NULL)
         goto create_gfx_failed;
 
+    if (net_init() < 0)
+        goto net_init_failed;
+    if (client_init(&client, a->ip, a->port) < 0)
+        goto net_init_connection_failed;
+
+    client_join_game_request(&client, "test");
+    client_send_pending_data(&client);
+
     log_info("Client started\n");
     while (1 /*signals_exit_requested() == 0*/)
     {
-        gfx_poll_input(gfx);
-        if (gfx->input.quit)
+        gfx_poll_input(gfx, &controls);
+        if (controls.quit)
             break;
 
         gfx_update(gfx);
     }
     log_info("Stopping client\n");
 
+    client_deinit(&client);
+net_init_connection_failed:
+    net_deinit();
+net_init_failed:
     gfx_destroy(gfx);
-    create_gfx_failed : gfx_deinit();
-    init_gfx_failed   : signals_remove();
-                        log_set_colors("", "");
-                        log_set_prefix("");
+    world_deinit(&world);
+create_gfx_failed:
+    gfx_deinit();
+init_gfx_failed:
+    signals_remove();
+    log_set_colors("", "");
+    log_set_prefix("");
 }
 #endif
 
@@ -156,7 +186,7 @@ start_background_server(const char* prog_name, const struct args* a)
 
 /* ------------------------------------------------------------------------- */
 static void
-stop_background_server(uint64_t pid)
+wait_for_background_server(uint64_t pid)
 {
 #if defined(_WIN32)
     HANDLE hProcess = (HANDLE)(pid & 0xFFFFFFFF);
@@ -166,6 +196,8 @@ stop_background_server(uint64_t pid)
     CloseHandle(hThread);
 #else
     int status;
+    waitpid((pid_t)pid, 0);
+#   if 0
     log_dbg("Sending SIGINT to server process %d\n", (int)pid);
     kill((pid_t)pid, SIGINT);
     if (waitpid((pid_t)pid, &status, 0) < 0)
@@ -178,6 +210,7 @@ stop_background_server(uint64_t pid)
             kill((pid_t)pid, SIGKILL);
         }
     }
+#   endif
 #endif
 }
 
@@ -246,10 +279,9 @@ int main(int argc, char* argv[])
             /* The server should be running, so try to join as a client */
             run_client(&args);
 
-            /* Request server process to stop when the client is done *
-            stop_background_server(subprocess);*/
             log_note("The server will continue to run.\n");
             log_note("You can stop it by pressing CTRL+C\n");
+            wait_for_background_server(subprocess);
         } break;
 #endif
     }

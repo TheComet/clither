@@ -42,13 +42,16 @@ add_library (clither_lib STATIC
 
     "include/clither/args.h"
     "include/clither/bezier.h"
+    "include/clither/controls.h"
     "include/clither/event.h"
     "include/clither/gfx.h"
     "include/clither/log.h"
     "include/clither/net.h"
+    "include/clither/protocol.h"
     "include/clither/q.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
+    "include/clither/world.h"
 
     "src/args.c"
     "src/bezier.c"
@@ -56,13 +59,15 @@ add_library (clither_lib STATIC
     $<$<STREQUAL:${CLITHER_GFX},SDL>:src/gfx_sdl.c>
     "src/log.c"
     "src/net.c"
+    "src/protocol.c"
     $<$<PLATFORM_ID:Windows>:
         src/signals_win32.c>
     $<$<PLATFORM_ID:Linux>:
         src/signals_posix.c>
     $<$<PLATFORM_ID:Darwin>:
         src/signals_posix.c>
-    "src/snake.c")
+    "src/snake.c"
+    "src/world.c")
 target_include_directories (clither_lib
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
