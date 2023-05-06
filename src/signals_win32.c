@@ -67,6 +67,10 @@ signals_exit_requested(void)
     HANDLE hStdin;
 
     hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    GetNumberOfConsoleInputEvents(hStdin, &dwNumRead);
+    if (dwNumRead < 1)
+        return 0;
+
     if (!ReadConsoleInput(hStdin, irInBuf, 1, &dwNumRead))
         return 1;
 
