@@ -130,6 +130,11 @@ hashmap_insert(
     const void* key,
     const void* value);
 
+CSTRUCTURES_PRIVATE_API void*
+hashmap_emplace(
+    struct cs_hashmap* hm,
+    const void* key);
+
 CSTRUCTURES_PRIVATE_API enum cs_hashmap_status
 hashmap_insert_str(struct cs_hashmap* hm,
                    const char* key,

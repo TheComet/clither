@@ -51,6 +51,7 @@ add_library (clither_lib STATIC
     "include/clither/q.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
+    "include/clither/tick.h"
     "include/clither/world.h"
 
     "src/args.c"
@@ -61,11 +62,14 @@ add_library (clither_lib STATIC
     "src/net.c"
     "src/protocol.c"
     $<$<PLATFORM_ID:Windows>:
-        src/signals_win32.c>
+        src/signals_win32.c
+        src/tick_win32.c>
     $<$<PLATFORM_ID:Linux>:
-        src/signals_posix.c>
+        src/signals_posix.c
+        src/tick_posix.c>
     $<$<PLATFORM_ID:Darwin>:
-        src/signals_posix.c>
+        src/signals_posix.c
+        src/tick_posix.c>
     "src/snake.c"
     "src/world.c")
 target_include_directories (clither_lib
@@ -141,6 +145,8 @@ if (CLITHER_TESTS)
         "tests/main.cpp"
 
         "tests/clither/test_args.cpp"
+        "tests/clither/test_protocol.cpp"
+        "tests/clither/test_tick.cpp"
 
         "tests/cstructures/env_library_init.cpp"
         "tests/cstructures/test_btree_as_set.cpp"
