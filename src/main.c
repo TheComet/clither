@@ -55,7 +55,7 @@ run_server(const struct args* a)
         server_send_pending_data(&server);
 
         if ((tick_lag = tick_wait(&tick)) > 0)
-            log_warn("Server is lagging! Behind by %d tick\n", tick_lag);
+            log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
     }
     log_info("Stopping server\n");
 

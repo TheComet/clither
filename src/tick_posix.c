@@ -26,7 +26,7 @@ tick_wait(struct tick* t)
     if (now > wait_until)
     {
         t->last = wait_until;
-        return (now - wait_until) / t->interval + 1;
+        return (now - wait_until) / t->interval;
     }
 
     /* Context switch on linux takes about ~1us */

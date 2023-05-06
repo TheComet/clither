@@ -29,6 +29,11 @@
  */
 #define MAX_UDP_PACKET_SIZE (576 - 60 - 8)
 
+/* Unfortunate */
+#if !defined(_WIN32)
+#   define closesocket(s) close(s)
+#endif
+
 struct client_table_entry
 {
     struct cs_vector pending_reliable;
@@ -39,6 +44,32 @@ struct client_table_entry
     HASHMAP_FOR_EACH(table, struct sockaddr, struct client_table_entry, k, v)
 #define CLIENT_TABLE_END_EACH \
     HASHMAP_END_EACH
+
+/* ------------------------------------------------------------------------- */
+static int
+set_nonblocking(int sockfd)
+{
+#if defined(_WIN32)
+    unsigned long nonblock = 1;
+    if (ioctlsocket(sockfd, FIONBIO, &nonblock) == 0)
+        return 0;
+    log_err("ioctlsocket() failed for socket\n");
+    return -1;
+#else
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        log_err("fcntl() failed for socket: %s\n", strerror(errno));
+        return -1;
+    }
+    if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+    {
+        log_err("fcntl() failed for socket: %s\n", strerror(errno));
+        return -1;
+    }
+    return 0;
+#endif
+}
 
 /* ------------------------------------------------------------------------- */
 static void
@@ -64,9 +95,10 @@ hash32_sockaddr(const void* addr_storage, uintptr_t len)
         /* IPv6 is 16 bytes (128 bits) */
         return hash32_jenkins_oaat(((struct sockaddr_in6*)addr)->sin6_addr.s6_addr, 16);
     else
+    {
         assert(0);
-
-    (void)len;
+        return hash32_jenkins_oaat(addr_storage, len);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -174,28 +206,35 @@ server_init(struct server* server, const char* bind_address, const char* port)
         if (server->udp_sock == -1)
             continue;
 
-        if (bind(server->udp_sock, p->ai_addr, p->ai_addrlen) == 0)
-            break;
-        log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
-
-        close(server->udp_sock);
+        /* We want non-blocking sockets */
+        if (set_nonblocking(server->udp_sock) < 0)
+        {
+            closesocket(server->udp_sock);
+            continue;
+        }
+        
+        if (bind(server->udp_sock, p->ai_addr, p->ai_addrlen) != 0)
+        {
+            log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
+            closesocket(server->udp_sock);
+        }
+        break;
     }
-    freeaddrinfo(candidates);
     if (p == NULL)
     {
         log_err("Failed to bind UDP socket\n");
-        close(server->udp_sock);
+        freeaddrinfo(candidates);
         return -1;
     }
 
     log_dbg("Bound UDP socket to %s:%s\n", ipstr, port);
 
-    hashmap_init_with_options(
+    hashmap_init(
         &server->client_table,
-        sizeof(struct sockaddr_in6),  /* Assumption is: ipv6 is the largest address we can receive */
-        sizeof(struct client_table_entry),
-        128,
-        hash32_sockaddr);
+        p->ai_addrlen,
+        sizeof(struct client_table_entry));
+
+    freeaddrinfo(candidates);
 
     return 0;
 }
@@ -205,11 +244,7 @@ void
 server_deinit(struct server* server)
 {
     log_dbg("Closing socket\n");
-#if defined(_WIN32)
     closesocket(server->udp_sock);
-#else
-    close(server->udp_sock);
-#endif
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         net_msg_queue_deinit(&client->pending_reliable);
@@ -256,14 +291,20 @@ server_recv(struct server* server)
 
     memset(&client_addr, 0, sizeof client_addr);
     client_addr_len = sizeof(client_addr);
-    bytes_received = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, MSG_DONTWAIT, (struct sockaddr*)&client_addr, &client_addr_len);
+    bytes_received = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
     if (bytes_received < 0)
     {
+#if defined(_WIN32)
+        if (WSAGetLastError() == WSAEWOULDBLOCK)
+            return 0;
+        log_err("Receive call failed: %d\n", WSAGetLastError());
+        return -1;
+#else
         if (errno == EAGAIN)
             return 0;
-
         log_err("Receive call failed: %s\n", strerror(errno));
         return -1;
+#endif
     }
 
     for (i = 0; i < bytes_received - 1;)
@@ -354,22 +395,29 @@ client_init(struct client* client, const char* server_address, const char* port)
         if (client->udp_sock == -1)
             continue;
 
+        /* We want non-blocking sockets */
+        if (set_nonblocking(client->udp_sock) < 0)
+        {
+            closesocket(client->udp_sock);
+            continue;
+        }
+
         /*
          * When connecting a UDP socket, we can use send() instead of sendto()
          * This way, the server address (socketaddr_storage) doens't need to be
          * saved in the client structure
          */
-        if (connect(client->udp_sock, p->ai_addr, p->ai_addrlen) == 0)
-            break;
-        log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
-
-        close(client->udp_sock);
+        if (connect(client->udp_sock, p->ai_addr, p->ai_addrlen) != 0)
+        {
+            log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
+            closesocket(client->udp_sock);
+        }
+        break;
     }
     freeaddrinfo(candidates);
     if (p == NULL)
     {
         log_err("Failed to connect UDP socket\n");
-        close(client->udp_sock);
         return -1;
     }
 
@@ -385,11 +433,7 @@ void
 client_deinit(struct client* client)
 {
     log_dbg("Closing socket\n");
-#if defined(_WIN32)
     closesocket(client->udp_sock);
-#else
-    close(client->udp_sock);
-#endif
 
     net_msg_queue_deinit(&client->pending_reliable);
 }
@@ -429,14 +473,22 @@ client_recv(struct client* client)
 
     memset(&server_addr, 0, sizeof server_addr);
     server_addr_len = sizeof(server_addr);
-    bytes_received = recvfrom(client->udp_sock, buf, MAX_UDP_PACKET_SIZE, MSG_DONTWAIT, (struct sockaddr*)&server_addr, &server_addr_len);
+    bytes_received = recvfrom(client->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&server_addr, &server_addr_len);
     if (bytes_received < 0)
     {
+#if defined(_WIN32)
+        if (WSAGetLastError() == WSAEWOULDBLOCK)
+            return 0;
+        if (WSAGetLastError() == WSAECONNRESET)
+            return 0;
+        log_err("Receive call failed: %d\n", WSAGetLastError());
+        return -1;
+#else
         if (errno == EAGAIN)
             return 0;
-
         log_err("Receive call failed: %s\n", strerror(errno));
         return -1;
+#endif
     }
 
     for (i = 0; i < bytes_received - 1;)
