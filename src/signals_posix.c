@@ -1,5 +1,6 @@
-#include "clither/signal.h"
+#include "clither/signals.h"
 #include <signal.h>
+#include <stddef.h>
 
 static volatile char ctrl_c_pressed = 0;
 static struct sigaction old_act;
@@ -33,7 +34,7 @@ signals_remove(void)
 
 /* ------------------------------------------------------------------------- */
 char
-signals_ctrl_c_pressed(void)
+signals_exit_requested(void)
 {
     return ctrl_c_pressed;
 }

@@ -292,6 +292,67 @@ hashmap_insert(struct cs_hashmap* hm, const void* key, const void* value)
 
 /* ------------------------------------------------------------------------- */
 void*
+hashmap_emplace(
+    struct cs_hashmap* hm,
+    const void* key)
+{
+    cs_hash32 hash, pos, i, last_tombstone;
+
+    /* NOTE: Rehashing may change table count, make sure to compute hash after this */
+    if (hm->slots_used * 100 / hm->table_count >= HM_REHASH_AT_PERCENT)
+        if (resize_rehash(hm, hm->table_count * HM_EXPAND_FACTOR) != 0)
+            return NULL;
+
+    /* Init values */
+    hash = hash_wrapper(hm, key, hm->key_size);
+    pos = hash % hm->table_count;
+    i = 0;
+    last_tombstone = HM_SLOT_INVALID;
+
+    while (SLOT(hm, pos) != HM_SLOT_UNUSED)
+    {
+        /* If the same hash already exists in this slot, and this isn't the
+         * result of a hash collision (which we can verify by comparing the
+         * original keys), then we can conclude this key was already inserted */
+        if (SLOT(hm, pos) == hash)
+        {
+            if (memcmp(KEY(hm, pos), key, hm->key_size) == 0)
+                return NULL;
+        }
+        else
+            if (SLOT(hm, pos) == HM_SLOT_RIP)
+                last_tombstone = pos;
+
+        /* Quadratic probing following p(K,i)=(i^2+i)/2. If the hash table
+         * size is a power of two, this will visit every slot */
+        i++;
+        pos += i;
+        pos = pos % hm->table_count;
+        STATS_INSERTION_PROBE(hm);
+    }
+
+    /* It's safe to insert new values at the end of a probing sequence */
+    if (last_tombstone != HM_SLOT_INVALID)
+    {
+        pos = last_tombstone;
+        STATS_INSERTED_IN_TOMBSTONE(hm);
+    }
+    else
+    {
+        STATS_INSERTED_IN_UNUSED(hm);
+    }
+
+    /* Store hash, key and value */
+    SLOT(hm, pos) = hash;
+    memcpy(KEY(hm, pos), key, hm->key_size);
+
+    hm->slots_used++;
+
+    return VALUE(hm, pos);
+}
+
+/* ------------------------------------------------------------------------- */
+void*
 hashmap_erase(struct cs_hashmap* hm, const void* key)
 {
     cs_hash32 hash = hash_wrapper(hm, key, hm->key_size);

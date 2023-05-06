@@ -2,17 +2,20 @@
 
 #include "clither/config.h"
 #include "cstructures/vector.h"
+#include "cstructures/hashmap.h"
+
+C_BEGIN
 
 struct server
 {
     int udp_sock;
-    struct cs_vector pending_reliable;
+    struct cs_hashmap client_table;  /* struct sockaddr_storage -> struct client_table_entry (see net.c) */
 };
 
 struct client
 {
     int udp_sock;
-    struct cs_vector pending_reliable;
+    struct cs_vector pending_reliable;  /* struct net_msg* */
 };
 
 /*!
@@ -60,9 +63,9 @@ void
 server_send_pending_data(struct server* server);
 
 /*!
- * 
+ *
  */
-void
+int
 server_recv(struct server* server);
 
 /*!
@@ -79,3 +82,8 @@ client_deinit(struct client* client);
 
 void
 client_send_pending_data(struct client* client);
+
+int
+client_recv(struct client* client);
+
+C_END

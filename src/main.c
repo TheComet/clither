@@ -6,6 +6,7 @@
 #include "clither/log.h"
 #include "clither/protocol.h"
 #include "clither/signals.h"
+#include "clither/tick.h"
 #include "clither/world.h"
 
 #include "cstructures/init.h"
@@ -27,6 +28,7 @@ run_server(const struct args* a)
 {
     struct world world;
     struct server server;
+    struct tick tick;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -44,9 +46,16 @@ run_server(const struct args* a)
         goto net_init_connection_failed;
     net_log_host_ips();
 
+    tick_init(&tick, 1);
     while (signals_exit_requested() == 0)
     {
+        int tick_lag;
+
         server_recv(&server);
+        server_send_pending_data(&server);
+
+        if ((tick_lag = tick_wait(&tick)) > 0)
+            log_warn("Server is lagging! Behind by %d tick\n", tick_lag);
     }
     log_info("Stopping server\n");
 
@@ -59,7 +68,7 @@ run_server(const struct args* a)
 
 net_init_connection_failed:
     net_deinit();
-net_init_failed: 
+net_init_failed:
     signals_remove();
 }
 
@@ -72,13 +81,17 @@ run_client(const struct args* a)
     struct controls controls = { 0 };
     struct gfx* gfx;
     struct client client;
+    struct tick tick;
+    int counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     /* Install signal handlers for CTRL+C and (on windows) console close events */
-    //signals_install();
+#ifndef _WIN32
+    signals_install();
+#endif
 
     world_init(&world);
 
@@ -94,20 +107,36 @@ run_client(const struct args* a)
     if (client_init(&client, a->ip, a->port) < 0)
         goto net_init_connection_failed;
 
-    client_join_game_request(&client, "test");
+    protocol_join_game_request(&client.pending_reliable, "test");
     client_send_pending_data(&client);
+
+    tick_init(&tick, 1);
+    counter = 0;
+    while (1 /*signals_exit_requested() == 0*/)
+    {
+        gfx_poll_input(gfx, &controls);
+        if (controls.quit)
+            goto quit;
+
+        client_recv(&client);
+        client_send_pending_data(&client);
+
+        if (tick_wait(&tick) > 10)
+            tick_skip(&tick);
+    }
 
     log_info("Client started\n");
     while (1 /*signals_exit_requested() == 0*/)
     {
         gfx_poll_input(gfx, &controls);
         if (controls.quit)
-            break;
+            goto quit;
 
         gfx_update(gfx);
     }
-    log_info("Stopping client\n");
 
+quit:
+    log_info("Stopping client\n");
     client_deinit(&client);
 net_init_connection_failed:
     net_deinit();
@@ -117,7 +146,9 @@ net_init_failed:
 create_gfx_failed:
     gfx_deinit();
 init_gfx_failed:
+#ifndef _WIN32
     signals_remove();
+#endif
     log_set_colors("", "");
     log_set_prefix("");
 }
@@ -196,8 +227,11 @@ wait_for_background_server(uint64_t pid)
     CloseHandle(hThread);
 #else
     int status;
-    waitpid((pid_t)pid, 0);
-#   if 0
+    signals_install();
+    while (signals_exit_requested() == 0)
+        pause();
+    signals_remove();
+
     log_dbg("Sending SIGINT to server process %d\n", (int)pid);
     kill((pid_t)pid, SIGINT);
     if (waitpid((pid_t)pid, &status, 0) < 0)
@@ -210,14 +244,13 @@ wait_for_background_server(uint64_t pid)
             kill((pid_t)pid, SIGKILL);
         }
     }
-#   endif
 #endif
 }
 
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
-    /* 
+    /*
      * Parse command line args before doing anything else. This function
      * returns -1 if an error occurred, 0 if we can continue running, and 1
      * if --help appeared, in which case we should exit.
@@ -236,7 +269,7 @@ int main(int argc, char* argv[])
         log_file_open(args.log_file);
 #endif
 
-    /* 
+    /*
      * cstructures global init. This is mostly for memory tracking during
      * debug builds
      */
@@ -275,7 +308,7 @@ int main(int argc, char* argv[])
              */
             if (subprocess == 0)
                 break;
-            
+
             /* The server should be running, so try to join as a client */
             run_client(&args);
 

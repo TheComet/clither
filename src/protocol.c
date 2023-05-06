@@ -1,9 +1,10 @@
+#include "clither/log.h"
 #include "clither/net.h"
 #include "clither/protocol.h"
 #include "clither/q.h"
 #include "cstructures/memory.h"
 
-#include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 
 /* Because net_msg.payload is defined as char[1] */
@@ -14,13 +15,15 @@
     MALLOC(NET_MSG_SIZE(extra_bytes))
 
 /* ------------------------------------------------------------------------- */
-static void
-init_msg(struct net_msg* msg, enum net_msg_type type, int8_t priority)
+static struct net_msg*
+msg_new(uint8_t size, enum net_msg_type type, int8_t priority)
 {
+    struct net_msg* msg = MALLOC_NET_MSG(size);
     msg->type = type;
     msg->priority = priority;
     msg->priority_counter = 0;
-    msg->ack = 0;
+    msg->payload_len = size;
+    return msg;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -42,21 +45,32 @@ net_msg_queue_deinit(struct cs_vector* queue)
 
 /* ------------------------------------------------------------------------- */
 void
-client_join_game_request(struct client* client, const char* username)
+protocol_join_game_request(struct cs_vector* msg_queue, const char* username)
 {
-    int username_len = strlen(username);
-    struct net_msg* msg = MALLOC_NET_MSG(username_len + 1);
-    init_msg(msg, MSG_JOIN, 10);
-    memcpy(msg->payload, username, username_len + 1);
-    vector_push(&client->pending_reliable, &msg);
+    struct net_msg* msg;
+    int username_len_i32;
+    uint8_t username_len;
+
+    username_len_i32 = strlen(username);
+    if (username_len_i32 > 254)
+        username_len_i32 = 254;
+    username_len = (uint8_t)username_len_i32;
+
+    msg = msg_new(username_len + 1, MSG_JOIN, 10);
+    memcpy(msg->payload + 0, &username_len, 1);
+    memcpy(msg->payload + 1, username, username_len);
+    vector_push(msg_queue, &msg);
+
+    log_dbg("Protocol: MSG_JOIN -> \"%s\"\n", username);
 }
 
 /* ------------------------------------------------------------------------- */
 void
-server_join_game_response(struct server* server, struct qpos2* spawn_pos)
+protocol_join_game_response(struct cs_vector* msg_queue, struct qpos2* spawn_pos)
 {
-    struct net_msg* msg = MALLOC_NET_MSG(sizeof(*spawn_pos));
-    init_msg(msg, MSG_JOIN, 10);
+    struct net_msg* msg = msg_new((uint8_t)sizeof(*spawn_pos), MSG_JOIN, 10);
     memcpy(msg->payload, spawn_pos, sizeof(*spawn_pos));
-    vector_push(&server->pending_reliable, &msg);
+    vector_push(msg_queue, &msg);
+
+    log_dbg("Protocol: MSG_JOIN -> %d,%d\n", spawn_pos->x, spawn_pos->y);
 }

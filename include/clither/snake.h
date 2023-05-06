@@ -12,7 +12,9 @@ struct controls;
 
 struct snake
 {
-    /* 
+    char* name;
+
+    /*
      * We keep a local list of points that are drawn out over time as the head
      * moves. These points are used to fit a bezier curve to the front part of
      * the snake, so the list of points will be as long as the first section of
@@ -35,7 +37,7 @@ struct snake
 };
 
 void
-snake_init(struct snake* s);
+snake_init(struct snake* s, const char* name);
 
 void
 snake_deinit(struct snake* s);
