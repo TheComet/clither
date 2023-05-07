@@ -29,6 +29,7 @@ run_server(const struct args* a)
     struct world world;
     struct server server;
     struct tick tick;
+    uint8_t counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -46,13 +47,21 @@ run_server(const struct args* a)
         goto net_init_connection_failed;
     net_log_host_ips();
 
-    tick_init(&tick, 1);
+    tick_init(&tick, 60);
+    counter = 0;
     while (signals_exit_requested() == 0)
     {
         int tick_lag;
+        counter++;
 
-        server_recv(&server);
-        server_send_pending_data(&server);
+        if (counter % 3 == 0)
+            if (server_recv(&server) != 0)
+                break;
+
+        /* sim_update */
+
+        if (counter % 3 == 0)
+            server_send_pending_data(&server);
 
         if ((tick_lag = tick_wait(&tick)) > 0)
             log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
@@ -82,14 +91,14 @@ run_client(const struct args* a)
     struct gfx* gfx;
     struct client client;
     struct tick tick;
-    int counter;
+    uint8_t counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     /* Install signal handlers for CTRL+C and (on windows) console close events */
-#ifndef _WIN32
+#if !defined(_WIN32)
     signals_install();
 #endif
 
@@ -107,35 +116,43 @@ run_client(const struct args* a)
     if (client_init(&client, a->ip, a->port) < 0)
         goto net_init_connection_failed;
 
-    protocol_join_game_request(&client.pending_reliable, "test");
+    client_join_game_request(&client.pending_reliable, "test");
     client_send_pending_data(&client);
 
-    tick_init(&tick, 1);
+    tick_init(&tick, 60);
     counter = 0;
-    while (1 /*signals_exit_requested() == 0*/)
-    {
-        gfx_poll_input(gfx, &controls);
-        if (controls.quit)
-            goto quit;
-
-        client_recv(&client);
-        client_send_pending_data(&client);
-
-        if (tick_wait(&tick) > 10)
-            tick_skip(&tick);
-    }
-
     log_info("Client started\n");
-    while (1 /*signals_exit_requested() == 0*/)
+    while (1)
     {
+        counter++;
+
         gfx_poll_input(gfx, &controls);
         if (controls.quit)
-            goto quit;
+            break;
+#if !defined(_WIN32)
+        if (signals_exit_requested())
+            break;
+#endif
+
+        if (counter % 3 == 0)
+            if (client_recv(&client) != 0)
+                break;
+
+        /* sim_update */
+
+        if (counter % 3 == 0)
+            if (client_send_pending_data(&client) != 0)
+                break;
 
         gfx_update(gfx);
+
+        if (tick_wait(&tick) > 180)
+        {
+            log_err("Client lagged too hard\n");
+            break;
+        }
     }
 
-quit:
     log_info("Stopping client\n");
     client_deinit(&client);
 net_init_connection_failed:
@@ -146,7 +163,7 @@ net_init_failed:
 create_gfx_failed:
     gfx_deinit();
 init_gfx_failed:
-#ifndef _WIN32
+#if !defined(_WIN32)
     signals_remove();
 #endif
     log_set_colors("", "");

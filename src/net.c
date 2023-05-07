@@ -20,6 +20,7 @@
 #   include <sys/socket.h>
 #   include <arpa/inet.h>
 #   include <ifaddrs.h>
+#   include <fcntl.h>
 #endif
 
 /*
@@ -36,8 +37,10 @@
 
 struct client_table_entry
 {
+    struct cs_vector pending_unreliable;
     struct cs_vector pending_reliable;
     socklen_t addrlen;
+    int timeout_counter;
 };
 
 #define CLIENT_TABLE_FOR_EACH(table, k, v) \
@@ -84,24 +87,6 @@ sockaddr_to_str(char* ipstr, const struct sockaddr* addr, int maxlen)
 }
 
 /* ------------------------------------------------------------------------- */
-static cs_hash32
-hash32_sockaddr(const void* addr_storage, uintptr_t len)
-{
-    const struct sockaddr* addr = addr_storage;
-    if (addr->sa_family == AF_INET)
-        /* IPv4 is a uint32_t */
-        return (cs_hash32)((struct sockaddr_in*)addr)->sin_addr.s_addr;
-    else if (addr->sa_family == AF_INET6)
-        /* IPv6 is 16 bytes (128 bits) */
-        return hash32_jenkins_oaat(((struct sockaddr_in6*)addr)->sin6_addr.s6_addr, 16);
-    else
-    {
-        assert(0);
-        return hash32_jenkins_oaat(addr_storage, len);
-    }
-}
-
-/* ------------------------------------------------------------------------- */
 int
 net_init(void)
 {
@@ -145,8 +130,6 @@ net_log_host_ips(void)
 #else
     struct ifaddrs* ifaddr;
     struct ifaddrs* p;
-    int family, s;
-    char host[NI_MAXHOST];
 
     if (getifaddrs(&ifaddr) < 0)
     {
@@ -159,7 +142,7 @@ net_log_host_ips(void)
         if (p->ifa_addr == NULL)
             continue;
 
-        s = getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+        //s = getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
     }
 
     freeifaddrs(ifaddr);
@@ -212,7 +195,7 @@ server_init(struct server* server, const char* bind_address, const char* port)
             closesocket(server->udp_sock);
             continue;
         }
-        
+
         if (bind(server->udp_sock, p->ai_addr, p->ai_addrlen) != 0)
         {
             log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
@@ -229,6 +212,11 @@ server_init(struct server* server, const char* bind_address, const char* port)
 
     log_dbg("Bound UDP socket to %s:%s\n", ipstr, port);
 
+    /*
+     * Whenever we receive a UDP packet, we look up the source address to get
+     * the client structure associated with that packet. Depending on whether
+     * we are using IPv4 or IPv6 the size of the key will be different.
+     */
     hashmap_init(
         &server->client_table,
         p->ai_addrlen,
@@ -248,6 +236,7 @@ server_deinit(struct server* server)
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         net_msg_queue_deinit(&client->pending_reliable);
+        net_msg_queue_deinit(&client->pending_unreliable);
     CLIENT_TABLE_END_EACH
     hashmap_deinit(&server->client_table);
 }
@@ -257,12 +246,14 @@ void
 server_send_pending_data(struct server* server)
 {
     char buf[MAX_UDP_PACKET_SIZE];
+    char ipstr[INET6_ADDRSTRLEN];
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         uint8_t type;
         int len = 0;
 
-        NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+        /* Append unreliable messages first */
+        NET_MSG_FOR_EACH(&client->pending_unreliable, msg)
             if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
                 continue;
 
@@ -270,11 +261,44 @@ server_send_pending_data(struct server* server)
             memcpy(buf + 0, &type, 1);
             memcpy(buf + 1, &msg->payload_len, 1);
             memcpy(buf + 2, msg->payload, msg->payload_len);
+
+            len += msg->payload_len + 2;
+            NET_MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+        NET_MSG_END_EACH
+
+        /* Append reliable messages */
+        NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+            if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
+                continue;
+
+            if (msg->priority_counter-- > 0)
+                continue;
+            msg->priority_counter = msg->priority;
+
+            type = (uint8_t)msg->type;
+            memcpy(buf + 0, &type, 1);
+            memcpy(buf + 1, &msg->payload_len, 1);
+            memcpy(buf + 2, msg->payload, msg->payload_len);
+
             len += msg->payload_len + 2;
         NET_MSG_END_EACH
 
-        log_dbg("Sending UDP packet size=%d\n", len);
-        sendto(server->udp_sock, buf, len, 0, (struct sockaddr*)addr, client->addrlen);
+        if (len > 0)
+        {
+            sockaddr_to_str(ipstr, addr, sizeof ipstr);
+            log_dbg("Sending UDP packet to %s, size=%d\n", ipstr, len);
+            sendto(server->udp_sock, buf, len, 0, (struct sockaddr*)addr, client->addrlen);
+            client->timeout_counter++;
+        }
+
+        if (client->timeout_counter > 100)
+        {
+            sockaddr_to_str(ipstr, addr, sizeof ipstr);
+            log_warn("Client %s timed out\n", ipstr);
+            net_msg_queue_deinit(&client->pending_reliable);
+            net_msg_queue_deinit(&client->pending_unreliable);
+            hashmap_erase(&server->client_table, addr);
+        }
     CLIENT_TABLE_END_EACH
 }
 
@@ -284,77 +308,162 @@ server_recv(struct server* server)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     char ipstr[INET6_ADDRSTRLEN];
+    struct client_table_entry* client;
     struct sockaddr_in6 client_addr;  /* Assumption is: IPv6 is the largest address possible */
     socklen_t client_addr_len;
     int bytes_received;
     int i;
 
-    memset(&client_addr, 0, sizeof client_addr);
-    client_addr_len = sizeof(client_addr);
-    bytes_received = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
-    if (bytes_received < 0)
+    /* Update timeout counters of every client that we've communicated with */
+    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+        client->timeout_counter++;
+    CLIENT_TABLE_END_EACH
+
+    /* We may need to read more than one UDP packet */
+    while (1)
     {
+        memset(&client_addr, 0, sizeof client_addr);
+        client_addr_len = sizeof(client_addr);
+        bytes_received = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
+
+        /* Call to recvfrom is non-blocking, handle accordingly */
+        if (bytes_received < 0)
+        {
 #if defined(_WIN32)
-        if (WSAGetLastError() == WSAEWOULDBLOCK)
-            return 0;
-        log_err("Receive call failed: %d\n", WSAGetLastError());
-        return -1;
+            if (WSAGetLastError() == WSAEWOULDBLOCK)
+                return 0;
+            log_err("Receive call failed: %d\n", WSAGetLastError());
+            return -1;
 #else
-        if (errno == EAGAIN)
-            return 0;
-        log_err("Receive call failed: %s\n", strerror(errno));
-        return -1;
+            if (errno == EAGAIN)
+                return 0;
+            log_err("Receive call failed: %s\n", strerror(errno));
+            return -1;
 #endif
-    }
-
-    for (i = 0; i < bytes_received - 1;)
-    {
-        struct client_table_entry* client;
-        enum net_msg_type type = buf[i+0];
-        uint8_t payload_len = buf[i+1];
-        if (i + payload_len + 2 > bytes_received)
-        {
-            sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof *ipstr);
-            log_warn("Invalid payload length \"%d\" received from client %s\n", (int)payload_len, ipstr);
-            log_warn("Dropping rest of packet\n");
-            return 0;
         }
 
+        /*
+         * If we received a packet from a registered client, reset their timeout
+         * counter
+         */
         client = hashmap_find(&server->client_table, &client_addr);
-        if (client == NULL && type != MSG_JOIN)
-        {
-            sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof *ipstr);
-            log_warn("Received packet from unknown client %s\n", ipstr);
-            return 0;
-        }
+        if (client != NULL)
+            client->timeout_counter = 0;
 
-        switch (type)
+        /* Packet can contain multiple message objects. Unpack */
+        for (i = 0; i < bytes_received - 1;)
         {
-            case MSG_JOIN: {
-                char name[128];
-                struct qpos2 spawn_pos;
-                if (client != NULL)
+            enum net_msg_type type = buf[i+0];
+            uint8_t payload_len = buf[i+1];
+            if (i + payload_len + 2 > bytes_received)
+            {
+                sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof ipstr);
+                log_warn("Invalid payload length \"%d\" received from client %s\n", (int)payload_len, ipstr);
+                log_warn("Dropping rest of packet\n");
+                return 0;
+            }
+
+            /*
+             * Disallow receiving packets from clients that are not registered
+             * with the excepption of the "join game request" message.
+             */
+            if (client == NULL && type != MSG_JOIN_REQUEST)
+            {
+                sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof ipstr);
+                log_warn("Received packet from unknown client %s\n", ipstr);
+                return 0;
+            }
+
+            /* Process message */
+            switch (type)
+            {
+                case MSG_JOIN_REQUEST: {
+                    char name[256];
+                    struct qpos2 spawn_pos;
+                    if (client != NULL)
+                        break;
+
+                    if (hashmap_count(&server->client_table) > 600)
+                    {
+                        server_join_game_deny_server_full(
+                            &client->pending_reliable,
+                            "Server is full");
+                        break;
+                    }
+
+                    if (payload_len == 0)
+                    {
+                        server_join_game_deny_bad_username(
+                            &client->pending_reliable,
+                            "Username cannot be empty");
+                        break;
+                    }
+                    if (payload_len > 32)
+                    {
+                        server_join_game_deny_bad_username(
+                            &client->pending_reliable,
+                            "Username too long");
+                        break;
+                    }
+
+                    /* TODO: Create snake in world */
+
+                    memcpy(name, buf+2, payload_len);
+                    name[payload_len] = '\0';
+                    log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", name);
+
+                    client = hashmap_emplace(&server->client_table, &client_addr);
+                    client->addrlen = client_addr_len;
+                    net_msg_queue_init(&client->pending_reliable);
+
+                    server_join_game_accept(&client->pending_reliable, &spawn_pos);
+                } break;
+
+                case MSG_JOIN_ACCEPT:
+                case MSG_JOIN_DENY_BAD_PROTOCOL:
+                case MSG_JOIN_DENY_BAD_USERNAME:
+                case MSG_JOIN_DENY_SERVER_FULL:
                     break;
 
-                /* TODO: Create snake in world */
+                case MSG_JOIN_ACK: {
+                    server_join_game_ack_received(&client->pending_reliable);
+                } break;
 
-                memcpy(name, buf+2, payload_len);
-                name[payload_len] = '\0';
-                log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", name);
+                case MSG_LEAVE: {
 
-                client = hashmap_emplace(&server->client_table, &client_addr);
-                client->addrlen = client_addr_len;
-                net_msg_queue_init(&client->pending_reliable);
+                } break;
 
-                protocol_join_game_response(&client->pending_reliable, &spawn_pos);
-            } break;
+                case MSG_SNAKE_METADATA: {
 
-            case MSG_JOIN_ACK: {
+                } break;
 
-            } break;
+                case MSG_SNAKE_METADATA_ACK: {
+
+                } break;
+
+                case MSG_SNAKE_DATA: {
+
+                } break;
+
+                case MSG_FOOD_CREATE: {
+
+                } break;
+
+                case MSG_FOOD_CREATE_ACK: {
+
+                } break;
+
+                case MSG_FOOD_DESTROY: {
+
+                } break;
+
+                case MSG_FOOD_DESTROY_ACK: {
+
+                } break;
+            }
+
+            i += payload_len + 2;
         }
-
-        i += payload_len + 2;
     }
 
     return 0;
@@ -423,7 +532,9 @@ client_init(struct client* client, const char* server_address, const char* port)
 
     log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
 
+    net_msg_queue_init(&client->pending_unreliable);
     net_msg_queue_init(&client->pending_reliable);
+    client->timeout_counter = 0;
 
     return 0;
 }
@@ -436,16 +547,19 @@ client_deinit(struct client* client)
     closesocket(client->udp_sock);
 
     net_msg_queue_deinit(&client->pending_reliable);
+    net_msg_queue_deinit(&client->pending_unreliable);
 }
 
 /* ------------------------------------------------------------------------- */
-void
+int
 client_send_pending_data(struct client* client)
 {
     uint8_t type;
     char buf[MAX_UDP_PACKET_SIZE];
     int len = 0;
-    NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+
+    /* Append unreliable messages first */
+    NET_MSG_FOR_EACH(&client->pending_unreliable, msg)
         if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
             continue;
 
@@ -453,11 +567,42 @@ client_send_pending_data(struct client* client)
         memcpy(buf + 0, &type, 1);
         memcpy(buf + 1, &msg->payload_len, 1);
         memcpy(buf + 2, msg->payload, msg->payload_len);
+
+        len += msg->payload_len + 2;
+        NET_MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+    NET_MSG_END_EACH
+
+    /* Append reliable messages */
+    NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+        if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
+            continue;
+
+        if (msg->priority_counter-- > 0)
+            continue;
+        msg->priority_counter = msg->priority;
+
+        type = (uint8_t)msg->type;
+        memcpy(buf + 0, &type, 1);
+        memcpy(buf + 1, &msg->payload_len, 1);
+        memcpy(buf + 2, msg->payload, msg->payload_len);
+
         len += msg->payload_len + 2;
     NET_MSG_END_EACH
 
-    log_dbg("Sending UDP packet size=%d\n", len);
-    send(client->udp_sock, buf, len, 0);
+    if (len > 0)
+    {
+        log_dbg("Sending UDP packet, size=%d\n", len);
+        send(client->udp_sock, buf, len, 0);
+        client->timeout_counter++;
+    }
+
+    if (client->timeout_counter > 100)
+    {
+        log_err("Server timed out\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -474,6 +619,8 @@ client_recv(struct client* client)
     memset(&server_addr, 0, sizeof server_addr);
     server_addr_len = sizeof(server_addr);
     bytes_received = recvfrom(client->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&server_addr, &server_addr_len);
+
+    /* Call to recvfrom is non-blocking, handle accordingly */
     if (bytes_received < 0)
     {
 #if defined(_WIN32)
@@ -491,28 +638,42 @@ client_recv(struct client* client)
 #endif
     }
 
+    /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
     {
         enum net_msg_type type = buf[i+0];
         uint8_t payload_len = buf[i+1];
         if (i + payload_len + 2 > bytes_received)
         {
-            sockaddr_to_str(ipstr, (struct sockaddr*)&server_addr, sizeof *ipstr);
+            sockaddr_to_str(ipstr, (struct sockaddr*)&server_addr, sizeof ipstr);
             log_warn("Invalid payload length \"%d\" received from %s\n", (int)payload_len, ipstr);
             log_warn("Dropping rest of packet\n");
             return 0;
         }
 
+        /* Process message */
         switch (type)
         {
-            case MSG_JOIN: {
+            case MSG_JOIN_REQUEST:
+                break;
 
+            case MSG_JOIN_ACCEPT: {
+                client_join_game_accepted(&client->pending_reliable);
+                client_join_game_ack(&client->pending_unreliable);
             } break;
+
+            case MSG_JOIN_DENY_BAD_PROTOCOL:
+            case MSG_JOIN_DENY_BAD_USERNAME:
+            case MSG_JOIN_DENY_SERVER_FULL:
+                break;
 
             case MSG_JOIN_ACK:
                 break;
         }
+
+        i += payload_len + 2;
     }
 
+    client->timeout_counter = 0;
     return 0;
 }
