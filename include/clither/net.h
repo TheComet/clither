@@ -8,14 +8,16 @@ C_BEGIN
 
 struct server
 {
-    int udp_sock;
     struct cs_hashmap client_table;  /* struct sockaddr_storage -> struct client_table_entry (see net.c) */
+    int udp_sock;
 };
 
 struct client
 {
+    struct cs_vector pending_unreliable;  /* struct net_msg* */
+    struct cs_vector pending_reliable;    /* struct net_msg* */
     int udp_sock;
-    struct cs_vector pending_reliable;  /* struct net_msg* */
+    int timeout_counter;
 };
 
 /*!
@@ -80,7 +82,7 @@ client_init(struct client* client, const char* server_address, const char* port)
 void
 client_deinit(struct client* client);
 
-void
+int
 client_send_pending_data(struct client* client);
 
 int

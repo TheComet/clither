@@ -286,7 +286,7 @@ vector_reverse(struct cs_vector* vector);
  */
 #define VECTOR_FOR_EACH_RANGE(vector, var_type, var, begin_index, end_index) { \
     var_type* var; \
-    uint8_t* internal_##var_end_of_vector = (vector)->data + (end_index) * (vector)->element_size; \
+    uint8_t* internal_##var##_end_of_vector = (vector)->data + (end_index) * (vector)->element_size; \
     for(var = (var_type*)((vector)->data + (begin_index) * (vector)->element_size); \
         (uint8_t*)var < internal_##var_end_of_vector;                          \
         var = (var_type*)(((uint8_t*)var) + (vector)->element_size)) {
@@ -304,10 +304,17 @@ vector_reverse(struct cs_vector* vector);
  */
 #define VECTOR_FOR_EACH_RANGE_R(vector, var_type, var, begin_index, end_index) { \
     var_type* var;                                                             \
-    uint8_t* internal_##var_start_of_vector = (vector)->data + (begin_index) * (vector)->element_size - (vector)->element_size; \
+    uint8_t* internal_##var##_start_of_vector = (vector)->data + (begin_index) * (vector)->element_size - (vector)->element_size; \
     for(var = (var_type*)((vector)->data + (end_index) * (vector)->element_size - (vector)->element_size); \
         (uint8_t*)var > internal_##var_start_of_vector;                        \
         var = (var_type*)(((uint8_t*)var) - (vector)->element_size)) {
+
+
+#define VECTOR_ERASE_IN_FOR_LOOP(vector, var_type, var) do { \
+        vector_erase_element(vector, var); \
+        var = (var_type*)(((uint8_t*)var) - (vector)->element_size); \
+        internal_##var##_end_of_vector = (vector)->data + (vector)->count * (vector)->element_size; \
+    } while (0)
 
 /*!
  * @brief Closes a for each scope previously opened by VECTOR_FOR_EACH.

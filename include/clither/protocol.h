@@ -12,8 +12,22 @@ struct server;
 
 enum net_msg_type
 {
-    MSG_JOIN,
-    MSG_JOIN_ACK
+    MSG_JOIN_REQUEST,
+    MSG_JOIN_ACCEPT,
+    MSG_JOIN_DENY_BAD_PROTOCOL,
+    MSG_JOIN_DENY_BAD_USERNAME,
+    MSG_JOIN_DENY_SERVER_FULL,
+    MSG_JOIN_ACK,
+    MSG_LEAVE,
+
+    MSG_SNAKE_METADATA,
+    MSG_SNAKE_METADATA_ACK,
+    MSG_SNAKE_DATA,
+
+    MSG_FOOD_CREATE,
+    MSG_FOOD_CREATE_ACK,
+    MSG_FOOD_DESTROY,
+    MSG_FOOD_DESTROY_ACK
 };
 
 struct net_msg
@@ -32,15 +46,43 @@ void
 net_msg_queue_deinit(struct cs_vector* queue);
 
 void
-protocol_join_game_request(struct cs_vector* msg_queue, const char* username);
+server_join_game_accept(
+        struct cs_vector* msg_queue,
+        struct qpos2* spawn_pos);
 
 void
-protocol_join_game_response(struct cs_vector* msg_queue, struct qpos2* spawn_pos);
+server_join_game_deny_bad_username(
+        struct cs_vector* msg_queue,
+        const char* error);
+
+void
+server_join_game_deny_server_full(
+        struct cs_vector* msg_queue,
+        const char* error);
+
+void
+server_join_game_ack_received(struct cs_vector* msg_queue);
+
+void
+client_join_game_request(
+        struct cs_vector* msg_queue,
+        const char* username);
+
+void
+client_join_game_accepted(struct cs_vector* msg_queue);
+
+void
+client_join_game_ack(struct cs_vector* msg_queue);
+
+void
+client_leave(struct cs_vector* msg_queue);
 
 #define NET_MSG_FOR_EACH(queue, var) \
     VECTOR_FOR_EACH((queue), struct net_msg*, vec_##var) \
     struct net_msg* var = *(vec_##var); {
 #define NET_MSG_END_EACH \
     VECTOR_END_EACH }
+#define NET_MSG_ERASE_IN_FOR_LOOP(queue, var) \
+    VECTOR_ERASE_IN_FOR_LOOP(queue, struct net_msg*, vec_##var)
 
 C_END
