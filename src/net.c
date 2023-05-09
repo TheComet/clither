@@ -1,4 +1,5 @@
 #include "clither/log.h"
+#include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/protocol.h"
 
@@ -353,6 +354,7 @@ server_recv(struct server* server)
         /* Packet can contain multiple message objects. Unpack */
         for (i = 0; i < bytes_received - 1;)
         {
+            union parsed_payload pp;
             enum net_msg_type type = buf[i+0];
             uint8_t payload_len = buf[i+1];
             if (i + payload_len + 2 > bytes_received)
@@ -375,14 +377,13 @@ server_recv(struct server* server)
             }
 
             /* Process message */
-            switch (type)
+            switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
             {
-                case MSG_JOIN_REQUEST: {
-                    char name[256];
-                    struct qpos2 spawn_pos;
-                    if (client != NULL)
-                        break;
+                default: {
+                    /* malicious client */
+                } break;
 
+                case MSG_JOIN_REQUEST: {
                     if (hashmap_count(&server->client_table) > 600)
                     {
                         server_join_game_deny_server_full(
@@ -391,14 +392,7 @@ server_recv(struct server* server)
                         break;
                     }
 
-                    if (payload_len == 0)
-                    {
-                        server_join_game_deny_bad_username(
-                            &client->pending_reliable,
-                            "Username cannot be empty");
-                        break;
-                    }
-                    if (payload_len > 32)
+                    if (pp.join_request.username_len > 32)
                     {
                         server_join_game_deny_bad_username(
                             &client->pending_reliable,
@@ -407,10 +401,6 @@ server_recv(struct server* server)
                     }
 
                     /* TODO: Create snake in world */
-
-                    memcpy(name, buf+2, payload_len);
-                    name[payload_len] = '\0';
-                    log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", name);
 
                     client = hashmap_emplace(&server->client_table, &client_addr);
                     client->addrlen = client_addr_len;
