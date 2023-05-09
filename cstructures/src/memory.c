@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #define BACKTRACE_OMIT_COUNT 2
 
@@ -288,10 +289,10 @@ memory_deinit(void)
 
     /* overall report */
     leaks = (g_allocations > d_deallocations ? g_allocations - d_deallocations : d_deallocations - g_allocations);
-    fprintf(stderr, "allocations: %lu\n", g_allocations);
-    fprintf(stderr, "deallocations: %lu\n", d_deallocations);
-    fprintf(stderr, "memory leaks: %lu\n", leaks);
-    fprintf(stderr, "peak memory usage: %lu bytes\n", g_bytes_in_use_peak);
+    fprintf(stderr, "allocations: %" PRIu64 "\n", g_allocations);
+    fprintf(stderr, "deallocations: %" PRIu64 "u\n", d_deallocations);
+    fprintf(stderr, "memory leaks: %" PRIu64 "u\n", leaks);
+    fprintf(stderr, "peak memory usage: %" PRIu64 " bytes\n", g_bytes_in_use_peak);
     fprintf(stderr, "=========================================\n");
 
     ++g_allocations; /* this is the single allocation still held by the report hashmap */

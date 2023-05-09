@@ -288,7 +288,7 @@ vector_reverse(struct cs_vector* vector);
     var_type* var; \
     uint8_t* internal_##var##_end_of_vector = (vector)->data + (end_index) * (vector)->element_size; \
     for(var = (var_type*)((vector)->data + (begin_index) * (vector)->element_size); \
-        (uint8_t*)var < internal_##var_end_of_vector;                          \
+        (uint8_t*)var < internal_##var##_end_of_vector;                        \
         var = (var_type*)(((uint8_t*)var) + (vector)->element_size)) {
 
 /*!
@@ -303,10 +303,10 @@ vector_reverse(struct cs_vector* vector);
  * @param[in] end_index The "upper" index of the first element (exclusive).
  */
 #define VECTOR_FOR_EACH_RANGE_R(vector, var_type, var, begin_index, end_index) { \
-    var_type* var;                                                             \
+    var_type* var;                                                               \
     uint8_t* internal_##var##_start_of_vector = (vector)->data + (begin_index) * (vector)->element_size - (vector)->element_size; \
     for(var = (var_type*)((vector)->data + (end_index) * (vector)->element_size - (vector)->element_size); \
-        (uint8_t*)var > internal_##var_start_of_vector;                        \
+        (uint8_t*)var > internal_##var##_start_of_vector;                        \
         var = (var_type*)(((uint8_t*)var) - (vector)->element_size)) {
 
 

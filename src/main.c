@@ -1,12 +1,13 @@
 #include "clither/args.h"
+#include "clither/benchmarks.h"
 #include "clither/cli_colors.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/log.h"
-#include "clither/protocol.h"
 #include "clither/signals.h"
+#include "clither/tests.h"
 #include "clither/tick.h"
 #include "clither/world.h"
 
@@ -270,6 +271,8 @@ wait_for_background_server(uint64_t pid)
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
+    int retval;
+
     /*
      * Parse command line args before doing anything else. This function
      * returns -1 if an error occurred, 0 if we can continue running, and 1
@@ -299,8 +302,19 @@ int main(int argc, char* argv[])
         goto cstructures_init_failed;
     }
 
+    retval = 0;
     switch (args.mode)
     {
+#if defined(CLITHER_TESTS)
+        case MODE_TESTS:
+            retval = tests_run(argc, argv);
+            break;
+#endif
+#if defined(CLITHER_BENCHMARKS)
+        case MODE_BENCHMARKS:
+            retval = benchmarks_run(argc, argv);
+            break;
+#endif
         case MODE_HEADLESS:
             run_server(&args);
             break;
@@ -314,7 +328,9 @@ int main(int argc, char* argv[])
 
             /* Modify the command line arguments for client and server */
             server_args.mode = MODE_HEADLESS;
+#if defined(CLITHER_LOGGING)
             server_args.log_file = "";
+#endif
             args.ip = "127.0.0.1";
 
             subprocess = start_background_server(argv[0], &server_args);
@@ -340,9 +356,11 @@ int main(int argc, char* argv[])
     }
 
     cstructures_deinit();
+#if defined(CLITHER_LOGGING)
     log_file_close();
+#endif
 
-    return 0;
+    return retval;
 
 #if defined(CLITHER_LOGGING)
     cstructures_init_failed : log_file_close();

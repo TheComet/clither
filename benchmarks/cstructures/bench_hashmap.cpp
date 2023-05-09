@@ -13,8 +13,8 @@ static std::mt19937 rng;
 
 static uint8_t randomChar()
 {
-    std::uniform_int_distribution<uint8_t> dist(0, 255);
-    return dist(rng);
+    std::uniform_int_distribution<unsigned int> dist(0, 255);
+    return (uint8_t)dist(rng);
 }
 
 static void fillRandom(char* s, uint32_t len)

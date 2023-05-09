@@ -1,9 +1,10 @@
 #pragma once
 
 #include "clither/config.h"
-#include <stdint.h>
 
 C_BEGIN
 
+int
+tests_run(int argc, char* argv[]);
 
 C_END

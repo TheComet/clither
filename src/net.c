@@ -1,7 +1,6 @@
 #include "clither/log.h"
 #include "clither/msg.h"
 #include "clither/net.h"
-#include "clither/protocol.h"
 
 #include "clither/q.h"
 
@@ -235,7 +234,7 @@ server_init(struct server* server, const char* bind_address, const char* port)
             continue;
         }
 
-        if (bind(server->udp_sock, p->ai_addr, p->ai_addrlen) != 0)
+        if (bind(server->udp_sock, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
             closesocket(server->udp_sock);
@@ -258,15 +257,15 @@ server_init(struct server* server, const char* bind_address, const char* port)
      */
     hashmap_init(
         &server->client_table,
-        p->ai_addrlen,
+        (uint32_t)p->ai_addrlen,
         sizeof(struct client_table_entry));
     hashmap_init(
         &server->malicious_clients,
-        p->ai_addrlen,
+        (uint32_t)p->ai_addrlen,
         sizeof(int));
     hashmap_init(
         &server->banned_clients,
-        p->ai_addrlen,
+        (uint32_t)p->ai_addrlen,
         0);
 
     freeaddrinfo(candidates);
@@ -356,13 +355,6 @@ server_send_pending_data(struct server* server)
 
 /* ------------------------------------------------------------------------- */
 static void
-server_client_add(struct server* server)
-{
-
-}
-
-/* ------------------------------------------------------------------------- */
-static void
 mark_client_as_malicious_and_drop(struct server* server)
 {
 
@@ -374,7 +366,6 @@ server_recv(struct server* server)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     char ipstr[INET6_ADDRSTRLEN];
-    struct client_table_entry* client;
     struct sockaddr_in6 client_addr;  /* Assumption is: IPv6 is the largest address possible */
     socklen_t client_addr_len;
     int bytes_received;
@@ -398,6 +389,7 @@ server_recv(struct server* server)
     /* We may need to read more than one UDP packet */
     while (1)
     {
+        struct client_table_entry* client;
         memset(&client_addr, 0, sizeof client_addr);
         client_addr_len = sizeof(client_addr);
         bytes_received = recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
@@ -466,7 +458,7 @@ server_recv(struct server* server)
 
             /*
              * Disallow receiving packets from clients that are not registered
-             * with the excepption of the "join game request" message.
+             * with the exception of the "join game request" message.
              */
             if (client == NULL && type != MSG_JOIN_REQUEST)
             {
@@ -493,22 +485,17 @@ server_recv(struct server* server)
                     struct msg* response;
                     struct qpos2 spawn_pos = { 32, 32 };
 
-                    if (client != NULL)
-                    {
-
-                    }
-
                     if (hashmap_count(&server->client_table) > 600)
                     {
-                        char response[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
-                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
+                        char payload[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
+                        sendto(server->udp_sock, payload, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
                     if (pp.join_request.username_len > 32)
                     {
-                        char response[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
-                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
+                        char payload[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
+                        sendto(server->udp_sock, payload, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
@@ -623,7 +610,7 @@ client_init(struct client* client, const char* server_address, const char* port)
          * This way, the server address (socketaddr_storage) doens't need to be
          * saved in the client structure
          */
-        if (connect(client->udp_sock, p->ai_addr, p->ai_addrlen) != 0)
+        if (connect(client->udp_sock, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
             closesocket(client->udp_sock);

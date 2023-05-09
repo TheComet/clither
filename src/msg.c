@@ -2,6 +2,7 @@
 #include "clither/log.h"
 #include "cstructures/memory.h"
 #include <stddef.h>
+#include <string.h>
 
 /* Because msg.payload is defined as char[1] */
 #define MSG_SIZE(extra_bytes) \
@@ -125,7 +126,7 @@ msg_parse_paylaod(
 struct msg*
 msg_join_request(uint16_t protocol_version, const char* username)
 {
-    int name_len_i32 = strlen(username);
+    int name_len_i32 = (int)strlen(username);
     uint8_t name_len = name_len_i32 > 254 ? 254 : (uint8_t)name_len_i32;
 
     struct msg* m = msg_alloc(
@@ -163,7 +164,7 @@ msg_join_accept(struct qpos2* spawn_pos)
 static struct msg*
 msg_alloc_string_payload(enum msg_type type, int8_t resend_rate, const char* str)
 {
-    int len_i32 = strlen(str);
+    int len_i32 = (int)strlen(str);
     uint8_t len = len_i32 > 254 ? 254 : (uint8_t)len_i32;
 
     struct msg* m = msg_alloc(

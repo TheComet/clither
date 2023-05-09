@@ -191,7 +191,6 @@ TEST(NAME, erase_by_key)
     struct cs_btree btree;
     btree_init(&btree, 0);
 
-    int a=56, b=45, c=18, d=27, e=84;
     btree_insert_new(&btree, 0, NULL);
     btree_insert_new(&btree, 1, NULL);
     btree_insert_new(&btree, 2, NULL);

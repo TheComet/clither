@@ -14,8 +14,14 @@ TEST(NAME, no_args_check_defaults)
     ASSERT_THAT(args_parse(&a, 1, (char**)argv), Eq(0));
     EXPECT_THAT(a.ip, StrEq(""));
     EXPECT_THAT(a.port, StrEq("5555"));
+#if defined(CLITHER_LOGGING)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
+#endif
+#if defined(CLITHER_GFX)
     EXPECT_THAT(a.mode, Eq(MODE_CLIENT));
+#else
+    EXPECT_THAT(a.mode, Eq(MODE_HEADLESS));
+#endif
 }
 
 TEST(NAME, invalid_argument_1)
@@ -72,6 +78,7 @@ TEST(NAME, help_multiple)
     ASSERT_THAT(args_parse(&a, 6, (char**)argv), Eq(1));
 }
 
+#if defined(CLITHER_GFX)
 TEST(NAME, set_host_mode_long)
 {
     const char* argv[] = {
@@ -93,7 +100,9 @@ TEST(NAME, set_host_mode_short)
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(0));
     EXPECT_THAT(a.mode, Eq(MODE_CLIENT_AND_SERVER));
 }
+#endif
 
+#if defined(CLITHER_GFX)
 TEST(NAME, terminate_parsing)
 {
     const char* argv[] = {
@@ -105,6 +114,7 @@ TEST(NAME, terminate_parsing)
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0));
     EXPECT_THAT(a.mode, Eq(MODE_CLIENT));
 }
+#endif
 
 TEST(NAME, set_headless_mode_long)
 {
@@ -128,6 +138,7 @@ TEST(NAME, set_headless_mode_short)
     EXPECT_THAT(a.mode, Eq(MODE_HEADLESS));
 }
 
+#if defined(CLITHER_GFX)
 TEST(NAME, headless_and_client_at_same_time_invalid_1)
 {
     const char* argv[] = {
@@ -148,7 +159,9 @@ TEST(NAME, headless_and_client_at_same_time_invalid_2)
     struct args a;
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(-1));
 }
+#endif
 
+#if defined(CLITHER_LOGGING)
 TEST(NAME, set_log_file_long)
 {
     const char* argv[] = {
@@ -172,7 +185,9 @@ TEST(NAME, set_log_file_short)
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0));
     EXPECT_THAT(a.log_file, StrEq("mylog.txt"));
 }
+#endif
 
+#if defined(CLITHER_LOGGING) && defined(CLITHER_GFX)
 TEST(NAME, set_log_file_short_other_options)
 {
     const char* argv[] = {
@@ -196,7 +211,9 @@ TEST(NAME, set_log_file_short_other_options_invalid)
     struct args a;
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(-1));
 }
+#endif
 
+#if defined(CLITHER_LOGGING)
 TEST(NAME, set_log_file_long_empty)
 {
     const char* argv[] = {
@@ -240,7 +257,9 @@ TEST(NAME, set_log_file_short_missing_arg)
     struct args a;
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(-1));
 }
+#endif
 
+#if defined(CLITHER_LOGGING) && defined(CLITHER_GFX)
 TEST(NAME, set_log_file_short_missing_arg_other_options)
 {
     const char* argv[] = {
@@ -250,6 +269,7 @@ TEST(NAME, set_log_file_short_missing_arg_other_options)
     struct args a;
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(-1));
 }
+#endif
 
 TEST(NAME, set_address_long)
 {
@@ -308,6 +328,7 @@ TEST(NAME, set_port_short)
     EXPECT_THAT(a.port, StrEq("1234"));
 }
 
+#if defined(CLITHER_GFX)
 TEST(NAME, set_port_short_other_options)
 {
     const char* argv[] = {
@@ -331,6 +352,7 @@ TEST(NAME, set_port_short_other_options_invalid)
     struct args a;
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(-1));
 }
+#endif
 
 TEST(NAME, set_port_long_empty)
 {
@@ -374,6 +396,7 @@ TEST(NAME, set_port_short_missing_arg)
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(-1));
 }
 
+#if defined(CLITHER_GFX)
 TEST(NAME, set_port_short_missing_arg_other_options)
 {
     const char* argv[] = {
@@ -383,3 +406,4 @@ TEST(NAME, set_port_short_missing_arg_other_options)
     struct args a;
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(-1));
 }
+#endif

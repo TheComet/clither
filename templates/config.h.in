@@ -4,8 +4,10 @@
 #define CLITHER_STRINGIFY(x) CLITHER_STRINGIFY_(x)
 
 /* Config ------------------------------------------------------------------ */
-#cmakedefine CLITHER_LOGGING
+#cmakedefine CLITHER_BENCHMARKS
 #cmakedefine CLITHER_GFX
+#cmakedefine CLITHER_LOGGING
+#cmakedefine CLITHER_TESTS
 
 #if defined(CLITHER_GFX)
 #   define CLITHER_GFX_${CLITHER_GFX}

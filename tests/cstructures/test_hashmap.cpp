@@ -12,14 +12,20 @@ static const char KEY4[16] = "KEY4";
 
 static cs_hash32 shitty_hash(const void* data, uintptr_t len)
 {
+    (void)data;
+    (void)len;
     return 42;
 }
 static cs_hash32 collide_with_shitty_hash(const void* data, uintptr_t len)
 {
+    (void)data;
+    (void)len;
     return HM_DEFAULT_TABLE_COUNT + 42;
 }
 static cs_hash32 collide_with_shitty_hash_second_probe(const void* data, uintptr_t len)
 {
+    (void)data;
+    (void)len;
     return HM_DEFAULT_TABLE_COUNT + 45; // sequence would be 42, 43, 45, 48, ...
 }
 

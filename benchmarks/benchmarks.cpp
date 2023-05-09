@@ -1,13 +1,12 @@
 #include "benchmark/benchmark.h"
-#include "cstructures/init.h"
+#include "clither/benchmarks.h"
 
 using namespace benchmark;
 
-int main(int argc, char** argv) {
-    cstructures_init();
+int benchmarks_run(int argc, char** argv) {
     Initialize(&argc, argv);
     if (ReportUnrecognizedArguments(argc, argv))
         return 1;
     RunSpecifiedBenchmarks();
-    cstructures_deinit();
+    return 0;
 }

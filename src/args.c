@@ -59,6 +59,12 @@ print_help(const char* prog_name)
     fprintf(stderr,
         SECTION "Available options:\n" RESET
         "  "      "  "       " " ARG1 " --help  " RESET "        Print this help text.\n"
+#if defined(CLITHER_TESTS)
+        "  "      "  "       " " ARG1 " --tests " RESET "        Run unit tests.\n"
+#endif
+#if defined(CLITHER_BENCHMARKS)
+        "  "      "  "       " " ARG1 " --benchmarks" RESET "    Run benchmarks.\n"
+#endif
 #if defined(CLITHER_GFX)
         "  " ARG2 "-s" RESET "," ARG1 " --server" RESET "        Run  in  headless  mode.  This only  starts the server\n"
         "  " ARG2 "-h" RESET "," ARG1 " --host  " RESET "        Spawn both the server and client, and join the server.\n"
@@ -91,6 +97,8 @@ int
 args_parse(struct args* a, int argc, char* argv[])
 {
     int i;
+    char tests_flag = 0;
+    char bench_flag = 0;
 #if defined(CLITHER_GFX)
     char server_flag = 0;
     char host_flag = 0;
@@ -122,6 +130,14 @@ args_parse(struct args* a, int argc, char* argv[])
                     print_help(argv[0]);
                     return 1;
                 }
+#if defined(CLITHER_TESTS)
+                else if (strcmp(arg, "tests") == 0)
+                    tests_flag = 1;
+#endif
+#if defined(CLITHER_BENCHMARKS)
+                else if (strcmp(arg, "benchmarks") == 0)
+                    bench_flag = 1;
+#endif
 #if defined(CLITHER_GFX)
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
@@ -162,7 +178,7 @@ args_parse(struct args* a, int argc, char* argv[])
 #endif
                 else if (strcmp(argv[i], "--") == 0)
                     break;
-                else
+                else if (tests_flag == 0 && bench_flag == 0)
                 {
                     log_err("Unknown option \"%s\"\n", argv[i]);
                     return -1;
@@ -189,6 +205,7 @@ args_parse(struct args* a, int argc, char* argv[])
                     else if (*p == 'h')
                         host_flag = 1;
 #endif
+#if defined(CLITHER_LOGGING)
                     else if (*p == 'l')
                     {
                         ++i;
@@ -199,6 +216,7 @@ args_parse(struct args* a, int argc, char* argv[])
                         }
                         a->log_file = argv[i];
                     }
+#endif
                     else
                     {
                         log_err("Unknown option \"-%c\"\n", *p);
@@ -220,8 +238,17 @@ args_parse(struct args* a, int argc, char* argv[])
         }
     }
 
+    if (0) {}
+#if defined(CLITHER_TESTS)
+    else if (tests_flag)
+        a->mode = MODE_TESTS;
+#endif
+#if defined(CLITHER_BENCHMARKS)
+    else if (bench_flag)
+        a->mode = MODE_BENCHMARKS;
+#endif
 #if defined(CLITHER_GFX)
-    if (server_flag && host_flag)
+    else if (server_flag && host_flag)
     {
         log_err("Can't use \"--server\" and \"--host\" at the same time\n");
         return -1;
@@ -240,13 +267,13 @@ char*
 args_to_string(const char* prog_name, const struct args* a)
 {
     char* s;
-    int len = strlen(prog_name) + 3;  /* null terminator + quotes */
+    int len = (int)strlen(prog_name) + 3;  /* null terminator + quotes */
 
 #if defined(CLITHER_LOGGING)
     if (strcmp(a->log_file, DEFAULT_LOG_FILE) != 0)
     {
         len += sizeof(" -l \"");
-        len += strlen(a->log_file);
+        len += (int)strlen(a->log_file);
         len += sizeof("\"");
     }
 #endif
@@ -254,14 +281,14 @@ args_to_string(const char* prog_name, const struct args* a)
     if (*a->ip)
     {
         len += sizeof(" --ip \"");
-        len += strlen(a->ip);
+        len += (int)strlen(a->ip);
         len += sizeof("\"");
     }
 
     if (strcmp(a->port, DEFAULT_PORT) != 0)
     {
         len += sizeof(" -p ");
-        len += strlen(a->port);
+        len += (int)strlen(a->port);
     }
 
 #if defined(CLITHER_GFX)
@@ -276,12 +303,14 @@ args_to_string(const char* prog_name, const struct args* a)
     strcpy(s+1, prog_name);
     strcat(s, "\"");
 
+#if defined(CLITHER_LOGGING)
     if (strcmp(a->log_file, DEFAULT_LOG_FILE) != 0)
     {
         strcat(s, " -l \"");
         strcat(s, a->log_file);
         strcat(s, "\"");
     }
+#endif
 
     if (*a->ip)
     {
