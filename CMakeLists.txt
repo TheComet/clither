@@ -46,6 +46,7 @@ add_library (clither_lib STATIC
     "include/clither/event.h"
     "include/clither/gfx.h"
     "include/clither/log.h"
+    "include/clither/msg.h"
     "include/clither/net.h"
     "include/clither/protocol.h"
     "include/clither/q.h"
@@ -59,6 +60,7 @@ add_library (clither_lib STATIC
     "src/event.c"
     $<$<STREQUAL:${CLITHER_GFX},SDL>:src/gfx_sdl.c>
     "src/log.c"
+    "src/msg.c"
     "src/net.c"
     "src/protocol.c"
     $<$<PLATFORM_ID:Windows>:
