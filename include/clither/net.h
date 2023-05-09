@@ -8,7 +8,9 @@ C_BEGIN
 
 struct server
 {
-    struct cs_hashmap client_table;  /* struct sockaddr_storage -> struct client_table_entry (see net.c) */
+    struct cs_hashmap client_table;       /* struct (key size depends on protocol) -> struct client_table_entry (see net.c) */
+    struct cs_hashmap malicious_clients;  /* struct sockaddr (key size depends on protocol) */
+    struct cs_hashmap banned_clients;     /* struct sockaddr (key size depends on protocol) */
     int udp_sock;
 };
 

@@ -28,8 +28,8 @@ enum msg_type
 
 struct msg
 {
-    int8_t priority;
-    int8_t priority_counter;
+    int8_t resend_rate;
+    int8_t resend_rate_counter;
 
     enum msg_type type;
     uint8_t payload_len;
@@ -54,24 +54,34 @@ union parsed_payload
 };
 
 int
-msg_parse_paylaod(union parsed_payload* pl, enum msg_type type, uint8_t payload_len, const char* payload);
+msg_parse_paylaod(
+    union parsed_payload* pl,
+    enum msg_type type,
+    uint8_t payload_len,
+    const char* payload);
 
-struct net_msg*
-msg_server_join_accept(struct qpos2* spawn_pos);
+void
+msg_free(struct msg* m);
 
-struct net_msg*
-msg_server_join_deny_bad_username(const char* error);
+struct msg*
+msg_join_request(uint16_t protocol_version, const char* username);
 
-struct net_msg*
-msg_server_join_deny_server_full(const char* error);
+struct msg*
+msg_join_accept(struct qpos2* spawn_pos);
 
-struct net_msg*
-msg_client_join_request(uint16_t protocol_version, const char* username);
+struct msg*
+msg_join_deny_bad_protocol(const char* error);
 
-struct net_msg*
-msg_client_join_game_ack(void);
+struct msg*
+msg_join_deny_bad_username(const char* error);
 
-struct net_msg*
-msg_client_leave(void);
+struct msg*
+msg_join_deny_server_full(const char* error);
+
+struct msg*
+msg_join_ack(void);
+
+struct msg*
+msg_leave(void);
 
 C_END

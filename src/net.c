@@ -38,16 +38,54 @@
 
 struct client_table_entry
 {
-    struct cs_vector pending_unreliable;
-    struct cs_vector pending_reliable;
-    socklen_t addrlen;
+    struct cs_vector pending_unreliable;  /* struct msg* */
+    struct cs_vector pending_reliable;    /* struct msg* */
     int timeout_counter;
 };
+
+#define MSG_FOR_EACH(v, var) \
+    VECTOR_FOR_EACH(v, struct msg*, vec_##var) \
+    struct msg* var = *vec_##var; {
+#define MSG_END_EACH \
+    } VECTOR_END_EACH
+#define MSG_ERASE_IN_FOR_LOOP(v, var) \
+    VECTOR_ERASE_IN_FOR_LOOP(v, struct msg*, vec_##var)
 
 #define CLIENT_TABLE_FOR_EACH(table, k, v) \
     HASHMAP_FOR_EACH(table, struct sockaddr, struct client_table_entry, k, v)
 #define CLIENT_TABLE_END_EACH \
     HASHMAP_END_EACH
+
+#define MALICIOUS_CLIENT_FOR_EACH(table, k, v) \
+    HASHMAP_FOR_EACH(table, struct sockaddr, int, k, v)
+#define MALICIOUS_CLIENT_END_EACH \
+    HASHMAP_END_EACH
+
+/* ------------------------------------------------------------------------- */
+static void
+msg_queue_init(struct cs_vector* q)
+{
+    vector_init(q, sizeof(struct msg*));
+}
+static void
+msg_queue_deinit(struct cs_vector* q)
+{
+    MSG_FOR_EACH(q, m)
+        msg_free(m);
+    MSG_END_EACH
+    vector_deinit(q);
+}
+static void
+msg_queue_remove_type(struct cs_vector* q, enum msg_type type)
+{
+    MSG_FOR_EACH(q, msg)
+        if (msg->type == type)
+        {
+            msg_free(msg);
+            MSG_ERASE_IN_FOR_LOOP(q, msg);
+        }
+    MSG_END_EACH
+}
 
 /* ------------------------------------------------------------------------- */
 static int
@@ -222,6 +260,14 @@ server_init(struct server* server, const char* bind_address, const char* port)
         &server->client_table,
         p->ai_addrlen,
         sizeof(struct client_table_entry));
+    hashmap_init(
+        &server->malicious_clients,
+        p->ai_addrlen,
+        sizeof(int));
+    hashmap_init(
+        &server->banned_clients,
+        p->ai_addrlen,
+        0);
 
     freeaddrinfo(candidates);
 
@@ -235,9 +281,12 @@ server_deinit(struct server* server)
     log_dbg("Closing socket\n");
     closesocket(server->udp_sock);
 
+    hashmap_deinit(&server->banned_clients);
+    hashmap_deinit(&server->malicious_clients);
+
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
-        net_msg_queue_deinit(&client->pending_reliable);
-        net_msg_queue_deinit(&client->pending_unreliable);
+        msg_queue_deinit(&client->pending_reliable);
+        msg_queue_deinit(&client->pending_unreliable);
     CLIENT_TABLE_END_EACH
     hashmap_deinit(&server->client_table);
 }
@@ -254,7 +303,7 @@ server_send_pending_data(struct server* server)
         int len = 0;
 
         /* Append unreliable messages first */
-        NET_MSG_FOR_EACH(&client->pending_unreliable, msg)
+        MSG_FOR_EACH(&client->pending_unreliable, msg)
             if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
                 continue;
 
@@ -264,17 +313,18 @@ server_send_pending_data(struct server* server)
             memcpy(buf + 2, msg->payload, msg->payload_len);
 
             len += msg->payload_len + 2;
-            NET_MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
-        NET_MSG_END_EACH
+            msg_free(msg);
+            MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+        MSG_END_EACH
 
         /* Append reliable messages */
-        NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+        MSG_FOR_EACH(&client->pending_reliable, msg)
             if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
                 continue;
 
-            if (msg->priority_counter-- > 0)
+            if (msg->resend_rate_counter-- > 0)
                 continue;
-            msg->priority_counter = msg->priority;
+            msg->resend_rate_counter = msg->resend_rate;
 
             type = (uint8_t)msg->type;
             memcpy(buf + 0, &type, 1);
@@ -282,13 +332,14 @@ server_send_pending_data(struct server* server)
             memcpy(buf + 2, msg->payload, msg->payload_len);
 
             len += msg->payload_len + 2;
-        NET_MSG_END_EACH
+        MSG_END_EACH
 
         if (len > 0)
         {
             sockaddr_to_str(ipstr, addr, sizeof ipstr);
             log_dbg("Sending UDP packet to %s, size=%d\n", ipstr, len);
-            sendto(server->udp_sock, buf, len, 0, (struct sockaddr*)addr, client->addrlen);
+            /* NOTE: The hashmap's key size contains the length of the stored address */
+            sendto(server->udp_sock, buf, len, 0, (struct sockaddr*)addr, server->client_table.key_size);
             client->timeout_counter++;
         }
 
@@ -296,11 +347,25 @@ server_send_pending_data(struct server* server)
         {
             sockaddr_to_str(ipstr, addr, sizeof ipstr);
             log_warn("Client %s timed out\n", ipstr);
-            net_msg_queue_deinit(&client->pending_reliable);
-            net_msg_queue_deinit(&client->pending_unreliable);
+            msg_queue_deinit(&client->pending_reliable);
+            msg_queue_deinit(&client->pending_unreliable);
             hashmap_erase(&server->client_table, addr);
         }
     CLIENT_TABLE_END_EACH
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+server_client_add(struct server* server)
+{
+
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+mark_client_as_malicious_and_drop(struct server* server)
+{
+
 }
 
 /* ------------------------------------------------------------------------- */
@@ -319,6 +384,16 @@ server_recv(struct server* server)
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         client->timeout_counter++;
     CLIENT_TABLE_END_EACH
+
+    /* Update malicious client timeouts */
+    MALICIOUS_CLIENT_FOR_EACH(&server->malicious_clients, addr, timeout)
+        if (--(*timeout) <= 0)
+        {
+            sockaddr_to_str(ipstr, addr, sizeof ipstr);
+            log_dbg("Client %s removed from malicious list\n", ipstr);
+            hashmap_erase(&server->malicious_clients, addr);
+        }
+    MALICIOUS_CLIENT_END_EACH
 
     /* We may need to read more than one UDP packet */
     while (1)
@@ -344,6 +419,24 @@ server_recv(struct server* server)
         }
 
         /*
+         * If we received a packet from a banned client, ignore packet
+         */
+        if (hashmap_find(&server->banned_clients, &client_addr) != 0)
+            continue;
+
+        /*
+         * If we received a packet from a potentially malicious client, increase their timeout
+         */
+        {
+            int* timeout = hashmap_find(&server->malicious_clients, &client_addr);
+            if (timeout != NULL)
+            {
+                *timeout += 20 * 60;  /* 1 minute */
+                continue;
+            }
+        }
+
+        /*
          * If we received a packet from a registered client, reset their timeout
          * counter
          */
@@ -351,18 +444,24 @@ server_recv(struct server* server)
         if (client != NULL)
             client->timeout_counter = 0;
 
-        /* Packet can contain multiple message objects. Unpack */
+        /* 
+         * Packet can contain multiple message objects.
+         * buf[0] == message type
+         * buf[1] == payload length
+         * buf[2] == beginning of message payload
+         */
         for (i = 0; i < bytes_received - 1;)
         {
             union parsed_payload pp;
-            enum net_msg_type type = buf[i+0];
+            enum msg_type type = buf[i+0];
             uint8_t payload_len = buf[i+1];
-            if (i + payload_len + 2 > bytes_received)
+            if (i+2 + payload_len > bytes_received)
             {
                 sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof ipstr);
                 log_warn("Invalid payload length \"%d\" received from client %s\n", (int)payload_len, ipstr);
                 log_warn("Dropping rest of packet\n");
-                return 0;
+                mark_client_as_malicious_and_drop(server);
+                break;
             }
 
             /*
@@ -372,41 +471,60 @@ server_recv(struct server* server)
             if (client == NULL && type != MSG_JOIN_REQUEST)
             {
                 sockaddr_to_str(ipstr, (struct sockaddr*)&client_addr, sizeof ipstr);
-                log_warn("Received packet from unknown client %s\n", ipstr);
-                return 0;
+                log_warn("Received packet from unknown client %s, ignoring\n", ipstr);
+                break;
             }
+
+            /* 
+             * NOTE: Beyond this point, "client" won't be NULL *unless* the message is
+             * MSG_JOIN_REQUEST. This makes the switch/case handling a little easier for
+             * all other cases
+             */
 
             /* Process message */
             switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
             {
                 default: {
-                    /* malicious client */
+                    mark_client_as_malicious_and_drop(server);
                 } break;
 
+
                 case MSG_JOIN_REQUEST: {
+                    struct msg* response;
+                    struct qpos2 spawn_pos = { 32, 32 };
+
+                    if (client != NULL)
+                    {
+
+                    }
+
                     if (hashmap_count(&server->client_table) > 600)
                     {
-                        server_join_game_deny_server_full(
-                            &client->pending_reliable,
-                            "Server is full");
+                        char response[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
+                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
                     if (pp.join_request.username_len > 32)
                     {
-                        server_join_game_deny_bad_username(
-                            &client->pending_reliable,
-                            "Username too long");
+                        char response[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
+                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
-                    /* TODO: Create snake in world */
+                    if (client == NULL)
+                    {
+                        /* TODO: Create snake in world */
 
-                    client = hashmap_emplace(&server->client_table, &client_addr);
-                    client->addrlen = client_addr_len;
-                    net_msg_queue_init(&client->pending_reliable);
+                        log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", pp.join_request.username);
 
-                    server_join_game_accept(&client->pending_reliable, &spawn_pos);
+                        client = hashmap_emplace(&server->client_table, &client_addr);
+                        msg_queue_init(&client->pending_reliable);
+                        msg_queue_init(&client->pending_unreliable);
+                    }
+
+                    response = msg_join_accept(&spawn_pos);
+                    vector_push(&client->pending_unreliable, &response);
                 } break;
 
                 case MSG_JOIN_ACCEPT:
@@ -416,7 +534,6 @@ server_recv(struct server* server)
                     break;
 
                 case MSG_JOIN_ACK: {
-                    server_join_game_ack_received(&client->pending_reliable);
                 } break;
 
                 case MSG_LEAVE: {
@@ -522,8 +639,8 @@ client_init(struct client* client, const char* server_address, const char* port)
 
     log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
 
-    net_msg_queue_init(&client->pending_unreliable);
-    net_msg_queue_init(&client->pending_reliable);
+    msg_queue_init(&client->pending_unreliable);
+    msg_queue_init(&client->pending_reliable);
     client->timeout_counter = 0;
 
     return 0;
@@ -536,8 +653,8 @@ client_deinit(struct client* client)
     log_dbg("Closing socket\n");
     closesocket(client->udp_sock);
 
-    net_msg_queue_deinit(&client->pending_reliable);
-    net_msg_queue_deinit(&client->pending_unreliable);
+    msg_queue_deinit(&client->pending_reliable);
+    msg_queue_deinit(&client->pending_unreliable);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -549,7 +666,7 @@ client_send_pending_data(struct client* client)
     int len = 0;
 
     /* Append unreliable messages first */
-    NET_MSG_FOR_EACH(&client->pending_unreliable, msg)
+    MSG_FOR_EACH(&client->pending_unreliable, msg)
         if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
             continue;
 
@@ -559,17 +676,18 @@ client_send_pending_data(struct client* client)
         memcpy(buf + 2, msg->payload, msg->payload_len);
 
         len += msg->payload_len + 2;
-        NET_MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
-    NET_MSG_END_EACH
+        msg_free(msg);
+        MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+    MSG_END_EACH
 
     /* Append reliable messages */
-    NET_MSG_FOR_EACH(&client->pending_reliable, msg)
+    MSG_FOR_EACH(&client->pending_reliable, msg)
         if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
             continue;
 
-        if (msg->priority_counter-- > 0)
+        if (msg->resend_rate_counter-- > 0)
             continue;
-        msg->priority_counter = msg->priority;
+        msg->resend_rate_counter = msg->resend_rate;
 
         type = (uint8_t)msg->type;
         memcpy(buf + 0, &type, 1);
@@ -577,7 +695,7 @@ client_send_pending_data(struct client* client)
         memcpy(buf + 2, msg->payload, msg->payload_len);
 
         len += msg->payload_len + 2;
-    NET_MSG_END_EACH
+    MSG_END_EACH
 
     if (len > 0)
     {
@@ -631,9 +749,10 @@ client_recv(struct client* client)
     /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
     {
+        union parsed_payload pp;
         enum net_msg_type type = buf[i+0];
         uint8_t payload_len = buf[i+1];
-        if (i + payload_len + 2 > bytes_received)
+        if (i+2 + payload_len > bytes_received)
         {
             sockaddr_to_str(ipstr, (struct sockaddr*)&server_addr, sizeof ipstr);
             log_warn("Invalid payload length \"%d\" received from %s\n", (int)payload_len, ipstr);
@@ -642,20 +761,27 @@ client_recv(struct client* client)
         }
 
         /* Process message */
-        switch (type)
+        switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
         {
+            default: {
+                log_warn("Received unknown message type from server. Malicious?\n");
+            } break;
+
             case MSG_JOIN_REQUEST:
                 break;
 
             case MSG_JOIN_ACCEPT: {
-                client_join_game_accepted(&client->pending_reliable);
-                client_join_game_ack(&client->pending_unreliable);
+                /* Stop making join game requests */
+                msg_queue_remove_type(&client->pending_reliable, MSG_JOIN_REQUEST);
+
+                log_dbg("MSG_JOIN_ACCEPT: %d, %d\n", pp.join_accept.spawn.x, pp.join_accept.spawn.y);
             } break;
 
             case MSG_JOIN_DENY_BAD_PROTOCOL:
             case MSG_JOIN_DENY_BAD_USERNAME:
-            case MSG_JOIN_DENY_SERVER_FULL:
-                break;
+            case MSG_JOIN_DENY_SERVER_FULL: {
+                log_err("Failed to join server: %s\n", pp.join_deny.error);
+            } break;
 
             case MSG_JOIN_ACK:
                 break;
