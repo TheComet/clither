@@ -8,6 +8,12 @@ C_BEGIN
 
 enum mode
 {
+#if defined(CLITHER_TESTS)
+    MODE_TESTS,
+#endif
+#if defined(CLITHER_BENCHMARKS)
+    MODE_BENCHMARKS,
+#endif
     MODE_HEADLESS,
 #if defined(CLITHER_GFX)
     MODE_CLIENT,

@@ -113,7 +113,7 @@ TEST(NAME, insert_new_with_realloc_shifts_data_correctly)
     btree_reserve(&btree, CSTRUCTURES_BTREE_MIN_CAPACITY);
     for (int i = 0; i != CSTRUCTURES_BTREE_MIN_CAPACITY; ++i)
     {
-        if (i < midway)
+        if (i < (int)midway)
             ASSERT_THAT(btree_insert_new(&btree, i, &value), Eq(BTREE_OK));
         else
             ASSERT_THAT(btree_insert_new(&btree, i+1, &value), Eq(BTREE_OK));
@@ -279,7 +279,7 @@ TEST(NAME, insert_or_get_with_realloc_shifts_data_correctly)
     btree_reserve(&btree, CSTRUCTURES_BTREE_MIN_CAPACITY);
     for (int i = 0; i != CSTRUCTURES_BTREE_MIN_CAPACITY; ++i)
     {
-        if (i < midway)
+        if (i < (int)midway)
             ASSERT_THAT(btree_insert_or_get(&btree, i, &value, (void**)&get), Eq(BTREE_NOT_FOUND));
         else
             ASSERT_THAT(btree_insert_or_get(&btree, i+1, &value, (void**)&get), Eq(BTREE_NOT_FOUND));
@@ -426,7 +426,6 @@ TEST(NAME, key_exists_returns_false_if_key_doesnt_exist)
     btree_insert_new(&btree, 8, &b);
     btree_insert_new(&btree, 2, &c);
 
-    int d=53;
     EXPECT_THAT(btree_key_exists(&btree, 4), IsFalse());
 
     btree_deinit(&btree);
@@ -442,7 +441,6 @@ TEST(NAME, key_exists_returns_true_if_key_does_exist)
     btree_insert_new(&btree, 8, &b);
     btree_insert_new(&btree, 2, &c);
 
-    int d=53;
     EXPECT_THAT(btree_key_exists(&btree, 3), IsTrue());
 
     btree_deinit(&btree);

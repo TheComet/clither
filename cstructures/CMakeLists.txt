@@ -33,6 +33,9 @@ configure_file ("templates/config.h.in" "include/cstructures/config.h")
 ###############################################################################
 
 add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
+    "templates/config.h.in"
+    "${PROJECT_BINARY_DIR}/include/cstructures/config.h"
+
     "src/btree.c"
     "src/hash.c"
     "src/hashmap.c"
@@ -59,7 +62,7 @@ target_include_directories (cstructures
         $<INSTALL_INTERFACE:include>)
 target_compile_options (cstructures
     PRIVATE
-        $<$<C_COMPILER_ID:MSVC>:/EHa /MTd /W4 /wd4305 /wd4201 /wd4706 /wd4100 /wd4244 /wd4477 /wd4003 /D_CRT_SECURE_NO_DEPRECATE>
+        $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244>
         $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -Wshadow -Wconversion -Wno-unused-parameter $<$<BOOL:${CSTRUCTURES_PROFILING}>:-pg -fno-omit-frame-pointer>>
         $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -Wshadow -Wconversion -Wno-unused-parameter $<$<BOOL:${CSTRUCTURES_PROFILING}>:-pg -fno-omit-frame-pointer>>)
 set_target_properties (cstructures

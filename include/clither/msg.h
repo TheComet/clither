@@ -16,6 +16,9 @@ enum msg_type
     MSG_JOIN_ACK,
     MSG_LEAVE,
 
+    MSG_CONTROLS,
+    MSG_CONTROLS_ACK,
+
     MSG_SNAKE_METADATA,
     MSG_SNAKE_METADATA_ACK,
     MSG_SNAKE_DATA,
@@ -83,5 +86,8 @@ msg_join_ack(void);
 
 struct msg*
 msg_leave(void);
+
+struct msg*
+msg_controls();
 
 C_END

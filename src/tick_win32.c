@@ -31,7 +31,7 @@ tick_wait(struct tick* t)
     }
 
     /* The best we can do for resolution on Windows is 1ms */
-    if (wait_until - now > freq.QuadPart / 1000)
+    if (wait_until - now > (uint64_t)freq.QuadPart / 1000)
     {
         Sleep((wait_until - now) / freq.QuadPart * 1000);
     }

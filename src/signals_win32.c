@@ -74,7 +74,7 @@ signals_exit_requested(void)
     if (!ReadConsoleInput(hStdin, irInBuf, 1, &dwNumRead))
         return 1;
 
-    for (i = 0; i < dwNumRead; ++i)
+    for (i = 0; i < (int)dwNumRead; ++i)
     {
         switch (irInBuf[i].EventType)
         {
