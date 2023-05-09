@@ -58,11 +58,16 @@ add_library (clither_lib STATIC
     "src/args.c"
     "src/bezier.c"
     "src/event.c"
-    $<$<STREQUAL:${CLITHER_GFX},SDL>:src/gfx_sdl.c>
     "src/log.c"
     "src/msg.c"
     "src/net.c"
     "src/protocol.c"
+    "src/snake.c"
+    "src/world.c"
+    
+    $<$<STREQUAL:${CLITHER_GFX},SDL>:
+        src/gfx_sdl.c>
+
     $<$<PLATFORM_ID:Windows>:
         src/signals_win32.c
         src/tick_win32.c>
@@ -71,9 +76,7 @@ add_library (clither_lib STATIC
         src/tick_posix.c>
     $<$<PLATFORM_ID:Darwin>:
         src/signals_posix.c
-        src/tick_posix.c>
-    "src/snake.c"
-    "src/world.c")
+        src/tick_posix.c>)
 target_include_directories (clither_lib
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

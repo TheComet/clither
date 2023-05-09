@@ -2,6 +2,7 @@
 #include "clither/cli_colors.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
+#include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/log.h"
 #include "clither/protocol.h"
@@ -116,8 +117,10 @@ run_client(const struct args* a)
     if (client_init(&client, a->ip, a->port) < 0)
         goto net_init_connection_failed;
 
-    client_join_game_request(&client.pending_reliable, "test");
-    client_send_pending_data(&client);
+    {
+        struct msg* m = msg_join_request(0x0000, "username");
+        vector_push(&client.pending_reliable, &m);
+    }
 
     tick_init(&tick, 60);
     counter = 0;
