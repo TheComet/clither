@@ -48,6 +48,7 @@ add_executable (clither
     "include/clither/msg.h"
     "include/clither/net.h"
     "include/clither/q.h"
+    "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
     "include/clither/tick.h"
@@ -61,6 +62,7 @@ add_executable (clither
     "src/main.c"
     "src/msg.c"
     "src/net.c"
+    "src/server_settings.c"
     "src/snake.c"
     "src/world.c"
     

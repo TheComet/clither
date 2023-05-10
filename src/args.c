@@ -17,8 +17,8 @@
 #define VERSION_NUMBER COL_B_CYAN
 #define RESET          COL_RESET
 
-#define DEFAULT_LOG_FILE "clither.txt"
-#define DEFAULT_PORT     "5555"
+#define DEFAULT_LOG_FILE    "clither.txt"
+#define DEFAULT_CONFIG_FILE "config.ini"
 
 /* ------------------------------------------------------------------------- */
 /*!
@@ -108,7 +108,7 @@ args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_LOGGING)
     a->log_file = DEFAULT_LOG_FILE;
 #endif
-
+    a->config_file = DEFAULT_CONFIG_FILE;
 #if defined(CLITHER_GFX)
     a->mode = MODE_CLIENT;
 #else
@@ -116,7 +116,7 @@ args_parse(struct args* a, int argc, char* argv[])
 #endif
 
     a->ip = "";
-    a->port = DEFAULT_PORT;
+    a->port = "";
 
     for (i = 1; i < argc; ++i)
     {
@@ -285,7 +285,7 @@ args_to_string(const char* prog_name, const struct args* a)
         len += sizeof("\"");
     }
 
-    if (strcmp(a->port, DEFAULT_PORT) != 0)
+    if (*a->port)
     {
         len += sizeof(" -p ");
         len += (int)strlen(a->port);
@@ -319,7 +319,7 @@ args_to_string(const char* prog_name, const struct args* a)
         strcat(s, "\"");
     }
 
-    if (strcmp(a->port, DEFAULT_PORT) != 0)
+    if (*a->port != 0)
     {
         strcat(s, " -p ");
         strcat(s, a->port);

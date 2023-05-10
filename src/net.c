@@ -189,13 +189,26 @@ net_log_host_ips(void)
 
 /* ------------------------------------------------------------------------- */
 int
-server_init(struct server* server, const char* bind_address, const char* port)
+server_init(
+    struct server* server,
+    const char* bind_address,
+    const char* port,
+    const char* config_filename)
 {
     struct addrinfo hints;
     struct addrinfo* candidates;
     struct addrinfo* p;
     char ipstr[INET6_ADDRSTRLEN];
     int ret;
+
+    server_settings_load_or_set_defaults(&server->settings, config_filename);
+
+    /*
+     * The port passed in over the command line has precedence over the port
+     * specified in the config file
+     */
+    if (!*port)
+        port = server->settings.port;
 
     /*
      * Set up hints structure. If an IP address was specified in the command
@@ -222,7 +235,7 @@ server_init(struct server* server, const char* bind_address, const char* port)
     {
         sockaddr_to_str(ipstr, p->ai_addr, sizeof ipstr);
 
-        log_dbg("Attempting to bind UDP %s:%s...\n", ipstr, port);
+        log_dbg("Attempting to bind UDP %s:%s\n", ipstr, port);
         server->udp_sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (server->udp_sock == -1)
             continue;
@@ -275,10 +288,12 @@ server_init(struct server* server, const char* bind_address, const char* port)
 
 /* ------------------------------------------------------------------------- */
 void
-server_deinit(struct server* server)
+server_deinit(struct server* server, const char* config_filename)
 {
     log_dbg("Closing socket\n");
     closesocket(server->udp_sock);
+
+    server_settings_save(&server->settings, config_filename);
 
     hashmap_deinit(&server->banned_clients);
     hashmap_deinit(&server->malicious_clients);
@@ -482,20 +497,17 @@ server_recv(struct server* server)
 
 
                 case MSG_JOIN_REQUEST: {
-                    struct msg* response;
-                    struct qpos2 spawn_pos = { 32, 32 };
-
-                    if (hashmap_count(&server->client_table) > 600)
+                    if (hashmap_count(&server->client_table) > (uint32_t)server->settings.max_players)
                     {
-                        char payload[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
-                        sendto(server->udp_sock, payload, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
+                        char response[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
+                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
-                    if (pp.join_request.username_len > 32)
+                    if (pp.join_request.username_len > server->settings.max_username_len)
                     {
-                        char payload[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
-                        sendto(server->udp_sock, payload, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
+                        char response[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
+                        sendto(server->udp_sock, response, 2, 0, (struct sockaddr*)&client_addr, client_addr_len);
                         break;
                     }
 
@@ -510,8 +522,12 @@ server_recv(struct server* server)
                         msg_queue_init(&client->pending_unreliable);
                     }
 
-                    response = msg_join_accept(&spawn_pos);
-                    vector_push(&client->pending_unreliable, &response);
+                    /* (Re-)send join accept response */
+                    {
+                        struct qpos2 spawn_pos = { 32, 32 };
+                        struct msg* response = msg_join_accept(&spawn_pos);
+                        vector_push(&client->pending_unreliable, &response);
+                    }
                 } break;
 
                 case MSG_JOIN_ACCEPT:

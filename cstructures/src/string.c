@@ -76,7 +76,7 @@ string_getline(struct cs_string* str, FILE* fp)
 
 /* ------------------------------------------------------------------------- */
 char*
-cs_stringok(struct cs_string* str, char delimiter, char** saveptr)
+string_tok(struct cs_string* str, char delimiter, char** saveptr)
 {
     char* begin_ptr;
     char* end_ptr;

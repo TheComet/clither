@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/server_settings.h"
 #include "cstructures/vector.h"
 #include "cstructures/hashmap.h"
 
@@ -8,6 +9,7 @@ C_BEGIN
 
 struct server
 {
+    struct server_settings settings;
     struct cs_hashmap client_table;       /* struct (key size depends on protocol) -> struct client_table_entry (see net.c) */
     struct cs_hashmap malicious_clients;  /* struct sockaddr (key size depends on protocol) */
     struct cs_hashmap banned_clients;     /* struct sockaddr (key size depends on protocol) */
@@ -52,13 +54,17 @@ net_log_host_ips(void);
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
 int
-server_init(struct server* server, const char* bind_address, const char* port);
+server_init(
+    struct server* server,
+    const char* bind_address,
+    const char* port,
+    const char* config_filename);
 
 /*!
  * \brief Closes all sockets and frees all data.
  */
 void
-server_deinit(struct server* server);
+server_deinit(struct server* server, const char* config_filename);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.

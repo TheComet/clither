@@ -41,10 +41,10 @@ CSTRUCTURES_PUBLIC_API int
 string_getline(struct cs_string* str, FILE* fp);
 
 char*
-cs_stringtok(struct cs_string* str, char delimiter, char** saveptr);
+string_tok(struct cs_string* str, char delimiter, char** saveptr);
 
 #define string_length(str) \
-        (vector_count(&str->buf) - 1)
+        (vector_count(&(str)->buf) - 1)
 
 #define string_cstr(str) \
         ((char*)vector_data(&(str)->buf))
