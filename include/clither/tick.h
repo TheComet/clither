@@ -21,7 +21,7 @@ struct tick
  * for to achieve the number of ticks per second.
  */
 void
-tick_init(struct tick* t, int tps);
+tick_cfg(struct tick* t, int tps);
 
 /*!
  * \brief Waits (and sleeps if necessary) until the tick rate configured in
