@@ -12,13 +12,13 @@ public:
     void SetUp() override
     {
         ASSERT_THAT(net_init(), Eq(0));
-        ASSERT_THAT(server_init(&server, "", "5555"), Eq(0));
+        ASSERT_THAT(server_init(&server, "", "5555", ""), Eq(0));
         ASSERT_THAT(client_init(&client, "127.0.0.1", "5555"), Eq(0));
     }
     void TearDown() override
     {
         client_deinit(&client);
-        server_deinit(&server);
+        server_deinit(&server, "");
         net_deinit();
     }
 

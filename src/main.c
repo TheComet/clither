@@ -31,7 +31,7 @@ run_server(const struct args* a)
     struct world world;
     struct server server;
     struct tick tick;
-    uint8_t counter;
+    uint8_t net_update_counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -45,32 +45,36 @@ run_server(const struct args* a)
     /* Init networking and bind server sockets */
     if (net_init() < 0)
         goto net_init_failed;
-    if (server_init(&server, a->ip, a->port) < 0)
+    if (server_init(&server, a->ip, a->port, a->config_file) < 0)
         goto net_init_connection_failed;
     net_log_host_ips();
 
-    tick_init(&tick, 60);
-    counter = 0;
+    tick_init(&tick, server.settings.sim_tick_rate);
+    net_update_counter = 0;
     while (signals_exit_requested() == 0)
     {
         int tick_lag;
-        counter++;
 
-        if (counter % 3 == 0)
+        if (net_update_counter >= server.settings.net_tick_rate)
             if (server_recv(&server) != 0)
                 break;
 
         /* sim_update */
 
-        if (counter % 3 == 0)
+        if (net_update_counter >= server.settings.net_tick_rate)
             server_send_pending_data(&server);
+
+        /* determine when to do network updates */
+        net_update_counter++;
+        if (net_update_counter >= server.settings.net_tick_rate)
+            net_update_counter = 0;
 
         if ((tick_lag = tick_wait(&tick)) > 0)
             log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
     }
     log_info("Stopping server\n");
 
-    server_deinit(&server);
+    server_deinit(&server, a->config_file);
     net_deinit();
     world_deinit(&world);
     signals_remove();
@@ -93,6 +97,7 @@ run_client(const struct args* a)
     struct gfx* gfx;
     struct client client;
     struct tick tick;
+    int tick_lag;
     uint8_t counter;
 
     /* Change log prefix and color for server log messages */
@@ -148,9 +153,15 @@ run_client(const struct args* a)
             if (client_send_pending_data(&client) != 0)
                 break;
 
-        gfx_update(gfx);
-
-        if (tick_wait(&tick) > 180)
+        /* 
+         * Skip rendering if we are lagging, as this is most likely the source
+         * of the delay. If for some reason we end up 3 seconds behind where we
+         * should be, quit.
+         */
+        tick_lag = tick_wait(&tick);
+        if (tick_lag == 0)
+            gfx_update(gfx);
+        else if (tick_lag > 180)
         {
             log_err("Client lagged too hard\n");
             break;

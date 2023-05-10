@@ -42,12 +42,15 @@ memory_init(void)
      * crashing.
      */
     g_ignore_hm_malloc = 1;
-        if (hashmap_init_with_options(&g_report,
-                                      sizeof(void*),
-                                      sizeof(report_info_t),
-                                      4096,
-                                      hash32_ptr) != HM_OK)
+        if (hashmap_init_with_options(
+            &g_report,
+            sizeof(void*),
+            sizeof(report_info_t),
+            4096,
+            hash32_ptr) != HM_OK)
+        {
             return -1;
+        }
     g_ignore_hm_malloc = 0;
 
     return 0;
@@ -289,9 +292,9 @@ memory_deinit(void)
 
     /* overall report */
     leaks = (g_allocations > d_deallocations ? g_allocations - d_deallocations : d_deallocations - g_allocations);
-    fprintf(stderr, "allocations: %" PRIu64 "\n", g_allocations);
-    fprintf(stderr, "deallocations: %" PRIu64 "u\n", d_deallocations);
-    fprintf(stderr, "memory leaks: %" PRIu64 "u\n", leaks);
+    fprintf(stderr, "allocations   : %" PRIu64 "\n", g_allocations);
+    fprintf(stderr, "deallocations : %" PRIu64 "\n", d_deallocations);
+    fprintf(stderr, "memory leaks  : %" PRIu64 "\n", leaks);
     fprintf(stderr, "peak memory usage: %" PRIu64 " bytes\n", g_bytes_in_use_peak);
     fprintf(stderr, "=========================================\n");
 

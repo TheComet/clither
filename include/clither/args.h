@@ -26,6 +26,7 @@ struct args
 #if defined(CLITHER_LOGGING)
     const char* log_file;
 #endif
+    const char* config_file;
     const char* ip;
     const char* port;
     enum mode mode;
