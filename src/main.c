@@ -1,11 +1,13 @@
 #include "clither/args.h"
 #include "clither/benchmarks.h"
 #include "clither/cli_colors.h"
+#include "clither/client.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/log.h"
+#include "clither/server.h"
 #include "clither/signals.h"
 #include "clither/tests.h"
 #include "clither/tick.h"
@@ -31,6 +33,7 @@ run_server(const struct args* a)
     struct world world;
     struct server server;
     struct tick tick;
+    uint16_t frame_number;
     uint8_t net_update_counter;
 
     /* Change log prefix and color for server log messages */
@@ -49,28 +52,30 @@ run_server(const struct args* a)
         goto net_init_connection_failed;
     net_log_host_ips();
 
-    tick_init(&tick, server.settings.sim_tick_rate);
+    tick_cfg(&tick, server.settings.sim_tick_rate);
     net_update_counter = 0;
+    frame_number = 0;
     while (signals_exit_requested() == 0)
     {
         int tick_lag;
 
-        if (net_update_counter >= server.settings.net_tick_rate)
-            if (server_recv(&server) != 0)
+        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
+            if (server_recv(&server, frame_number) != 0)
                 break;
 
         /* sim_update */
 
-        if (net_update_counter >= server.settings.net_tick_rate)
+        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
             server_send_pending_data(&server);
-
-        /* determine when to do network updates */
-        net_update_counter++;
-        if (net_update_counter >= server.settings.net_tick_rate)
-            net_update_counter = 0;
 
         if ((tick_lag = tick_wait(&tick)) > 0)
             log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
+
+        /* determine when to do network updates */
+        net_update_counter++;
+        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
+            net_update_counter = 0;
+        frame_number++;
     }
     log_info("Stopping server\n");
 
@@ -98,7 +103,7 @@ run_client(const struct args* a)
     struct client client;
     struct tick tick;
     int tick_lag;
-    uint8_t counter;
+    uint8_t net_update_counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -123,18 +128,11 @@ run_client(const struct args* a)
     if (client_init(&client, a->ip, a->port) < 0)
         goto net_init_connection_failed;
 
-    {
-        struct msg* m = msg_join_request(0x0000, "username");
-        vector_push(&client.pending_reliable, &m);
-    }
-
-    tick_init(&tick, 60);
-    counter = 0;
+    net_update_counter = 0;
+    tick_cfg(&tick, client.sim_tick_rate);
     log_info("Client started\n");
     while (1)
     {
-        counter++;
-
         gfx_poll_input(gfx, &controls);
         if (controls.quit)
             break;
@@ -143,15 +141,23 @@ run_client(const struct args* a)
             break;
 #endif
 
-        if (counter % 3 == 0)
+        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
             if (client_recv(&client) != 0)
                 break;
 
         /* sim_update */
 
-        if (counter % 3 == 0)
+        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
+        {
+            if (client.state == CLIENT_JOINING)
+            {
+                struct msg* m = msg_join_request(0x0000, client.frame_number, "username");
+                vector_push(&client.pending_unreliable, &m);
+            }
+
             if (client_send_pending_data(&client) != 0)
                 break;
+        }
 
         /* 
          * Skip rendering if we are lagging, as this is most likely the source
@@ -161,11 +167,17 @@ run_client(const struct args* a)
         tick_lag = tick_wait(&tick);
         if (tick_lag == 0)
             gfx_update(gfx);
-        else if (tick_lag > 180)
+        else if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
         {
             log_err("Client lagged too hard\n");
             break;
         }
+
+        /* determine when to do network updates */
+        net_update_counter++;
+        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
+            net_update_counter = 0;
+        client.frame_number++;
     }
 
     log_info("Stopping client\n");

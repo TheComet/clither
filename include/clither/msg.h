@@ -42,13 +42,18 @@ struct msg
 union parsed_payload
 {
     struct {
-        uint16_t protocol_version;
-        uint8_t username_len;
         const char* username;
+        uint16_t protocol_version;
+        uint16_t frame;
+        uint8_t username_len;
     } join_request;
 
     struct {
         struct qpos2 spawn;
+        uint16_t client_frame;
+        uint16_t server_frame;
+        uint8_t sim_tick_rate;
+        uint8_t net_tick_rate;
     } join_accept;
 
     struct {
@@ -67,10 +72,15 @@ void
 msg_free(struct msg* m);
 
 struct msg*
-msg_join_request(uint16_t protocol_version, const char* username);
+msg_join_request(uint16_t protocol_version, uint16_t frame, const char* username);
 
 struct msg*
-msg_join_accept(struct qpos2* spawn_pos);
+msg_join_accept(
+    uint8_t sim_tick_rate,
+    uint8_t net_tick_rate,
+    uint16_t client_frame,
+    uint16_t server_frame,
+    struct qpos2* spawn_pos);
 
 struct msg*
 msg_join_deny_bad_protocol(const char* error);

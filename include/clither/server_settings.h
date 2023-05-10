@@ -11,6 +11,8 @@ struct server_settings
 	int max_username_len;
 	int sim_tick_rate;
 	int net_tick_rate;
+	int client_timeout;
+	int malicious_timeout;
 	char port[6];
 	
 	struct cs_hashmap banned_ips;

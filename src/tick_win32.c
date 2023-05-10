@@ -3,7 +3,7 @@
 
 /* ------------------------------------------------------------------------- */
 void
-tick_init(struct tick* t, int tps)
+tick_cfg(struct tick* t, int tps)
 {
     LARGE_INTEGER freq, ticks;
     QueryPerformanceFrequency(&freq);

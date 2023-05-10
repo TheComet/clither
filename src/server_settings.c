@@ -15,6 +15,8 @@ set_defaults(struct server_settings* s)
 	s->max_username_len = 32;
 	s->sim_tick_rate = 60;
 	s->net_tick_rate = 20;
+	s->client_timeout = 5;
+	s->malicious_timeout = 60;
 	strcpy(s->port, "5555");
 }
 
@@ -147,6 +149,24 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			else
 				log_err("Invalid value \"%s\" for \"net_tick_rate\" in config file\n", value);
 		}
+		else if (strcmp(key, "client_timeout") == 0)
+		{
+			UNQUOTE_STRING(value);
+			int seconds = atoi(value);
+			if (seconds > 0)
+				server->client_timeout = seconds;
+			else
+				log_err("Invalid value \"%s\" for \"client_timeout\" in config file\n", value);
+		}
+		else if (strcmp(key, "malicious_timeout") == 0)
+		{
+			UNQUOTE_STRING(value);
+			int seconds = atoi(value);
+			if (seconds > 0)
+				server->malicious_timeout = seconds;
+			else
+				log_err("Invalid value \"%s\" for \"malicious_timeout\" in config file\n", value);
+		}
 		else if (strcmp(key, "port") == 0)
 		{
 			UNQUOTE_STRING(value);
@@ -185,6 +205,8 @@ server_settings_save(const struct server_settings* s, const char* filename)
 	fprintf(fp, "max_username_len = %d ; Limits the user name length\n", s->max_username_len);
 	fprintf(fp, "sim_tick_rate = %d    ; Simulation speed in Hz\n", s->sim_tick_rate);
 	fprintf(fp, "net_tick_rate = %d    ; Network update speed in Hz. Should be smaller or equal to simulation speed\n", s->net_tick_rate);
+	fprintf(fp, "client_timeout = %d    ; How many seconds to wait for a client before disconnecting them\n", s->client_timeout);
+	fprintf(fp, "malicious_timeout = %d ; How many seconds to keep a client on the malicious list\n", s->malicious_timeout);
 	fprintf(fp, "port = %s           ; Port to bind server to\n", s->port);
 	fclose(fp);
 }

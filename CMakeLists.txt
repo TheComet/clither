@@ -41,13 +41,16 @@ add_executable (clither
     "include/clither/args.h"
     "include/clither/benchmarks.h"
     "include/clither/bezier.h"
+    "include/clither/client.h"
     "include/clither/controls.h"
     "include/clither/event.h"
     "include/clither/gfx.h"
     "include/clither/log.h"
     "include/clither/msg.h"
+    "include/clither/msg_queue.h"
     "include/clither/net.h"
     "include/clither/q.h"
+    "include/clither/server.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
@@ -57,11 +60,13 @@ add_executable (clither
 
     "src/args.c"
     "src/bezier.c"
+    "src/client.c"
     "src/event.c"
     "src/log.c"
     "src/main.c"
     "src/msg.c"
-    "src/net.c"
+    "src/msg_queue.c"
+    "src/server.c"
     "src/server_settings.c"
     "src/snake.c"
     "src/world.c"
@@ -70,12 +75,15 @@ add_executable (clither
         src/gfx_sdl.c>
 
     $<$<PLATFORM_ID:Windows>:
+        src/net_win32.c
         src/signals_win32.c
         src/tick_win32.c>
     $<$<PLATFORM_ID:Linux>:
+        src/net_posix.c
         src/signals_posix.c
         src/tick_posix.c>
     $<$<PLATFORM_ID:Darwin>:
+        src/net_posix.c
         src/signals_posix.c
         src/tick_posix.c>
 
@@ -110,7 +118,6 @@ target_compile_options (clither
         $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic>)
 set_target_properties (clither
     PROPERTIES
-        MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>DLL
         VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CLITHER_BUILD_BINDIR}
