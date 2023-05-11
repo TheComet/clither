@@ -26,6 +26,17 @@ option (CSTRUCTURES_PIC "Generate position independent code" OFF)
 option (CSTRUCTURES_PROFILING "Enable -pg and -fno-omit-frame-pointer" OFF)
 option (CSTRUCTURES_VEC_64BIT "Set vector capacity to 2^64 instead of 2^32, but makes the structure 32 bytes instead of 20 bytes" OFF)
 
+# Memory debugging uses thread-local storage for its state because we don't want to deal with locks
+include (CheckCSourceCompiles)
+check_c_source_compiles ("__declspec(thread) int value; int main(void) { return 0; }" MSVC_THREADLOCAL)
+check_c_source_compiles ("__thread int value; int main(void) { return 0; }" GCC_THREADLOCAL)
+if (MSVC_THREADLOCAL)
+    set (CSTRUCTURES_THREADLOCAL "__declspec(thread)")
+endif ()
+if (GCC_THREADLOCAL)
+    set (CSTRUCTURES_THREADLOCAL "__thread")
+endif ()
+
 configure_file ("templates/config.h.in" "include/cstructures/config.h")
 
 ###############################################################################
@@ -39,7 +50,6 @@ add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
     "src/btree.c"
     "src/hash.c"
     "src/hashmap.c"
-    "src/init.c"
     "src/memory.c"
     "src/string.c"
     "src/vector.c"
@@ -48,7 +58,6 @@ add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
     "include/cstructures/btree.h"
     "include/cstructures/hash.h"
     "include/cstructures/hashmap.h"
-    "include/cstructures/init.h"
     "include/cstructures/memory.h"
     "include/cstructures/string.h"
     "include/cstructures/vector.h"

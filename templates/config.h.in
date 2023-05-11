@@ -13,6 +13,8 @@
 #   define CLITHER_GFX_${CLITHER_GFX}
 #endif
 
+#define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
+
 /* Version string ---------------------------------------------------------- */
 #define CLITHER_VERSION_MAJOR ${PROJECT_VERSION_MAJOR}
 #define CLITHER_VERSION_MINOR ${PROJECT_VERSION_MINOR}

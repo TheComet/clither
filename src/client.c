@@ -11,19 +11,22 @@ void
 client_init(struct client* client)
 {
     client->udp_sock = -1;
-    client->timeout_counter = 0;
     client->sim_tick_rate = 60;
     client->net_tick_rate = 20;
+    client->timeout_counter = 0;
+    client->frame_number = 0;
     client->state = CLIENT_DISCONNECTED;
 
-    return 0;
+    msg_queue_init(&client->pending_unreliable);
+    msg_queue_init(&client->pending_reliable);
 }
 
 /* ------------------------------------------------------------------------- */
 void
 client_deinit(struct client* client)
 {
-    net_close(client->udp_sock);
+    if (client->state != CLIENT_DISCONNECTED)
+        client_disconnect(client);
 
     msg_queue_deinit(&client->pending_reliable);
     msg_queue_deinit(&client->pending_unreliable);
@@ -31,7 +34,11 @@ client_deinit(struct client* client)
 
 /* ------------------------------------------------------------------------- */
 int
-client_connect(struct client* client, const char* server_address, const char* port)
+client_connect(
+    struct client* client,
+    const char* server_address,
+    const char* port, 
+    const char* username)
 {
     if (!*server_address)
     {
@@ -40,6 +47,9 @@ client_connect(struct client* client, const char* server_address, const char* po
         return -1;
     }
 
+    if (!*port)
+        port = NET_DEFAULT_PORT;
+
     assert(client->state == CLIENT_DISCONNECTED);
     assert(client->udp_sock == -1);
 
@@ -47,8 +57,7 @@ client_connect(struct client* client, const char* server_address, const char* po
     if (client->udp_sock < 0)
         return -1;
 
-    msg_queue_init(&client->pending_unreliable);
-    msg_queue_init(&client->pending_reliable);
+    client_queue_reliable(client, msg_join_request(0x0000, client->frame_number, username));
 
     client->state = CLIENT_JOINING;
 
@@ -66,8 +75,8 @@ client_disconnect(struct client* client)
     client->udp_sock = -1;
     client->state = CLIENT_DISCONNECTED;
 
-    msg_queue_deinit(&client->pending_reliable);
-    msg_queue_deinit(&client->pending_unreliable);
+    msg_queue_clear(&client->pending_reliable);
+    msg_queue_clear(&client->pending_unreliable);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -77,6 +86,16 @@ client_send_pending_data(struct client* client)
     uint8_t type;
     char buf[MAX_UDP_PACKET_SIZE];
     int len = 0;
+
+    /* 
+     * Some messages in the reliable queue contain the frame number they were
+     * sent as part of the message payload. These numbers need to be updated
+     * to the most recent frame number every time they are resent so the server
+     * is able to differentiate them.
+     */
+    MSG_FOR_EACH(&client->pending_reliable, msg)
+        msg_update_frame_number(msg, client->frame_number);
+    MSG_END_EACH
 
     /* Append unreliable messages first */
     MSG_FOR_EACH(&client->pending_unreliable, msg)
@@ -127,11 +146,12 @@ client_send_pending_data(struct client* client)
 }
 
 /* ------------------------------------------------------------------------- */
-int
+enum client_state
 client_recv(struct client* client)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     int i;
+    int retval = 0;
     int bytes_received = net_recv(client->udp_sock, buf, MAX_UDP_PACKET_SIZE);
 
     /* Packet can contain multiple message objects. Unpack */
@@ -145,20 +165,32 @@ client_recv(struct client* client)
             log_warn("Invalid payload length \"%d\" received from server\n",
                 (int)payload_len);
             log_warn("Dropping rest of packet\n");
-            return 0;
+            break;
         }
 
         /* Process message */
         switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
         {
             default: {
-                log_warn("Received unknown message type from server. Malicious?\n");
+                log_warn("Received unknown message type \"%d\" from server. Malicious?\n", type);
             } break;
 
             case MSG_JOIN_REQUEST:
                 break;
 
             case MSG_JOIN_ACCEPT: {
+                if (client->state != CLIENT_JOINING)
+                    break;
+
+                /* Stop sending join request messages */
+                msg_queue_remove_type(&client->pending_reliable, MSG_JOIN_REQUEST);
+
+                /* 
+                 * Regardless of whether we succeed or fail, the client is
+                 * changing state as a result of this message
+                 */
+                retval = 1;
+
                 /*
                  * The server will be on a different frame number than we are,
                  * since we joined at some random time. In our join request
@@ -174,16 +206,20 @@ client_recv(struct client* client)
                 int rtt = client->frame_number - pp.join_accept.client_frame;
                 if (rtt < 0 || rtt > 20 * 5)  /* 5 seconds */
                 {
-                    log_err("Server sent back a client frame number that is unlikely or impossible.\n");
+                    log_err("Server sent back a client frame number that is unlikely or impossible (ours: %d, theirs: %d).\n",
+                        client->frame_number, pp.join_accept.client_frame);
                     log_err("This may be a bug, or the server is possibly malicious.\n");
-                    client->state = CLIENT_DISCONNECTED;
-                    return -1;
+                    client_disconnect(client);
+                    return 1;
                 }
 
                 /* We will be simulating half rtt in the future, relative to the server */
                 client->frame_number = pp.join_accept.server_frame + rtt / 2;
 
-                client->state = CLIENT_JOINED;
+                /* Server may also be running on a different tick rate */
+                client->sim_tick_rate = pp.join_accept.sim_tick_rate;
+                client->net_tick_rate = pp.join_accept.net_tick_rate;
+
                 log_dbg("MSG_JOIN_ACCEPT: %d, %d\n", pp.join_accept.spawn.x, pp.join_accept.spawn.y);
             } break;
 
@@ -191,6 +227,8 @@ client_recv(struct client* client)
             case MSG_JOIN_DENY_BAD_USERNAME:
             case MSG_JOIN_DENY_SERVER_FULL: {
                 log_err("Failed to join server: %s\n", pp.join_deny.error);
+                client_disconnect(client);
+                return 1;  /* Return immediately, as we don't want to process any more messages */
             } break;
 
             case MSG_JOIN_ACK:
@@ -201,5 +239,5 @@ client_recv(struct client* client)
     }
 
     client->timeout_counter = 0;
-    return 0;
+    return retval;
 }

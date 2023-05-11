@@ -28,6 +28,16 @@ set (CLITHER_BUILD_LIBDIR "${CLITHER_BUILD_BINDIR}/lib")
 set (CLITHER_INSTALL_BINDIR ".")
 set (CLITHER_INSTALL_LIBDIR "lib")
 
+include (CheckCSourceCompiles)
+check_c_source_compiles ("__declspec(thread) int value; int main(void) { return 0; }" MSVC_THREADLOCAL)
+check_c_source_compiles ("__thread int value; int main(void) { return 0; }" GCC_THREADLOCAL)
+if (MSVC_THREADLOCAL)
+    set (CLITHER_THREADLOCAL "__declspec(thread)")
+endif ()
+if (GCC_THREADLOCAL)
+    set (CLITHER_THREADLOCAL "__thread")
+endif ()
+
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################

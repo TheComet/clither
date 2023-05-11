@@ -14,6 +14,9 @@ void
 msg_queue_deinit(struct cs_vector* q);
 
 void
+msg_queue_clear(struct cs_vector* q);
+
+void
 msg_queue_remove_type(struct cs_vector* q, enum msg_type type);
 
 C_END

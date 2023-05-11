@@ -15,6 +15,28 @@ tick_cfg(struct tick* t, int tps)
 
 /* ------------------------------------------------------------------------- */
 int
+tick_advance(struct tick* t)
+{
+    LARGE_INTEGER freq, ticks;
+    uint64_t now, wait_until;
+    QueryPerformanceCounter(&ticks);
+    QueryPerformanceFrequency(&freq);
+    now = ticks.QuadPart;
+    wait_until = t->last + t->interval;
+
+    if (now > wait_until)
+    {
+        int ticks_behind = (now - wait_until) / t->interval;
+        if (ticks_behind >  0)
+            t->last = wait_until;
+        return ticks_behind;
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int
 tick_wait(struct tick* t)
 {
     LARGE_INTEGER freq, ticks;

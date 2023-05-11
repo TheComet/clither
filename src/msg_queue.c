@@ -15,7 +15,17 @@ msg_queue_deinit(struct cs_vector* q)
     MSG_FOR_EACH(q, m)
         msg_free(m);
     MSG_END_EACH
-        vector_deinit(q);
+    vector_deinit(q);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+msg_queue_clear(struct cs_vector* q)
+{
+    MSG_FOR_EACH(q, m)
+        msg_free(m);
+    MSG_END_EACH
+    vector_clear_compact(q);
 }
 
 /* ------------------------------------------------------------------------- */

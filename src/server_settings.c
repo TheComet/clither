@@ -1,4 +1,5 @@
 #include "clither/log.h"
+#include "clither/net.h"
 #include "clither/server_settings.h"
 #include "cstructures/string.h"
 
@@ -17,7 +18,7 @@ set_defaults(struct server_settings* s)
 	s->net_tick_rate = 20;
 	s->client_timeout = 5;
 	s->malicious_timeout = 60;
-	strcpy(s->port, "5555");
+	strcpy(s->port, NET_DEFAULT_PORT);
 }
 
 /* ------------------------------------------------------------------------- */
