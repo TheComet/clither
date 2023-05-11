@@ -31,6 +31,46 @@ msg_free(struct msg* m)
 }
 
 /* ------------------------------------------------------------------------- */
+void
+msg_update_frame_number(struct msg* m, uint16_t frame_number)
+{
+    switch (m->type)
+    {
+    case MSG_JOIN_REQUEST:
+        m->payload[2] = frame_number >> 8;
+        m->payload[3] = frame_number & 0xFF;
+        break;
+
+    case MSG_JOIN_ACCEPT:
+    case MSG_JOIN_DENY_BAD_PROTOCOL:
+    case MSG_JOIN_DENY_BAD_USERNAME:
+    case MSG_JOIN_DENY_SERVER_FULL:
+    case MSG_JOIN_ACK:
+    case MSG_LEAVE:
+        break;
+
+    case MSG_CONTROLS:
+        break;
+
+    case MSG_CONTROLS_ACK:
+        break;
+
+    case MSG_SNAKE_METADATA:
+    case MSG_SNAKE_METADATA_ACK:
+        break;
+
+    case MSG_SNAKE_DATA:
+        break;
+
+    case MSG_FOOD_CREATE:
+    case MSG_FOOD_CREATE_ACK:
+    case MSG_FOOD_DESTROY:
+    case MSG_FOOD_DESTROY_ACK:
+        break;
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 int
 msg_parse_paylaod(
     union parsed_payload* pp,
@@ -91,7 +131,7 @@ msg_parse_paylaod(
             pp->join_accept.client_frame =
                 (payload[2] << 8) |
                 (payload[3] << 0);
-            pp->join_accept.client_frame =
+            pp->join_accept.server_frame =
                 (payload[4] << 8) |
                 (payload[5] << 0);
             pp->join_accept.spawn.x =
@@ -136,7 +176,7 @@ msg_parse_paylaod(
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_join_request(uint16_t protocol_version, uint16_t frame, const char* username)
+msg_join_request(uint16_t protocol_version, uint16_t frame_number, const char* username)
 {
     int name_len_i32 = (int)strlen(username);
     uint8_t name_len = name_len_i32 > 254 ? 254 : (uint8_t)name_len_i32;
@@ -144,14 +184,14 @@ msg_join_request(uint16_t protocol_version, uint16_t frame, const char* username
     struct msg* m = msg_alloc(
         MSG_JOIN_REQUEST, 10,
         sizeof(protocol_version) +
-        sizeof(frame) +
+        sizeof(frame_number) +
         sizeof(name_len) +
         name_len + 1  /* we need to include the null terminator */
     );
     m->payload[0] = protocol_version >> 8;
     m->payload[1] = protocol_version & 0xFF;
-    m->payload[2] = frame >> 8;
-    m->payload[3] = frame & 0xFF;
+    m->payload[2] = frame_number >> 8;
+    m->payload[3] = frame_number & 0xFF;
     m->payload[4] = name_len;
     /* we need to include the null terminator */
     memcpy(m->payload + 5, username, name_len + 1);

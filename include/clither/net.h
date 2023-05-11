@@ -17,6 +17,8 @@
 
 #define MAX_ADDRSTRLEN 65
 
+#define NET_DEFAULT_PORT "5555"
+
 C_BEGIN
 
 /*!

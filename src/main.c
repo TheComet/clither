@@ -13,7 +13,7 @@
 #include "clither/tick.h"
 #include "clither/world.h"
 
-#include "cstructures/init.h"
+#include "cstructures/memory.h"
 
 #if defined(_WIN32)
 #   define _WIN32_LEAN_AND_MEAN
@@ -32,9 +32,9 @@ run_server(const struct args* a)
 {
     struct world world;
     struct server server;
-    struct tick tick;
+    struct tick sim_tick;
+    struct tick net_tick;
     uint16_t frame_number;
-    uint8_t net_update_counter;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -52,29 +52,26 @@ run_server(const struct args* a)
         goto net_init_connection_failed;
     net_log_host_ips();
 
-    tick_cfg(&tick, server.settings.sim_tick_rate);
-    net_update_counter = 0;
+    tick_cfg(&sim_tick, server.settings.sim_tick_rate);
+    tick_cfg(&net_tick, server.settings.net_tick_rate);
     frame_number = 0;
     while (signals_exit_requested() == 0)
     {
         int tick_lag;
+        int net_update = tick_advance(&net_tick);
 
-        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
+        if (net_update)
             if (server_recv(&server, frame_number) != 0)
                 break;
 
         /* sim_update */
 
-        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
+        if (net_update)
             server_send_pending_data(&server);
 
-        if ((tick_lag = tick_wait(&tick)) > 0)
+        if ((tick_lag = tick_wait(&sim_tick)) > 0)
             log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
 
-        /* determine when to do network updates */
-        net_update_counter++;
-        if (net_update_counter * server.settings.net_tick_rate >= server.settings.sim_tick_rate)
-            net_update_counter = 0;
         frame_number++;
     }
     log_info("Stopping server\n");
@@ -101,13 +98,9 @@ run_client(const struct args* a)
     struct controls controls = { 0 };
     struct gfx* gfx;
     struct client client;
-    struct tick tick;
+    struct tick sim_tick;
+    struct tick net_tick;
     int tick_lag;
-    uint16_t frame_number;
-    uint8_t sim_update_rate;
-    uint8_t net_update_rate;
-    uint8_t net_update_counter;
-    enum client_state state;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -117,6 +110,8 @@ run_client(const struct args* a)
 #if !defined(_WIN32)
     signals_install();
 #endif
+
+    world_init(&world);
 
     /* Init all graphics and create window */
     if (gfx_init() < 0)
@@ -128,19 +123,23 @@ run_client(const struct args* a)
     /* Init global networking */
     if (net_init() < 0)
         goto net_init_failed;
+    client_init(&client);
 
-    /* Run the menu at 60 fps, net update at 20 fps */
-
+    /* 
+     * TODO: In the future the GUI will take care of connecting. Here we do
+     * it immediately because there is no menu.
+     */
+    if (client_connect(&client, a->ip, a->port, "username") < 0)
+        goto net_init_connection_failed;
 
     log_info("Client started\n");
 
-    /* Menu mode */
-    frame_number = 0;
-    net_update_counter = 0;
-    state = CLIENT_DISCONNECTED;
-    tick_cfg(&tick, 60);  
+    tick_cfg(&sim_tick, client.sim_tick_rate);  
+    tick_cfg(&net_tick, client.net_tick_rate);
     while (1)
     {
+        int net_update;
+
         gfx_poll_input(gfx, &controls);
         if (controls.quit)
             break;
@@ -149,29 +148,35 @@ run_client(const struct args* a)
             break;
 #endif
 
-        switch (state)
+        /* Receive net data */
+        net_update = tick_advance(&net_tick);
+        if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            case CLIENT_DISCONNECTED: {
-                /* TODO: Implement menu. For now we attempt to connect to the server directly */
-                if (client_init(&client, a->ip, a->port) < 0)
-                    break;
+            int action = client_recv(&client);
 
-            } break;
-        }
-
-        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
-        {
-            if (client_recv(&client) != 0)
+            /* Some error occurred */
+            if (action == -1)
                 break;
+
+            if (action == 1)
+            {
+                /* 
+                 * We may have to match our tick rates to the server, because
+                 * the server can freely configure these values. If the client
+                 * disconnected then sim_tick_rate and net_tick_rate are reset
+                 * to their default values, so in this case we also want to
+                 * update the tick rate.
+                 */
+                tick_cfg(&sim_tick, client.sim_tick_rate);
+                tick_cfg(&net_tick, client.net_tick_rate);
+                log_dbg("Sim tick rate: %d, net tick rate: %d\n", client.sim_tick_rate, client.net_tick_rate);
+            }
         }
 
         /* sim_update */
 
-        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
+        if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            if (client.state == CLIENT_JOINING)
-                client_queue_unreliable(&client, msg_join_request(0x0000, frame_number, "username"));
-
             if (client_send_pending_data(&client) != 0)
                 break;
         }
@@ -181,19 +186,19 @@ run_client(const struct args* a)
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
          */
-        tick_lag = tick_wait(&tick);
+        tick_lag = tick_wait(&sim_tick);
         if (tick_lag == 0)
             gfx_update(gfx);
-        else if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+        else
         {
-            log_err("Client lagged too hard\n");
-            break;
+            log_dbg("Client is lagging! %d frames behind\n", tick_lag);
+            if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+            {
+                log_err("Client lagged too hard\n");
+                break;
+            }
         }
 
-        /* determine when to do network updates */
-        net_update_counter++;
-        if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
-            net_update_counter = 0;
         client.frame_number++;
     }
 
@@ -336,7 +341,7 @@ int main(int argc, char* argv[])
      * cstructures global init. This is mostly for memory tracking during
      * debug builds
      */
-    if (cstructures_init() < 0)
+    if (memory_init_thread() < 0)
     {
         log_err("Failed to initialize c structures library\n");
         goto cstructures_init_failed;
@@ -395,7 +400,7 @@ int main(int argc, char* argv[])
 #endif
     }
 
-    cstructures_deinit();
+    memory_deinit_thread();
 #if defined(CLITHER_LOGGING)
     log_file_close();
 #endif

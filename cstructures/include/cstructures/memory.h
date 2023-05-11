@@ -22,23 +22,24 @@
 C_BEGIN
 
 /*!
- * @brief Initializes the memory system.
+ * @brief Initializes memory tracking for the current thread. Must be
+ * called for every thread.
  *
  * In release mode this does nothing. In debug mode it will initialize
  * memory reports and backtraces, if enabled.
  */
 CSTRUCTURES_PUBLIC_API int
-memory_init(void);
+memory_init_thread(void);
 
 /*!
- * @brief De-initializes the memory system.
+ * @brief De-initializes memory tracking for the current thread.
  *
  * In release mode this does nothing. In debug mode this will output the memory
  * report and print backtraces, if enabled.
  * @return Returns the number of memory leaks.
  */
 CSTRUCTURES_PUBLIC_API uintptr_t
-memory_deinit(void);
+memory_deinit_thread(void);
 
 /*!
  * @brief Does the same thing as a normal call to malloc(), but does some

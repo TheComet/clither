@@ -5,6 +5,8 @@
 
 C_BEGIN
 
+struct msg;
+
 /*
  * The client can be in 3 states:
  *   - Disconnected, or "menu mode"
@@ -15,7 +17,7 @@ enum client_state
 {
     CLIENT_DISCONNECTED,
     CLIENT_JOINING,
-    CLIENT_JOINED
+    CLIENT_CONNECTED
 };
 
 struct client
@@ -26,6 +28,7 @@ struct client
     int sim_tick_rate;
     int net_tick_rate;
     int timeout_counter;
+    uint16_t frame_number;
     enum client_state state;
 };
 
@@ -46,24 +49,32 @@ client_deinit(struct client* client);
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
 int
-client_connect(struct client* client, const char* server_address, const char* port);
+client_connect(
+    struct client* client,
+    const char* server_address,
+    const char* port,
+    const char* username);
 
 void
 client_disconnect(struct client* client);
 
-void
-client_queue_unreliable(struct client* client, struct msg* m);
+static inline void
+client_queue_unreliable(struct client* client, struct msg* m)
+    { vector_push(&client->pending_unreliable, &m); }
 
-void
-client_queue_reliable(struct client* client, struct msg* m);
+static inline void
+client_queue_reliable(struct client* client, struct msg* m)
+    { vector_push(&client->pending_reliable, &m); }
 
 int
 client_send_pending_data(struct client* client);
 
+/*!
+ * \brief 
+ * \return Returns -1 if an error occurs. Returns 1 if the client's state
+ * changed. Returns 0 otherwise.
+ */
 int
-client_recv_joining(struct client* client, uint16_t* frame_number);
-
-int
-client_recv_game(struct client* client);
+client_recv(struct client* client);
 
 C_END

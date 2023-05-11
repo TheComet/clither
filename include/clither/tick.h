@@ -24,6 +24,16 @@ void
 tick_cfg(struct tick* t, int tps);
 
 /*!
+ * \brief If the period of time configured in tick_cfg() has passed since the
+ * last call to tick_advance(), this function returns non-zero. This is
+ * essentially a non-blocking version of tick_wait().
+ * \return Returns the number of periods (configured in tick_cfg()) that you
+ * are behind from where you should be.
+ */
+int
+tick_advance(struct tick* t);
+
+/*!
  * \brief Waits (and sleeps if necessary) until the tick rate configured in
  * tick_init() is reached. Then updates the current time, so that the next
  * call to tick_wait() will delay for the same amount of time again.

@@ -71,15 +71,18 @@ msg_parse_paylaod(
 void
 msg_free(struct msg* m);
 
+void
+msg_update_frame_number(struct msg* m, uint16_t frame_number);
+
 struct msg*
-msg_join_request(uint16_t protocol_version, uint16_t frame, const char* username);
+msg_join_request(uint16_t protocol_version, uint16_t frame_number, const char* username);
 
 struct msg*
 msg_join_accept(
     uint8_t sim_tick_rate,
     uint8_t net_tick_rate,
-    uint16_t client_frame,
-    uint16_t server_frame,
+    uint16_t client_frame_number,
+    uint16_t server_frame_number,
     struct qpos2* spawn_pos);
 
 struct msg*
@@ -98,6 +101,6 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls();
+msg_controls(void);
 
 C_END

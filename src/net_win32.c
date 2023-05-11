@@ -121,7 +121,7 @@ net_bind(
 
         if (bind(sockfd, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
-            log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
+            log_warn("bind() failed for UDP %s:%s: %d\n", ipstr, port, WSAGetLastError());
             closesocket(sockfd);
         }
 
@@ -163,7 +163,7 @@ net_connect(const char* server_address, const char* port)
     {
         net_addr_to_str(ipstr, sizeof ipstr, p->ai_addr);
 
-        log_dbg("Attempting to connect UDP socket %s:%s...\n", ipstr, port);
+        log_dbg("Attempting to connect UDP socket %s:%s\n", ipstr, port);
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             continue;

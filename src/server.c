@@ -292,6 +292,7 @@ server_recv(struct server* server, uint16_t frame_number)
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_reliable);
                         msg_queue_init(&client->pending_unreliable);
+                        client->timeout_counter = 0;
                     }
 
                     /* (Re-)send join accept response */
