@@ -4,28 +4,17 @@
 #include "clither/net.h"
 
 #include <string.h>
+#include <assert.h>
 
 /* ------------------------------------------------------------------------- */
-int
-client_init(struct client* client, const char* server_address, const char* port)
+void
+client_init(struct client* client)
 {
-    if (!*server_address)
-    {
-        log_err("No server IP address was specified! Can't init client socket\n");
-        log_err("You can use --ip <address> to specify an address to connect to\n");
-        return -1;
-    }
-
-    client->udp_sock = net_connect(server_address, port);
-    if (client->udp_sock < 0)
-        return -1;
-
-    msg_queue_init(&client->pending_unreliable);
-    msg_queue_init(&client->pending_reliable);
+    client->udp_sock = -1;
     client->timeout_counter = 0;
     client->sim_tick_rate = 60;
     client->net_tick_rate = 20;
-    client->frame_number = 0;
+    client->state = CLIENT_DISCONNECTED;
 
     return 0;
 }
@@ -35,6 +24,47 @@ void
 client_deinit(struct client* client)
 {
     net_close(client->udp_sock);
+
+    msg_queue_deinit(&client->pending_reliable);
+    msg_queue_deinit(&client->pending_unreliable);
+}
+
+/* ------------------------------------------------------------------------- */
+int
+client_connect(struct client* client, const char* server_address, const char* port)
+{
+    if (!*server_address)
+    {
+        log_err("No server IP address was specified! Can't init client socket\n");
+        log_err("You can use --ip <address> to specify an address to connect to\n");
+        return -1;
+    }
+
+    assert(client->state == CLIENT_DISCONNECTED);
+    assert(client->udp_sock == -1);
+
+    client->udp_sock = net_connect(server_address, port);
+    if (client->udp_sock < 0)
+        return -1;
+
+    msg_queue_init(&client->pending_unreliable);
+    msg_queue_init(&client->pending_reliable);
+
+    client->state = CLIENT_JOINING;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_disconnect(struct client* client)
+{
+    assert(client->state != CLIENT_DISCONNECTED);
+    assert(client->udp_sock != -1);
+
+    net_close(client->udp_sock);
+    client->udp_sock = -1;
+    client->state = CLIENT_DISCONNECTED;
 
     msg_queue_deinit(&client->pending_reliable);
     msg_queue_deinit(&client->pending_unreliable);

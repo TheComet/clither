@@ -103,7 +103,11 @@ run_client(const struct args* a)
     struct client client;
     struct tick tick;
     int tick_lag;
+    uint16_t frame_number;
+    uint8_t sim_update_rate;
+    uint8_t net_update_rate;
     uint8_t net_update_counter;
+    enum client_state state;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -114,8 +118,6 @@ run_client(const struct args* a)
     signals_install();
 #endif
 
-    world_init(&world);
-
     /* Init all graphics and create window */
     if (gfx_init() < 0)
         goto init_gfx_failed;
@@ -123,14 +125,20 @@ run_client(const struct args* a)
     if (gfx == NULL)
         goto create_gfx_failed;
 
+    /* Init global networking */
     if (net_init() < 0)
         goto net_init_failed;
-    if (client_init(&client, a->ip, a->port) < 0)
-        goto net_init_connection_failed;
 
-    net_update_counter = 0;
-    tick_cfg(&tick, client.sim_tick_rate);
+    /* Run the menu at 60 fps, net update at 20 fps */
+
+
     log_info("Client started\n");
+
+    /* Menu mode */
+    frame_number = 0;
+    net_update_counter = 0;
+    state = CLIENT_DISCONNECTED;
+    tick_cfg(&tick, 60);  
     while (1)
     {
         gfx_poll_input(gfx, &controls);
@@ -141,19 +149,28 @@ run_client(const struct args* a)
             break;
 #endif
 
+        switch (state)
+        {
+            case CLIENT_DISCONNECTED: {
+                /* TODO: Implement menu. For now we attempt to connect to the server directly */
+                if (client_init(&client, a->ip, a->port) < 0)
+                    break;
+
+            } break;
+        }
+
         if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
+        {
             if (client_recv(&client) != 0)
                 break;
+        }
 
         /* sim_update */
 
         if (net_update_counter * client.net_tick_rate >= client.sim_tick_rate)
         {
             if (client.state == CLIENT_JOINING)
-            {
-                struct msg* m = msg_join_request(0x0000, client.frame_number, "username");
-                vector_push(&client.pending_unreliable, &m);
-            }
+                client_queue_unreliable(&client, msg_join_request(0x0000, frame_number, "username"));
 
             if (client_send_pending_data(&client) != 0)
                 break;
