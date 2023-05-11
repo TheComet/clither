@@ -1,6 +1,8 @@
 #include "gmock/gmock.h"
+#include "clither/client.h"
 #include "clither/net.h"
 #include "clither/msg.h"
+#include "clither/server.h"
 
 #define NAME protocol
 
@@ -29,10 +31,10 @@ protected:
 
 TEST_F(NAME, server_can_receive_join_message)
 {
-    msg* m = msg_join_request(0x0000, "username");
+    msg* m = msg_join_request(0x0000, 0, "username");
     vector_push(&client.pending_reliable, &m);
     client_send_pending_data(&client);
-    server_recv(&server);
+    server_recv(&server, 0);
 
     server_send_pending_data(&server);
     client_recv(&client);
