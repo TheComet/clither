@@ -91,7 +91,8 @@ add_executable (clither
         src/net_win32.c
         src/signals_win32.c
         src/thread_win32.c
-        src/tick_win32.c>
+        src/tick_win32.c
+        src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
         src/mutex_pthread.c
         src/net_posix.c

@@ -125,9 +125,6 @@ run_server(const void* args)
 
     memory_init_thread();
 
-    /* Install signal handlers for CTRL+C and (on windows) console close events */
-    signals_install();
-
     btree_init(&instances, sizeof(struct server_instance));
 
     if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
@@ -163,6 +160,7 @@ run_server(const void* args)
         }
     }
 
+    /* For now we don't create more instances once the server fills up */
     INSTANCE_FOR_EACH(&instances, port, instance)
         thread_join(instance->thread, 0);
     INSTANCE_END_EACH
@@ -171,7 +169,6 @@ run_server(const void* args)
     server_settings_save(&settings, a->config_file);
 
     btree_deinit(&instances);
-    signals_remove();
     memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
@@ -181,7 +178,6 @@ run_server(const void* args)
 start_default_instance_failed:
 load_settings_failed:
     btree_deinit(&instances);
-    signals_remove();
     memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
@@ -202,6 +198,7 @@ start_background_server(struct thread* t, const struct args* a)
      * something goes wrong, but also ensures that the server socket is bound
      * before the client tries to join.
      */
+    /* TODO */
     return 0;
 }
 
@@ -231,19 +228,7 @@ run_client(const struct args* a)
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     memory_init_thread();
-
     world_init(&world);
-
-    /* Init all graphics and create window */
-    if (gfx_init() < 0)
-        goto init_gfx_failed;
-    gfx = gfx_create(800, 600);
-    if (gfx == NULL)
-        goto create_gfx_failed;
-
-    /* Init global networking */
-    if (net_init() < 0)
-        goto net_init_failed;
     client_init(&client);
 
     /*
@@ -253,21 +238,24 @@ run_client(const struct args* a)
     if (client_connect(&client, a->ip, a->port, "username") < 0)
         goto net_init_connection_failed;
 
+    /* Init all graphics and create window */
+    if (gfx_init() < 0)
+        goto init_gfx_failed;
+    gfx = gfx_create(800, 600);
+    if (gfx == NULL)
+        goto create_gfx_failed;
+
     log_info("Client started\n");
 
     tick_cfg(&sim_tick, client.sim_tick_rate);
     tick_cfg(&net_tick, client.net_tick_rate);
-    while (1)
+    while (signals_exit_requested() == 0)
     {
         int net_update;
 
         gfx_poll_input(gfx, &controls);
         if (controls.quit)
             break;
-#if !defined(_WIN32)
-        if (signals_exit_requested())
-            break;
-#endif
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
@@ -298,7 +286,7 @@ run_client(const struct args* a)
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            if (client_send_pending_data(&client) != 0)
+            if (client_send_pending_data(&client) < 0)
                 break;
         }
 
@@ -322,16 +310,14 @@ run_client(const struct args* a)
 
         client.frame_number++;
     }
-
     log_info("Stopping client\n");
-    client_deinit(&client);
-net_init_connection_failed:
-    net_deinit();
-net_init_failed:
+
     gfx_destroy(gfx);
 create_gfx_failed:
     gfx_deinit();
 init_gfx_failed:
+net_init_connection_failed:
+    client_deinit(&client);
     world_deinit(&world);
     memory_deinit_thread();
     log_set_colors("", "");
@@ -356,6 +342,9 @@ int main(int argc, char* argv[])
         case 1: return 0;
         default: return -1;
     }
+
+    /* Install signal handlers for CTRL+C and (on windows) console close events */
+    signals_install();
 
     /* Open log file */
 #if defined(CLITHER_LOGGING)
@@ -404,8 +393,11 @@ int main(int argc, char* argv[])
             args.ip = "localhost";
             run_client(&args);
 
-            log_note("The server will continue to run.\n");
-            log_note("You can stop it by pressing CTRL+C\n");
+            if (!signals_exit_requested())
+            {
+                log_note("The server will continue to run.\n");
+                log_note("You can stop it by pressing CTRL+C\n");
+            }
             join_background_server(server_thread);
         } break;
 #endif
@@ -416,6 +408,7 @@ int main(int argc, char* argv[])
 #if defined(CLITHER_LOGGING)
     log_file_close();
 #endif
+    signals_remove();
 
     return retval;
 
@@ -423,19 +416,6 @@ net_init_failed:
 #if defined(CLITHER_LOGGING)
     log_file_close();
 #endif
+    signals_remove();
     return -1;
 }
-
-/* ------------------------------------------------------------------------- */
-#if defined(_WIN32)
-#include <Windows.h>
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow)
-{
-    (void)hInstance;
-    (void)hPrevInstance;
-    (void)lpCmdLine;
-    (void)nCmdShow;
-
-    return main(__argc, __argv);
-}
-#endif
