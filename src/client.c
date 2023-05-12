@@ -137,13 +137,21 @@ client_send_pending_data(struct client* client)
         assert(vector_count(&client->udp_sockfds) > 0);
         log_dbg("Sending UDP packet, size=%d\n", len);
 
+        /*
+         * The client was initialized with a list of possible sockets. This is
+         * because we can't know without first communicating with the server
+         * which protocol (IPv4 vs IPv6) is being used. If a send call fails,
+         * and there are more sockets, simply close the one that failed and try
+         * the next one.
+         */
+retry_send:
         if (net_send(*(int*)vector_back(&client->udp_sockfds), buf, len) < 0)
         {
             if (vector_count(&client->udp_sockfds) == 1)
                 return -1;
             net_close(*(int*)vector_pop(&client->udp_sockfds));
             log_info("Attempting to use next socket\n");
-            return 0;
+            goto retry_send;
         }
         client->timeout_counter++;
     }
@@ -168,6 +176,7 @@ client_recv(struct client* client)
 
     assert(vector_count(&client->udp_sockfds) > 0);
 
+retry_recv:
     bytes_received = net_recv(*(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
     if (bytes_received < 0)
     {
@@ -175,7 +184,7 @@ client_recv(struct client* client)
             return -1;
         net_close(*(int*)vector_pop(&client->udp_sockfds));
         log_info("Attempting to use next socket\n");
-        return 0;
+        goto retry_recv;
     }
 
     /* Packet can contain multiple message objects. Unpack */
