@@ -11,12 +11,12 @@
 #define BACKTRACE_OMIT_COUNT 2
 
 #if defined(CSTRUCTURES_MEMORY_DEBUGGING)
-CSTRUCTURES_THREADLOCAL static uintptr_t g_allocations = 0;
-CSTRUCTURES_THREADLOCAL static uintptr_t d_deallocations = 0;
-CSTRUCTURES_THREADLOCAL static uintptr_t g_ignore_hm_malloc = 0;
+static CSTRUCTURES_THREADLOCAL uintptr_t g_allocations = 0;
+static CSTRUCTURES_THREADLOCAL uintptr_t d_deallocations = 0;
+static CSTRUCTURES_THREADLOCAL uintptr_t g_ignore_hm_malloc = 0;
 CSTRUCTURES_THREADLOCAL uintptr_t g_bytes_in_use = 0;
 CSTRUCTURES_THREADLOCAL uintptr_t g_bytes_in_use_peak = 0;
-CSTRUCTURES_THREADLOCAL static struct cs_hashmap g_report;
+static CSTRUCTURES_THREADLOCAL struct cs_hashmap g_report;
 
 typedef struct report_info_t
 {

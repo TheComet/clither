@@ -6,7 +6,7 @@ struct thread
 };
 
 int
-thread_start(struct thread* t, void* (*func)(void*), const void* args);
+thread_start(struct thread* t, void* (*func)(const void*), const void* args);
 
 int
 thread_join(struct thread t, int timeout_ms);

@@ -218,18 +218,6 @@ vector_pop(struct cs_vector* vector)
 
 /* ------------------------------------------------------------------------- */
 void*
-vector_back(const struct cs_vector* vector)
-{
-    assert(vector);
-
-    if (!vector->count)
-        return NULL;
-
-    return vector->data + (vector->element_size * (vector->count - 1));
-}
-
-/* ------------------------------------------------------------------------- */
-void*
 vector_insert_emplace(struct cs_vector* vector, cs_vec_idx index)
 {
     cs_vec_idx offset;

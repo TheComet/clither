@@ -10,7 +10,6 @@
 void
 client_init(struct client* client)
 {
-    client->udp_sock = -1;
     client->sim_tick_rate = 60;
     client->net_tick_rate = 20;
     client->timeout_counter = 0;
@@ -19,6 +18,7 @@ client_init(struct client* client)
 
     msg_queue_init(&client->pending_unreliable);
     msg_queue_init(&client->pending_reliable);
+    vector_init(&client->udp_sockfds, sizeof(int));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -28,6 +28,7 @@ client_deinit(struct client* client)
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
+    vector_deinit(&client->udp_sockfds);
     msg_queue_deinit(&client->pending_reliable);
     msg_queue_deinit(&client->pending_unreliable);
 }
@@ -37,7 +38,7 @@ int
 client_connect(
     struct client* client,
     const char* server_address,
-    const char* port, 
+    const char* port,
     const char* username)
 {
     if (!*server_address)
@@ -51,10 +52,9 @@ client_connect(
         port = NET_DEFAULT_PORT;
 
     assert(client->state == CLIENT_DISCONNECTED);
-    assert(client->udp_sock == -1);
+    assert(vector_count(&client->udp_sockfds) == 0);
 
-    client->udp_sock = net_connect(server_address, port);
-    if (client->udp_sock < 0)
+    if (net_connect(&client->udp_sockfds, server_address, port) < 0)
         return -1;
 
     client_queue_reliable(client, msg_join_request(0x0000, client->frame_number, username));
@@ -69,10 +69,13 @@ void
 client_disconnect(struct client* client)
 {
     assert(client->state != CLIENT_DISCONNECTED);
-    assert(client->udp_sock != -1);
+    assert(vector_count(&client->udp_sockfds) != 0);
 
-    net_close(client->udp_sock);
-    client->udp_sock = -1;
+    VECTOR_FOR_EACH(&client->udp_sockfds, int, sockfd)
+        net_close(*sockfd);
+    VECTOR_END_EACH
+    vector_clear(&client->udp_sockfds);
+
     client->state = CLIENT_DISCONNECTED;
 
     msg_queue_clear(&client->pending_reliable);
@@ -87,7 +90,7 @@ client_send_pending_data(struct client* client)
     char buf[MAX_UDP_PACKET_SIZE];
     int len = 0;
 
-    /* 
+    /*
      * Some messages in the reliable queue contain the frame number they were
      * sent as part of the message payload. These numbers need to be updated
      * to the most recent frame number every time they are resent so the server
@@ -131,8 +134,17 @@ client_send_pending_data(struct client* client)
 
     if (len > 0)
     {
+        assert(vector_count(&client->udp_sockfds) > 0);
         log_dbg("Sending UDP packet, size=%d\n", len);
-        net_send(client->udp_sock, buf, len);
+
+        if (net_send(*(int*)vector_back(&client->udp_sockfds), buf, len) < 0)
+        {
+            if (vector_count(&client->udp_sockfds) == 1)
+                return -1;
+            net_close(*(int*)vector_pop(&client->udp_sockfds));
+            log_info("Attempting to use next socket\n");
+            return 0;
+        }
         client->timeout_counter++;
     }
 
@@ -146,19 +158,31 @@ client_send_pending_data(struct client* client)
 }
 
 /* ------------------------------------------------------------------------- */
-enum client_state
+int
 client_recv(struct client* client)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     int i;
+    int bytes_received;
     int retval = 0;
-    int bytes_received = net_recv(client->udp_sock, buf, MAX_UDP_PACKET_SIZE);
+
+    assert(vector_count(&client->udp_sockfds) > 0);
+
+    bytes_received = net_recv(*(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
+    if (bytes_received < 0)
+    {
+        if (vector_count(&client->udp_sockfds) == 1)
+            return -1;
+        net_close(*(int*)vector_pop(&client->udp_sockfds));
+        log_info("Attempting to use next socket\n");
+        return 0;
+    }
 
     /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
     {
         union parsed_payload pp;
-        enum net_msg_type type = buf[i+0];
+        enum msg_type type = buf[i+0];
         uint8_t payload_len = buf[i+1];
         if (i+2 + payload_len > bytes_received)
         {
@@ -185,7 +209,7 @@ client_recv(struct client* client)
                 /* Stop sending join request messages */
                 msg_queue_remove_type(&client->pending_reliable, MSG_JOIN_REQUEST);
 
-                /* 
+                /*
                  * Regardless of whether we succeed or fail, the client is
                  * changing state as a result of this message
                  */
@@ -199,7 +223,7 @@ client_recv(struct client* client)
                  * this it's possible to figure out our offset and synchronize.
                  */
 
-                /* 
+                /*
                  * Round trip time is our current frame number minus the frame
                  * on which the join request was sent.
                  */

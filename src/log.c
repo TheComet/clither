@@ -5,12 +5,12 @@
 #include <string.h>
 #include <errno.h>
 
-CLITHER_THREADLOCAL static const char* g_prefix = "";
-CLITHER_THREADLOCAL static const char* g_col_set = "";
-CLITHER_THREADLOCAL static const char* g_col_clr = "";
+static CLITHER_THREADLOCAL const char* g_prefix = "";
+static CLITHER_THREADLOCAL const char* g_col_set = "";
+static CLITHER_THREADLOCAL const char* g_col_clr = "";
 
 #if defined(CLITHER_LOGGING)
-CLITHER_THREADLOCAL static FILE* g_log = NULL;
+static CLITHER_THREADLOCAL FILE* g_log = NULL;
 #endif
 
 /* ------------------------------------------------------------------------- */

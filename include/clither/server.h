@@ -24,7 +24,7 @@ struct server
  * value from the config file will be used (and if that doesn't exist then the
  * default port will be used).
  * \param[in] config_filename The name of the config.ini file to load settings
- * from. Note that if you pass in 
+ * from. Note that if you pass in
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
 int

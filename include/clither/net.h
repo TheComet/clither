@@ -21,6 +21,8 @@
 
 C_BEGIN
 
+struct cs_vector;
+
 /*!
  * \brief Initialize global data for networking. Call this before any other
  * net function.
@@ -64,15 +66,21 @@ int
 net_bind(const char* bind_address, const char* port, int* addrlen);
 
 /*!
- * \brief Creates a non-blocking socket and connects it with the specified
- * address.
- * This function is designed to work with client_init() and net_socket_send().
+ * \brief Creates a number of non-blocking sockets and connects them to the
+ * specified address.
+ * \note Because these are UDP sockets, we can't know ahead of time whether the
+ * server is using IPv6 or IPv4. This is handled later when sending the first
+ * packets by using the first socket that responds successfully and closing the
+ * rest.
+ * \note This function is designed to work with client_init() and net_socket_send().
+ * \param[out] sockfds Pointer to an initialized vector with sizeof(int). All
+ * potential socket file descriptors are pushed into this vector.
  * \param[in] server_address The server address to connect to.
  * \param[in] port The port of the server to connect to.
- * \return Returns the socket file descriptor, or -1 if an error occurred.
+ * \return Returns 0 on success and -1 if an error occurred.
  */
 int
-net_connect(const char* server_address, const char* port);
+net_connect(struct cs_vector* sockfds, const char* server_address, const char* port);
 
 /*! Closes a socket */
 void
@@ -94,7 +102,7 @@ net_send(int sockfd, const char* buf, int len);
  * \brief Receive data (non-blocking) from a socket. Data is written to buf
  * and the number of bytes received is returned. The address length returned
  * from recvfrom() must match addrlen exactly or this function will fail.
- * 
+ *
  * \return Returns 0 if nothing was received. Returns -1 if an error occurred.
  * Returns the number of bytes received if successful.
  */
@@ -104,7 +112,7 @@ net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen);
 /*!
  * \brief Receive data (non-blocking) from a connected socket. Data is written
  * to buf and the number of bytes received is returned.
- * 
+ *
  * \return Returns 0 if nothing was received. Returns -1 if an error occurred.
  * Returns the number of bytes received if successful.
  */
