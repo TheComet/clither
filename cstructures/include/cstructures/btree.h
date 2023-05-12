@@ -143,6 +143,9 @@ btree_reserve(struct cs_btree* btree, cs_btree_size size);
 CSTRUCTURES_PUBLIC_API enum cs_btree_status
 btree_insert_new(struct cs_btree* btree, cs_btree_key key, const void* value);
 
+CSTRUCTURES_PUBLIC_API void*
+btree_emplace_new(struct cs_btree* btree, cs_btree_key key);
+
 /*!
  * @brief Updates an existing value. If the key doesn't exist, this function
  * does nothing.
@@ -333,8 +336,8 @@ btree_compact(struct cs_btree* btree);
  * item. Will be of type T*.
  */
 #define BTREE_FOR_EACH(btree, T, k, v) {                                      \
-    cs_btree_size idx_##k;                                                     \
-    cs_btree_key k;                                                            \
+    cs_btree_size idx_##k;                                                    \
+    cs_btree_key k;                                                           \
     T* v;                                                                     \
     assert(btree_value_size(btree) > 0);                                      \
     for(idx_##k = 0;                                                          \
@@ -347,8 +350,8 @@ btree_compact(struct cs_btree* btree);
  * @brief Iterates over the specified btree's keys and opens a FOR_EACH scope.
  */
 #define BTREE_KEYS_FOR_EACH(btree, k) {                                       \
-    cs_btree_size idx_##k;                                                     \
-    cs_btree_key k;                                                            \
+    cs_btree_size idx_##k;                                                    \
+    cs_btree_key k;                                                           \
     for(idx_##k = 0;                                                          \
         idx_##k != btree_count(btree) && ((k = *BTREE_KEY(btree, idx_##k)) || 1); \
         idx_##k++) {

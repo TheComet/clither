@@ -22,7 +22,7 @@ set_defaults(struct server_settings* s)
 }
 
 /* ------------------------------------------------------------------------- */
-void
+int
 server_settings_load_or_set_defaults(struct server_settings* server, const char* filename)
 {
 	FILE* fp;
@@ -32,7 +32,7 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 	set_defaults(server);
 
 	if (!*filename)
-		return;
+		return 0;
 
 	fp = fopen(filename, "r");
 	if (fp == NULL)
@@ -121,7 +121,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (max_players > 0)
 				server->max_players = max_players;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"max_players\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "max_username_len") == 0)
 		{
@@ -130,7 +133,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (maxlen > 0)
 				server->max_username_len = maxlen;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"max_username_len\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "sim_tick_rate") == 0)
 		{
@@ -139,7 +145,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (rate > 0)
 				server->sim_tick_rate = rate;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"sim_tick_rate\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "net_tick_rate") == 0)
 		{
@@ -148,7 +157,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (rate > 0)
 				server->net_tick_rate = rate;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"net_tick_rate\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "client_timeout") == 0)
 		{
@@ -157,7 +169,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (seconds > 0)
 				server->client_timeout = seconds;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"client_timeout\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "malicious_timeout") == 0)
 		{
@@ -166,7 +181,10 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (seconds > 0)
 				server->malicious_timeout = seconds;
 			else
+			{
 				log_err("Invalid value \"%s\" for \"malicious_timeout\" in config file\n", value);
+				goto error;
+			}
 		}
 		else if (strcmp(key, "port") == 0)
 		{
@@ -174,14 +192,25 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 			if (atoi(value) == 0 || atoi(value) > 65535 || strlen(value) > sizeof(server->port))
 			{
 				log_err("Invalid port number \"%s\" for \"port\" in config file\n", value);
-				continue;
+				goto error;
 			}
 			strcpy(server->port, value);
+		}
+		else
+		{
+			log_err("Unknown key/value pair in config file: \"%s = %s\"\n", key, value);
+			goto error;
 		}
 	}
 
 	string_deinit(&line);
 	fclose(fp);
+	return 0;
+
+error:
+	string_deinit(&line);
+	fclose(fp);
+	return -1;
 }
 
 /* ------------------------------------------------------------------------- */
