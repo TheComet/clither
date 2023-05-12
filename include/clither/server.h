@@ -1,14 +1,14 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/server_settings.h"
 #include "cstructures/hashmap.h"
 
 C_BEGIN
 
+struct server_settings;
+
 struct server
 {
-    struct server_settings settings;
     struct cs_hashmap client_table;       /* struct (key size depends on protocol) -> struct client_table_entry (see net.c) */
     struct cs_hashmap malicious_clients;  /* struct sockaddr (key size depends on protocol) */
     struct cs_hashmap banned_clients;     /* struct sockaddr (key size depends on protocol) */
@@ -31,8 +31,7 @@ int
 server_init(
     struct server* server,
     const char* bind_address,
-    const char* port,
-    const char* config_filename);
+    const char* port);
 
 /*!
  * \brief Closes all sockets and frees all data. Saves the settings structure
@@ -42,18 +41,18 @@ server_init(
  * to.
  */
 void
-server_deinit(struct server* server, const char* config_filename);
+server_deinit(struct server* server);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
 void
-server_send_pending_data(struct server* server);
+server_send_pending_data(struct server* server, const struct server_settings* settings);
 
 /*!
  *
  */
 int
-server_recv(struct server* server, uint16_t frame_number);
+server_recv(struct server* server, const struct server_settings* settings, uint16_t frame_number);
 
 C_END

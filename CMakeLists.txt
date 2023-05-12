@@ -58,12 +58,14 @@ add_executable (clither
     "include/clither/log.h"
     "include/clither/msg.h"
     "include/clither/msg_queue.h"
+    "include/clither/mutex.h"
     "include/clither/net.h"
     "include/clither/q.h"
     "include/clither/server.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
+    "include/clither/thread.h"
     "include/clither/tick.h"
     "include/clither/tests.h"
     "include/clither/world.h"
@@ -85,8 +87,10 @@ add_executable (clither
         src/gfx_sdl.c>
 
     $<$<PLATFORM_ID:Windows>:
+    	src/mutex_win32.c
         src/net_win32.c
         src/signals_win32.c
+	src/thread_win32.c
         src/tick_win32.c>
     $<$<PLATFORM_ID:Linux>:
         src/net_posix.c

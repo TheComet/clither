@@ -2,6 +2,7 @@
 #include "clither/msg_queue.h"
 #include "clither/net.h"
 #include "clither/server.h"
+#include "clither/server_settings.h"
 
 #include "cstructures/vector.h"
 
@@ -36,22 +37,9 @@ int
 server_init(
     struct server* server,
     const char* bind_address,
-    const char* port,
-    const char* config_filename)
+    const char* port)
 {
     int addrlen;
-
-    /* Have to load config first */
-    server_settings_load_or_set_defaults(&server->settings, config_filename);
-
-    /*
-     * The port passed in over the command line has precedence over the port
-     * specified in the config file. Note that the port obtained from the
-     * settings structure is always initialized, regardless of whether the
-     * config file existed or not.
-     */
-    if (!*port)
-        port = server->settings.port;
 
     server->udp_sock = net_bind(bind_address, port, &addrlen);
     if (server->udp_sock < 0)
@@ -80,11 +68,9 @@ server_init(
 
 /* ------------------------------------------------------------------------- */
 void
-server_deinit(struct server* server, const char* config_filename)
+server_deinit(struct server* server)
 {
     net_close(server->udp_sock);
-
-    server_settings_save(&server->settings, config_filename);
 
     hashmap_deinit(&server->banned_clients);
     hashmap_deinit(&server->malicious_clients);
@@ -98,7 +84,7 @@ server_deinit(struct server* server, const char* config_filename)
 
 /* ------------------------------------------------------------------------- */
 void
-server_send_pending_data(struct server* server)
+server_send_pending_data(struct server* server, const struct server_settings* settings)
 {
     char buf[MAX_UDP_PACKET_SIZE];
 
@@ -145,7 +131,7 @@ server_send_pending_data(struct server* server)
             client->timeout_counter++;
         }
 
-        if (client->timeout_counter > server->settings.client_timeout * server->settings.net_tick_rate)
+        if (client->timeout_counter > settings->client_timeout * settings->net_tick_rate)
         {
             char ipstr[MAX_ADDRSTRLEN];
             net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
@@ -159,7 +145,7 @@ server_send_pending_data(struct server* server)
 
 /* ------------------------------------------------------------------------- */
 int
-server_recv(struct server* server, uint16_t frame_number)
+server_recv(struct server* server, const struct server_settings* settings, uint16_t frame_number)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     char client_addr[MAX_ADDRLEN];
@@ -207,7 +193,7 @@ server_recv(struct server* server, uint16_t frame_number)
             int* timeout = hashmap_find(&server->malicious_clients, client_addr);
             if (timeout != NULL)
             {
-                *timeout += server->settings.malicious_timeout * server->settings.net_tick_rate;
+                *timeout += settings->malicious_timeout * settings->net_tick_rate;
                 continue;
             }
         }
@@ -269,14 +255,14 @@ server_recv(struct server* server, uint16_t frame_number)
 
 
                 case MSG_JOIN_REQUEST: {
-                    if (hashmap_count(&server->client_table) > (uint32_t)server->settings.max_players)
+                    if (hashmap_count(&server->client_table) > (uint32_t)settings->max_players)
                     {
                         char response[2] = { MSG_JOIN_DENY_SERVER_FULL, 0 };
                         net_sendto(server->udp_sock, response, 2, client_addr, server->client_table.key_size);
                         break;
                     }
 
-                    if (pp.join_request.username_len > server->settings.max_username_len)
+                    if (pp.join_request.username_len > settings->max_username_len)
                     {
                         char response[2] = { MSG_JOIN_DENY_BAD_USERNAME, 0 };
                         net_sendto(server->udp_sock, response, 2, client_addr, server->client_table.key_size);
@@ -299,8 +285,8 @@ server_recv(struct server* server, uint16_t frame_number)
                     {
                         struct qpos2 spawn_pos = { 32, 32 };
                         struct msg* response = msg_join_accept(
-                            server->settings.sim_tick_rate,
-                            server->settings.net_tick_rate,
+                            settings->sim_tick_rate,
+                            settings->net_tick_rate,
                             pp.join_request.frame,
                             frame_number,
                             &spawn_pos);

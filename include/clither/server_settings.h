@@ -18,7 +18,7 @@ struct server_settings
 	struct cs_hashmap banned_ips;
 };
 
-void
+int
 server_settings_load_or_set_defaults(struct server_settings* s, const char* filename);
 
 void

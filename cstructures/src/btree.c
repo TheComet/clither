@@ -221,6 +221,39 @@ btree_insert_new(struct cs_btree* btree, cs_btree_key key, const void* value)
 }
 
 /* ------------------------------------------------------------------------- */
+void*
+btree_emplace_new(struct cs_btree* btree, cs_btree_key key)
+{
+    cs_btree_key* lower_bound;
+    cs_btree_size insertion_index;
+    cs_btree_size entries_to_move;
+
+    assert(btree);
+
+    /* May need to realloc */
+    if (BTREE_NEEDS_REALLOC(btree))
+        if (btree_realloc(btree, btree->capacity * CSTRUCTURES_BTREE_EXPAND_FACTOR) != BTREE_OK)
+            return NULL;
+
+    /* lookup location in btree to insert */
+    lower_bound = btree_find_lower_bound(btree, key);
+    if (lower_bound < BTREE_KEY_END(btree) && *lower_bound == key)
+        return NULL;
+    insertion_index = BTREE_KEY_TO_IDX(btree, lower_bound);
+
+    /* Move entries out of the way to make space for new entry */
+    entries_to_move = btree_count(btree) - insertion_index;
+    memmove(lower_bound + 1, lower_bound, entries_to_move * sizeof(cs_btree_key));
+    memmove(BTREE_VALUE(btree, insertion_index + 1), BTREE_VALUE(btree, insertion_index), entries_to_move * btree->value_size);
+
+    /* Copy key into storage */
+    memcpy(BTREE_KEY(btree, insertion_index), &key, sizeof(cs_btree_key));
+    btree->count++;
+
+    return BTREE_VALUE(btree, insertion_index);
+}
+
+/* ------------------------------------------------------------------------- */
 enum cs_btree_status
 btree_set_existing(struct cs_btree* btree, cs_btree_key key, const void* value)
 {

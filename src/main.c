@@ -4,56 +4,64 @@
 #include "clither/client.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
+#include "clither/mutex.h"
 #include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/log.h"
 #include "clither/server.h"
+#include "clither/server_settings.h"
 #include "clither/signals.h"
 #include "clither/tests.h"
+#include "clither/thread.h"
 #include "clither/tick.h"
 #include "clither/world.h"
 
 #include "cstructures/memory.h"
+#include "cstructures/btree.h"
 
-#if defined(_WIN32)
-#   define _WIN32_LEAN_AND_MEAN
-#   include <Windows.h>
-#else
-#   include <unistd.h>
-#   include <errno.h>
-#   include <string.h>
-#   include <sys/types.h>
-#   include <sys/wait.h>
-#endif
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <stdio.h>
+
+static int server_instances = 0;
+static struct mutex server_mutex;
+
+struct server_instance
+{
+    struct thread thread;
+    const struct server_settings* settings;
+    const char* ip;
+    char port[6];
+};
 
 /* ------------------------------------------------------------------------- */
-static void
-run_server(const struct args* a)
+static void*
+run_server_instance(const struct server_instance* instance)
 {
     struct world world;
     struct server server;
     struct tick sim_tick;
     struct tick net_tick;
     uint16_t frame_number;
+    char log_prefix[] = "S:xxxxx ";
 
     /* Change log prefix and color for server log messages */
-    log_set_prefix("Server: ");
+    sprintf(log_prefix+2, "%-6s", instance->port);
+    log_set_prefix(log_prefix);
     log_set_colors(COL_B_CYAN, COL_RESET);
 
-    /* Install signal handlers for CTRL+C and (on windows) console close events */
-    signals_install();
+    memory_init_thread();
 
     world_init(&world);
 
-    /* Init networking and bind server sockets */
-    if (net_init() < 0)
-        goto net_init_failed;
-    if (server_init(&server, a->ip, a->port, a->config_file) < 0)
-        goto net_init_connection_failed;
+    if (server_init(&server, instance->ip, instance->port) < 0)
+        goto server_init_failed;
     net_log_host_ips();
 
-    tick_cfg(&sim_tick, server.settings.sim_tick_rate);
-    tick_cfg(&net_tick, server.settings.net_tick_rate);
+    log_dbg("Started server instance\n");
+    tick_cfg(&sim_tick, instance->settings->sim_tick_rate);
+    tick_cfg(&net_tick, instance->settings->net_tick_rate);
     frame_number = 0;
     while (signals_exit_requested() == 0)
     {
@@ -61,32 +69,139 @@ run_server(const struct args* a)
         int net_update = tick_advance(&net_tick);
 
         if (net_update)
-            if (server_recv(&server, frame_number) != 0)
+            if (server_recv(&server, instance->settings, frame_number) != 0)
                 break;
 
         /* sim_update */
 
         if (net_update)
-            server_send_pending_data(&server);
+            server_send_pending_data(&server, instance->settings);
 
         if ((tick_lag = tick_wait(&sim_tick)) > 0)
             log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
 
         frame_number++;
     }
-    log_info("Stopping server\n");
+    log_info("Stopping server instance\n");
 
-    server_deinit(&server, a->config_file);
-    net_deinit();
+    server_deinit(&server);
     world_deinit(&world);
-    signals_remove();
 
-    return;
+    memory_deinit_thread();
 
-net_init_connection_failed:
-    net_deinit();
-net_init_failed:
+    return (void*)0;
+
+server_init_failed:
+    world_deinit(&world);
+    log_set_colors("", "");
+    log_set_prefix("");
+    return (void*)-1;
+}
+
+/* ------------------------------------------------------------------------- */
+static void*
+run_server(const struct args* a)
+{
+#define INSTANCE_FOR_EACH(btree, port, instance) \
+    BTREE_FOR_EACH(btree, struct server_instance, port, instance)
+#define INSTANCE_END_EACH \
+    BTREE_END_EACH
+
+    struct cs_btree instances;
+    struct server_settings settings;
+
+    /* Change log prefix and color for server log messages */
+    log_set_prefix("Server: ");
+    log_set_colors(COL_B_CYAN, COL_RESET);
+
+    memory_init_thread();
+
+    /* Install signal handlers for CTRL+C and (on windows) console close events */
+    signals_install();
+
+    btree_init(&instances, sizeof(struct server_instance));
+
+    if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
+        goto load_settings_failed;
+
+    /*
+     * Create the default server instance. This is always active, regardless of
+     * how many players are connected.
+     */
+    {
+        /*
+         * The port passed in over the command line has precedence over the port
+         * specified in the config file. Note that the port obtained from the
+         * settings structure is always initialized, regardless of whether the
+         * config file existed or not.
+         */
+        struct server_instance* instance;
+        const char* port = *a->port ? a->port : settings.port;
+        cs_btree_key key = atoi(port);
+        assert(key != 0);
+        
+        instance = btree_emplace_new(&instances, key);
+        assert(instance != NULL);
+        instance->settings = &settings;
+        instance->ip = a->ip;
+        strcpy(instance->port, port);
+
+        log_dbg("Starting default server instance\n");
+        if (thread_start(&instance->thread, run_server_instance, instance) < 0)
+        {
+            log_err("Failed to start the default server instance! Can't continue\n");
+            goto start_default_instance_failed;
+        }
+    }
+
+    INSTANCE_FOR_EACH(&instances, port, instance)
+        thread_join(instance->thread, 0);
+    INSTANCE_END_EACH
+    log_dbg("Joined all server instances\n");
+
+    server_settings_save(&settings, a->config_file);
+    
+    btree_deinit(&instances);
     signals_remove();
+    memory_deinit_thread();
+    log_set_colors("", "");
+    log_set_prefix("");
+    
+    return (void*)0;
+
+start_default_instance_failed:
+load_settings_failed:
+    btree_deinit(&instances);
+    signals_remove();
+    memory_deinit_thread();
+    log_set_colors("", "");
+    log_set_prefix("");
+    return (void*)-1;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+start_background_server(struct thread* t, const struct args* a)
+{
+    log_dbg("Starting server in background thread\n");
+    if (thread_start(t, run_server, a) < 0)
+        return -1;
+
+    /* 
+     * Wait (for a reasonable amount of time) until the server reports it is
+     * running, or until it fails. This is so we don't start the client if
+     * something goes wrong, but also ensures that the server socket is bound
+     * before the client tries to join.
+     */
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+join_background_server(struct thread t)
+{
+    thread_join(t, 0);
+    log_dbg("Joined background server thread\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -106,10 +221,7 @@ run_client(const struct args* a)
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
 
-    /* Install signal handlers for CTRL+C and (on windows) console close events */
-#if !defined(_WIN32)
-    signals_install();
-#endif
+    memory_init_thread();
 
     world_init(&world);
 
@@ -208,110 +320,15 @@ net_init_connection_failed:
     net_deinit();
 net_init_failed:
     gfx_destroy(gfx);
-    world_deinit(&world);
 create_gfx_failed:
     gfx_deinit();
 init_gfx_failed:
-#if !defined(_WIN32)
-    signals_remove();
-#endif
+    world_deinit(&world);
+    memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
 }
 #endif
-
-/* ------------------------------------------------------------------------- */
-static uint64_t
-start_background_server(const char* prog_name, const struct args* a)
-{
-#if defined(_WIN32)
-    uint64_t ret;
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-
-    LPCSTR lpApplicationName = prog_name;
-    LPSTR lpCommandLine = args_to_string(prog_name, a);
-
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(si);
-    ZeroMemory(&pi, sizeof(pi));
-
-    ret = CreateProcess(
-        lpApplicationName,
-        lpCommandLine,
-        NULL,
-        NULL,
-        FALSE,
-        NORMAL_PRIORITY_CLASS | /* CREATE_NEW_CONSOLE | */ CREATE_NEW_PROCESS_GROUP,
-        NULL,
-        NULL,
-        &si,
-        &pi);
-    args_free_string(lpCommandLine);
-
-    if (!ret)
-    {
-        log_err("Failed to create server process\n");
-        return (uint64_t)-1;
-    }
-
-    /* Windows handles fit into 32-bit integers. We can pack both here */
-    ret = (uint64_t)pi.hProcess & 0xFFFFFFFF;
-    ret |= ((uint64_t)pi.hThread & 0xFFFFFFFF) << 32;
-    return ret;
-
-#else
-    pid_t pid = fork();
-    if (pid < 0)
-    {
-        log_err("Failed to fork server process: %s\n", strerror(errno));
-        return (uint64_t)-1;
-    }
-    if (pid == 0)
-    {
-        /* Change to a unique process group so ctrl+c only signals the client
-         * process */
-        setpgid(0, 0);
-        run_server(a);
-        return 0;
-    }
-
-    log_dbg("Forked server process %d\n", pid);
-    return (uint64_t)pid;
-#endif
-}
-
-/* ------------------------------------------------------------------------- */
-static void
-wait_for_background_server(uint64_t pid)
-{
-#if defined(_WIN32)
-    HANDLE hProcess = (HANDLE)(pid & 0xFFFFFFFF);
-    HANDLE hThread = (HANDLE)((pid >> 32) & 0xFFFFFFFF);
-    WaitForSingleObject(hProcess, INFINITE);
-    CloseHandle(hProcess);
-    CloseHandle(hThread);
-#else
-    int status;
-    signals_install();
-    while (signals_exit_requested() == 0)
-        pause();
-    signals_remove();
-
-    log_dbg("Sending SIGINT to server process %d\n", (int)pid);
-    kill((pid_t)pid, SIGINT);
-    if (waitpid((pid_t)pid, &status, 0) < 0)
-    {
-        log_warn("Server process is not responding, sending SIGTERM\n");
-        kill((pid_t)pid, SIGTERM);
-        if (waitpid((pid_t)pid, &status, 0) < 0)
-        {
-            log_warn("Server process is still not responding, sending SIGKILL\n");
-            kill((pid_t)pid, SIGKILL);
-        }
-    }
-#endif
-}
 
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
@@ -337,15 +354,12 @@ int main(int argc, char* argv[])
         log_file_open(args.log_file);
 #endif
 
-    /*
-     * cstructures global init. This is mostly for memory tracking during
-     * debug builds
-     */
-    if (memory_init_thread() < 0)
-    {
-        log_err("Failed to initialize c structures library\n");
-        goto cstructures_init_failed;
-    }
+    /* Init networking */
+    if (net_init() < 0)
+        goto net_init_failed;
+
+    mutex_init(&server_mutex);
+    server_instances = 0;
 
     retval = 0;
     switch (args.mode)
@@ -360,63 +374,53 @@ int main(int argc, char* argv[])
             retval = benchmarks_run(argc, argv);
             break;
 #endif
-        case MODE_HEADLESS:
-            run_server(&args);
-            break;
+        case MODE_HEADLESS: {
+            struct thread t;
+            retval = (int)(intptr_t)run_server(&args);
+        } break;
 #if defined(CLITHER_GFX)
         case MODE_CLIENT:
             run_client(&args);
             break;
         case MODE_CLIENT_AND_SERVER: {
-            uint64_t subprocess;
+            struct thread server_thread;
             struct args server_args = args;
 
-            /* Modify the command line arguments for client and server */
-            server_args.mode = MODE_HEADLESS;
-#if defined(CLITHER_LOGGING)
-            server_args.log_file = "";
-#endif
-            args.ip = "127.0.0.1";
-
-            subprocess = start_background_server(argv[0], &server_args);
-            if (subprocess == (uint64_t)-1) /* error */
+            if (start_background_server(&server_thread, &server_args) < 0)
+            {
+                retval = -1;
                 break;
-            /*
-             * On linux, the forked server process will return when it stops.
-             * This is indicated by returning 0 (on Windows, the server process
-             * starts from main() instead). We still have a log file to close
-             * in this situation.
-             */
-            if (subprocess == 0)
-                break;
+            }
 
             /* The server should be running, so try to join as a client */
+            args.ip = "localhost";
             run_client(&args);
 
             log_note("The server will continue to run.\n");
             log_note("You can stop it by pressing CTRL+C\n");
-            wait_for_background_server(subprocess);
+            join_background_server(server_thread);
         } break;
 #endif
     }
 
-    memory_deinit_thread();
+    mutex_deinit(server_mutex);
+    net_deinit();
 #if defined(CLITHER_LOGGING)
     log_file_close();
 #endif
 
     return retval;
 
+net_init_failed:
 #if defined(CLITHER_LOGGING)
-    cstructures_init_failed : log_file_close();
-#else
-    cstructures_init_failed : ;
+    log_file_close();
 #endif
     return -1;
 }
 
 /* ------------------------------------------------------------------------- */
 #if defined(_WIN32)
+#include <Windows.h>
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow)
 {
     (void)hInstance;
