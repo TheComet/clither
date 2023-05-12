@@ -5,7 +5,6 @@
 #include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/mutex.h"
-#include "clither/msg.h"
 #include "clither/net.h"
 #include "clither/log.h"
 #include "clither/server.h"
@@ -47,10 +46,18 @@ run_server_instance(const void* args)
     char log_prefix[] = "S:xxxxx ";
     const struct server_instance* instance = args;
 
+    static const char* colors[] = {
+        COL_N_CYAN,
+        COL_N_MAGENTA,
+        COL_N_BLUE,
+        COL_N_GREEN,
+        COL_N_RED
+    };
+
     /* Change log prefix and color for server log messages */
     sprintf(log_prefix+2, "%-6s", instance->port);
     log_set_prefix(log_prefix);
-    log_set_colors(COL_B_CYAN, COL_RESET);
+    log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
     memory_init_thread();
 

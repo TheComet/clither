@@ -10,7 +10,7 @@ static CLITHER_THREADLOCAL const char* g_col_set = "";
 static CLITHER_THREADLOCAL const char* g_col_clr = "";
 
 #if defined(CLITHER_LOGGING)
-static CLITHER_THREADLOCAL FILE* g_log = NULL;
+static FILE* g_log = NULL;
 #endif
 
 /* ------------------------------------------------------------------------- */
