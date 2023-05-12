@@ -4,12 +4,34 @@
 
 /* ------------------------------------------------------------------------- */
 void
-tick_init(struct tick* t, int tps)
+tick_cfg(struct tick* t, int tps)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     t->last = ts.tv_sec * 1e9 + ts.tv_nsec;
     t->interval = 1e9 / tps;
+}
+
+/* ------------------------------------------------------------------------- */
+int
+tick_advance(struct tick* t)
+{
+    struct timespec ts;
+    uint64_t now;
+    uint64_t wait_until;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    now = ts.tv_sec * 1e9 + ts.tv_nsec;
+    wait_until = t->last + t->interval;
+
+    if (now > wait_until)
+    {
+        int ticks_behind = (now - wait_until) / t->interval;
+        if (ticks_behind >  0)
+            t->last = wait_until;
+        return ticks_behind;
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */

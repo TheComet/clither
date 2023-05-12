@@ -11,6 +11,7 @@
 
 #include "cstructures/config.h"
 #include <stdint.h>
+#include <assert.h>
 
 C_BEGIN
 
@@ -163,10 +164,13 @@ vector_pop(struct cs_vector* vector);
  *
  * @param[in] vector The vector to return the last element from.
  * @return A pointer to the last element. See warning and use with caution.
- * If there are no elements in the vector, NULL is returned.
+ * Vector must not be empty.
  */
-CSTRUCTURES_PUBLIC_API void*
-vector_back(const struct cs_vector* vector);
+static inline void* vector_back(const struct cs_vector* vector)
+{
+    assert(vector->count > 0);
+    return vector->data + (vector->element_size * (vector->count - 1));
+}
 
 /*!
  * @brief Allocates space for a new element at the specified index, but does

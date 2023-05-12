@@ -1,6 +1,8 @@
 #include "clither/log.h"
 #include "clither/net.h"
 
+#include "cstructures/vector.h"
+
 #include <errno.h>
 #include <unistd.h>
 #include <netdb.h>
@@ -8,6 +10,8 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
+#include <string.h>
+#include <assert.h>
 
 /* ------------------------------------------------------------------------- */
 static int
@@ -53,7 +57,6 @@ net_init(void)
 void
 net_deinit(void)
 {
-    WSACleanup();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -127,14 +130,14 @@ net_bind(
         /* We want non-blocking sockets */
         if (set_nonblocking(sockfd) < 0)
         {
-            closesocket(sockfd);
+            close(sockfd);
             continue;
         }
 
         if (bind(sockfd, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn("bind() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
-            closesocket(sockfd);
+            close(sockfd);
         }
 
         *addrlen = p->ai_addrlen;
@@ -153,7 +156,7 @@ net_bind(
 
 /* ------------------------------------------------------------------------- */
 int
-net_connect(const char* server_address, const char* port)
+net_connect(struct cs_vector* sockfds, const char* server_address, const char* port)
 {
     struct addrinfo hints;
     struct addrinfo* candidates;
@@ -161,6 +164,8 @@ net_connect(const char* server_address, const char* port)
     char ipstr[INET6_ADDRSTRLEN];
     int ret;
     int sockfd;
+
+    assert(vector_count(sockfds) == 0);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;     /* IPv4 or IPv6 */
@@ -183,7 +188,7 @@ net_connect(const char* server_address, const char* port)
         /* We want non-blocking sockets */
         if (set_nonblocking(sockfd) < 0)
         {
-            closesocket(sockfd);
+            close(sockfd);
             continue;
         }
 
@@ -195,19 +200,22 @@ net_connect(const char* server_address, const char* port)
         if (connect(sockfd, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
-            closesocket(sockfd);
+            close(sockfd);
+            continue;
         }
-        break;
+
+        log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
+        vector_push(sockfds, &sockfd);
     }
     freeaddrinfo(candidates);
-    if (p == NULL)
+
+    if (vector_count(sockfds) == 0)
     {
-        log_err("Failed to connect UDP socket\n");
+        log_err("Failed to connect any UDP socket\n");
         return -1;
     }
 
-    log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
-    return sockfd;
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -215,7 +223,7 @@ void
 net_close(int sockfd)
 {
     log_dbg("Closing socket\n");
-    closesocket(sockfd);
+    close(sockfd);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -237,12 +245,12 @@ int
 net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen)
 {
     struct sockaddr_storage addr_received;
-    int addrlen_received = sizeof(addr_received);
+    socklen_t addrlen_received = sizeof(addr_received);
 
     int bytes_received = recvfrom(
         sockfd, buf, capacity, 0,
         (struct sockaddr*)&addr_received, &addrlen_received);
-    
+
     if (bytes_received < 0)
     {
         if (errno == EAGAIN)
@@ -251,7 +259,7 @@ net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen)
         return -1;
     }
 
-    if (addrlen_received != addrlen)
+    if ((int)addrlen_received != addrlen)
     {
         char ipstr[INET6_ADDRSTRLEN];
         net_addr_to_str(ipstr, INET6_ADDRSTRLEN, &addr_received);

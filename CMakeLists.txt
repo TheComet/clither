@@ -82,23 +82,27 @@ add_executable (clither
     "src/server_settings.c"
     "src/snake.c"
     "src/world.c"
-    
+
     $<$<STREQUAL:${CLITHER_GFX},SDL>:
         src/gfx_sdl.c>
 
     $<$<PLATFORM_ID:Windows>:
-    	src/mutex_win32.c
+        src/mutex_win32.c
         src/net_win32.c
         src/signals_win32.c
-	src/thread_win32.c
+        src/thread_win32.c
         src/tick_win32.c>
     $<$<PLATFORM_ID:Linux>:
+        src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
+        src/thread_pthread.c
         src/tick_posix.c>
     $<$<PLATFORM_ID:Darwin>:
+        src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
+        src/thread_pthread.c
         src/tick_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
@@ -148,6 +152,9 @@ target_link_libraries (clither
     PRIVATE
         cstructures
         $<$<PLATFORM_ID:Windows>:ws2_32>)
+
+find_package(Threads REQUIRED)
+target_link_libraries (clither PRIVATE Threads::Threads)
 
 if (CLITHER_GFX STREQUAL "SDL")
     find_package (SDL2 REQUIRED)

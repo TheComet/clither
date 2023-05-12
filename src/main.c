@@ -37,7 +37,7 @@ struct server_instance
 
 /* ------------------------------------------------------------------------- */
 static void*
-run_server_instance(const struct server_instance* instance)
+run_server_instance(const void* args)
 {
     struct world world;
     struct server server;
@@ -45,6 +45,7 @@ run_server_instance(const struct server_instance* instance)
     struct tick net_tick;
     uint16_t frame_number;
     char log_prefix[] = "S:xxxxx ";
+    const struct server_instance* instance = args;
 
     /* Change log prefix and color for server log messages */
     sprintf(log_prefix+2, "%-6s", instance->port);
@@ -100,7 +101,7 @@ server_init_failed:
 
 /* ------------------------------------------------------------------------- */
 static void*
-run_server(const struct args* a)
+run_server(const void* args)
 {
 #define INSTANCE_FOR_EACH(btree, port, instance) \
     BTREE_FOR_EACH(btree, struct server_instance, port, instance)
@@ -109,6 +110,7 @@ run_server(const struct args* a)
 
     struct cs_btree instances;
     struct server_settings settings;
+    const struct args* a = args;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -139,7 +141,7 @@ run_server(const struct args* a)
         const char* port = *a->port ? a->port : settings.port;
         cs_btree_key key = atoi(port);
         assert(key != 0);
-        
+
         instance = btree_emplace_new(&instances, key);
         assert(instance != NULL);
         instance->settings = &settings;
@@ -160,13 +162,13 @@ run_server(const struct args* a)
     log_dbg("Joined all server instances\n");
 
     server_settings_save(&settings, a->config_file);
-    
+
     btree_deinit(&instances);
     signals_remove();
     memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
-    
+
     return (void*)0;
 
 start_default_instance_failed:
@@ -187,7 +189,7 @@ start_background_server(struct thread* t, const struct args* a)
     if (thread_start(t, run_server, a) < 0)
         return -1;
 
-    /* 
+    /*
      * Wait (for a reasonable amount of time) until the server reports it is
      * running, or until it fails. This is so we don't start the client if
      * something goes wrong, but also ensures that the server socket is bound
@@ -237,7 +239,7 @@ run_client(const struct args* a)
         goto net_init_failed;
     client_init(&client);
 
-    /* 
+    /*
      * TODO: In the future the GUI will take care of connecting. Here we do
      * it immediately because there is no menu.
      */
@@ -246,7 +248,7 @@ run_client(const struct args* a)
 
     log_info("Client started\n");
 
-    tick_cfg(&sim_tick, client.sim_tick_rate);  
+    tick_cfg(&sim_tick, client.sim_tick_rate);
     tick_cfg(&net_tick, client.net_tick_rate);
     while (1)
     {
@@ -272,7 +274,7 @@ run_client(const struct args* a)
 
             if (action == 1)
             {
-                /* 
+                /*
                  * We may have to match our tick rates to the server, because
                  * the server can freely configure these values. If the client
                  * disconnected then sim_tick_rate and net_tick_rate are reset
@@ -293,7 +295,7 @@ run_client(const struct args* a)
                 break;
         }
 
-        /* 
+        /*
          * Skip rendering if we are lagging, as this is most likely the source
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
@@ -375,7 +377,6 @@ int main(int argc, char* argv[])
             break;
 #endif
         case MODE_HEADLESS: {
-            struct thread t;
             retval = (int)(intptr_t)run_server(&args);
         } break;
 #if defined(CLITHER_GFX)

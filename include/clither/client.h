@@ -24,7 +24,7 @@ struct client
 {
     struct cs_vector pending_unreliable;  /* struct net_msg* */
     struct cs_vector pending_reliable;    /* struct net_msg* */
-    int udp_sock;
+    struct cs_vector udp_sockfds;         /* int */
     int sim_tick_rate;
     int net_tick_rate;
     int timeout_counter;
@@ -70,7 +70,7 @@ int
 client_send_pending_data(struct client* client);
 
 /*!
- * \brief 
+ * \brief
  * \return Returns -1 if an error occurs. Returns 1 if the client's state
  * changed. Returns 0 otherwise.
  */
