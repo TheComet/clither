@@ -1,10 +1,13 @@
 #include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/log.h"
+#include "clither/snake.h"
+#include "clither/world.h"
 
 #include <cstructures/memory.h>
 
 #include <SDL.h>
+#include <math.h>
 
 struct gfx_sdl
 {
@@ -78,11 +81,6 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
 int
 gfx_init(void)
 {
-    /*if (SDL_Init(0) < 0)
-    {
-        log_err("Failed to initialize SDL: %s\n", SDL_GetError());
-        goto sdl_init_failed;
-    }*/
     if (SDL_InitSubSystem(SDL_INIT_EVENTS) < 0)
     {
         log_err("Failed to initialize SDL event subsystem: %s\n", SDL_GetError());
@@ -169,7 +167,7 @@ gfx_destroy(struct gfx* gb)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_poll_input(struct gfx* g, struct controls* c)
+gfx_poll_input(struct gfx* g, struct input* c)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e))
@@ -200,7 +198,7 @@ gfx_poll_input(struct gfx* g, struct controls* c)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_update(struct gfx* gb)
+gfx_draw(struct gfx* gb, struct input* i, struct world* w)
 {
     struct gfx_sdl* g = (struct gfx_sdl*)gb;
 
@@ -208,7 +206,14 @@ gfx_update(struct gfx* gb)
     SDL_RenderClear(g->renderer);
 
     SDL_SetRenderDrawColor(g->renderer, 0, 255, 0, 255);
-    draw_circle(g->renderer, (SDL_Point) { 200, 200 }, 20);
+    draw_circle(g->renderer, (SDL_Point) { 400, 400 }, 20);
+
+    WORLD_FOR_EACH_SNAKE(w, uid, snake)
+        double a = (double)snake->controls.angle / 255.0 * 2*M_PI;
+        double x = snake->controls.distance * cos(a) + 400;
+        double y = snake->controls.distance * sin(a) + 400;
+        draw_circle(g->renderer, (SDL_Point) { x, y }, 10);
+    WORLD_END_EACH
 
     SDL_RenderPresent(g->renderer);
 }

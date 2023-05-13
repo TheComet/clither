@@ -10,6 +10,7 @@
 #include "clither/server.h"
 #include "clither/server_settings.h"
 #include "clither/signals.h"
+#include "clither/snake.h"
 #include "clither/tests.h"
 #include "clither/thread.h"
 #include "clither/tick.h"
@@ -216,12 +217,14 @@ static void
 run_client(const struct args* a)
 {
     struct world world;
-    struct controls controls = { 0 };
+    struct input input = { 0 };
     struct gfx* gfx;
     struct client client;
     struct tick sim_tick;
     struct tick net_tick;
     int tick_lag;
+
+    struct snake* snake;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -230,6 +233,9 @@ run_client(const struct args* a)
     memory_init_thread();
     world_init(&world);
     client_init(&client);
+
+    snake = btree_emplace_new(&world.snakes, 0);
+    snake_init(snake, "username");
 
     /*
      * TODO: In the future the GUI will take care of connecting. Here we do
@@ -253,8 +259,8 @@ run_client(const struct args* a)
     {
         int net_update;
 
-        gfx_poll_input(gfx, &controls);
-        if (controls.quit)
+        gfx_poll_input(gfx, &input);
+        if (input.quit)
             break;
 
         /* Receive net data */
@@ -283,6 +289,8 @@ run_client(const struct args* a)
         }
 
         /* sim_update */
+        snake_update_controls(btree_find(&world.snakes, 0), &input);
+        world_step(&world, client.sim_tick_rate);
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
@@ -297,7 +305,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait(&sim_tick);
         if (tick_lag == 0)
-            gfx_update(gfx);
+            gfx_draw(gfx, &input, &world);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -311,6 +319,7 @@ run_client(const struct args* a)
         client.frame_number++;
     }
     log_info("Stopping client\n");
+
 
     gfx_destroy(gfx);
 create_gfx_failed:

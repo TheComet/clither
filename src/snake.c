@@ -28,10 +28,22 @@ snake_deinit(struct snake* s)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step_forwards(
-    struct snake* s,
-    struct controls* c)
+snake_update_controls(struct snake* s, const struct input* i)
 {
-    (void)s;
-    (void)c;
+    double head_x = 400;
+    double head_y = 400;
+    double dx = head_x - i->mousex;
+    double dy = head_y - i->mousey;
+    double a = atan2(dy, dx) / (2*M_PI) + 0.5;
+    double d = sqrt(dx*dx + dy*dy);
+    if (d > 255)
+        d = 255;
+    s->controls.angle = (uint8_t)(a * 255);
+    s->controls.distance = (uint8_t)d;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_step(struct snake* s, int sim_tick_rate)
+{
 }

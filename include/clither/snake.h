@@ -1,10 +1,12 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/net.h"
-#include "clither/q.h"
+#include "clither/controls.h"
+#include "clither/log.h"
 
 #include "cstructures/vector.h"
+
+#include <math.h>
 
 C_BEGIN
 
@@ -13,6 +15,7 @@ struct controls;
 struct snake
 {
     char* name;
+    struct controls controls;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
@@ -43,8 +46,9 @@ void
 snake_deinit(struct snake* s);
 
 void
-snake_step_forwards(
-    struct snake* s,
-    struct controls* c);
+snake_update_controls(struct snake* s, const struct input* i);
+
+void
+snake_step(struct snake* s, int sim_tick_rate);
 
 C_END
