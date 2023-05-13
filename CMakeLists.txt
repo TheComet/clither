@@ -157,6 +157,10 @@ target_link_libraries (clither
 find_package(Threads REQUIRED)
 target_link_libraries (clither PRIVATE Threads::Threads)
 
+if (UNIX)
+    target_link_libraries (clither PRIVATE m)
+endif ()
+
 if (CLITHER_GFX STREQUAL "SDL")
     find_package (SDL2 REQUIRED)
     target_link_libraries (clither PUBLIC SDL2::Core)
