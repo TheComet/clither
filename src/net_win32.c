@@ -3,6 +3,8 @@
 #include "clither/log.h"
 #include "clither/net.h"
 
+#include "cstructures/vector.h"
+
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2ipdef.h>
@@ -129,6 +131,7 @@ net_bind(
         break;
     }
     freeaddrinfo(candidates);
+
     if (p == NULL)
     {
         log_err("Failed to bind UDP socket\n");
@@ -141,7 +144,7 @@ net_bind(
 
 /* ------------------------------------------------------------------------- */
 int
-net_connect(const char* server_address, const char* port)
+net_connect(struct cs_vector* sockfds, const char* server_address, const char* port)
 {
     struct addrinfo hints;
     struct addrinfo* candidates;
@@ -185,17 +188,18 @@ net_connect(const char* server_address, const char* port)
             log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
             closesocket(sockfd);
         }
-        break;
+        
+        vector_push(sockfds, &sockfd);
     }
     freeaddrinfo(candidates);
-    if (p == NULL)
+
+    if (vector_count(sockfds) == 0)
     {
         log_err("Failed to connect UDP socket\n");
         return -1;
     }
 
-    log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
-    return sockfd;
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */

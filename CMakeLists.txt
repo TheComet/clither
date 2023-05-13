@@ -51,6 +51,7 @@ add_executable (clither
     "include/clither/args.h"
     "include/clither/benchmarks.h"
     "include/clither/bezier.h"
+    "include/clither/camera.h"
     "include/clither/client.h"
     "include/clither/controls.h"
     "include/clither/event.h"
@@ -72,7 +73,9 @@ add_executable (clither
 
     "src/args.c"
     "src/bezier.c"
+    "src/camera.c"
     "src/client.c"
+    "src/controls.c"
     "src/event.c"
     "src/log.c"
     "src/main.c"

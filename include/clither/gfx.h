@@ -1,5 +1,6 @@
 #pragma once
 
+struct camera;
 struct input;
 struct world;
 
@@ -21,7 +22,10 @@ void
 gfx_destroy(struct gfx* g);
 
 void
-gfx_poll_input(struct gfx* g, struct input* c);
+gfx_poll_input(struct gfx* g, struct input* i);
+
+struct qpos2
+gfx_screen_to_world(struct gfx* g, const struct camera* c, int x, int y);
 
 void
-gfx_draw(struct gfx* g, struct input* c, struct world* w);
+gfx_draw_world(struct gfx* g, const struct world* w, const struct camera* c, const struct input* i);

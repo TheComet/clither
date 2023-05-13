@@ -1,3 +1,4 @@
+#include "clither/camera.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
 #include "clither/log.h"
@@ -197,22 +198,103 @@ gfx_poll_input(struct gfx* g, struct input* c)
 }
 
 /* ------------------------------------------------------------------------- */
+struct qpos2
+gfx_screen_to_world(struct gfx* gb, const struct camera* c, int x, int y)
+{
+    int screen_x, screen_y;
+    struct qpos2 pos = make_qpos2(x, y);
+    struct gfx_sdl* g = (struct gfx_sdl*)gb;
+
+    SDL_GetWindowSize(g->window, &screen_x, &screen_y);
+    if (screen_x < screen_y)
+    {
+        int pad = (screen_y - screen_x) / 2;
+        pos.x = q_sub(pos.x, make_q(screen_x / 2));
+        pos.y = q_sub(pos.y, make_q(screen_x / 2 + pad));
+        pos.x = q_div(pos.x, make_q(screen_x));
+        pos.y = q_div(pos.y, make_q(-screen_x));
+    }
+    else
+    {
+        int pad = (screen_x - screen_y) / 2;
+        pos.x = q_sub(pos.x, make_q(screen_y / 2 + pad));
+        pos.y = q_sub(pos.y, make_q(screen_y / 2));
+        pos.x = q_div(pos.x, make_q(screen_y));
+        pos.y = q_div(pos.y, make_q(-screen_y));
+    }
+
+    pos.x = q_div(pos.x, c->scale);
+    pos.y = q_div(pos.y, c->scale);
+    pos.x = q_add(pos.x, c->pos.x);
+    pos.y = q_add(pos.y, c->pos.y);
+
+    return pos;
+}
+
+/* ------------------------------------------------------------------------- */
+struct qpos2
+world_to_screen(struct gfx_sdl* g, const struct camera* c, struct qpos2 pos)
+{
+    int screen_x, screen_y;
+
+    /* world -> camera space */
+    pos.x = q_mul(pos.x, c->scale);
+    pos.y = q_mul(pos.y, c->scale);
+    pos.x = q_sub(pos.x, c->pos.x);
+    pos.y = q_sub(pos.y, c->pos.y);
+
+    /* camera space -> screen space + keep aspect ratio */
+    SDL_GetWindowSize(g->window, &screen_x, &screen_y);
+    if (screen_x < screen_y)
+    {
+        int pad = (screen_y - screen_x) / 2;
+        pos.x = q_mul(pos.x, make_q(screen_x));
+        pos.y = q_mul(pos.y, make_q(-screen_x));
+        pos.x = q_add(pos.x, make_q(screen_x / 2));
+        pos.y = q_add(pos.y, make_q(screen_x / 2 + pad));
+    }
+    else
+    {
+        int pad = (screen_x - screen_y) / 2;
+        pos.x = q_mul(pos.x, make_q(screen_y));
+        pos.y = q_mul(pos.y, make_q(-screen_y));
+        pos.x = q_add(pos.x, make_q(screen_y / 2 + pad));
+        pos.y = q_add(pos.y, make_q(screen_y / 2));
+    }
+
+    return pos;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+draw_snake(struct gfx_sdl* g, const struct camera* c, const struct snake* s)
+{
+    int screen_x, screen_y;
+    struct qpos2 pos = world_to_screen(g, c, s->head_pos);
+
+    screen_x = q_to_int(pos.x);
+    screen_y = q_to_int(pos.y);
+
+    SDL_SetRenderDrawColor(g->renderer, 0, 255, 0, 255);
+    draw_circle(g->renderer, (SDL_Point) { screen_x, screen_y }, 20);
+
+    double a = (double)s->controls.angle / 255.0 * 2 * M_PI;
+    double x = s->controls.distance * cos(a) + screen_x;
+    double y = s->controls.distance * sin(a) + screen_y;
+    draw_circle(g->renderer, (SDL_Point) { x, y }, 10);
+}
+
+/* ------------------------------------------------------------------------- */
 void
-gfx_draw(struct gfx* gb, struct input* i, struct world* w)
+gfx_draw_world(struct gfx* gb, const struct world* w, const struct camera* c, const struct input* i)
 {
     struct gfx_sdl* g = (struct gfx_sdl*)gb;
 
     SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
     SDL_RenderClear(g->renderer);
 
-    SDL_SetRenderDrawColor(g->renderer, 0, 255, 0, 255);
-    draw_circle(g->renderer, (SDL_Point) { 400, 400 }, 20);
-
     WORLD_FOR_EACH_SNAKE(w, uid, snake)
-        double a = (double)snake->controls.angle / 255.0 * 2*M_PI;
-        double x = snake->controls.distance * cos(a) + 400;
-        double y = snake->controls.distance * sin(a) + 400;
-        draw_circle(g->renderer, (SDL_Point) { x, y }, 10);
+        draw_snake(g, c, snake);
     WORLD_END_EACH
 
     SDL_RenderPresent(g->renderer);
