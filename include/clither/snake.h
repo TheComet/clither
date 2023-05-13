@@ -2,11 +2,9 @@
 
 #include "clither/config.h"
 #include "clither/controls.h"
-#include "clither/log.h"
+#include "clither/q.h"
 
 #include "cstructures/vector.h"
-
-#include <math.h>
 
 C_BEGIN
 
@@ -16,6 +14,8 @@ struct snake
 {
     char* name;
     struct controls controls;
+
+    struct qpos2 head_pos;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
@@ -46,7 +46,7 @@ void
 snake_deinit(struct snake* s);
 
 void
-snake_update_controls(struct snake* s, const struct input* i);
+snake_update_controls(struct snake* s, struct qpos2 mouse_world);
 
 void
 snake_step(struct snake* s, int sim_tick_rate);

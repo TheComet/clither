@@ -1,5 +1,6 @@
 #include "clither/args.h"
 #include "clither/benchmarks.h"
+#include "clither/camera.h"
 #include "clither/cli_colors.h"
 #include "clither/client.h"
 #include "clither/controls.h"
@@ -219,6 +220,7 @@ run_client(const struct args* a)
     struct world world;
     struct input input = { 0 };
     struct gfx* gfx;
+    struct camera camera;
     struct client client;
     struct tick sim_tick;
     struct tick net_tick;
@@ -233,6 +235,7 @@ run_client(const struct args* a)
     memory_init_thread();
     world_init(&world);
     client_init(&client);
+    camera_init(&camera);
 
     snake = btree_emplace_new(&world.snakes, 0);
     snake_init(snake, "username");
@@ -289,7 +292,7 @@ run_client(const struct args* a)
         }
 
         /* sim_update */
-        snake_update_controls(btree_find(&world.snakes, 0), &input);
+        snake_update_controls(btree_find(&world.snakes, 0), gfx_screen_to_world(gfx, &camera, input.mousex, input.mousey));
         world_step(&world, client.sim_tick_rate);
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
@@ -305,15 +308,12 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait(&sim_tick);
         if (tick_lag == 0)
-            gfx_draw(gfx, &input, &world);
+            gfx_draw_world(gfx, &world, &camera, &input);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
             if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
-            {
-                log_err("Client lagged too hard\n");
-                break;
-            }
+                tick_skip(&sim_tick);
         }
 
         client.frame_number++;
