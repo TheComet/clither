@@ -297,6 +297,8 @@ run_client(const struct args* a)
             gfx_calc_controls(&controls, &input, gfx, &camera, snake->head_pos);
             snake_update_controls(btree_find(&world.snakes, 0), &controls);
             world_step(&world, client.sim_tick_rate);
+
+            camera.pos = snake->head_pos;
         }
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
@@ -312,7 +314,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait(&sim_tick);
         if (tick_lag == 0)
-            gfx_draw_world(gfx, &world, &camera, &input);
+            gfx_draw_world(gfx, &world, &camera);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -323,7 +325,6 @@ run_client(const struct args* a)
         client.frame_number++;
     }
     log_info("Stopping client\n");
-
 
     gfx_destroy(gfx);
 create_gfx_failed:
