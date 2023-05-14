@@ -10,8 +10,14 @@
  * for world position.
  */
 typedef int32_t qw;
-#define QW_Q  10
+#define QW_Q  12
 #define QW_K  (1 << (QW_Q - 1))
+
+struct ipos2
+{
+    int x;
+    int y;
+};
 
 struct qwpos2
 {
@@ -20,17 +26,17 @@ struct qwpos2
 };
 
 /*
- * Angles are stored in a Q3.13 fixed point representation (16-bit), which is
+ * Angles are stored in a Q4.12 fixed point representation (16-bit), which is
  * designed to cover the range [-pi .. pi].
  */
 typedef int16_t qa;
-#define QA_Q  13
+#define QA_Q  12
 #define QA_K  (1 << (QA_Q - 1))
 
-#define make_qw(v) (qw)((v) * QW_K)
+#define make_qw(v) (qw)((v) * (1 << QW_Q))
 #define make_qwpos2(x, y) (struct qwpos2){ make_qw(x), make_qw(y) }
-#define qw_to_int(q) (int)((q) / QW_K)
-#define qw_to_float(q) ((double)(q) / QW_K)
+#define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
+#define qw_to_float(q) ((double)(q) / (1 << QW_Q))
 
 static inline qw qw_add(qw a, qw b)
 {
@@ -74,9 +80,19 @@ static inline qw qw_mul(qw a, qw b)
     /* Rounding; mid values are rounded up */
     temp += QW_K;
     /* Correct by dividing by base and saturate result */
-    result = qw_sat16(temp >> QW_Q);
+    return qw_sat16(temp >> QW_Q);
+}
 
-    return result;
+static inline int qw_mul_to_int(qw a, int b)
+{
+    int64_t temp;
+
+    temp = (int64_t)a * (int64_t)b; /* result type is operand's type */
+    /* Rounding; mid values are rounded up */
+    temp += QW_K;
+    /* Correct by dividing by base */
+    temp = (temp >> QW_Q);
+    return qw_to_int(temp);
 }
 
 static inline qw qw_div(qw a, qw b)
@@ -94,9 +110,9 @@ static inline qw qw_div(qw a, qw b)
     return (qw)(temp / b);
 }
 
-#define make_qa(v) (qa)((v) * QA_K)
-#define qa_to_int(q) (int)((q) / QA_K)
-#define qa_to_float(q) ((double)(q) / QA_K)
+#define make_qa(v) (qa)((v) * (1 << QA_Q))
+#define qa_to_int(q) ((int)((q) / (1 << QA_Q)))
+#define qa_to_float(q) ((double)(q) / (1 << QA_Q))
 
 static inline qa qa_add(qa a, qa b)
 {

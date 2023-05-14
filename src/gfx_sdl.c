@@ -8,6 +8,7 @@
 #include <cstructures/memory.h>
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <math.h>
 
 struct gfx_sdl
@@ -15,6 +16,10 @@ struct gfx_sdl
     struct gfx base;
     SDL_Window* window;
     SDL_Renderer* renderer;
+
+    struct {
+        SDL_Texture* background;
+    } textures;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -150,6 +155,14 @@ gfx_create(int initial_width, int initial_height)
         goto create_renderer_failed;
     }
 
+    g->textures.background = IMG_LoadTexture(g->renderer, "textures/tile.png");
+    if (g->textures.background == NULL)
+    {
+        log_err("Failed to load image: textures/tile.png\n");
+    }
+
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+
     return (struct gfx*)g;
 
     create_renderer_failed : SDL_DestroyWindow(g->window);
@@ -175,24 +188,25 @@ gfx_poll_input(struct gfx* g, struct input* c)
     {
         switch (e.type)
         {
-        case SDL_QUIT:
-            c->quit = 1;
-            break;
-        case SDL_KEYDOWN:
-            if (e.key.keysym.sym == SDLK_ESCAPE)
+            case SDL_QUIT:
                 c->quit = 1;
-            break;
-        case SDL_MOUSEBUTTONDOWN:
-            if (e.button.button == 0)
-                c->boost = 1;
-            break;
-        case SDL_MOUSEBUTTONUP:
-            if (e.button.button == 0)
-                c->boost = 0;
-            break;
-        case SDL_MOUSEMOTION:
-            c->mousex = e.motion.x;
-            c->mousey = e.motion.y;
+                break;
+            case SDL_KEYDOWN:
+                if (e.key.keysym.sym == SDLK_ESCAPE)
+                    c->quit = 1;
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                if (e.button.button == SDL_BUTTON_LEFT)
+                    c->boost = 1;
+                break;
+            case SDL_MOUSEBUTTONUP:
+                if (e.button.button == SDL_BUTTON_LEFT)
+                    c->boost = 0;
+                break;
+            case SDL_MOUSEMOTION:
+                c->mousex = e.motion.x;
+                c->mousey = e.motion.y;
+                break;
         }
     }
 }
@@ -207,60 +221,63 @@ gfx_calc_controls(
     struct qwpos2 snake_head)
 {
     int screen_x, screen_y, max_dist;
+    struct ipos2 snake_head_screen;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
     max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
 
-    snake_head = gfx_world_to_screen(gfx, camera, snake_head);
-    double dx = input->mousex - qw_to_int(snake_head.x);
-    double dy = qw_to_int(snake_head.y) - input->mousey;
+    snake_head_screen = gfx_world_to_screen(snake_head, gfx, camera);
+    double dx = input->mousex - snake_head_screen.x;
+    double dy = snake_head_screen.y - input->mousey;
     double a = atan2(dy, dx) / (2*M_PI) + 0.5;
     double d = sqrt(dx*dx + dy*dy);
     if (d > max_dist)
         d = max_dist;
     controls->angle = (uint8_t)(a * 256);
     controls->speed = (uint8_t)(d / max_dist * 255);
+    controls->boost = input->boost;
 }
 
 /* ------------------------------------------------------------------------- */
 struct qwpos2
-gfx_screen_to_world(const struct gfx* gfx, const struct camera* camera, int x, int y)
+gfx_screen_to_world(struct ipos2 pos, const struct gfx* gfx, const struct camera* camera)
 {
     int screen_x, screen_y;
-    struct qwpos2 pos = make_qwpos2(x, y);
+    struct qwpos2 result = make_qwpos2(pos.x, pos.y);
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
     if (screen_x < screen_y)
     {
         int pad = (screen_y - screen_x) / 2;
-        pos.x = qw_sub(pos.x, make_qw(screen_x / 2));
-        pos.y = qw_sub(pos.y, make_qw(screen_x / 2 + pad));
-        pos.x = qw_div(pos.x, make_qw(screen_x));
-        pos.y = qw_div(pos.y, make_qw(-screen_x));
+        result.x = qw_sub(result.x, make_qw(screen_x / 2));
+        result.y = qw_sub(result.y, make_qw(screen_x / 2 + pad));
+        result.x = qw_div(result.x, make_qw(screen_x));
+        result.y = qw_div(result.y, make_qw(-screen_x));
     }
     else
     {
         int pad = (screen_x - screen_y) / 2;
-        pos.x = qw_sub(pos.x, make_qw(screen_y / 2 + pad));
-        pos.y = qw_sub(pos.y, make_qw(screen_y / 2));
-        pos.x = qw_div(pos.x, make_qw(screen_y));
-        pos.y = qw_div(pos.y, make_qw(-screen_y));
+        result.x = qw_sub(result.x, make_qw(screen_y / 2 + pad));
+        result.y = qw_sub(result.y, make_qw(screen_y / 2));
+        result.x = qw_div(result.x, make_qw(screen_y));
+        result.y = qw_div(result.y, make_qw(-screen_y));
     }
 
-    pos.x = qw_div(pos.x, camera->scale);
-    pos.y = qw_div(pos.y, camera->scale);
-    pos.x = qw_add(pos.x, camera->pos.x);
-    pos.y = qw_add(pos.y, camera->pos.y);
+    result.x = qw_div(result.x, camera->scale);
+    result.y = qw_div(result.y, camera->scale);
+    result.x = qw_add(result.x, camera->pos.x);
+    result.y = qw_add(result.y, camera->pos.y);
 
-    return pos;
+    return result;
 }
 
 /* ------------------------------------------------------------------------- */
-struct qwpos2
-gfx_world_to_screen(const struct gfx* gfx, const struct camera* camera, struct qwpos2 pos)
+struct ipos2
+gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camera* camera)
 {
+    struct ipos2 result;
     int screen_x, screen_y;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
@@ -275,31 +292,27 @@ gfx_world_to_screen(const struct gfx* gfx, const struct camera* camera, struct q
     if (screen_x < screen_y)
     {
         int pad = (screen_y - screen_x) / 2;
-        pos.x = qw_mul(pos.x, make_qw(screen_x));
-        pos.y = qw_mul(pos.y, make_qw(-screen_x));
-        pos.x = qw_add(pos.x, make_qw(screen_x / 2));
-        pos.y = qw_add(pos.y, make_qw(screen_x / 2 + pad));
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_x)) + (screen_x / 2);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_x)) + (screen_x / 2 + pad);
     }
     else
     {
         int pad = (screen_x - screen_y) / 2;
-        pos.x = qw_mul(pos.x, make_qw(screen_y));
-        pos.y = qw_mul(pos.y, make_qw(-screen_y));
-        pos.x = qw_add(pos.x, make_qw(screen_y / 2 + pad));
-        pos.y = qw_add(pos.y, make_qw(screen_y / 2));
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_y)) + (screen_y / 2 + pad);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_y)) + (screen_y / 2);
     }
 
-    return pos;
+    return result;
 }
 
 /* ------------------------------------------------------------------------- */
 static void
 draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
 {
-    struct qwpos2 pos = gfx_world_to_screen((const struct gfx*)gfx, camera, snake->head_pos);
+    struct ipos2 pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
 
     SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
-    draw_circle(gfx->renderer, (SDL_Point) { qw_to_int(pos.x), qw_to_int(pos.y) }, 20);
+    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
 
     /* Debug: Draw how the "controls" structure interpreted the mouse position */
     {
@@ -308,23 +321,89 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
         SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
         max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
         a = snake->controls.angle / 256.0 * 2 * M_PI;
-        screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + qw_to_int(pos.x);
-        screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + qw_to_int(pos.y);
+        screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
+        screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
         draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 10);
     }
+
+    pos = gfx_world_to_screen(make_qwpos2(0, 0), (const struct gfx*)gfx, camera);
+    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
+{
+#define TILE_SCALE 3
+
+    int screen_x, screen_y, pad;
+    int startx, starty, dim, x, y;
+    qw dim_cam;
+
+    if (gfx->textures.background == NULL)
+        return;
+
+    dim_cam = qw_mul(make_qw(1.0 / TILE_SCALE), camera->scale);
+
+    SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
+    pad = (screen_y - screen_x) / 2;
+    if (screen_x < screen_y)
+    {
+        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1.0 / TILE_SCALE);
+        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1.0 / TILE_SCALE);
+        startx = qw_mul_to_int(sx, make_qw(screen_x));
+        starty = qw_mul_to_int(sy, make_qw(screen_x)) + pad;
+
+        dim = qw_mul_to_int(dim_cam, make_qw(screen_x));
+    }
+    else
+    {
+        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1.0 / TILE_SCALE);
+        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1.0 / TILE_SCALE);
+        startx = qw_mul_to_int(sx, make_qw(screen_y)) - pad;
+        starty = qw_mul_to_int(sy, make_qw(screen_y));
+
+        dim = qw_mul_to_int(dim_cam, make_qw(screen_y));
+    }
+
+    /*
+     * Accounts for negative modulus and extreme aspect ratios. Otherwise the
+     * top-right corner of the map will have missing tiles on the edges of the
+     * screen.
+     */
+    while (startx > 0)
+        startx -= dim;
+    while (starty > 0)
+        starty -= dim;
+
+    if (dim < 1)
+    {
+        log_warn("Background tiles are smaller than 1x1, can't draw!\n");
+        return;
+    }
+
+
+    for (x = startx; x < screen_x; x += dim)
+        for (y = starty; y < screen_y; y += dim)
+        {
+            SDL_Rect rect = {x, y, dim + 1, dim + 1};
+            SDL_RenderCopy(gfx->renderer, gfx->textures.background, NULL, &rect);
+        }
 }
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_draw_world(struct gfx* gfx, const struct world* w, const struct camera* c, const struct input* i)
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
     const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
 
     SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
     SDL_RenderClear(g->renderer);
 
-    WORLD_FOR_EACH_SNAKE(w, uid, snake)
-        draw_snake(g, c, snake);
+    draw_background(g, camera);
+
+    WORLD_FOR_EACH_SNAKE(world, uid, snake)
+        draw_snake(g, camera, snake);
     WORLD_END_EACH
 
     SDL_RenderPresent(g->renderer);

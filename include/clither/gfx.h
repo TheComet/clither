@@ -37,10 +37,10 @@ gfx_calc_controls(
     struct qwpos2 snake_head);
 
 struct qwpos2
-gfx_screen_to_world(const struct gfx* gfx, const struct camera* camera, int x, int y);
+gfx_screen_to_world(struct ipos2 pos, const struct gfx* gfx, const struct camera* camera);
 
-struct qwpos2
-gfx_world_to_screen(const struct gfx* gfx, const struct camera* camera, struct qwpos2 pos);
+struct ipos2
+gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camera* camera);
 
 void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, const struct input* i);
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera);

@@ -11,9 +11,9 @@
 #include <stdlib.h>
 
 #define TURN_SPEED   (1.0 / 16)
-#define MIN_SPEED    (1.0 / 128)
-#define MAX_SPEED    (1.0 / 24)
-#define BOOST_SPEED  (1.0 / 12)
+#define MIN_SPEED    (1.0 / 512)
+#define MAX_SPEED    (1.0 / 128)
+#define BOOST_SPEED  (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
 void
@@ -58,10 +58,10 @@ snake_step(struct snake* snake, int sim_tick_rate)
     qa angle_diff, target_angle;
 
     /*
-     * The controls structure contains the absolute angle (in world space) of
+     * The "controls" structure contains the absolute angle (in world space) of
      * the desired angle. That is, the angle from the snake's head to the mouse
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
-     * it to radians [0 .. 2*pi] using the fixed point angle type "qa"
+     * it to radians [-pi .. pi] using the fixed point angle type "qa"
      */
     target_angle = make_qa(snake->controls.angle / 256.0 * 2*M_PI - M_PI);
 
@@ -94,9 +94,10 @@ snake_step(struct snake* snake, int sim_tick_rate)
         BOOST_SPEED :
         (snake->controls.speed / 255.0 * (MAX_SPEED - MIN_SPEED) + MIN_SPEED);
     a = qa_to_float(snake->head_angle);
-    log_dbg("%f\n", a);
     dx = make_qw(cos(a) * speed);
     dy = make_qw(sin(a) * speed);
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
+
+    log_dbg("pos: %f, %f\n", qw_to_float(snake->head_pos.x), qw_to_float(snake->head_pos.y));
 }
