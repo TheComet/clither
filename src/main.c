@@ -292,8 +292,12 @@ run_client(const struct args* a)
         }
 
         /* sim_update */
-        snake_update_controls(btree_find(&world.snakes, 0), gfx_screen_to_world(gfx, &camera, input.mousex, input.mousey));
-        world_step(&world, client.sim_tick_rate);
+        {
+            struct controls controls;
+            gfx_calc_controls(&controls, &input, gfx, &camera, snake->head_pos);
+            snake_update_controls(btree_find(&world.snakes, 0), &controls);
+            world_step(&world, client.sim_tick_rate);
+        }
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {

@@ -15,7 +15,8 @@ struct snake
     char* name;
     struct controls controls;
 
-    struct qpos2 head_pos;
+    struct qwpos2 head_pos;
+    qa head_angle;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
@@ -40,15 +41,15 @@ struct snake
 };
 
 void
-snake_init(struct snake* s, const char* name);
+snake_init(struct snake* snake, const char* name);
 
 void
-snake_deinit(struct snake* s);
+snake_deinit(struct snake* snake);
 
 void
-snake_update_controls(struct snake* s, struct qpos2 mouse_world);
+snake_update_controls(struct snake* snake, const struct controls* controls);
 
 void
-snake_step(struct snake* s, int sim_tick_rate);
+snake_step(struct snake* snake, int sim_tick_rate);
 
 C_END

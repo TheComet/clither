@@ -1,7 +1,6 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/q.h"
 
 C_BEGIN
 
@@ -18,8 +17,11 @@ struct input
 
 struct controls
 {
-    unsigned angle    : 8;
-    unsigned distance : 8;
+    unsigned angle   : 8;
+    unsigned speed   : 8;
+    unsigned boost   : 1;
+    unsigned shoot   : 1;
+    unsigned reverse : 1;
 };
 
 void

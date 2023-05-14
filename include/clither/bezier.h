@@ -5,7 +5,7 @@
 
 struct bezier_handle
 {
-    struct qpos2 pos;
+    struct qwpos2 pos;
     uint8_t angle;
     uint8_t len1, len2;
 };

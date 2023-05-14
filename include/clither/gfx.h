@@ -1,6 +1,10 @@
 #pragma once
 
+#include "clither/config.h"
+#include "clither/q.h"
+
 struct camera;
+struct controls;
 struct input;
 struct world;
 
@@ -19,13 +23,24 @@ struct gfx*
 gfx_create(int initial_width, int initial_height);
 
 void
-gfx_destroy(struct gfx* g);
+gfx_destroy(struct gfx* gfx);
 
 void
-gfx_poll_input(struct gfx* g, struct input* i);
-
-struct qpos2
-gfx_screen_to_world(struct gfx* g, const struct camera* c, int x, int y);
+gfx_poll_input(struct gfx* gfx, struct input* input);
 
 void
-gfx_draw_world(struct gfx* g, const struct world* w, const struct camera* c, const struct input* i);
+gfx_calc_controls(
+    struct controls* controls,
+    const struct input* input,
+    const struct gfx* gfx,
+    const struct camera* cam,
+    struct qwpos2 snake_head);
+
+struct qwpos2
+gfx_screen_to_world(const struct gfx* gfx, const struct camera* camera, int x, int y);
+
+struct qwpos2
+gfx_world_to_screen(const struct gfx* gfx, const struct camera* camera, struct qwpos2 pos);
+
+void
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, const struct input* i);

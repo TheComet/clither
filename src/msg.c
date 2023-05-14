@@ -205,7 +205,7 @@ msg_join_accept(
     uint8_t net_tick_rate,
     uint16_t client_frame,
     uint16_t server_frame,
-    struct qpos2* spawn_pos)
+    struct qwpos2* spawn_pos)
 {
     struct msg* m = msg_alloc(
         MSG_JOIN_ACCEPT, 10,

@@ -283,7 +283,7 @@ server_recv(struct server* server, const struct server_settings* settings, uint1
 
                     /* (Re-)send join accept response */
                     {
-                        struct qpos2 spawn_pos = { 32, 32 };
+                        struct qwpos2 spawn_pos = { 32, 32 };
                         struct msg* response = msg_join_accept(
                             settings->sim_tick_rate,
                             settings->net_tick_rate,
