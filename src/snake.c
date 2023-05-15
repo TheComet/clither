@@ -12,7 +12,7 @@
 
 #define TURN_SPEED   (1.0 / 16)
 #define MIN_SPEED    (1.0 / 512)
-#define MAX_SPEED    (1.0 / 128)
+#define MAX_SPEED    (1.0 / 96)
 #define BOOST_SPEED  (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
@@ -30,7 +30,7 @@ snake_init(struct snake* snake, const char* name)
     vector_init(&snake->points, sizeof(struct qwpos2));
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
 
-    snake->length = 20;
+    snake->length = 80;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -89,6 +89,10 @@ snake_step(struct snake* snake, int sim_tick_rate)
     else if (snake->head_angle >= make_qa(M_PI))
         snake->head_angle = qa_sub(snake->head_angle, make_qa(2*M_PI));
 
+    while (vector_count(&snake->points) >= snake->length)
+        vector_pop(&snake->points);
+    vector_insert(&snake->points, 0, &snake->head_pos);
+
     /* Update snake position using the head's current angle */
     speed = snake->controls.boost ?
         BOOST_SPEED :
@@ -98,6 +102,4 @@ snake_step(struct snake* snake, int sim_tick_rate)
     dy = make_qw(sin(a) * speed);
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
-
-    log_dbg("pos: %f, %f\n", qw_to_float(snake->head_pos.x), qw_to_float(snake->head_pos.y));
 }

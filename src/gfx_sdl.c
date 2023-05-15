@@ -309,9 +309,16 @@ gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camer
 static void
 draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
 {
-    struct ipos2 pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
+    struct ipos2 pos;
 
     SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
+
+    VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
+        pos = gfx_world_to_screen(*wpos, (const struct gfx*)gfx, camera);
+        draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 10);
+    VECTOR_END_EACH
+
+    pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
     draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
 
     /* Debug: Draw how the "controls" structure interpreted the mouse position */
@@ -334,7 +341,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
 static void
 draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
 {
-#define TILE_SCALE 3
+#define TILE_SCALE 2
 
     int screen_x, screen_y, pad;
     int startx, starty, dim, x, y;
