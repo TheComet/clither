@@ -330,7 +330,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
         a = snake->controls.angle / 256.0 * 2 * M_PI;
         screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
         screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
-        draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 10);
+        draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 5);
     }
 
     pos = gfx_world_to_screen(make_qwpos2(0, 0), (const struct gfx*)gfx, camera);
