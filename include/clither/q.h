@@ -13,6 +13,14 @@ typedef int32_t qw;
 #define QW_Q  12
 #define QW_K  (1 << (QW_Q - 1))
 
+/*
+ * Angles are stored in a Q4.12 fixed point representation (16-bit), which is
+ * designed to cover the range [-pi .. pi].
+ */
+typedef int16_t qa;
+#define QA_Q  12
+#define QA_K  (1 << (QA_Q - 1))
+
 struct ipos2
 {
     int x;
@@ -25,18 +33,11 @@ struct qwpos2
     qw y;
 };
 
-/*
- * Angles are stored in a Q4.12 fixed point representation (16-bit), which is
- * designed to cover the range [-pi .. pi].
- */
-typedef int16_t qa;
-#define QA_Q  12
-#define QA_K  (1 << (QA_Q - 1))
-
 #define make_qw(v) (qw)((v) * (1 << QW_Q))
 #define make_qwpos2(x, y) (struct qwpos2){ make_qw(x), make_qw(y) }
 #define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
 #define qw_to_float(q) ((double)(q) / (1 << QW_Q))
+#define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
 
 static inline qw qw_add(qw a, qw b)
 {
