@@ -172,6 +172,12 @@ static inline void* vector_back(const struct cs_vector* vector)
     return vector->data + (vector->element_size * (vector->count - 1));
 }
 
+static inline void* vector_front(const struct cs_vector* vector)
+{
+    assert(vector->count > 0);
+    return vector->data;
+}
+
 /*!
  * @brief Allocates space for a new element at the specified index, but does
  * not initialize it.
