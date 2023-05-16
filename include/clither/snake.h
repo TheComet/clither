@@ -17,6 +17,7 @@ struct snake
 
     struct qwpos2 head_pos;
     qa head_angle;
+    uint8_t speed;
 
     /*
      * We keep a local list of points that are drawn out over time as the head

@@ -14,6 +14,7 @@
 #define MIN_SPEED    (1.0 / 512)
 #define MAX_SPEED    (1.0 / 96)
 #define BOOST_SPEED  (1.0 / 32)
+#define ACCELERATION (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
 void
@@ -26,6 +27,7 @@ snake_init(struct snake* snake, const char* name)
 
     snake->head_pos = make_qwpos2(0, 0);
     snake->head_angle = make_qa(0);
+    snake->speed = 0;
 
     vector_init(&snake->points, sizeof(struct qwpos2));
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
@@ -56,12 +58,13 @@ snake_step(struct snake* snake, int sim_tick_rate)
     double a, speed;
     qw dx, dy;
     qa angle_diff, target_angle;
+    uint8_t target_speed;
 
     /*
      * The "controls" structure contains the absolute angle (in world space) of
      * the desired angle. That is, the angle from the snake's head to the mouse
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
-     * it to radians [-pi .. pi] using the fixed point angle type "qa"
+     * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
     target_angle = make_qa(snake->controls.angle / 256.0 * 2*M_PI - M_PI);
 
@@ -83,7 +86,7 @@ snake_step(struct snake* snake, int sim_tick_rate)
     else
         snake->head_angle = target_angle;
 
-    /* Ensure the angle remains in the range [-pi .. pi] or bad things happen */
+    /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
     if (snake->head_angle < make_qa(-M_PI))
         snake->head_angle = qa_add(snake->head_angle, make_qa(2*M_PI));
     else if (snake->head_angle >= make_qa(M_PI))
@@ -93,13 +96,20 @@ snake_step(struct snake* snake, int sim_tick_rate)
         vector_pop(&snake->points);
     vector_insert(&snake->points, 0, &snake->head_pos);
 
+    target_speed = snake->controls.boost ?
+        255 :
+        make_qw(MAX_SPEED - MIN_SPEED) * snake->controls.speed / make_qw(BOOST_SPEED - MIN_SPEED);
+    if (snake->speed - target_speed > (ACCELERATION*255))
+        snake->speed -= (ACCELERATION*255);
+    else if (snake->speed - target_speed < (-ACCELERATION*255))
+        snake->speed += (ACCELERATION*255);
+    else
+        snake->speed = target_speed;
+
     /* Update snake position using the head's current angle */
-    speed = snake->controls.boost ?
-        BOOST_SPEED :
-        (snake->controls.speed / 255.0 * (MAX_SPEED - MIN_SPEED) + MIN_SPEED);
     a = qa_to_float(snake->head_angle);
-    dx = make_qw(cos(a) * speed);
-    dy = make_qw(sin(a) * speed);
+    dx = make_qw(cos(a) * (snake->speed / 255.0 * (BOOST_SPEED - MIN_SPEED) + MIN_SPEED));
+    dy = make_qw(sin(a) * (snake->speed / 255.0 * (BOOST_SPEED - MIN_SPEED) + MIN_SPEED));
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
 }
