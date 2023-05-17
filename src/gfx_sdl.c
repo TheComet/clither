@@ -1,3 +1,4 @@
+#include "clither/bezier.h"
 #include "clither/camera.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
@@ -34,14 +35,13 @@ static void
 draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
 {
     SDL_Point* points;
-    SDL_Point pointBuf[128];
-
-    /* 35 / 49 is a slightly biased approximation of 1/sqrt(2) */
-    const int arrSize = round_up_multiple_of_8(radius * 8 * 35 / 49);
-    points = arrSize <= 128 ? pointBuf : malloc(sizeof(SDL_Point) * arrSize);
-    int drawCount = 0;
+    SDL_Point point_buf[128];
+    int draw_count;
 
     const int32_t diameter = (radius * 2);
+
+    /* 35 / 49 is a slightly biased approximation of 1/sqrt(2) */
+    const int arr_size = round_up_multiple_of_8(radius * 8 * 35 / 49);
 
     int32_t x = (radius - 1);
     int32_t y = 0;
@@ -49,19 +49,22 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
     int32_t ty = 1;
     int32_t error = (tx - diameter);
 
+    points = arr_size <= 128 ? point_buf : MALLOC(sizeof(SDL_Point) * arr_size);
+    draw_count = 0;
+
     while (x >= y)
     {
         /* Each of the following renders an octant of the circle */
-        points[drawCount + 0] = (SDL_Point){ center.x + x, center.y - y };
-        points[drawCount + 1] = (SDL_Point){ center.x + x, center.y + y };
-        points[drawCount + 2] = (SDL_Point){ center.x - x, center.y - y };
-        points[drawCount + 3] = (SDL_Point){ center.x - x, center.y + y };
-        points[drawCount + 4] = (SDL_Point){ center.x + y, center.y - x };
-        points[drawCount + 5] = (SDL_Point){ center.x + y, center.y + x };
-        points[drawCount + 6] = (SDL_Point){ center.x - y, center.y - x };
-        points[drawCount + 7] = (SDL_Point){ center.x - y, center.y + x };
+        points[draw_count + 0] = (SDL_Point){ center.x + x, center.y - y };
+        points[draw_count + 1] = (SDL_Point){ center.x + x, center.y + y };
+        points[draw_count + 2] = (SDL_Point){ center.x - x, center.y - y };
+        points[draw_count + 3] = (SDL_Point){ center.x - x, center.y + y };
+        points[draw_count + 4] = (SDL_Point){ center.x + y, center.y - x };
+        points[draw_count + 5] = (SDL_Point){ center.x + y, center.y + x };
+        points[draw_count + 6] = (SDL_Point){ center.x - y, center.y - x };
+        points[draw_count + 7] = (SDL_Point){ center.x - y, center.y + x };
 
-        drawCount += 8;
+        draw_count += 8;
 
         if (error <= 0)
         {
@@ -78,9 +81,9 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
         }
     }
 
-    SDL_RenderDrawPoints(renderer, points, drawCount);
-    if (arrSize > 128)
-        free(points);
+    SDL_RenderDrawPoints(renderer, points, draw_count);
+    if (arr_size > 128)
+        FREE(points);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -181,7 +184,7 @@ gfx_destroy(struct gfx* gb)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_poll_input(struct gfx* g, struct input* c)
+gfx_poll_input(struct gfx* gfx, struct input* input)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e))
@@ -189,23 +192,23 @@ gfx_poll_input(struct gfx* g, struct input* c)
         switch (e.type)
         {
             case SDL_QUIT:
-                c->quit = 1;
+                input->quit = 1;
                 break;
             case SDL_KEYDOWN:
                 if (e.key.keysym.sym == SDLK_ESCAPE)
-                    c->quit = 1;
+                    input->quit = 1;
                 break;
             case SDL_MOUSEBUTTONDOWN:
                 if (e.button.button == SDL_BUTTON_LEFT)
-                    c->boost = 1;
+                    input->boost = 1;
                 break;
             case SDL_MOUSEBUTTONUP:
                 if (e.button.button == SDL_BUTTON_LEFT)
-                    c->boost = 0;
+                    input->boost = 0;
                 break;
             case SDL_MOUSEMOTION:
-                c->mousex = e.motion.x;
-                c->mousey = e.motion.y;
+                input->mousex = e.motion.x;
+                input->mousey = e.motion.y;
                 break;
         }
     }
@@ -221,7 +224,7 @@ gfx_calc_controls(
     struct qwpos2 snake_head)
 {
     int screen_x, screen_y, max_dist;
-    struct ipos2 snake_head_screen;
+    struct spos2 snake_head_screen;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
@@ -241,7 +244,7 @@ gfx_calc_controls(
 
 /* ------------------------------------------------------------------------- */
 struct qwpos2
-gfx_screen_to_world(struct ipos2 pos, const struct gfx* gfx, const struct camera* camera)
+gfx_screen_to_world(struct spos2 pos, const struct gfx* gfx, const struct camera* camera)
 {
     int screen_x, screen_y;
     struct qwpos2 result = make_qwpos2(pos.x, pos.y);
@@ -274,10 +277,10 @@ gfx_screen_to_world(struct ipos2 pos, const struct gfx* gfx, const struct camera
 }
 
 /* ------------------------------------------------------------------------- */
-struct ipos2
+struct spos2
 gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camera* camera)
 {
-    struct ipos2 result;
+    struct spos2 result;
     int screen_x, screen_y;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
@@ -309,7 +312,7 @@ gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camer
 static void
 draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
 {
-    struct ipos2 pos;
+    struct spos2 pos;
 
     SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
 
@@ -335,6 +338,57 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
 
     pos = gfx_world_to_screen(make_qwpos2(0, 0), (const struct gfx*)gfx, camera);
     draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+draw_bezier(
+    const struct gfx* gfx,
+    const struct camera* camera,
+    const struct bezier_handle* head,
+    const struct bezier_handle* tail,
+    int num_points)
+{
+    SDL_Point* points;
+    SDL_Point point_buf[64];
+    int i;
+
+    struct spos2 p0 = gfx_world_to_screen(head->pos, gfx, camera);
+    struct spos2 p1 = gfx_world_to_screen(make_qwpos2(
+        qw_add(head->pos.x, make_qw(head->len * cos(qa_to_float(head->angle)) / 255)),
+        qw_add(head->pos.y, make_qw(head->len * sin(qa_to_float(head->angle)) / 255))
+    ), gfx, camera);
+    struct spos2 p2 = gfx_world_to_screen(make_qwpos2(
+        qw_add(tail->pos.x, make_qw(tail->len * cos(qa_to_float(tail->angle)) / 255)),
+        qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255))
+    ), gfx, camera);
+    struct spos2 p3 = gfx_world_to_screen(tail->pos, gfx, camera);
+
+    points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
+
+    for (i = 0; i != num_points; ++i)
+    {
+        double t1 = (double)i / (num_points - 1);
+        double t2 = t1*t1;
+        double t3 = t2*t1;
+
+        double a0 = p0.x;
+        double a1 = -3*p0.x + 3*p1.x;
+        double a2 = 3*p0.x - 6*p1.x + 3*p2.x;
+        double a3 = -p0.x + 3*p1.x - 3*p2.x + p3.x;
+        points[i].x = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
+
+        a0 = p0.y;
+        a1 = -3*p0.y + 3*p1.y;
+        a2 = 3*p0.y - 6*p1.y + 3*p2.y;
+        a3 = -p0.y + 3*p1.y - 3*p2.y + p3.y;
+        points[i].y = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
+    }
+
+    SDL_RenderDrawPoints(((const struct gfx_sdl*)gfx)->renderer, points, num_points);
+
+    if (num_points > 64)
+        FREE(point_buf);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -411,6 +465,7 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
         draw_snake(g, camera, snake);
+        draw_bezier(gfx, camera, vector_get_element(&snake->bezier_handles, 0), vector_get_element(&snake->bezier_handles, 1), 50);
     WORLD_END_EACH
 
     SDL_RenderPresent(g->renderer);
