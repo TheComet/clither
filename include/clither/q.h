@@ -21,7 +21,7 @@ typedef int16_t qa;
 #define QA_Q  12
 #define QA_K  (1 << (QA_Q - 1))
 
-struct ipos2
+struct spos2
 {
     int x;
     int y;
