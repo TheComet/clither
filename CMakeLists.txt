@@ -17,6 +17,7 @@ project ("clither"
 
 include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
+option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 set (CLITHER_GFX "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
 set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL")
@@ -24,9 +25,11 @@ option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
 set (CLITHER_BUILD_LIBDIR "${CLITHER_BUILD_BINDIR}/lib")
+set (CLITHER_BUILD_DOCDIR "${CLITHER_BUILD_BINDIR}/doc")
 
 set (CLITHER_INSTALL_BINDIR ".")
 set (CLITHER_INSTALL_LIBDIR "lib")
+set (CLITHER_INSTALL_DOCDIR "doc")
 
 include (CheckCSourceCompiles)
 check_c_source_compiles ("__declspec(thread) int value; int main(void) { return 0; }" MSVC_THREADLOCAL)
@@ -206,6 +209,10 @@ if (CLITHER_BENCHMARKS)
     enable_language (CXX)
     add_subdirectory ("thirdparty/benchmark")
     target_link_libraries (clither PRIVATE benchmark)
+endif ()
+
+if (CLITHER_DOC)
+    add_subdirectory ("doc/clither-doc")
 endif ()
 
 ###############################################################################

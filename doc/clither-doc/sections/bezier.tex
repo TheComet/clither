@@ -1,0 +1,74 @@
+\section{Bezier Curves}
+\label{sec:bezier}
+
+The Bernstein polynomial of order $n$ for the function $f(t)$ is defined on the closed interval $[0,1]$ as
+
+\begin{equation}
+    B_n(t) = \sum_{i=0}^n f\left(\frac{i}{n}\right){n\choose i} t^i\left(1-t\right)^{n-i}
+    \label{eq:bernstein}
+\end{equation}
+
+Equation \ref{eq:bernstein} may be rewritten as
+
+\begin{equation}
+    B_n(t) = \sum_{i=0}^n f\left(\frac{i}{n}\right) B_i^n(t)
+\end{equation}
+
+where the $B_i^n(t)$ are the Bernstein basis polynomials
+
+\begin{align}
+    B_i^n(t) = {n\choose i} t^i (1-t)^{n-i} & & \makecell[l]{ i=0,1,2,\ldots,n \\ n=0,1,2,\ldots }
+\end{align}
+
+For a 2-dimensional B\'ezier curve $b^n$ with $n+1$ control points $b_n = (x_i, y_i)$ we can define the curve with equations
+
+\begin{align}
+    \left.\begin{aligned}
+        x(t) &= \sum_{i=0}^n a_i B_i^n(t) \\
+        y(t) &= \sum_{i=0}^n b_i B_i^n(t)
+    \end{aligned}\right.
+    & & 0 \leq t \leq 1
+\end{align}
+
+\begin{align}
+    x(t) &= \sum_{i=0}^3 a_i {3\choose i} t^i(1-t)^{3-i} \\
+         &= a_0(1-t)^3 + 3a_1t(1-t)^2 + 3a_2t^2(1-t) + a_3t^3 \\
+         &= a_0(1-3t+3t^2-t^3) + a_1(3t-6t^2+3t^3) + a_2(3t^2-3t^3) + a_3t^3 \\
+         &= a_0 + (-3a_0+3a_1)t + (3a_0-6a_1+3a_2)t^2 + (-a_0+3a_1-3a_2+a_3)t^3 \\
+         &= \begin{bmatrix}
+                1 & t & t^2 & t^3
+            \end{bmatrix}
+            \begin{bmatrix}
+                a_0 \\
+                -3a_0 + 3a_1 \\
+                3a_0  - 6a_1 + 3a_2 \\
+                -a_0  + 3a_1 - 3a_2 + a_3
+            \end{bmatrix}
+\end{align}
+
+\begin{equation}
+    \begin{bmatrix}
+        x_1 & y_1 \\ x_2 & y_2 \\ \vdots & \vdots \\ x_n & y_n
+    \end{bmatrix}
+    =
+    \begin{bmatrix}
+        1      & t_0     & t_0^2     & \ldots & t_1^m \\
+        1      & t_1     & t_1^2     & \ldots & t_2^m \\
+        \vdots & \vdots  & \vdots    & \ddots & \vdots \\
+        1      & t_n     & t_n^2     & \ldots & t_n^m
+    \end{bmatrix}
+    \begin{bmatrix}
+        c_{x,0} & c_{y,0} \\
+        c_{x,1} & c_{y,1} \\
+        \vdots  & \vdots \\
+        c_{x,n} & c_{c,n}
+    \end{bmatrix}
+    +
+    \begin{bmatrix}
+        \epsilon_{x,0} & \epsilon_{y,0} \\
+        \epsilon_{x,1} & \epsilon_{y,1} \\
+        \vdots         & \vdots \\
+        \epsilon_{x,n} & \epsilon_{y,n}
+    \end{bmatrix}
+\end{equation}
+
