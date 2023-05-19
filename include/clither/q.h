@@ -33,8 +33,8 @@ struct qwpos2
     qw y;
 };
 
-#define make_qw(v) (qw)((v) * (1 << QW_Q))
-#define make_qwpos2(x, y) (struct qwpos2){ make_qw(x), make_qw(y) }
+#define make_qw(v, div) (qw)((v) * (1 << QW_Q) / (div))
+#define make_qwpos2(x, y, div) (struct qwpos2){ make_qw(x, div), make_qw(y, div) }
 #define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
 #define qw_to_float(q) ((double)(q) / (1 << QW_Q))
 #define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
