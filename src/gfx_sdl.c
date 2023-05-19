@@ -354,14 +354,14 @@ draw_bezier(
     int i;
 
     struct spos2 p0 = gfx_world_to_screen(head->pos, gfx, camera);
-    struct spos2 p1 = gfx_world_to_screen(make_qwpos2(
+    struct spos2 p1 = gfx_world_to_screen((struct qwpos2){
         qw_add(head->pos.x, make_qw(head->len * cos(qa_to_float(head->angle)) / 255)),
         qw_add(head->pos.y, make_qw(head->len * sin(qa_to_float(head->angle)) / 255))
-    ), gfx, camera);
-    struct spos2 p2 = gfx_world_to_screen(make_qwpos2(
+    }, gfx, camera);
+    struct spos2 p2 = gfx_world_to_screen((struct qwpos2) {
         qw_add(tail->pos.x, make_qw(tail->len * cos(qa_to_float(tail->angle)) / 255)),
-        qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255))
-    ), gfx, camera);
+            qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255))
+    }, gfx, camera);
     struct spos2 p3 = gfx_world_to_screen(tail->pos, gfx, camera);
 
     points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
@@ -385,7 +385,7 @@ draw_bezier(
         points[i].y = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
     }
 
-    SDL_RenderDrawPoints(((const struct gfx_sdl*)gfx)->renderer, points, num_points);
+    SDL_RenderDrawLines(((const struct gfx_sdl*)gfx)->renderer, points, num_points);
 
     if (num_points > 64)
         FREE(point_buf);
