@@ -247,25 +247,25 @@ struct qwpos2
 gfx_screen_to_world(struct spos2 pos, const struct gfx* gfx, const struct camera* camera)
 {
     int screen_x, screen_y;
-    struct qwpos2 result = make_qwpos2(pos.x, pos.y);
+    struct qwpos2 result = make_qwpos2(pos.x, pos.y, 1);
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
     if (screen_x < screen_y)
     {
         int pad = (screen_y - screen_x) / 2;
-        result.x = qw_sub(result.x, make_qw(screen_x / 2));
-        result.y = qw_sub(result.y, make_qw(screen_x / 2 + pad));
-        result.x = qw_div(result.x, make_qw(screen_x));
-        result.y = qw_div(result.y, make_qw(-screen_x));
+        result.x = qw_sub(result.x, make_qw(screen_x / 2, 1));
+        result.y = qw_sub(result.y, make_qw(screen_x / 2 + pad, 1));
+        result.x = qw_div(result.x, make_qw(screen_x, 1));
+        result.y = qw_div(result.y, make_qw(-screen_x, 1));
     }
     else
     {
         int pad = (screen_x - screen_y) / 2;
-        result.x = qw_sub(result.x, make_qw(screen_y / 2 + pad));
-        result.y = qw_sub(result.y, make_qw(screen_y / 2));
-        result.x = qw_div(result.x, make_qw(screen_y));
-        result.y = qw_div(result.y, make_qw(-screen_y));
+        result.x = qw_sub(result.x, make_qw(screen_y / 2 + pad, 1));
+        result.y = qw_sub(result.y, make_qw(screen_y / 2, 1));
+        result.x = qw_div(result.x, make_qw(screen_y, 1));
+        result.y = qw_div(result.y, make_qw(-screen_y, 1));
     }
 
     result.x = qw_div(result.x, camera->scale);
@@ -295,14 +295,14 @@ gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camer
     if (screen_x < screen_y)
     {
         int pad = (screen_y - screen_x) / 2;
-        result.x = qw_mul_to_int(pos.x, make_qw(screen_x)) + (screen_x / 2);
-        result.y = qw_mul_to_int(pos.y, make_qw(-screen_x)) + (screen_x / 2 + pad);
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_x, 1)) + (screen_x / 2);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_x, 1)) + (screen_x / 2 + pad);
     }
     else
     {
         int pad = (screen_x - screen_y) / 2;
-        result.x = qw_mul_to_int(pos.x, make_qw(screen_y)) + (screen_y / 2 + pad);
-        result.y = qw_mul_to_int(pos.y, make_qw(-screen_y)) + (screen_y / 2);
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_y, 1)) + (screen_y / 2 + pad);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_y, 1)) + (screen_y / 2);
     }
 
     return result;
@@ -331,12 +331,13 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
         SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
         max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
         a = snake->controls.angle / 256.0 * 2 * M_PI;
+        log_dbg("snake angle: %f\n", a);
         screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
         screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
         draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 5);
     }
 
-    pos = gfx_world_to_screen(make_qwpos2(0, 0), (const struct gfx*)gfx, camera);
+    pos = gfx_world_to_screen(make_qwpos2(0, 0, 1), (const struct gfx*)gfx, camera);
     draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
 }
 
@@ -353,16 +354,20 @@ draw_bezier(
     SDL_Point point_buf[64];
     int i;
 
+    const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
+
     struct spos2 p0 = gfx_world_to_screen(head->pos, gfx, camera);
     struct spos2 p1 = gfx_world_to_screen((struct qwpos2){
-        qw_add(head->pos.x, make_qw(head->len * cos(qa_to_float(head->angle)) / 255)),
-        qw_add(head->pos.y, make_qw(head->len * sin(qa_to_float(head->angle)) / 255))
+        qw_add(head->pos.x, make_qw(head->len * cos(qa_to_float(head->angle)) / 255, 1)),
+        qw_add(head->pos.y, make_qw(head->len * sin(qa_to_float(head->angle)) / 255, 1))
     }, gfx, camera);
     struct spos2 p2 = gfx_world_to_screen((struct qwpos2) {
-        qw_add(tail->pos.x, make_qw(tail->len * cos(qa_to_float(tail->angle)) / 255)),
-            qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255))
+        qw_add(tail->pos.x, make_qw(tail->len * cos(qa_to_float(tail->angle)) / 255, 1)),
+        qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255, 1))
     }, gfx, camera);
     struct spos2 p3 = gfx_world_to_screen(tail->pos, gfx, camera);
+
+    log_dbg("angle: %f\n", qa_to_float(head->angle));
 
     points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
 
@@ -385,7 +390,8 @@ draw_bezier(
         points[i].y = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
     }
 
-    SDL_RenderDrawLines(((const struct gfx_sdl*)gfx)->renderer, points, num_points);
+    SDL_SetRenderDrawColor(g->renderer, 255, 0, 0, 255);
+    SDL_RenderDrawLines(g->renderer, points, num_points);
 
     if (num_points > 64)
         FREE(point_buf);
@@ -404,27 +410,27 @@ draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
     if (gfx->textures.background == NULL)
         return;
 
-    dim_cam = qw_mul(make_qw(1.0 / TILE_SCALE), camera->scale);
+    dim_cam = qw_mul(make_qw(1, TILE_SCALE), camera->scale);
 
     SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
     pad = (screen_y - screen_x) / 2;
     if (screen_x < screen_y)
     {
-        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1.0 / TILE_SCALE);
-        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1.0 / TILE_SCALE);
-        startx = qw_mul_to_int(sx, make_qw(screen_x));
-        starty = qw_mul_to_int(sy, make_qw(screen_x)) + pad;
+        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1, TILE_SCALE);
+        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1, TILE_SCALE);
+        startx = qw_mul_to_int(sx, make_qw(screen_x, 1));
+        starty = qw_mul_to_int(sy, make_qw(screen_x, 1)) + pad;
 
-        dim = qw_mul_to_int(dim_cam, make_qw(screen_x));
+        dim = qw_mul_to_int(dim_cam, make_qw(screen_x, 1));
     }
     else
     {
-        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1.0 / TILE_SCALE);
-        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1.0 / TILE_SCALE);
-        startx = qw_mul_to_int(sx, make_qw(screen_y)) - pad;
-        starty = qw_mul_to_int(sy, make_qw(screen_y));
+        qw sx = qw_mul(-camera->pos.x, camera->scale) % make_qw(1, TILE_SCALE);
+        qw sy = qw_mul(camera->pos.y, camera->scale) % make_qw(1, TILE_SCALE);
+        startx = qw_mul_to_int(sx, make_qw(screen_y, 1)) - pad;
+        starty = qw_mul_to_int(sy, make_qw(screen_y, 1));
 
-        dim = qw_mul_to_int(dim_cam, make_qw(screen_y));
+        dim = qw_mul_to_int(dim_cam, make_qw(screen_y, 1));
     }
 
     /*

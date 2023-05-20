@@ -22,8 +22,8 @@ bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos, uint8_t angle, u
 
 qw
 bezier_fit_head(
-        struct bezier_handle* tail,
         struct bezier_handle* head,
+        struct bezier_handle* tail,
         const struct cs_vector* points);
 
 C_END

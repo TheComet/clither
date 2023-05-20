@@ -4,6 +4,10 @@
 #include "cstructures/memory.h"
 #include "cstructures/vector.h"
 
+#include <math.h>
+#include <string.h>
+#include <stdio.h>
+
 /* ------------------------------------------------------------------------- */
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos, uint8_t angle, uint8_t len)
@@ -14,77 +18,212 @@ bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos, uint8_t angle, u
 }
 
 /* ------------------------------------------------------------------------- */
-qw
+q16_16
 bezier_fit_head(
-        struct bezier_handle* tail,
         struct bezier_handle* head,
+        struct bezier_handle* tail,
         const struct cs_vector* points)
 {
-#define BUF_SIZE 128
     int i, m, n;
-    qw tbuf[BUF_SIZE];
-    qw rbuf[BUF_SIZE];
-    qw* t;
-    qw* r;
-    qw T[4][4];
+    q16_16 T[2][2];
+    q16_16 T_mom[2][2];
+    q16_16 T_inv[2][2];
+    q16_16 Cx[2], Cy[2];
+    q16_16 det;
+    q16_16 mx, qx, my, qy;  /* f(t) coefficients */
+
+    struct qwpos2* p0 = vector_front(points);
+    struct qwpos2* pm = vector_back(points);
 
     /*
      * We use constrained polynomial regression to fit the bezier curve to the
      * data points.
      * https://stats.stackexchange.com/questions/50447/perform-linear-regression-but-force-solution-to-go-through-some-particular-data
-     * 
+     *
      * The fitted curve must pass through the first and last points. The problem
      * can be formulated as:
-     * 
-     *   x = fx(t) + (t-t0)(t-t1)(cx0 + cx1*t + cx2*t^2 + cx3*t^3)
-     *   y = fy(t) + (t-t0)(t-t1)(cy0 + cy1*t + cy2*t^2 + cy3*t^3)
-     * 
-     * where cx0..cx3 are the unknown coefficients of the x dimension of the
-     * bezier curve, cy0..cy3 are the unknown coefficients of the y domension
-     * of the bezier curve, (t0,x0,y0) and (t1,x1,y1) are the first and last
+     *
+     *   x = fx(t) + (t-t0)(t-tm)(cx0 + cx1*t)
+     *   y = fy(t) + (t-t0)(t-tm)(cy0 + cy1*t)
+     *
+     * where cx0..cx1 are the unknown coefficients of the x dimension of the
+     * bezier curve, cy0..cy1 are the unknown coefficients of the y dimension
+     * of the bezier curve, (t0,x0,y0) and (tm,xm,ym) are the first and last
      * points, and fx(t) and fy(t) are polynomials (in this case 1st degree)
      * that pass through these two points. If we define:
-     * 
-     *   r(t) = (t-t0)(t-t1)
-     * 
+     *
+     *   r(t) = (t-t0)(t-tm)
+     *
      * then the problem can be rewritten as:
-     * 
-     *   x - fx(t) = cx0*r(t) + cx1*r(t)*t + cx2*r(t)*t^2 + cx3*r(t)*t^3
-     *   y - fy(t) = cy0*r(t) + cy1*r(t)*t + cy2*r(t)*t^2 + cy3*r(t)*t^3
-     * 
-     * The coefficients cx0..cx3 and cy0..cy3 can be independently estimated
-     * using ordinary least squares estimation.
+     *
+     *   (x - fx(t)) / r(t) = cx0 + cx1*t
+     *   (y - fy(t)) / r(t) = cy0 + cy1*t
+     *
+     * Notice, however, that r(t) has singularities at t0 and tm, and therefore,
+     * we must build the T matrix (see below) excluding those datapoints.
+     *
+     * The coefficients cx0..cx1 and cy0..cy1 can be independently estimated
+     * using ordinary least squares estimation. For a polynomial of the form
+     *
+     *   x(t) = c0 + c1*t + c2*t^2 + c3*t^3
+     *
+     * rewritten in matrix form X = T*C + E
+     *
+     *   [ x0 ]   [ 1  t0 ]
+     *   [ x1 ] = [ 1  t1 ] [ c0 ] + [ e0 ]
+     *   [ .. ]   [ .  .. ] [ c1 ]   [ e1 ]
+     *   [ xm ]   [ 1  tm ]
+     *
+     * Least squares estimation of c0 and c1 can be computed with:
+     *
+     *   C = (T'*T)^-1 * T' * X
      */
-    t = vector_count(points) > BUF_SIZE ? MALLOC(sizeof(qw) * vector_count(points)) : tbuf;
-    r = vector_count(points) > BUF_SIZE ? MALLOC(sizeof(qw) * vector_count(points)) : rbuf;
-    if (t > BUF_SIZE)
-        log_warn("had to allocate memory for bezier_fit_head()\n");
 
-    /* r(t) = (t-t0)(t-t1) */
-    for (i = 0; i != vector_count(points); ++i)
+    /*
+     * Calculate T'*T:
+     *
+     *                   [ 1   t0 ]
+     * [ 1   1  ... 1  ] [ 1   t1 ]
+     * [ t0  t1 ... tn ] [ ..  .. ]
+     *                   [ 1   tn ]
+     */
+    memset(T, 0, sizeof(T));
+    for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
-        qw t = make_qw(i, vector_count(points) - 1);  /* [0..1] */
-        qw t0 = make_qw(0, 1);  /* t0 = 0 (pass through first point) */
-        qw t1 = make_qw(1, 1);  /* t1 = 1 (pass through last point) */
-        r[i] = qw_mul(qw_sub(t, t0), qw_sub(t, t1));
+        /* t = [0..1] */
+        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+        q16_16 t2 = q16_16_mul(t, t);
+
+        T[0][0] = q16_16_add(T[0][0], make_q16_16(1, 1));
+        T[0][1] = q16_16_add(T[0][1], t);
+        T[1][0] = q16_16_add(T[1][0], t);
+        T[1][1] = q16_16_add(T[1][1], t2);
     }
 
     /*
-     * / r0       r1      ... rn        / r0  r0*t0  r0*t0^2  r0*t0^3 \
-     * | r0*t0    r1*t1   ... rn*tn   | | r1  r1*t1  r1*t1^2  r1*t1^3 |
-     * | r0*t0^2  r1*t1^2 ... rn*tn^2 | | ..  .....  .......  ....... |
-     * \ r0*t0^3  r1*t1^3 ... rn*tn^3 / \ rn  rn*tn  rn*tn^2  rn*tn^3 /
+     * Calculate inverse (T'*T)^-1
+     *
+     *          -1         1
+     *   [ a b ]    = ------- [  d -b ]
+     *   [ c d ]      ad - bc [ -c  a ]
      */
+    det = q16_16_sub(q16_16_mul(T[0][0], T[1][1]), q16_16_mul(T[0][1], T[1][0]));
+    T_inv[0][0] = q16_16_div(T[1][1], det);
+    T_inv[0][1] = q16_16_div(-T[0][1], det);
+    T_inv[1][0] = q16_16_div(-T[1][0], det);
+    T_inv[1][1] = q16_16_div(T[0][0], det);
 
-    for (m = 0; m != vector_count(points); ++m)
+    /*
+     * Calculate f(t) coefficients
+     *   f(t) = fm*x + fq
+     *
+     *   fm = (xm-x0) / (tm-t0)
+     *   fq = x0 - fm*t0
+     */
     {
-        T[i][0] = 
+        /* NOTE: t0=0, tm=1 -> fm = xm-x0, fq = x0 */
+        mx = qw_to_q16_16(qw_sub(pm->x, p0->x));
+        qx = qw_to_q16_16(p0->x);
+        my = qw_to_q16_16(qw_sub(pm->y, p0->y));
+        qy = qw_to_q16_16(p0->y);
     }
 
-    if (vector_count(points) > BUF_SIZE)
+    /*
+     * (T'*T)^-1 * T' * X = T_inv * T' * X
+     *
+     *   T' = [ 1     1    ... 1  ]
+     *        [ t0    t1   ... tn ]
+     */
+    memset(Cx, 0, sizeof(Cx));
+    memset(Cy, 0, sizeof(Cy));
+    for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
-        FREE(t);
-        FREE(r);
+        /* t = [0..1] */
+        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+
+        /* r(t) = (t-t0)(t-tm) */
+        q16_16 tm = make_q16_16(1, 1);  /* tm = 1 (pass through last point) */
+        q16_16 r = q16_16_mul(t, q16_16_sub(t, tm));
+
+        /* f = m*t + q */
+        q16_16 fx = q16_16_add(q16_16_mul(mx, t), qx);
+        q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
+
+        /* X = (x - f) / r */
+        struct qwpos2* p = vector_get_element(points, i);
+        q16_16 X = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
+        q16_16 Y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
+        for (m = 0; m != 2; ++m)
+        {
+            q16_16 c = q16_16_add(T_inv[m][0], q16_16_mul(T_inv[m][1], t));
+            q16_16 cx = q16_16_mul(c, X);
+            q16_16 cy = q16_16_mul(c, Y);
+
+            Cx[m] = q16_16_add(Cx[m], cx);
+            Cy[m] = q16_16_add(Cy[m], cy);
+        }
+    }
+
+    /*
+     * Convert fitted coefficients Cx and Cy to bezier handle coordinates
+     * x0, x1, x2, x3 and y0, y1, y2, y3.
+     *
+     * The fitted polynomial is:
+     *
+     *   x = fx(t) + r(t)(cx0 + cx1*t)
+     *   x = mx*t + qx + (t-0)(t-1)(cx0 + cx1*t)
+     *
+     * Expanded and re-arranged:
+     *
+     *   x = qx + (mx-cx0)*t + (cx0-cx1)*t^2 + cx1*t^3
+     *
+     * By comparing this polynomial to the bezier polynomial with control points
+     * x0..x3:
+     *
+     *   x = x0 + (-3*x0 + 3*x1)t + (3*x0 - 6*x1 + 3*x2)t^2 + (-x0 + 3*x1 - 3*x2 + x3)t^3
+     *
+     * we can create the following system of equations to relate the set of
+     * coefficients:
+     *
+     *   qx        = x0                           x0 = qx
+     *   mx - cx0  = -3*x0 + 3*x1            -->  x1 = (mx - cx0 + 3*x0) / 3
+     *   cx0 - cx1 = 3*x0 - 6*x1 + 3*x2           x2 = (cx0 - cx1 - 3*x0 + 6*x1) / 3
+     *   cx1       = -x0 + 3*x1 - 3*x2 + x3       x3 = cx1 + x0 - 3*x1 + 3*x2
+     */
+    {
+        q16_16 _3 = make_q16_16(3, 1);
+        q16_16 _6 = make_q16_16(6, 1);
+
+        q16_16 x0 = qx;
+        q16_16 _3x0 = q16_16_mul(_3, x0);
+        q16_16 x1 = q16_16_div(q16_16_add(q16_16_sub(mx, Cx[0]), _3x0), _3);
+        q16_16 x2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), q16_16_mul(_6, x1)), _3);
+        q16_16 _3x1 = q16_16_mul(_3, x1);
+        q16_16 _3x2 = q16_16_mul(_3, x2);
+        q16_16 x3 = q16_16_add(q16_16_sub(q16_16_add(Cx[1], x0), _3x1), _3x2);
+
+        q16_16 y0 = qy;
+        q16_16 _3y0 = q16_16_mul(y0, _3);
+        q16_16 y1 = q16_16_div(q16_16_add(q16_16_sub(my, Cy[0]), _3y0), _3);
+        q16_16 y2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), q16_16_mul(_6, y1)), _3);
+        q16_16 _3y1 = q16_16_mul(_3, y1);
+        q16_16 _3y2 = q16_16_mul(_3, y2);
+        q16_16 y3 = q16_16_add(q16_16_sub(q16_16_add(Cy[1], y0), _3y1), _3y2);
+
+        q16_16 head_dx = q16_16_sub(x1, x0);
+        q16_16 head_dy = q16_16_sub(y1, y0);
+        q16_16 tail_dx = q16_16_sub(x2, x3);
+        q16_16 tail_dy = q16_16_sub(y2, y3);
+        q16_16 head_lensq = q16_16_add(q16_16_mul(head_dx, head_dx), q16_16_mul(head_dy, head_dy));
+        q16_16 tail_lensq = q16_16_add(q16_16_mul(tail_dx, tail_dx), q16_16_mul(tail_dy, tail_dy));
+
+        head->pos = *p0;
+        head->angle = make_qa(atan2(q16_16_to_float(head_dy), q16_16_to_float(head_dx)));
+        head->len = (uint8_t)(sqrt(q16_16_to_float(head_lensq)) * 255.0);
+
+        tail->pos = *pm;
+        tail->angle = make_qa(atan2(q16_16_to_float(tail_dy), q16_16_to_float(tail_dx)));
+        tail->len = (uint8_t)(sqrt(q16_16_to_float(tail_lensq)) * 255.0);
     }
 
     return 0;

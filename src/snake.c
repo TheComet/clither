@@ -10,10 +10,10 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define TURN_SPEED   (1.0 / 16)
-#define MIN_SPEED    (1.0 / 512)
-#define MAX_SPEED    (1.0 / 96)
-#define BOOST_SPEED  (1.0 / 32)
+#define TURN_SPEED   make_qa(1.0 / 16)
+#define MIN_SPEED    make_qw(1, 512)
+#define MAX_SPEED    make_qw(1, 96)
+#define BOOST_SPEED  make_qw(1, 32)
 #define ACCELERATION (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
@@ -25,7 +25,7 @@ snake_init(struct snake* snake, const char* name)
 
     controls_init(&snake->controls);
 
-    snake->head_pos = make_qwpos2(0, 0);
+    snake->head_pos = make_qwpos2(0, 0, 1);
     snake->head_angle = make_qa(0);
     snake->speed = 0;
 
@@ -33,9 +33,9 @@ snake_init(struct snake* snake, const char* name)
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
 
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0), 0, 50);
+            make_qwpos2(0, 0, 1), 0, 50);
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0), 128, 50);
+            make_qwpos2(0, 0, 1), 128, 50);
 
     snake->length = 50;
 }
@@ -84,10 +84,10 @@ snake_step(struct snake* snake, int sim_tick_rate)
      * Turn the head towards the target angle and make sure to not go over the
      * maximum turning speed
      */
-    if (angle_diff > make_qa(TURN_SPEED))
-        snake->head_angle = qa_sub(snake->head_angle, make_qa(TURN_SPEED));
-    else if (angle_diff < make_qa(-TURN_SPEED))
-        snake->head_angle = qa_add(snake->head_angle, make_qa(TURN_SPEED));
+    if (angle_diff > TURN_SPEED)
+        snake->head_angle = qa_sub(snake->head_angle, TURN_SPEED);
+    else if (angle_diff < -TURN_SPEED)
+        snake->head_angle = qa_add(snake->head_angle, TURN_SPEED);
     else
         snake->head_angle = target_angle;
 
@@ -101,27 +101,17 @@ snake_step(struct snake* snake, int sim_tick_rate)
         vector_pop(&snake->points);
     vector_insert(&snake->points, 0, &snake->head_pos);
 
-    {
-        struct bezier_handle* bh = vector_front(&snake->bezier_handles);
-        struct qwpos2 p = *(struct qwpos2*)vector_front(&snake->points);
-        bh->pos = p;
-    }
     if (vector_count(&snake->points) == snake->length)
     {
-        qw dx, dy;
-        struct qwpos2 p1 = *(struct qwpos2*)vector_get_element(&snake->points, vector_count(&snake->points) - 1);
-        struct qwpos2 p2 = *(struct qwpos2*)vector_get_element(&snake->points, vector_count(&snake->points) - 2);
-        struct bezier_handle* bh = vector_get_element(&snake->bezier_handles, 1);
-
-        dx = qw_sub(p1.x, p2.x);
-        dy = qw_sub(p1.y, p2.y);
-        bh->pos = p1;
-        bh->angle = make_qa(atan2(dy, dx));
+        bezier_fit_head(
+            vector_get_element(&snake->bezier_handles, 1),
+            vector_get_element(&snake->bezier_handles, 0),
+            &snake->points);
     }
 
     target_speed = snake->controls.boost ?
         255 :
-        make_qw(MAX_SPEED - MIN_SPEED) * snake->controls.speed / make_qw(BOOST_SPEED - MIN_SPEED);
+        qw_sub(MAX_SPEED, MIN_SPEED) * snake->controls.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
     if (snake->speed - target_speed > (ACCELERATION*255))
         snake->speed -= (ACCELERATION*255);
     else if (snake->speed - target_speed < (-ACCELERATION*255))
@@ -131,8 +121,8 @@ snake_step(struct snake* snake, int sim_tick_rate)
 
     /* Update snake position using the head's current angle */
     a = qa_to_float(snake->head_angle);
-    dx = make_qw(cos(a) * (snake->speed / 255.0 * (BOOST_SPEED - MIN_SPEED) + MIN_SPEED));
-    dy = make_qw(sin(a) * (snake->speed / 255.0 * (BOOST_SPEED - MIN_SPEED) + MIN_SPEED));
+    dx = make_qw(cos(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)), 1);
+    dy = make_qw(sin(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)), 1);
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
 }
