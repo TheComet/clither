@@ -3,7 +3,6 @@ clear all;
 % Generate some random data
 t = linspace(0, 1, 50);
 p = sin(pi*2/3*t+0.3) + cos(pi*2*t) + rand(1, 50)*0.2;
-p = ones(1, 50);
 
 % Standard regression for reference
 T = [ones(1,50); t; t.^2; t.^3]';
@@ -28,10 +27,11 @@ f = m*t + q;
 % r(t) = (t-t1)(t-t2)
 % y - f(t) = c0*r(t) + c1*r(t)*t + c2*r(t)*t^2 + c3*r(t)*t^3
 r = (t-t(1)).*(t-t(end));
-Y = p - f;
-T = [r; r.*t; r.*t.^2; r.*t.^3]';
+Y = (p(2:end-1) - f(2:end-1)) ./ r(2:end-1);
+T = [ones(1,48); t(2:end-1); t(2:end-1).^2; t(2:end-1).^3]';
 c = (T'*T)^-1 * T' * Y';
-fit2 = (c(1)*r + c(2)*r.*t + c(3)*r.*t.^2 + c(4)*r.*t.^3) + f;
+fit2 = (c(1) + c(2)*t(2:end-1) + c(3)*t(2:end-1).^2 + c(4)*t(2:end-1).^3) .* r(2:end-1) + f(2:end-1);
+fit2 = [f(1), fit2, f(end)];
 
 hold off
 scatter(t, p);

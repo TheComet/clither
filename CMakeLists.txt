@@ -115,6 +115,7 @@ add_executable (clither
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
         tests/clither/test_args.cpp
+        tests/clither/test_bezier.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_tick.cpp
         tests/cstructures/test_btree_as_set.cpp
