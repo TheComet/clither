@@ -162,7 +162,7 @@ static inline int qw_mul_to_int(qw a, int b)
 
 static inline qw qw_div(qw a, qw b)
 {
-    /* pre-multiply by the base (Upscale to Q32 so that the result will be in Q16 format) */
+    /* pre-multiply by the base (Upscale to Q64 so that the result will be in Q32 format) */
     int64_t temp = (int64_t)a << QW_Q;
     /* Rounding: mid values are rounded up (down for negative values). */
     /* OR compare most significant bits i.e. if (((temp >> 31) & 1) == ((b >> 15) & 1)) */

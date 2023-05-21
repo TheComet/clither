@@ -12,15 +12,13 @@ struct bezier_handle
 {
     struct qwpos2 pos;
     qa angle;
-    uint8_t len;
-
-
+    uint8_t len_backwards, len_forwards;
 };
 
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos, uint8_t angle, uint8_t len);
+bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos);
 
-qw
+q16_16
 bezier_fit_head(
         struct bezier_handle* head,
         struct bezier_handle* tail,

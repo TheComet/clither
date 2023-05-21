@@ -310,39 +310,6 @@ gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camer
 
 /* ------------------------------------------------------------------------- */
 static void
-draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
-{
-    struct spos2 pos;
-
-    SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
-
-    VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
-        pos = gfx_world_to_screen(*wpos, (const struct gfx*)gfx, camera);
-        draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 10);
-    VECTOR_END_EACH
-
-    pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
-    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
-
-    /* Debug: Draw how the "controls" structure interpreted the mouse position */
-    {
-        int screen_x, screen_y, max_dist;
-        double a;
-        SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
-        max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
-        a = snake->controls.angle / 256.0 * 2 * M_PI;
-        log_dbg("snake angle: %f\n", a);
-        screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
-        screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
-        draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 5);
-    }
-
-    pos = gfx_world_to_screen(make_qwpos2(0, 0, 1), (const struct gfx*)gfx, camera);
-    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 20);
-}
-
-/* ------------------------------------------------------------------------- */
-static void
 draw_bezier(
     const struct gfx* gfx,
     const struct camera* camera,
@@ -358,16 +325,16 @@ draw_bezier(
 
     struct spos2 p0 = gfx_world_to_screen(head->pos, gfx, camera);
     struct spos2 p1 = gfx_world_to_screen((struct qwpos2){
-        qw_add(head->pos.x, make_qw(head->len * cos(qa_to_float(head->angle)) / 255, 1)),
-        qw_add(head->pos.y, make_qw(head->len * sin(qa_to_float(head->angle)) / 255, 1))
+        qw_add(head->pos.x, make_qw(head->len_backwards * cos(qa_to_float(head->angle)) / 255, 1)),
+        qw_add(head->pos.y, make_qw(head->len_backwards * sin(qa_to_float(head->angle)) / 255, 1))
     }, gfx, camera);
     struct spos2 p2 = gfx_world_to_screen((struct qwpos2) {
-        qw_add(tail->pos.x, make_qw(tail->len * cos(qa_to_float(tail->angle)) / 255, 1)),
-        qw_add(tail->pos.y, make_qw(tail->len * sin(qa_to_float(tail->angle)) / 255, 1))
+        qw_add(tail->pos.x, make_qw(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255, 1)),
+        qw_add(tail->pos.y, make_qw(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255, 1))
     }, gfx, camera);
     struct spos2 p3 = gfx_world_to_screen(tail->pos, gfx, camera);
 
-    log_dbg("angle: %f\n", qa_to_float(head->angle));
+    log_dbg("tail: %d, head: %d\n", head->len_backwards, tail->len_forwards);
 
     points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
 
@@ -395,6 +362,43 @@ draw_bezier(
 
     if (num_points > 64)
         FREE(point_buf);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
+{
+    struct spos2 pos;
+    int i;
+
+    SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
+
+    VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
+        pos = gfx_world_to_screen(*wpos, (const struct gfx*)gfx, camera);
+        draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 5);
+    VECTOR_END_EACH
+
+    pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
+    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 10);
+
+    /* Debug: Draw how the "controls" structure interpreted the mouse position */
+    {
+        int screen_x, screen_y, max_dist;
+        double a;
+        SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
+        max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
+        a = snake->controls.angle / 256.0 * 2 * M_PI;
+        screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
+        screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
+        draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 5);
+    }
+
+    for (i = 0; i < (int)vector_count(&snake->bezier_handles) - 1; ++i)
+    {
+        struct bezier_handle* head = vector_get_element(&snake->bezier_handles, i+0);
+        struct bezier_handle* tail = vector_get_element(&snake->bezier_handles, i+1);
+        draw_bezier((const struct gfx*)gfx, camera, head, tail, 50);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -471,8 +475,12 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
         draw_snake(g, camera, snake);
-        draw_bezier(gfx, camera, vector_get_element(&snake->bezier_handles, 0), vector_get_element(&snake->bezier_handles, 1), 50);
     WORLD_END_EACH
+
+    {
+        struct spos2 pos = gfx_world_to_screen(make_qwpos2(0, 0, 1), (const struct gfx*)gfx, camera);
+        draw_circle(g->renderer, (SDL_Point) { pos.x, pos.y }, 20);
+    }
 
     SDL_RenderPresent(g->renderer);
 }

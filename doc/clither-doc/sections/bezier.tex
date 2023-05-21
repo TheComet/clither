@@ -69,12 +69,16 @@ For a 2-dimensional B\'ezier curve $b^n$ with $n+1$ control points $b_n = (x_i, 
         \epsilon_{x,0} & \epsilon_{y,0} \\
         \epsilon_{x,1} & \epsilon_{y,1} \\
         \vdots         & \vdots \\
-        \epsilon_{x,n} & \epsilon_{y,n}
+        \epsilon_{x,m} & \epsilon_{y,m}
     \end{bmatrix}
 \end{align}
 
 \begin{equation}
     C = (T^T T)^{-1} T^T P
+\end{equation}
+
+\begin{equation}
+    E = P - T\cdot C
 \end{equation}
 
 \begin{align*}
