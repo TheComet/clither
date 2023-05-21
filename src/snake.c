@@ -33,11 +33,11 @@ snake_init(struct snake* snake, const char* name)
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
 
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0, 1), 0, 50);
+            make_qwpos2(0, 0, 1));
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0, 1), 128, 50);
+            make_qwpos2(0, 0, 1));
 
-    snake->length = 50;
+    snake->length = 200;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -101,12 +101,18 @@ snake_step(struct snake* snake, int sim_tick_rate)
         vector_pop(&snake->points);
     vector_insert(&snake->points, 0, &snake->head_pos);
 
-    if (vector_count(&snake->points) == snake->length)
+    q16_16 error_squared = bezier_fit_head(
+        vector_get_element(&snake->bezier_handles, 0),
+        vector_get_element(&snake->bezier_handles, 1),
+        &snake->points);
+    if (q16_16_to_float(error_squared) > 50.0)
     {
-        bezier_fit_head(
-            vector_get_element(&snake->bezier_handles, 1),
-            vector_get_element(&snake->bezier_handles, 0),
-            &snake->points);
+        struct bezier_handle* head = vector_get_element(&snake->bezier_handles, 0);
+        struct qwpos2 head_pos = head->pos;
+        bezier_handle_init(vector_insert_emplace(&snake->bezier_handles, 0),
+                head_pos);
+        vector_clear(&snake->points);
+        vector_insert(&snake->points, 0, &snake->head_pos);
     }
 
     target_speed = snake->controls.boost ?
@@ -115,6 +121,7 @@ snake_step(struct snake* snake, int sim_tick_rate)
     if (snake->speed - target_speed > (ACCELERATION*255))
         snake->speed -= (ACCELERATION*255);
     else if (snake->speed - target_speed < (-ACCELERATION*255))
+
         snake->speed += (ACCELERATION*255);
     else
         snake->speed = target_speed;

@@ -81,7 +81,7 @@ public:
 TEST_F(NAME, test)
 {
     struct bezier_handle head, tail;
-    bezier_handle_init(&head, points1[0], 0, 0);
-    bezier_handle_init(&tail, points1[49], 0, 0);
+    bezier_handle_init(&head, points1[0]);
+    bezier_handle_init(&tail, points1[49]);
     bezier_fit_head(&head, &tail, &points);
 }

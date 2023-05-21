@@ -10,11 +10,12 @@
 
 /* ------------------------------------------------------------------------- */
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos, uint8_t angle, uint8_t len)
+bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos)
 {
     bh->pos = pos;
-    bh->angle = angle;
-    bh->len = len;
+    bh->angle = 0;
+    bh->len_forwards = 0;
+    bh->len_backwards = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -24,16 +25,22 @@ bezier_fit_head(
         struct bezier_handle* tail,
         const struct cs_vector* points)
 {
-    int i, m, n;
+    int i, m;
     q16_16 T[2][2];
-    q16_16 T_mom[2][2];
     q16_16 T_inv[2][2];
     q16_16 Cx[2], Cy[2];
+    uint64_t Ex, Ey;
     q16_16 det;
     q16_16 mx, qx, my, qy;  /* f(t) coefficients */
 
     struct qwpos2* p0 = vector_front(points);
     struct qwpos2* pm = vector_back(points);
+
+    if (vector_count(points) <= 4)
+    {
+        head->pos = *p0;
+        return 0;
+    }
 
     /*
      * We use constrained polynomial regression to fit the bezier curve to the
@@ -151,13 +158,13 @@ bezier_fit_head(
 
         /* X = (x - f) / r */
         struct qwpos2* p = vector_get_element(points, i);
-        q16_16 X = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
-        q16_16 Y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
+        q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
+        q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
         for (m = 0; m != 2; ++m)
         {
             q16_16 c = q16_16_add(T_inv[m][0], q16_16_mul(T_inv[m][1], t));
-            q16_16 cx = q16_16_mul(c, X);
-            q16_16 cy = q16_16_mul(c, Y);
+            q16_16 cx = q16_16_mul(c, x);
+            q16_16 cy = q16_16_mul(c, y);
 
             Cx[m] = q16_16_add(Cx[m], cx);
             Cy[m] = q16_16_add(Cy[m], cy);
@@ -194,6 +201,7 @@ bezier_fit_head(
         q16_16 _3 = make_q16_16(3, 1);
         q16_16 _6 = make_q16_16(6, 1);
 
+        /* X dimension control points */
         q16_16 x0 = qx;
         q16_16 _3x0 = q16_16_mul(_3, x0);
         q16_16 x1 = q16_16_div(q16_16_add(q16_16_sub(mx, Cx[0]), _3x0), _3);
@@ -202,6 +210,7 @@ bezier_fit_head(
         q16_16 _3x2 = q16_16_mul(_3, x2);
         q16_16 x3 = q16_16_add(q16_16_sub(q16_16_add(Cx[1], x0), _3x1), _3x2);
 
+        /* Y dimension control points */
         q16_16 y0 = qy;
         q16_16 _3y0 = q16_16_mul(y0, _3);
         q16_16 y1 = q16_16_div(q16_16_add(q16_16_sub(my, Cy[0]), _3y0), _3);
@@ -210,21 +219,60 @@ bezier_fit_head(
         q16_16 _3y2 = q16_16_mul(_3, y2);
         q16_16 y3 = q16_16_add(q16_16_sub(q16_16_add(Cy[1], y0), _3y1), _3y2);
 
+        /* Control points are stored as polar coordinates relative to head/tail */
         q16_16 head_dx = q16_16_sub(x1, x0);
         q16_16 head_dy = q16_16_sub(y1, y0);
         q16_16 tail_dx = q16_16_sub(x2, x3);
         q16_16 tail_dy = q16_16_sub(y2, y3);
         q16_16 head_lensq = q16_16_add(q16_16_mul(head_dx, head_dx), q16_16_mul(head_dy, head_dy));
         q16_16 tail_lensq = q16_16_add(q16_16_mul(tail_dx, tail_dx), q16_16_mul(tail_dy, tail_dy));
+        double head_len = sqrt(q16_16_to_float(head_lensq));
+        double tail_len = sqrt(q16_16_to_float(tail_lensq));
 
+        /* Update head knot */
         head->pos = *p0;
         head->angle = make_qa(atan2(q16_16_to_float(head_dy), q16_16_to_float(head_dx)));
-        head->len = (uint8_t)(sqrt(q16_16_to_float(head_lensq)) * 255.0);
+        head->len_backwards = (uint8_t)(head_len * 255.0);
 
-        tail->pos = *pm;
-        tail->angle = make_qa(atan2(q16_16_to_float(tail_dy), q16_16_to_float(tail_dx)));
-        tail->len = (uint8_t)(sqrt(q16_16_to_float(tail_lensq)) * 255.0);
+        /*
+         * We are allowed to modify the tail's "forwards length", but not the
+         * angle, because the angle is shared between two bezier curves. Need
+         * to make sure to factor this in to the error calculation later.
+         */
+        tail->len_forwards = (uint8_t)(tail_len * 255.0);
     }
 
-    return 0;
+    /* Error estimation */
+    Ex = 0;
+    Ey = 0;
+    for (i = 1; i < (int)vector_count(points) - 1; ++i)
+    {
+        /* t = [0..1] */
+        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+
+        /* r(t) = (t-t0)(t-tm) */
+        q16_16 tm = make_q16_16(1, 1);  /* tm = 1 (pass through last point) */
+        q16_16 r = q16_16_mul(t, q16_16_sub(t, tm));
+
+        /* f = m*t + q */
+        q16_16 fx = q16_16_add(q16_16_mul(mx, t), qx);
+        q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
+
+        /* X = (x - f) / r */
+        struct qwpos2* p = vector_get_element(points, i);
+        q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
+        q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
+
+        for (m = 0; m != 2; ++m)
+        {
+            q16_16 ex = q16_16_sub(x, q16_16_add(q16_16_mul(T[m][0], Cx[0]), q16_16_mul(T[m][1], Cx[1])));
+            q16_16 ey = q16_16_sub(y, q16_16_add(q16_16_mul(T[m][0], Cy[0]), q16_16_mul(T[m][1], Cy[1])));
+            Ex += q16_16_mul(ex, ex);
+            Ey += q16_16_mul(ey, ey);
+        }
+    }
+    Ex = (Ex << Q16_16_Q) / make_q16_16(vector_count(points) - 1, 1);
+    Ey = (Ey << Q16_16_Q) / make_q16_16(vector_count(points) - 1, 1);
+
+    return q16_16_div(q16_16_add(Ex, Ey), make_q16_16(2, 1));
 }
