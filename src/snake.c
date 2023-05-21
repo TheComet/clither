@@ -11,9 +11,9 @@
 #include <stdlib.h>
 
 #define TURN_SPEED   make_qa(1.0 / 16)
-#define MIN_SPEED    make_qw(1, 512)
+#define MIN_SPEED    make_qw(1, 256)
 #define MAX_SPEED    make_qw(1, 96)
-#define BOOST_SPEED  make_qw(1, 32)
+#define BOOST_SPEED  make_qw(1, 48)
 #define ACCELERATION (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
@@ -97,24 +97,6 @@ snake_step(struct snake* snake, int sim_tick_rate)
     else if (snake->head_angle >= make_qa(M_PI))
         snake->head_angle = qa_sub(snake->head_angle, make_qa(2*M_PI));
 
-    while (vector_count(&snake->points) >= snake->length)
-        vector_pop(&snake->points);
-    vector_insert(&snake->points, 0, &snake->head_pos);
-
-    q16_16 error_squared = bezier_fit_head(
-        vector_get_element(&snake->bezier_handles, 0),
-        vector_get_element(&snake->bezier_handles, 1),
-        &snake->points);
-    if (q16_16_to_float(error_squared) > 50.0)
-    {
-        struct bezier_handle* head = vector_get_element(&snake->bezier_handles, 0);
-        struct qwpos2 head_pos = head->pos;
-        bezier_handle_init(vector_insert_emplace(&snake->bezier_handles, 0),
-                head_pos);
-        vector_clear(&snake->points);
-        vector_insert(&snake->points, 0, &snake->head_pos);
-    }
-
     target_speed = snake->controls.boost ?
         255 :
         qw_sub(MAX_SPEED, MIN_SPEED) * snake->controls.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
@@ -132,4 +114,22 @@ snake_step(struct snake* snake, int sim_tick_rate)
     dy = make_qw(sin(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)), 1);
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
+
+    /*while (vector_count(&snake->points) >= snake->length)
+        vector_pop(&snake->points);*/
+    vector_push(&snake->points, &snake->head_pos);
+
+    q16_16 error_squared = bezier_fit_head(
+        vector_get_element(&snake->bezier_handles, vector_count(&snake->bezier_handles) - 1),
+        vector_get_element(&snake->bezier_handles, vector_count(&snake->bezier_handles) - 2),
+        &snake->points);
+    if (error_squared > 2048)
+    {
+        struct bezier_handle* head = vector_back(&snake->bezier_handles);
+        struct qwpos2 head_pos = head->pos;
+        bezier_handle_init(vector_emplace(&snake->bezier_handles), head_pos);
+        vector_clear(&snake->points);
+        vector_push(&snake->points, &snake->head_pos);
+        log_dbg("new segment: %d\n", error_squared);
+    }
 }

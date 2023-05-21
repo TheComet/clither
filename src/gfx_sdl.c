@@ -334,8 +334,6 @@ draw_bezier(
     }, gfx, camera);
     struct spos2 p3 = gfx_world_to_screen(tail->pos, gfx, camera);
 
-    log_dbg("tail: %d, head: %d\n", head->len_backwards, tail->len_forwards);
-
     points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
 
     for (i = 0; i != num_points; ++i)
@@ -357,7 +355,6 @@ draw_bezier(
         points[i].y = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
     }
 
-    SDL_SetRenderDrawColor(g->renderer, 255, 0, 0, 255);
     SDL_RenderDrawLines(g->renderer, points, num_points);
 
     if (num_points > 64)
@@ -373,10 +370,10 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
 
     SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
 
-    VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
+    /*VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
         pos = gfx_world_to_screen(*wpos, (const struct gfx*)gfx, camera);
         draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 5);
-    VECTOR_END_EACH
+    VECTOR_END_EACH*/
 
     pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
     draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 10);
@@ -395,8 +392,12 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
 
     for (i = 0; i < (int)vector_count(&snake->bezier_handles) - 1; ++i)
     {
-        struct bezier_handle* head = vector_get_element(&snake->bezier_handles, i+0);
-        struct bezier_handle* tail = vector_get_element(&snake->bezier_handles, i+1);
+        struct bezier_handle* tail = vector_get_element(&snake->bezier_handles, i+0);
+        struct bezier_handle* head = vector_get_element(&snake->bezier_handles, i+1);
+        if (i&1)
+            SDL_SetRenderDrawColor(gfx->renderer, 255, 0, 0, 255);
+        else
+            SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
         draw_bezier((const struct gfx*)gfx, camera, head, tail, 50);
     }
 }
@@ -479,6 +480,7 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 
     {
         struct spos2 pos = gfx_world_to_screen(make_qwpos2(0, 0, 1), (const struct gfx*)gfx, camera);
+        SDL_SetRenderDrawColor(((const struct gfx_sdl*)gfx)->renderer, 0, 255, 0, 255);
         draw_circle(g->renderer, (SDL_Point) { pos.x, pos.y }, 20);
     }
 
