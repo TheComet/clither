@@ -9,6 +9,68 @@
 #include <stdio.h>
 
 /* ------------------------------------------------------------------------- */
+static q16_16
+squared_distance_to_polys(
+    q16_16 px, q16_16 py, q16_16 t,
+    const q16_16 Ax[static 4],
+    const q16_16 Ay[static 4])
+{
+    q16_16 t2 = q16_16_mul(t, t);
+    q16_16 t3 = q16_16_mul(t, t2);
+    q16_16 x = q16_16_add(q16_16_add(q16_16_add(Ax[0], q16_16_mul(Ax[1], t)), q16_16_mul(Ax[2], t2)), q16_16_mul(Ax[3], t3));
+    q16_16 y = q16_16_add(q16_16_add(q16_16_add(Ay[0], q16_16_mul(Ay[1], t)), q16_16_mul(Ay[2], t2)), q16_16_mul(Ay[3], t3));
+    q16_16 dx = q16_16_sub(px, x);
+    q16_16 dy = q16_16_sub(py, y);
+    return dx*dx + dy*dy;  /* HACK: Not the same as q16_16_mul() but otherwise the errors would be too small */
+}
+static q16_16
+binary_search_lsq(
+    const struct qwpos2* p,
+    const q16_16 Ax[static 4],
+    const q16_16 Ay[static 4],
+    q16_16 t_initial_guess)
+{
+    q16_16 last_error;
+    q16_16 t = t_initial_guess;
+    q16_16 t_step = make_q16_16(1, 2);
+    q16_16 px = qw_to_q16_16(p->x);
+    q16_16 py = qw_to_q16_16(p->y);
+
+    last_error = squared_distance_to_polys(px, py, t, Ax, Ay);
+    do
+    {
+        q16_16 error_up, error_down;
+        q16_16 t_up = q16_16_add(t, t_step);
+        q16_16 t_down = q16_16_sub(t, t_step);
+
+        if (t_up <= make_q16_16(1, 1))
+            error_up = squared_distance_to_polys(px, py, t_up, Ax, Ay);
+        else
+            error_up = last_error;
+
+        if (t_down >= 0)
+            error_down = squared_distance_to_polys(px, py, t_down, Ax, Ay);
+        else
+            error_down = last_error;
+
+        if (error_up < last_error)
+        {
+            last_error = error_up;
+            t = t_up;
+        }
+        else if (error_down < last_error)
+        {
+            last_error = error_down;
+            t = t_down;
+        }
+
+        t_step >>= 1;
+    } while (t_step > 0);
+
+    return last_error;
+}
+
+/* ------------------------------------------------------------------------- */
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos)
 {
@@ -28,17 +90,18 @@ bezier_fit_head(
     int i, m;
     q16_16 T[2][2];
     q16_16 T_inv[2][2];
+    q16_16 Ax[4], Ay[4];
     q16_16 Cx[2], Cy[2];
-    uint64_t Ex, Ey;
+    uint64_t mse_error;
     q16_16 det;
     q16_16 mx, qx, my, qy;  /* f(t) coefficients */
 
-    struct qwpos2* p0 = vector_front(points);
-    struct qwpos2* pm = vector_back(points);
+    struct qwpos2* p0 = vector_front(points);  /* tail */
+    struct qwpos2* pm = vector_back(points);   /* head */
 
     if (vector_count(points) <= 4)
     {
-        head->pos = *p0;
+        head->pos = *pm;
         return 0;
     }
 
@@ -148,7 +211,7 @@ bezier_fit_head(
         /* t = [0..1] */
         q16_16 t = make_q16_16(i, vector_count(points) - 1);
 
-        /* r(t) = (t-t0)(t-tm) */
+        /* r(t) = (t-t0)(t-tm) = (t-0)(t-1) = t(t-1) */
         q16_16 tm = make_q16_16(1, 1);  /* tm = 1 (pass through last point) */
         q16_16 r = q16_16_mul(t, q16_16_sub(t, tm));
 
@@ -205,7 +268,8 @@ bezier_fit_head(
         q16_16 x0 = qx;
         q16_16 _3x0 = q16_16_mul(_3, x0);
         q16_16 x1 = q16_16_div(q16_16_add(q16_16_sub(mx, Cx[0]), _3x0), _3);
-        q16_16 x2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), q16_16_mul(_6, x1)), _3);
+        q16_16 _6x1 = q16_16_mul(_6, x1);
+        q16_16 x2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), _6x1), _3);
         q16_16 _3x1 = q16_16_mul(_3, x1);
         q16_16 _3x2 = q16_16_mul(_3, x2);
         q16_16 x3 = q16_16_add(q16_16_sub(q16_16_add(Cx[1], x0), _3x1), _3x2);
@@ -214,23 +278,24 @@ bezier_fit_head(
         q16_16 y0 = qy;
         q16_16 _3y0 = q16_16_mul(y0, _3);
         q16_16 y1 = q16_16_div(q16_16_add(q16_16_sub(my, Cy[0]), _3y0), _3);
-        q16_16 y2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), q16_16_mul(_6, y1)), _3);
+        q16_16 _6y1 = q16_16_mul(_6, y1);
+        q16_16 y2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), _6y1), _3);
         q16_16 _3y1 = q16_16_mul(_3, y1);
         q16_16 _3y2 = q16_16_mul(_3, y2);
         q16_16 y3 = q16_16_add(q16_16_sub(q16_16_add(Cy[1], y0), _3y1), _3y2);
 
         /* Control points are stored as polar coordinates relative to head/tail */
-        q16_16 head_dx = q16_16_sub(x1, x0);
-        q16_16 head_dy = q16_16_sub(y1, y0);
-        q16_16 tail_dx = q16_16_sub(x2, x3);
-        q16_16 tail_dy = q16_16_sub(y2, y3);
+        q16_16 tail_dx = q16_16_sub(x1, x0);
+        q16_16 tail_dy = q16_16_sub(y1, y0);
+        q16_16 head_dx = q16_16_sub(x2, x3);
+        q16_16 head_dy = q16_16_sub(y2, y3);
         q16_16 head_lensq = q16_16_add(q16_16_mul(head_dx, head_dx), q16_16_mul(head_dy, head_dy));
         q16_16 tail_lensq = q16_16_add(q16_16_mul(tail_dx, tail_dx), q16_16_mul(tail_dy, tail_dy));
         double head_len = sqrt(q16_16_to_float(head_lensq));
         double tail_len = sqrt(q16_16_to_float(tail_lensq));
 
         /* Update head knot */
-        head->pos = *p0;
+        head->pos = *pm;
         head->angle = make_qa(atan2(q16_16_to_float(head_dy), q16_16_to_float(head_dx)));
         head->len_backwards = (uint8_t)(head_len * 255.0);
 
@@ -240,39 +305,58 @@ bezier_fit_head(
          * to make sure to factor this in to the error calculation later.
          */
         tail->len_forwards = (uint8_t)(tail_len * 255.0);
+
+        /*
+         * Modifying the tail length influences x1,y1. Propagate these changes
+         * back to a set of polynomial coefficients Ax0..Ax3 and Ay0..Ay3 so
+         * that error estimation is accurate.
+         */
+        x1 = q16_16_add(x3, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255, 1));
+        y1 = q16_16_add(y3, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255, 1));
+
+        /*
+        fprintf(stderr, "x = [%f, %f, %f, %f];\n", q16_16_to_float(x0), q16_16_to_float(x1), q16_16_to_float(x2), q16_16_to_float(x3));
+        fprintf(stderr, "y = [%f, %f, %f, %f];\n", q16_16_to_float(y0), q16_16_to_float(y1), q16_16_to_float(y2), q16_16_to_float(y3));*/
+
+        Ax[0] = x0;
+        Ax[1] = q16_16_sub(_3x1, _3x0);
+        _3x2 = q16_16_mul(_3, x2);
+        Ax[2] = q16_16_add(q16_16_sub(_3x0, _6x1), _3x2);
+        Ax[3] = q16_16_add(q16_16_sub(q16_16_sub(_3x1, x0), _3x2), x3);
+
+        Ay[0] = y0;
+        Ay[1] = q16_16_sub(_3y1, _3y0);
+        _3y2 = q16_16_mul(_3, y2);
+        Ay[2] = q16_16_add(q16_16_sub(_3y0, _6y1), _3y2);
+        Ay[3] = q16_16_add(q16_16_sub(q16_16_sub(_3y1, y0), _3y2), y3);
     }
 
     /* Error estimation */
-    Ex = 0;
-    Ey = 0;
+    mse_error = 0;
     for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
         /* t = [0..1] */
         q16_16 t = make_q16_16(i, vector_count(points) - 1);
 
-        /* r(t) = (t-t0)(t-tm) */
-        q16_16 tm = make_q16_16(1, 1);  /* tm = 1 (pass through last point) */
-        q16_16 r = q16_16_mul(t, q16_16_sub(t, tm));
-
-        /* f = m*t + q */
-        q16_16 fx = q16_16_add(q16_16_mul(mx, t), qx);
-        q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
-
-        /* X = (x - f) / r */
-        struct qwpos2* p = vector_get_element(points, i);
-        q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
-        q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
-
-        for (m = 0; m != 2; ++m)
-        {
-            q16_16 ex = q16_16_sub(x, q16_16_add(q16_16_mul(T[m][0], Cx[0]), q16_16_mul(T[m][1], Cx[1])));
-            q16_16 ey = q16_16_sub(y, q16_16_add(q16_16_mul(T[m][0], Cy[0]), q16_16_mul(T[m][1], Cy[1])));
-            Ex += q16_16_mul(ex, ex);
-            Ey += q16_16_mul(ey, ey);
-        }
+        const struct qwpos2* p = vector_get_element(points, i);
+        mse_error += binary_search_lsq(p, Ax, Ay, t);
     }
-    Ex = (Ex << Q16_16_Q) / make_q16_16(vector_count(points) - 1, 1);
-    Ey = (Ey << Q16_16_Q) / make_q16_16(vector_count(points) - 1, 1);
 
-    return q16_16_div(q16_16_add(Ex, Ey), make_q16_16(2, 1));
+    /*
+    fprintf(stderr, "Ax = [%f, %f, %f, %f];\n", q16_16_to_float(Ax[0]), q16_16_to_float(Ax[1]), q16_16_to_float(Ax[2]), q16_16_to_float(Ax[3]));
+    fprintf(stderr, "Ay = [%f, %f, %f, %f];\n", q16_16_to_float(Ay[0]), q16_16_to_float(Ay[1]), q16_16_to_float(Ay[2]), q16_16_to_float(Ay[3]));
+
+    fprintf(stderr, "px = [");
+    VECTOR_FOR_EACH(points, struct qwpos2, p)
+        fprintf(stderr, "%f, ", qw_to_float(p->x));
+    VECTOR_END_EACH
+    fprintf(stderr, "];\n");
+    fprintf(stderr, "py = [");
+    VECTOR_FOR_EACH(points, struct qwpos2, p)
+        fprintf(stderr, "%f, ", qw_to_float(p->y));
+    VECTOR_END_EACH
+    fprintf(stderr, "];\n");
+*/
+
+    return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1, 1));
 }
