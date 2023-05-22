@@ -28,10 +28,15 @@ struct snake
     struct cs_vector points;
 
     /*
-     * List of bezier handles that completely define the snake. Each handle is
-     * its own network object.
+     * List of bezier handles that define the shape of the entire snake.
      */
     struct cs_vector bezier_handles;
+
+    /*
+     * The entire curve (all bezier segments) is sampled N number of times,
+     * where N is the length of the snake.
+     */
+    struct cs_vector bezier_points;
 
     /*
      * The total length (in points) of the snake. The list of bezier handles

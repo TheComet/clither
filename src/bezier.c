@@ -1,7 +1,6 @@
 #include "clither/bezier.h"
 #include "clither/log.h"
 
-#include "cstructures/memory.h"
 #include "cstructures/vector.h"
 
 #include <math.h>
@@ -21,7 +20,7 @@ squared_distance_to_polys(
     q16_16 y = q16_16_add(q16_16_add(q16_16_add(Ay[0], q16_16_mul(Ay[1], t)), q16_16_mul(Ay[2], t2)), q16_16_mul(Ay[3], t3));
     q16_16 dx = q16_16_sub(px, x);
     q16_16 dy = q16_16_sub(py, y);
-    return dx*dx + dy*dy;  /* HACK: Not the same as q16_16_mul() but otherwise the errors would be too small */
+    return dx*dx + dy*dy;  /* HACK: Not the same as q16_16_mul(), but the precision of Q16.16 isn't enough so we do this */
 }
 static q16_16
 binary_search_lsq(
@@ -64,7 +63,7 @@ binary_search_lsq(
             t = t_down;
         }
 
-        t_step >>= 1;
+        t_step /= 2;
     } while (t_step > 0);
 
     return last_error;
@@ -81,7 +80,7 @@ bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos)
 }
 
 /* ------------------------------------------------------------------------- */
-q16_16
+double
 bezier_fit_head(
         struct bezier_handle* head,
         struct bezier_handle* tail,
@@ -178,6 +177,17 @@ bezier_fit_head(
      *   [ c d ]      ad - bc [ -c  a ]
      */
     det = q16_16_sub(q16_16_mul(T[0][0], T[1][1]), q16_16_mul(T[0][1], T[1][0]));
+    if (det == 0)
+    {
+        /*
+         * Usually means there are too many data points and we've exceeded the
+         * precision of q16.16. Kind of ugly but the best we can do is update
+         * the head position (hoping it still fits the data) and return an
+         * error estimate that will definitely cause a new segment to be created
+         */
+        head->pos = *pm;
+        return (1<<30);
+    }
     T_inv[0][0] = q16_16_div(T[1][1], det);
     T_inv[0][1] = q16_16_div(-T[0][1], det);
     T_inv[1][0] = q16_16_div(-T[1][0], det);
@@ -311,22 +321,28 @@ bezier_fit_head(
          * back to a set of polynomial coefficients Ax0..Ax3 and Ay0..Ay3 so
          * that error estimation is accurate.
          */
-        x1 = q16_16_add(x3, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255, 1));
-        y1 = q16_16_add(y3, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255, 1));
+        x1 = q16_16_add(x0, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255, 1));
+        y1 = q16_16_add(y0, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255, 1));
 
         /*
-        fprintf(stderr, "x = [%f, %f, %f, %f];\n", q16_16_to_float(x0), q16_16_to_float(x1), q16_16_to_float(x2), q16_16_to_float(x3));
-        fprintf(stderr, "y = [%f, %f, %f, %f];\n", q16_16_to_float(y0), q16_16_to_float(y1), q16_16_to_float(y2), q16_16_to_float(y3));*/
-
+         * Calculate new polynomial coefficients:
+         *
+         *   x = Ax[0] + Ax[1]*t + Ax[2]*t^2 + Ax[3]*t^3
+         *   y = Ay[0] + Ay[1]*t + Ay[2]*t^2 + Ay[3]*t^3
+         *
+         * these are used for error estimation
+         */
+        _3x1 = q16_16_mul(_3, x1);
+        _6x1 = q16_16_mul(_6, x1);
         Ax[0] = x0;
         Ax[1] = q16_16_sub(_3x1, _3x0);
-        _3x2 = q16_16_mul(_3, x2);
         Ax[2] = q16_16_add(q16_16_sub(_3x0, _6x1), _3x2);
         Ax[3] = q16_16_add(q16_16_sub(q16_16_sub(_3x1, x0), _3x2), x3);
 
+        _3y1 = q16_16_mul(_3, y1);
+        _6y1 = q16_16_mul(_6, y1);
         Ay[0] = y0;
         Ay[1] = q16_16_sub(_3y1, _3y0);
-        _3y2 = q16_16_mul(_3, y2);
         Ay[2] = q16_16_add(q16_16_sub(_3y0, _6y1), _3y2);
         Ay[3] = q16_16_add(q16_16_sub(q16_16_sub(_3y1, y0), _3y2), y3);
     }
@@ -342,21 +358,27 @@ bezier_fit_head(
         mse_error += binary_search_lsq(p, Ax, Ay, t);
     }
 
-    /*
-    fprintf(stderr, "Ax = [%f, %f, %f, %f];\n", q16_16_to_float(Ax[0]), q16_16_to_float(Ax[1]), q16_16_to_float(Ax[2]), q16_16_to_float(Ax[3]));
-    fprintf(stderr, "Ay = [%f, %f, %f, %f];\n", q16_16_to_float(Ay[0]), q16_16_to_float(Ay[1]), q16_16_to_float(Ay[2]), q16_16_to_float(Ay[3]));
-
-    fprintf(stderr, "px = [");
-    VECTOR_FOR_EACH(points, struct qwpos2, p)
-        fprintf(stderr, "%f, ", qw_to_float(p->x));
-    VECTOR_END_EACH
-    fprintf(stderr, "];\n");
-    fprintf(stderr, "py = [");
-    VECTOR_FOR_EACH(points, struct qwpos2, p)
-        fprintf(stderr, "%f, ", qw_to_float(p->y));
-    VECTOR_END_EACH
-    fprintf(stderr, "];\n");
-*/
-
     return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1, 1));
+}
+
+/* ------------------------------------------------------------------------- */
+void
+bezier_squeeze_step(
+    struct cs_vector* bezier_handles,
+    int sim_tick_rate)
+{
+
+}
+
+/* ------------------------------------------------------------------------- */
+int
+bezier_calc_equidistant_points(
+    struct cs_vector* bezier_points,
+    const struct cs_vector* bezier_handles,
+    qw distance,
+    int snake_length)
+{
+
+
+    return 0;
 }
