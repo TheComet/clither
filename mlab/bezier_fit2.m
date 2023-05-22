@@ -32,8 +32,8 @@ y1 = (my - cy(1) + 3*y0) / 3;
 y2 = (cy(1) - cy(2) - 3*y0 + 6*y1) / 3;
 y3 = cy(2) + y0 - 3*y1 + 3*y2;
 
-%fitx = (cx(1) + cx(2)*t) .* r + fx;
-%fity = (cy(1) + cy(2)*t) .* r + fy;
+fitx = (cx(1) + cx(2)*t) .* r + fx;
+fity = (cy(1) + cy(2)*t) .* r + fy;
 
 angle1 = atan2(y1-y0, x1-x0);
 angle2 = atan2(y2-y3, x2-x3);
