@@ -49,7 +49,7 @@ union parsed_payload
     } join_request;
 
     struct {
-        struct qwpos2 spawn;
+        struct qwpos spawn;
         uint16_t client_frame;
         uint16_t server_frame;
         uint8_t sim_tick_rate;
@@ -83,7 +83,7 @@ msg_join_accept(
     uint8_t net_tick_rate,
     uint16_t client_frame_number,
     uint16_t server_frame_number,
-    struct qwpos2* spawn_pos);
+    struct qwpos* spawn_pos);
 
 struct msg*
 msg_join_deny_bad_protocol(const char* error);

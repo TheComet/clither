@@ -10,19 +10,19 @@ struct cs_vector;
 
 struct bezier_point
 {
-    struct qwpos2 pos;
-    struct qwpos2 normal;
+    struct qwpos pos;
+    struct qwpos normal;
 };
 
 struct bezier_handle
 {
-    struct qwpos2 pos;
+    struct qwpos pos;
     qa angle;
     uint8_t len_backwards, len_forwards;
 };
 
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos);
+bezier_handle_init(struct bezier_handle* bh, struct qwpos pos);
 
 /*!
  * \brief Performs a constrained least squares fit on the input data points to

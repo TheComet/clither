@@ -24,14 +24,14 @@ squared_distance_to_polys(
 }
 static q16_16
 binary_search_lsq(
-    const struct qwpos2* p,
+    const struct qwpos* p,
     const q16_16 Ax[static 4],
     const q16_16 Ay[static 4],
     q16_16 t_initial_guess)
 {
     q16_16 last_error;
     q16_16 t = t_initial_guess;
-    q16_16 t_step = make_q16_16(1, 2);
+    q16_16 t_step = make_q16_16_2(1, 2);
     q16_16 px = qw_to_q16_16(p->x);
     q16_16 py = qw_to_q16_16(p->y);
 
@@ -42,7 +42,7 @@ binary_search_lsq(
         q16_16 t_up = q16_16_add(t, t_step);
         q16_16 t_down = q16_16_sub(t, t_step);
 
-        if (t_up <= make_q16_16(1, 1))
+        if (t_up <= make_q16_16(1))
             error_up = squared_distance_to_polys(px, py, t_up, Ax, Ay);
         else
             error_up = last_error;
@@ -71,7 +71,7 @@ binary_search_lsq(
 
 /* ------------------------------------------------------------------------- */
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos2 pos)
+bezier_handle_init(struct bezier_handle* bh, struct qwpos pos)
 {
     bh->pos = pos;
     bh->angle = 0;
@@ -95,8 +95,8 @@ bezier_fit_head(
     q16_16 det;
     q16_16 mx, qx, my, qy;  /* f(t) coefficients */
 
-    struct qwpos2* p0 = vector_front(points);  /* tail */
-    struct qwpos2* pm = vector_back(points);   /* head */
+    struct qwpos* p0 = vector_front(points);  /* tail */
+    struct qwpos* pm = vector_back(points);   /* head */
 
     if (vector_count(points) <= 4)
     {
@@ -138,10 +138,10 @@ bezier_fit_head(
      *
      * rewritten in matrix form X = T*C + E
      *
-     *   [ x0 ]   [ 1  t0 ]
-     *   [ x1 ] = [ 1  t1 ] [ c0 ] + [ e0 ]
-     *   [ .. ]   [ .  .. ] [ c1 ]   [ e1 ]
-     *   [ xm ]   [ 1  tm ]
+     *   [ x0 ]   [ 1  t0 ]          [ e0 ]
+     *   [ x1 ] = [ 1  t1 ] [ c0 ] + [ e1 ]
+     *   [ .. ]   [ .  .. ] [ c1 ]   [ e2 ]
+     *   [ xm ]   [ 1  tm ]          [ e3 ]
      *
      * Least squares estimation of c0 and c1 can be computed with:
      *
@@ -160,10 +160,10 @@ bezier_fit_head(
     for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
         q16_16 t2 = q16_16_mul(t, t);
 
-        T[0][0] = q16_16_add(T[0][0], make_q16_16(1, 1));
+        T[0][0] = q16_16_add(T[0][0], make_q16_16(1));
         T[0][1] = q16_16_add(T[0][1], t);
         T[1][0] = q16_16_add(T[1][0], t);
         T[1][1] = q16_16_add(T[1][1], t2);
@@ -172,7 +172,7 @@ bezier_fit_head(
     /*
      * Calculate inverse (T'*T)^-1
      *
-     *          -1         1
+     *          -1       1
      *   [ a b ]    = ------- [  d -b ]
      *   [ c d ]      ad - bc [ -c  a ]
      */
@@ -219,10 +219,10 @@ bezier_fit_head(
     for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
 
         /* r(t) = (t-t0)(t-tm) = (t-0)(t-1) = t(t-1) */
-        q16_16 tm = make_q16_16(1, 1);  /* tm = 1 (pass through last point) */
+        q16_16 tm = make_q16_16(1);  /* tm = 1 (pass through last point) */
         q16_16 r = q16_16_mul(t, q16_16_sub(t, tm));
 
         /* f = m*t + q */
@@ -230,7 +230,7 @@ bezier_fit_head(
         q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
 
         /* X = (x - f) / r */
-        struct qwpos2* p = vector_get_element(points, i);
+        struct qwpos* p = vector_get_element(points, i);
         q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
         q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
         for (m = 0; m != 2; ++m)
@@ -271,8 +271,8 @@ bezier_fit_head(
      *   cx1       = -x0 + 3*x1 - 3*x2 + x3       x3 = cx1 + x0 - 3*x1 + 3*x2
      */
     {
-        q16_16 _3 = make_q16_16(3, 1);
-        q16_16 _6 = make_q16_16(6, 1);
+        q16_16 _3 = make_q16_16(3);
+        q16_16 _6 = make_q16_16(6);
 
         /* X dimension control points */
         q16_16 x0 = qx;
@@ -321,8 +321,8 @@ bezier_fit_head(
          * back to a set of polynomial coefficients Ax0..Ax3 and Ay0..Ay3 so
          * that error estimation is accurate.
          */
-        x1 = q16_16_add(x0, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255, 1));
-        y1 = q16_16_add(y0, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255, 1));
+        x1 = q16_16_add(x0, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255));
+        y1 = q16_16_add(y0, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255));
 
         /*
          * Calculate new polynomial coefficients:
@@ -352,13 +352,13 @@ bezier_fit_head(
     for (i = 1; i < (int)vector_count(points) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
 
-        const struct qwpos2* p = vector_get_element(points, i);
+        const struct qwpos* p = vector_get_element(points, i);
         mse_error += binary_search_lsq(p, Ax, Ay, t);
     }
 
-    return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1, 1));
+    return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1));
 }
 
 /* ------------------------------------------------------------------------- */

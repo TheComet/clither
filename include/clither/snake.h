@@ -15,7 +15,7 @@ struct snake
     char* name;
     struct controls controls;
 
-    struct qwpos2 head_pos;
+    struct qwpos head_pos;
     qa head_angle;
     uint8_t speed;
 

@@ -7,7 +7,7 @@ C_BEGIN
 
 struct camera
 {
-    struct qwpos2 pos;
+    struct qwpos pos;
     qw scale;
 };
 

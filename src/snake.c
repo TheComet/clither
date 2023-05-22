@@ -12,10 +12,10 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define TURN_SPEED   make_qa(1.0 / 16)
-#define MIN_SPEED    make_qw(1, 256)
-#define MAX_SPEED    make_qw(1, 128)
-#define BOOST_SPEED  make_qw(1, 64)
+#define TURN_SPEED   make_qa2(1, 16)
+#define MIN_SPEED    make_qw2(1, 256)
+#define MAX_SPEED    make_qw2(1, 128)
+#define BOOST_SPEED  make_qw2(1, 64)
 #define ACCELERATION (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
@@ -27,18 +27,18 @@ snake_init(struct snake* snake, const char* name)
 
     controls_init(&snake->controls);
 
-    snake->head_pos = make_qwpos2(0, 0, 1);
+    snake->head_pos = make_qwpos(0, 0);
     snake->head_angle = make_qa(0);
     snake->speed = 0;
 
-    vector_init(&snake->points, sizeof(struct qwpos2));
+    vector_init(&snake->points, sizeof(struct qwpos));
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
     vector_init(&snake->bezier_points, sizeof(struct bezier_point));
 
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0, 1));
+            make_qwpos(0, 0));
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos2(0, 0, 1));
+            make_qwpos(0, 0));
 
     snake->length = 200;
 }
@@ -90,7 +90,7 @@ snake_step(struct snake* snake, int sim_tick_rate)
      * maximum turning speed.
      */
     if (angle_diff > TURN_SPEED)
-        snake->head_angle = qa_sub(snake->head_angle, TURN_SPEED);
+        snake->head_angle = qa_sub(snake->head_angle, qa_mul(TURN_SPEED, make_qa2(sim_tick_rate, 60)));
     else if (angle_diff < -TURN_SPEED)
         snake->head_angle = qa_add(snake->head_angle, TURN_SPEED);
     else
@@ -115,8 +115,8 @@ snake_step(struct snake* snake, int sim_tick_rate)
 
     /* Update snake position using the head's current angle and speed */
     a = qa_to_float(snake->head_angle);
-    dx = make_qw(cos(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)), 1);
-    dy = make_qw(sin(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)), 1);
+    dx = make_qw(cos(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
+    dy = make_qw(sin(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
     snake->head_pos.x = qw_add(snake->head_pos.x, dx);
     snake->head_pos.y = qw_add(snake->head_pos.y, dy);
 
@@ -134,16 +134,16 @@ snake_step(struct snake* snake, int sim_tick_rate)
 
     /* Update equidistant points -- required by rendering code */
     /* TODO: Distance is a function of the snake's size/length */
-    bezier_calc_equidistant_points(&snake->bezier_points, &snake->bezier_handles, make_qw(1, 32), snake->length);
+    bezier_calc_equidistant_points(&snake->bezier_points, &snake->bezier_handles, make_qw2(1, 32), snake->length);
 
     /*
      * If the fit's error exceeds some threshold (determined empirically),
      * create a new bezier segment.
      */
-    if (error_squared > make_q16_16(1, 16))
+    if (error_squared > make_q16_16_2(1, 16))
     {
         struct bezier_handle* head = vector_back(&snake->bezier_handles);
-        struct qwpos2 head_pos = head->pos;
+        struct qwpos head_pos = head->pos;
         bezier_handle_init(vector_emplace(&snake->bezier_handles), head_pos);
         vector_clear(&snake->points);
         vector_push(&snake->points, &snake->head_pos);
