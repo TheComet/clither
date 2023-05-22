@@ -34,13 +34,13 @@ gfx_calc_controls(
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* cam,
-    struct qwpos2 snake_head);
+    struct qwpos snake_head);
 
-struct qwpos2
-gfx_screen_to_world(struct spos2 pos, const struct gfx* gfx, const struct camera* camera);
+struct qwpos
+gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera);
 
-struct spos2
-gfx_world_to_screen(struct qwpos2 pos, const struct gfx* gfx, const struct camera* camera);
+struct spos
+gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera* camera);
 
 void
 gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera);
