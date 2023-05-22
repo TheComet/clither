@@ -11,8 +11,8 @@
 static q16_16
 squared_distance_to_polys(
     q16_16 px, q16_16 py, q16_16 t,
-    const q16_16 Ax[static 4],
-    const q16_16 Ay[static 4])
+    const q16_16 Ax[4],
+    const q16_16 Ay[4])
 {
     q16_16 t2 = q16_16_mul(t, t);
     q16_16 t3 = q16_16_mul(t, t2);
@@ -25,8 +25,8 @@ squared_distance_to_polys(
 static q16_16
 binary_search_lsq(
     const struct qwpos* p,
-    const q16_16 Ax[static 4],
-    const q16_16 Ay[static 4],
+    const q16_16 Ax[4],
+    const q16_16 Ay[4],
     q16_16 t_initial_guess)
 {
     q16_16 last_error;

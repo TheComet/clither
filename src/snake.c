@@ -27,7 +27,7 @@ snake_init(struct snake* snake, const char* name)
 
     controls_init(&snake->controls);
 
-    snake->head_pos = make_qwpos(0, 0);
+    snake->head_pos = make_qwposi(0, 0);
     snake->head_angle = make_qa(0);
     snake->speed = 0;
 
@@ -36,9 +36,9 @@ snake_init(struct snake* snake, const char* name)
     vector_init(&snake->bezier_points, sizeof(struct bezier_point));
 
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos(0, 0));
+            make_qwposi(0, 0));
     bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwpos(0, 0));
+            make_qwposi(0, 0));
 
     snake->length = 200;
 }

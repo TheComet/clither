@@ -116,8 +116,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 
         if (strcmp(key, "max_players") == 0)
         {
+            int max_players;
             UNQUOTE_STRING(value);
-            int max_players = atoi(value);
+            max_players = atoi(value);
             if (max_players > 0)
                 server->max_players = max_players;
             else
@@ -128,8 +129,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         }
         else if (strcmp(key, "max_username_len") == 0)
         {
+            int maxlen;
             UNQUOTE_STRING(value);
-            int maxlen = atoi(value);
+            maxlen = atoi(value);
             if (maxlen > 0)
                 server->max_username_len = maxlen;
             else
@@ -140,8 +142,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         }
         else if (strcmp(key, "sim_tick_rate") == 0)
         {
+            int rate;
             UNQUOTE_STRING(value);
-            int rate = atoi(value);
+            rate = atoi(value);
             if (rate > 0)
                 server->sim_tick_rate = rate;
             else
@@ -152,8 +155,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         }
         else if (strcmp(key, "net_tick_rate") == 0)
         {
+            int rate;
             UNQUOTE_STRING(value);
-            int rate = atoi(value);
+            rate = atoi(value);
             if (rate > 0)
                 server->net_tick_rate = rate;
             else
@@ -164,8 +168,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         }
         else if (strcmp(key, "client_timeout") == 0)
         {
+            int seconds;
             UNQUOTE_STRING(value);
-            int seconds = atoi(value);
+            seconds = atoi(value);
             if (seconds > 0)
                 server->client_timeout = seconds;
             else
@@ -176,8 +181,9 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         }
         else if (strcmp(key, "malicious_timeout") == 0)
         {
+            int seconds;
             UNQUOTE_STRING(value);
-            int seconds = atoi(value);
+            seconds = atoi(value);
             if (seconds > 0)
                 server->malicious_timeout = seconds;
             else

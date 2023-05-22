@@ -95,12 +95,32 @@ static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
 
 #define make_qw(v) (qw)((v) * (1 << QW_Q))
 #define make_qw2(v, div) (qw)((v) * (1 << QW_Q) / (div))
-#define make_qwpos(x, y) (struct qwpos){ make_qw(x), make_qw(y) }
-#define make_qwpos2(x, y, div) (struct qwpos){ make_qw2(x, div), make_qw2(y, div) }
 #define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
 #define qw_to_float(q) ((double)(q) / (1 << QW_Q))
 #define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
 #define q16_16_to_qw(q16) ((q16) * (1 << QW_Q) / (1 << Q16_16_Q))
+
+static inline struct qwpos make_qwposi(int x, int y)
+{
+    struct qwpos p;
+    p.x = make_qw(x);
+    p.y = make_qw(y);
+    return p;
+}
+static inline struct qwpos make_qwposf(double x, double y)
+{
+    struct qwpos p;
+    p.x = make_qw(x);
+    p.y = make_qw(y);
+    return p;
+}
+static inline struct qwpos make_qwposqw(qw x, qw y)
+{
+    struct qwpos p;
+    p.x = x;
+    p.y = y;
+    return p;
+}
 
 static inline qw qw_add(qw a, qw b)
 {
