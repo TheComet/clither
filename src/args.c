@@ -58,38 +58,43 @@ print_help(const char* prog_name)
 
     fprintf(stderr,
         SECTION "Available options:\n" RESET
-        "  "      "  "       " " ARG1 " --help  " RESET "        Print this help text.\n"
+        "  "      "  "       " " ARG1 " --help  " RESET "        Print this help text.\n");
 #if defined(CLITHER_TESTS)
-        "  "      "  "       " " ARG1 " --tests " RESET "        Run unit tests.\n"
+    fprintf(stderr,
+        "  "      "  "       " " ARG1 " --tests " RESET "        Run unit tests.\n");
 #endif
 #if defined(CLITHER_BENCHMARKS)
-        "  "      "  "       " " ARG1 " --benchmarks" RESET "    Run benchmarks.\n"
+    fprintf(stderr,
+        "  "      "  "       " " ARG1 " --benchmarks" RESET "    Run benchmarks.\n");
 #endif
 #if defined(CLITHER_GFX)
+    fprintf(stderr,
         "  " ARG2 "-s" RESET "," ARG1 " --server" RESET "        Run  in  headless  mode.  This only  starts the server\n"
         "  " ARG2 "-h" RESET "," ARG1 " --host  " RESET "        Spawn both the server and client, and join the server.\n"
         "                      The server will stop when the client is closed because\n"
-        "                      the server is a child process of the client.\n"
+        "                      the server is a child process of the client.\n");
 #endif
 #if defined(CLITHER_GFX)
+    fprintf(stderr,
         "  "      "  "       " " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">  Server  address  to  connect to. Can be a URL or an IP\n"
         "                      address. If --host or --server is used, then this sets\n"
         "                      the bind address  rather than the  address to  connect\n"
         "                      to. The client  will always use localhost or 127.0.0.1\n"
-        "                      in this case.\n"
+        "                      in this case.\n");
+    fprintf(stderr,
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">   Port  number  of  server to  connect to.  If --host or\n"
         "                      --server is used, then this sets the  bind port rather\n"
-        "                      than the port to connect to.\n"
+        "                      than the port to connect to.\n");
 #else
         "  "      "  "       " " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">  Address to bind server to.\n"
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">   Port to bind server to.\n"
 #endif
 #if defined(CLITHER_LOGGING)
+    fprintf(stderr,
         "  " ARG2 "-l" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">    Write log output to a custom file. The default file is\n"
         "                      \"clither.txt\".  To disable logging to a file, set this\n"
-        "                      to an empty string.\n"
+        "                      to an empty string.\n");
 #endif
-    );
 }
 
 /* ------------------------------------------------------------------------- */
@@ -277,7 +282,7 @@ args_to_string(const char* prog_name, const struct args* a)
         len += sizeof("\"");
     }
 #endif
-    
+
     if (*a->ip)
     {
         len += sizeof(" --ip \"");

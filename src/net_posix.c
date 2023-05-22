@@ -77,7 +77,7 @@ net_log_host_ips(void)
         if (p->ifa_addr == NULL)
             continue;
 
-        //s = getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+        /*s = getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);*/
     }
 
     freeifaddrs(ifaddr);

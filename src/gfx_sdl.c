@@ -24,6 +24,26 @@ struct gfx_sdl
 };
 
 /* ------------------------------------------------------------------------- */
+static SDL_Point make_SDL_Point(int x, int y)
+{
+    SDL_Point ret;
+    ret.x = x;
+    ret.y = y;
+    return ret;
+}
+
+/* ------------------------------------------------------------------------- */
+static SDL_Rect make_SDL_Rect(int x, int y, int w, int h)
+{
+    SDL_Rect ret;
+    ret.x = x;
+    ret.y = y;
+    ret.w = w;
+    ret.h = h;
+    return ret;
+}
+
+/* ------------------------------------------------------------------------- */
 static int
 round_up_multiple_of_8(int v)
 {
@@ -55,14 +75,14 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
     while (x >= y)
     {
         /* Each of the following renders an octant of the circle */
-        points[draw_count + 0] = (SDL_Point){ center.x + x, center.y - y };
-        points[draw_count + 1] = (SDL_Point){ center.x + x, center.y + y };
-        points[draw_count + 2] = (SDL_Point){ center.x - x, center.y - y };
-        points[draw_count + 3] = (SDL_Point){ center.x - x, center.y + y };
-        points[draw_count + 4] = (SDL_Point){ center.x + y, center.y - x };
-        points[draw_count + 5] = (SDL_Point){ center.x + y, center.y + x };
-        points[draw_count + 6] = (SDL_Point){ center.x - y, center.y - x };
-        points[draw_count + 7] = (SDL_Point){ center.x - y, center.y + x };
+        points[draw_count + 0] = make_SDL_Point(center.x + x, center.y - y);
+        points[draw_count + 1] = make_SDL_Point(center.x + x, center.y + y);
+        points[draw_count + 2] = make_SDL_Point(center.x - x, center.y - y);
+        points[draw_count + 3] = make_SDL_Point(center.x - x, center.y + y);
+        points[draw_count + 4] = make_SDL_Point(center.x + y, center.y - x);
+        points[draw_count + 5] = make_SDL_Point(center.x + y, center.y + x);
+        points[draw_count + 6] = make_SDL_Point(center.x - y, center.y - x);
+        points[draw_count + 7] = make_SDL_Point(center.x - y, center.y + x);
 
         draw_count += 8;
 
@@ -187,6 +207,7 @@ void
 gfx_poll_input(struct gfx* gfx, struct input* input)
 {
     SDL_Event e;
+    (void)gfx;
     while (SDL_PollEvent(&e))
     {
         switch (e.type)
@@ -223,6 +244,7 @@ gfx_calc_controls(
     const struct camera* camera,
     struct qwpos snake_head)
 {
+    double a, d, dx, dy;
     int screen_x, screen_y, max_dist;
     struct spos snake_head_screen;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
@@ -231,10 +253,10 @@ gfx_calc_controls(
     max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
 
     snake_head_screen = gfx_world_to_screen(snake_head, gfx, camera);
-    double dx = input->mousex - snake_head_screen.x;
-    double dy = snake_head_screen.y - input->mousey;
-    double a = atan2(dy, dx) / (2*M_PI) + 0.5;
-    double d = sqrt(dx*dx + dy*dy);
+    dx = input->mousex - snake_head_screen.x;
+    dy = snake_head_screen.y - input->mousey;
+    a = atan2(dy, dx) / (2*M_PI) + 0.5;
+    d = sqrt(dx*dx + dy*dy);
     if (d > max_dist)
         d = max_dist;
     controls->angle = (uint8_t)(a * 256);
@@ -247,7 +269,7 @@ struct qwpos
 gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera)
 {
     int screen_x, screen_y;
-    struct qwpos result = make_qwpos(pos.x, pos.y);
+    struct qwpos result = make_qwposi(pos.x, pos.y);
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
@@ -324,14 +346,14 @@ draw_bezier(
     const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
 
     struct spos p0 = gfx_world_to_screen(head->pos, gfx, camera);
-    struct spos p1 = gfx_world_to_screen((struct qwpos){
+    struct spos p1 = gfx_world_to_screen(make_qwposqw(
         qw_add(head->pos.x, make_qw(head->len_backwards * cos(qa_to_float(head->angle)) / 255)),
         qw_add(head->pos.y, make_qw(head->len_backwards * sin(qa_to_float(head->angle)) / 255))
-    }, gfx, camera);
-    struct spos p2 = gfx_world_to_screen((struct qwpos) {
+    ), gfx, camera);
+    struct spos p2 = gfx_world_to_screen(make_qwposqw(
         qw_add(tail->pos.x, make_qw(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255)),
         qw_add(tail->pos.y, make_qw(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255))
-    }, gfx, camera);
+    ), gfx, camera);
     struct spos p3 = gfx_world_to_screen(tail->pos, gfx, camera);
 
     points = num_points <= 64 ? point_buf : MALLOC(sizeof(SDL_Point) * num_points);
@@ -376,7 +398,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
     VECTOR_END_EACH*/
 
     pos = gfx_world_to_screen(snake->head_pos, (const struct gfx*)gfx, camera);
-    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 10);
+    draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 10);
 
     /* Debug: Draw how the "controls" structure interpreted the mouse position */
     {
@@ -387,7 +409,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
         a = snake->controls.angle / 256.0 * 2 * M_PI;
         screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
         screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
-        draw_circle(gfx->renderer, (SDL_Point) { screen_x, screen_y }, 5);
+        draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
     for (i = 0; i < (int)vector_count(&snake->bezier_handles) - 1; ++i)
@@ -458,7 +480,7 @@ draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
     for (x = startx; x < screen_x; x += dim)
         for (y = starty; y < screen_y; y += dim)
         {
-            SDL_Rect rect = {x, y, dim + 1, dim + 1};
+            SDL_Rect rect = make_SDL_Rect(x, y, dim + 1, dim + 1);
             SDL_RenderCopy(gfx->renderer, gfx->textures.background, NULL, &rect);
         }
 }
@@ -479,9 +501,9 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     WORLD_END_EACH
 
     {
-        struct spos pos = gfx_world_to_screen(make_qwpos(0, 0), (const struct gfx*)gfx, camera);
+        struct spos pos = gfx_world_to_screen(make_qwposi(0, 0), (const struct gfx*)gfx, camera);
         SDL_SetRenderDrawColor(((const struct gfx_sdl*)gfx)->renderer, 0, 255, 0, 255);
-        draw_circle(g->renderer, (SDL_Point) { pos.x, pos.y }, 20);
+        draw_circle(g->renderer, make_SDL_Point(pos.x, pos.y), 20);
     }
 
     SDL_RenderPresent(g->renderer);
