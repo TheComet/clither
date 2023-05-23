@@ -170,8 +170,9 @@ hashmap_find_str(struct cs_hashmap* hm, const char* key);
         cs_hash32 slot_##value = *(cs_hash32*)((uint8_t*)(hm)->storage + (sizeof(cs_hash32) + (hm)->key_size) * pos_##value); \
         if (slot_##value == HM_SLOT_UNUSED || slot_##value == HM_SLOT_RIP || slot_##value == HM_SLOT_INVALID) \
             continue; \
+        { \
 
 
-#define HASHMAP_END_EACH }}
+#define HASHMAP_END_EACH }}}
 
 C_END

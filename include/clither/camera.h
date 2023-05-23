@@ -5,6 +5,8 @@
 
 C_BEGIN
 
+struct snake;
+
 struct camera
 {
     struct qwpos pos;
@@ -12,6 +14,9 @@ struct camera
 };
 
 void
-camera_init(struct camera* c);
+camera_init(struct camera* camera);
+
+void
+camera_update(struct camera* camera, const struct snake* snake, int sim_tick_rate);
 
 C_END

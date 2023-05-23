@@ -237,7 +237,7 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_calc_controls(
+gfx_update_controls(
     struct controls* controls,
     const struct input* input,
     const struct gfx* gfx,
@@ -245,10 +245,12 @@ gfx_calc_controls(
     struct qwpos snake_head)
 {
     double a, d, dx, dy;
-    int screen_x, screen_y, max_dist;
+    int screen_x, screen_y, max_dist, da;
+    uint8_t new_angle, new_speed;
     struct spos snake_head_screen;
     struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
+    /* Scale the speed vector to a quarter of the screen's size */
     SDL_GetWindowSize(g->window, &screen_x, &screen_y);
     max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
 
@@ -259,9 +261,37 @@ gfx_calc_controls(
     d = sqrt(dx*dx + dy*dy);
     if (d > max_dist)
         d = max_dist;
-    controls->angle = (uint8_t)(a * 256);
-    controls->speed = (uint8_t)(d / max_dist * 255);
-    controls->boost = input->boost;
+
+    /* Yes, this 256 is not a mistake -- makes sure that not both of -3.141 and 3.141 are included */
+    new_angle = (uint8_t)(a * 256);
+    new_speed = (uint8_t)(d / max_dist * 255);
+
+    /*
+     * The following code is designed to limit the number of bits necessary to
+     * encode input deltas. The snake's turn speed is pretty slow, so we can
+     * get away with 4 bits. Speed is a little more sensitive. Through testing,
+     * 6 bits seems appropriate.
+     */
+    da = new_angle - controls->angle;
+    if (da > 128)
+        da -= 256;
+    if (da < -128)
+        da += 256;
+    if (da > 3)
+        controls->angle += 3;
+    else if (da < -3)
+        controls->angle -= 3;
+    else
+        controls->angle = new_angle;
+
+    if (new_speed - controls->speed > 15)
+        controls->speed += 15;
+    else if (new_speed - controls->speed < -15)
+        controls->speed -= 15;
+    else
+        controls->speed = new_speed;
+
+    controls->action = input->boost ? CONTROLS_ACTION_BOOST : CONTROLS_ACTION_NONE;
 }
 
 /* ------------------------------------------------------------------------- */
