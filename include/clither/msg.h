@@ -64,7 +64,7 @@ union parsed_payload
 
     struct
     {
-        uint8_t frame_number;
+        uint16_t frame_number;
     } controls;
 };
 
