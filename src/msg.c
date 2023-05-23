@@ -182,18 +182,20 @@ msg_parse_paylaod(
 
         case MSG_CONTROLS: {
             /*
-             * 1 byte for frame number
+             * 2 bytes for frame number
              * 1 byte for number of control structures
              * 3 bytes containing first controls structure
-             * N bytes containing deltas of proceeding control structures
+             * 0-N bytes containing deltas of proceeding control structures
              */
-            if (payload_len < 5)
+            if (payload_len < 6)
             {
                 log_warn("MSG_CONTROLS payload is too small\n");
                 return -1;
             }
 
-            pp->controls.frame_number = payload[0];
+            pp->controls.frame_number =
+                (payload[0] << 8) |
+                (payload[1] << 0);
         } break;
 
         case MSG_CONTROLS_ACK:
@@ -255,7 +257,7 @@ msg_join_accept(
         sizeof(net_tick_rate) +
         sizeof(client_frame) +
         sizeof(server_frame) +
-        6  /* qpos2 is 2x q19.5 (24 bits) = 48 bits */
+        6  /* qwpos is 2x q10.14 (24 bits) = 48 bits */
     );
 
     m->payload[0] = sim_tick_rate;
@@ -272,7 +274,7 @@ msg_join_accept(
     m->payload[8] = spawn_pos->x & 0xFF;
     m->payload[9] = spawn_pos->y >> 16;
     m->payload[10] = spawn_pos->y >> 8;
-    m->payload[10] = spawn_pos->y & 0xFF;
+    m->payload[11] = spawn_pos->y & 0xFF;
     return m;
 }
 
@@ -351,16 +353,17 @@ msg_controls(const struct cs_vector* controls, uint16_t frame_number)
         sizeof(frame_number) +  /* frame number */
         19 + 12*vector_count(controls)/8 + 1);  /* upper bound for all controls */
 
-    m->payload[0] = frame_number & 0xFF;
-    m->payload[1] = (uint8_t)(vector_count(controls) - 1);
+    m->payload[0] = frame_number >> 8;
+    m->payload[1] = frame_number & 0xFF;
+    m->payload[2] = (uint8_t)(vector_count(controls) - 1);
 
     /* First controls structure */
     c = vector_front(controls);
-    m->payload[2] = c->angle;
-    m->payload[3] = c->speed;
-    m->payload[4] = c->action; /* 3 bits */
+    m->payload[3] = c->angle;
+    m->payload[4] = c->speed;
+    m->payload[5] = c->action; /* 3 bits */
     bit = 3;
-    byte = 4;
+    byte = 5;
 
     /*
      * Delta compress rest of controls. Note that the frame number doesn't need
@@ -441,18 +444,18 @@ msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_
     uint8_t controls_count;
     vector_clear(controls);
 
-    controls_count = payload[1];
+    controls_count = payload[2];
 
     /* Read first controls structure */
     {
         struct controls* c = vector_emplace(controls);
-        c->angle = payload[2];
-        c->speed = payload[3];
-        c->action = (payload[4] & 0x07);
+        c->angle = payload[3];
+        c->speed = payload[4];
+        c->action = (payload[5] & 0x07);
     }
 
     bit = 3;
-    byte = 4;
+    byte = 5;
 
 #define READ_NEXT_BIT_INTO(x) do { \
         if (byte >= payload_len) { \

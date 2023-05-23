@@ -11,7 +11,7 @@ typedef int32_t q16_16;
  * for world position.
  */
 typedef int32_t qw;
-#define QW_Q  12
+#define QW_Q  14
 #define QW_K  (1 << (QW_Q - 1))
 
 /*
