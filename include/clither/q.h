@@ -51,8 +51,8 @@ static inline q16_16 q16_16_add_sat(q16_16 a, q16_16 b)
     int64_t tmp = (int64_t)a + (int64_t)b;
     if (tmp > 0x7FFFFFFF)
         tmp = 0x7FFFFFFF;
-    if (tmp < -1 * 0x80000000)
-        tmp = -1 * 0x80000000;
+    if (tmp < -(int64_t)0x80000000L)
+        tmp = -(int64_t)0x80000000L;
     return (q16_16)tmp;
 }
 
@@ -65,7 +65,7 @@ static inline q16_16 q16_16_sub(q16_16 a, q16_16 b)
 static inline q16_16 q16_16_sat32(int64_t x)
 {
     if (x > 0x7FFFFFFFL) return 0x7FFFFFFFL;
-    else if (x < -0x80000000L) return -1 * 0x80000000L;
+    else if (x < -(int64_t)0x80000000L) return -(int64_t)0x80000000L;
     else return (q16_16)x;
 }
 

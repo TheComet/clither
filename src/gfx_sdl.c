@@ -284,9 +284,10 @@ gfx_update_controls(
     else
         controls->angle = new_angle;
 
-    if (new_speed - controls->speed > 15)
+    /* (int) cast is necessary because msvc does not correctly deal with bitfields */
+    if (new_speed - (int)controls->speed > 15)
         controls->speed += 15;
-    else if (new_speed - controls->speed < -15)
+    else if (new_speed - (int)controls->speed < -15)
         controls->speed -= 15;
     else
         controls->speed = new_speed;
