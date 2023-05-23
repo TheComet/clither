@@ -6,6 +6,8 @@
 
 C_BEGIN
 
+struct cs_vector;
+
 enum msg_type
 {
     MSG_JOIN_REQUEST,
@@ -59,6 +61,11 @@ union parsed_payload
     struct {
         const char* error;
     } join_deny;
+
+    struct
+    {
+        uint8_t frame_number;
+    } controls;
 };
 
 int
@@ -101,6 +108,9 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls(void);
+msg_controls(const struct cs_vector* controls, uint16_t frame_number);
+
+int
+msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_t payload_len);
 
 C_END

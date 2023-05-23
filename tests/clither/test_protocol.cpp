@@ -1,7 +1,6 @@
 #include "gmock/gmock.h"
 #include "clither/client.h"
 #include "clither/net.h"
-#include "clither/msg.h"
 #include "clither/server.h"
 
 #define NAME protocol

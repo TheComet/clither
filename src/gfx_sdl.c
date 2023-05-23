@@ -269,8 +269,9 @@ gfx_update_controls(
     /*
      * The following code is designed to limit the number of bits necessary to
      * encode input deltas. The snake's turn speed is pretty slow, so we can
-     * get away with 4 bits. Speed is a little more sensitive. Through testing,
-     * 6 bits seems appropriate.
+     * get away with 3 bits. Speed is a little more sensitive. Through testing,
+     * 5 bits seems appropriate (see: snake.c, ACCELERATION is 8 per frame, so
+     * we need at least 5 bits)
      */
     da = new_angle - controls->angle;
     if (da > 128)

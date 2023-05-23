@@ -106,10 +106,10 @@ snake_step(struct snake* snake, int sim_tick_rate)
     target_speed = snake->controls.action == CONTROLS_ACTION_BOOST ?
         255 :
         qw_sub(MAX_SPEED, MIN_SPEED) * snake->controls.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
-    if (snake->speed - target_speed > (ACCELERATION*255))
-        snake->speed -= (ACCELERATION*255);
-    else if (snake->speed - target_speed < (-ACCELERATION*255))
-        snake->speed += (ACCELERATION*255);
+    if (snake->speed - target_speed > (ACCELERATION*256))
+        snake->speed -= (ACCELERATION*256);
+    else if (snake->speed - target_speed < (-ACCELERATION*256))
+        snake->speed += (ACCELERATION*256);
     else
         snake->speed = target_speed;
 
