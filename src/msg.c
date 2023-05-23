@@ -1,6 +1,10 @@
+#include "clither/controls.h"
 #include "clither/msg.h"
 #include "clither/log.h"
+
 #include "cstructures/memory.h"
+#include "cstructures/vector.h"
+
 #include <stddef.h>
 #include <string.h>
 
@@ -81,7 +85,7 @@ msg_parse_paylaod(
     switch (type)
     {
         case MSG_JOIN_REQUEST: {
-            /* 
+            /*
              * 2 bytes for protocol version
              * 2 bytes for frame number
              * 1 byte for name length
@@ -169,6 +173,44 @@ msg_parse_paylaod(
             }
             pp->join_deny.error = &payload[1];
         } break;
+
+        case MSG_JOIN_ACK:
+            break;
+
+        case MSG_LEAVE:
+            break;
+
+        case MSG_CONTROLS: {
+            /*
+             * 1 byte for frame number
+             * 1 byte for number of control structures
+             * 3 bytes containing first controls structure
+             * N bytes containing deltas of proceeding control structures
+             */
+            if (payload_len < 5)
+            {
+                log_warn("MSG_CONTROLS payload is too small\n");
+                return -1;
+            }
+
+            pp->controls.frame_number = payload[0];
+        } break;
+
+        case MSG_CONTROLS_ACK:
+            break;
+
+        case MSG_SNAKE_METADATA:
+        case MSG_SNAKE_METADATA_ACK:
+            break;
+
+        case MSG_SNAKE_DATA:
+            break;
+
+        case MSG_FOOD_CREATE:
+        case MSG_FOOD_CREATE_ACK:
+        case MSG_FOOD_DESTROY:
+        case MSG_FOOD_DESTROY_ACK:
+            break;
     }
 
     return type;
@@ -257,7 +299,7 @@ struct msg*
 msg_join_deny_bad_protocol(const char* error)
 {
     return msg_alloc_string_payload(
-        MSG_JOIN_DENY_BAD_PROTOCOL, 10, error);
+        MSG_JOIN_DENY_BAD_PROTOCOL, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -265,7 +307,7 @@ struct msg*
  msg_join_deny_bad_username(const char* error)
 {
     return msg_alloc_string_payload(
-        MSG_JOIN_DENY_BAD_USERNAME, 10, error);
+        MSG_JOIN_DENY_BAD_USERNAME, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -273,19 +315,201 @@ struct msg*
 msg_join_deny_server_full(const char* error)
 {
     return msg_alloc_string_payload(
-        MSG_JOIN_DENY_SERVER_FULL, 10, error);
+        MSG_JOIN_DENY_SERVER_FULL, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg*
 msg_join_ack(void)
 {
-    return msg_alloc(MSG_JOIN_ACK, 10, 0);
+    return msg_alloc(MSG_JOIN_ACK, 0, 0);
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg*
 msg_leave(void)
 {
-    return msg_alloc(MSG_LEAVE, 10, 0);
+    return msg_alloc(MSG_LEAVE, 0, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_controls(const struct cs_vector* controls, uint16_t frame_number)
+{
+    int i, bit, byte;
+    struct controls* c;
+
+    /*
+     * controls structure: 19 bits
+     * delta:
+     *   - 3 bits for angle
+     *   - 5 bits for speed
+     *   - 4 bits for action, assuming it changes every frame (it shouldn't)
+     */
+    struct msg* m = msg_alloc(
+        MSG_CONTROLS, 0,
+        sizeof(frame_number) +  /* frame number */
+        19 + 12*vector_count(controls)/8 + 1);  /* upper bound for all controls */
+
+    m->payload[0] = frame_number & 0xFF;
+    m->payload[1] = (uint8_t)(vector_count(controls) - 1);
+
+    /* First controls structure */
+    c = vector_front(controls);
+    m->payload[2] = c->angle;
+    m->payload[3] = c->speed;
+    m->payload[4] = c->action; /* 3 bits */
+    bit = 3;
+    byte = 4;
+
+    /*
+     * Delta compress rest of controls. Note that the frame number doesn't need
+     * to be included because it always increases by 1. First write all speed
+     * and angle deltas. These should be guaranteed to always be less than 3
+     * and 5 bits respectively (enforced by function gfx_update_controls()).
+     */
+#define CLEAR_NEXT_BIT() do { \
+        m->payload[byte] &= ~(1 << bit); \
+        if (++bit >= 8) { \
+            bit = 0; \
+            byte++; \
+        } \
+    } while(0)
+#define SET_NEXT_BIT() do { \
+        m->payload[byte] |= (1 << bit); \
+        if (++bit >= 8) { \
+            bit = 0; \
+            byte++; \
+        } \
+    } while(0)
+#define SET_OR_CLEAR_NEXT_BIT(cond) do { \
+        if (cond) \
+            SET_NEXT_BIT(); \
+        else \
+            CLEAR_NEXT_BIT(); \
+    } while(0)
+    for (i = 1; i < (int)vector_count(controls); ++i)
+    {
+        struct controls* prev = vector_get_element(controls, i-1);
+        struct controls* next = vector_get_element(controls, i);
+
+        if (next->action == prev->action)
+            CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
+        else
+        {
+            SET_NEXT_BIT();  /* Indicate something has changed */
+            SET_OR_CLEAR_NEXT_BIT(next->action & 0x1);
+            SET_OR_CLEAR_NEXT_BIT(next->action & 0x2);
+            SET_OR_CLEAR_NEXT_BIT(next->action & 0x4);
+        }
+    }
+
+    /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
+     * the current byte if it is only partially filled */
+    if (bit != 0)
+        byte++;
+
+    for (i = 1; i < (int)vector_count(controls); ++i)
+    {
+        struct controls* prev = vector_get_element(controls, i-1);
+        struct controls* next = vector_get_element(controls, i);
+        int da_i32 = next->angle - prev->angle + 3;
+        int ds_i32 = next->speed - prev->speed + 15;
+        uint8_t da = (uint8_t)da_i32;
+        uint8_t ds = (uint8_t)ds_i32;
+
+        if (da_i32 < 0 || da_i32 > 7-1)
+            log_warn("Issue while compressing controls: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
+        if (ds_i32 < 0 || ds_i32 > 31-1)
+            log_warn("Issue while compressing controls: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
+
+        m->payload[byte++] = ((ds << 3) & 0xF8) | (da & 0x07);
+    }
+
+    /* Adjust the actual payload length */
+    assert(byte <= m->payload_len);
+    m->payload_len = byte;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+int
+msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_t payload_len)
+{
+    int i, bit, byte;
+    uint8_t controls_count;
+    vector_clear(controls);
+
+    controls_count = payload[1];
+
+    /* Read first controls structure */
+    {
+        struct controls* c = vector_emplace(controls);
+        c->angle = payload[2];
+        c->speed = payload[3];
+        c->action = (payload[4] & 0x07);
+    }
+
+    bit = 3;
+    byte = 4;
+
+#define READ_NEXT_BIT_INTO(x) do { \
+        if (byte >= payload_len) { \
+            log_warn("Error while unpacking controls: Packet too small\n"); \
+            vector_clear(controls); \
+            return -1; \
+        } \
+        x = payload[byte] & (1<<bit); \
+        if (++bit >= 8) { \
+            bit = 0; \
+            byte++; \
+        } \
+    } while (0)
+
+    for (i = 0; i != (int)controls_count; ++i)
+    {
+        uint8_t b;
+        struct controls* c = vector_emplace(controls);
+
+        c->action = 0;
+
+        READ_NEXT_BIT_INTO(b);
+        if (b)
+        {
+            READ_NEXT_BIT_INTO(b);
+            if (b) c->action |= 0x01;
+            READ_NEXT_BIT_INTO(b);
+            if (b) c->action |= 0x02;
+            READ_NEXT_BIT_INTO(b);
+            if (b) c->action |= 0x04;
+        }
+    }
+
+    /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
+     * the current byte if it is only partially filled */
+    if (bit != 0)
+        byte++;
+
+    for (i = 0; i != (int)controls_count; ++i)
+    {
+        uint8_t da, ds;
+        struct controls* prev = vector_get_element(controls, i);
+        struct controls* next = vector_get_element(controls, i+1);
+
+        if (byte >= payload_len)
+        {
+            log_warn("Error while unpacking controls: Packet too small\n");
+            vector_clear(controls);
+            return -1;
+        }
+        da = payload[byte] & 0x07;
+        ds = (payload[byte] >> 3) & 0x1F;
+        byte++;
+
+        next->angle = prev->angle + da - 3;
+        next->speed = prev->speed + ds - 15;
+    }
+
+    return 0;
 }
