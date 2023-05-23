@@ -218,7 +218,8 @@ static void
 run_client(const struct args* a)
 {
     struct world world;
-    struct input input = { 0 };
+    struct input input;
+    struct controls controls;
     struct gfx* gfx;
     struct camera camera;
     struct client client;
@@ -253,6 +254,9 @@ run_client(const struct args* a)
     gfx = gfx_create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
+
+    input_init(&input);
+    controls_init(&controls);
 
     log_info("Client started\n");
 
@@ -293,12 +297,10 @@ run_client(const struct args* a)
 
         /* sim_update */
         {
-            struct controls controls;
-            gfx_calc_controls(&controls, &input, gfx, &camera, snake->head_pos);
+            gfx_update_controls(&controls, &input, gfx, &camera, snake->head_pos);
             snake_update_controls(btree_find(&world.snakes, 0), &controls);
             world_step(&world, client.sim_tick_rate);
-
-            camera.pos = snake->head_pos;
+            camera_update(&camera, snake, client.sim_tick_rate);
         }
 
         if (net_update && client.state != CLIENT_DISCONNECTED)

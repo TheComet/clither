@@ -140,10 +140,11 @@ target_compile_definitions (clither
 target_compile_options (clither
     PRIVATE
         $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244>
-        $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic>
-        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic>)
+        $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic -Wno-unused-function>
+        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>)
 set_target_properties (clither
     PROPERTIES
+        C_STANDARD 90
         VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
         VS_DEBUGGER_COMMAND_ARGUMENTS "--host"
         RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}

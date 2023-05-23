@@ -103,7 +103,7 @@ snake_step(struct snake* snake, int sim_tick_rate)
         snake->head_angle = qa_sub(snake->head_angle, make_qa(2*M_PI));
 
     /* Integrate speed over time */
-    target_speed = snake->controls.boost ?
+    target_speed = snake->controls.action == CONTROLS_ACTION_BOOST ?
         255 :
         qw_sub(MAX_SPEED, MIN_SPEED) * snake->controls.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
     if (snake->speed - target_speed > (ACCELERATION*255))

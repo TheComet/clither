@@ -4,6 +4,15 @@
 
 C_BEGIN
 
+enum controls_action
+{
+    CONTROLS_ACTION_NONE,
+    CONTROLS_ACTION_BOOST,
+    CONTROLS_ACTION_SHOOT,
+    CONTROLS_ACTION_REVERSE,
+    CONTROLS_ACTION_SPLIT
+};
+
 /*
  * Maps directly to the user's mouse and button presses. This structure is
  * filled in by gfx_poll_input()
@@ -17,11 +26,9 @@ struct input
 
 struct controls
 {
-    unsigned angle   : 8;
-    unsigned speed   : 8;
-    unsigned boost   : 1;
-    unsigned shoot   : 1;
-    unsigned reverse : 1;
+    unsigned angle  : 8;
+    unsigned speed  : 8;
+    unsigned action : 3;
 };
 
 void

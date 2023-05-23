@@ -29,7 +29,7 @@ void
 gfx_poll_input(struct gfx* gfx, struct input* input);
 
 void
-gfx_calc_controls(
+gfx_update_controls(
     struct controls* controls,
     const struct input* input,
     const struct gfx* gfx,
