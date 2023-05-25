@@ -5,6 +5,7 @@
 #include "clither/client.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
+#include "clither/msg.h"
 #include "clither/mutex.h"
 #include "clither/net.h"
 #include "clither/log.h"
@@ -292,19 +293,44 @@ run_client(const struct args* a)
                 tick_cfg(&sim_tick, client.sim_tick_rate);
                 tick_cfg(&net_tick, client.net_tick_rate);
                 log_dbg("Sim tick rate: %d, net tick rate: %d\n", client.sim_tick_rate, client.net_tick_rate);
+
+                /* The server's simulation of our snake is currently half rtt
+                 * ahead of us.
             }
         }
 
         /* sim_update */
+        if (client.state == CLIENT_CONNECTED)
         {
+            /*
+             * Map "input" to "controls". This converts the mouse and keyboard
+             * information into a structure that lets us step the snake forwards
+             * in time.
+             */
             gfx_update_controls(&controls, &input, gfx, &camera, snake->head_pos);
+
+            /*
+             * Append the new controls to the ring buffer of unconfirmed controls.
+             * This entire list is sent to the server every network update so
+             * in the event of packet loss, the server always has a complete
+             * history of what our snake has done, frame by frame. When the server
+             * acknowledges our move, we remove all controls that date back before
+             * and up to that point in time from the list again.
+             */
+            client_add_controls(&client, &controls);
+
+            /* Update snake and step */
             snake_update_controls(btree_find(&world.snakes, 0), &controls);
             world_step(&world, client.sim_tick_rate);
+
             camera_update(&camera, snake, client.sim_tick_rate);
         }
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
+            /* Send all unconfirmed controls (unreliable) */
+            client_queue_controls(&client);
+
             if (client_send_pending_data(&client) < 0)
                 break;
         }
@@ -321,7 +347,10 @@ run_client(const struct args* a)
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
             if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+            {
                 tick_skip(&sim_tick);
+                break;
+            }
         }
 
         client.frame_number++;
