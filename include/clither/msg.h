@@ -108,7 +108,7 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls(const struct cs_vector* controls, uint16_t frame_number);
+msg_controls(const struct cs_vector* controls, uint16_t first_frame_number);
 
 int
 msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_t payload_len);

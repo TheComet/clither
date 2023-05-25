@@ -14,11 +14,13 @@ client_init(struct client* client)
     client->net_tick_rate = 20;
     client->timeout_counter = 0;
     client->frame_number = 0;
+    client->first_unackknowledged_controls_frame = 0;
     client->state = CLIENT_DISCONNECTED;
 
     msg_queue_init(&client->pending_unreliable);
     msg_queue_init(&client->pending_reliable);
     vector_init(&client->udp_sockfds, sizeof(int));
+    vector_init(&client->controls_buffer, sizeof(struct controls));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -28,6 +30,7 @@ client_deinit(struct client* client)
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
+    vector_deinit(&client->controls_buffer);
     vector_deinit(&client->udp_sockfds);
     msg_queue_deinit(&client->pending_reliable);
     msg_queue_deinit(&client->pending_unreliable);
@@ -80,6 +83,35 @@ client_disconnect(struct client* client)
 
     msg_queue_clear(&client->pending_reliable);
     msg_queue_clear(&client->pending_unreliable);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_add_controls(struct client* client, const struct controls* controls)
+{
+    vector_push(&client->controls_buffer, controls);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_ack_controls(struct client* client, uint16_t frame_number)
+{
+    while (client->first_unackknowledged_controls_frame != frame_number)
+    {
+        vector_erase_index(&client->controls_buffer, 0);
+        client->first_unackknowledged_controls_frame++;
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+void
+client_queue_controls(struct client* client)
+{
+    client_queue_unreliable(
+        client,
+        msg_controls(
+            &client->controls_buffer,
+            client->first_unackknowledged_controls_frame));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -247,8 +279,19 @@ retry_recv:
                     return 1;
                 }
 
-                /* We will be simulating half rtt in the future, relative to the server */
-                client->frame_number = pp.join_accept.server_frame + rtt / 2;
+                /*
+                 * We will be simulating half rtt in the future, relative to the server,
+                 * however, the server is now also half rtt further into the future
+                 * relative to the frame it sent back. Therefore, we are a full rtt
+                 * into the future now.
+                 */
+                client->frame_number = pp.join_accept.server_frame + rtt;
+
+                /*
+                 * The server has begun simulating our snake on the server frame
+                 * number received.
+                 */
+                client->first_unackknowledged_controls_frame = pp.join_accept.server_frame + 1;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;

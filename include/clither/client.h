@@ -1,6 +1,8 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/controls.h"
+#include "cstructures/btree.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
@@ -25,10 +27,12 @@ struct client
     struct cs_vector pending_unreliable;  /* struct net_msg* */
     struct cs_vector pending_reliable;    /* struct net_msg* */
     struct cs_vector udp_sockfds;         /* int */
+    struct cs_vector controls_buffer;     /* struct controls */
     int sim_tick_rate;
     int net_tick_rate;
     int timeout_counter;
-    uint16_t frame_number;
+    uint16_t frame_number;                /* Counts upwards at sim_tick_rate */
+    uint16_t first_unackknowledged_controls_frame;  /* Will equal the last acknowledged controls frame + 1 */
     enum client_state state;
 };
 
@@ -57,6 +61,15 @@ client_connect(
 
 void
 client_disconnect(struct client* client);
+
+void
+client_add_controls(struct client* client, const struct controls* controls);
+
+void
+client_ack_controls(struct client* client, uint16_t frame_number);
+
+void
+client_queue_controls(struct client* client);
 
 static inline void
 client_queue_unreliable(struct client* client, struct msg* m)

@@ -172,20 +172,6 @@ if (UNIX)
 endif ()
 
 if (CLITHER_GFX STREQUAL "SDL")
-    #find_package (SDL2 REQUIRED)
-    #find_package (SDL2_image REQUIRED)
-    #target_link_libraries (clither
-    #    PRIVATE
-    #        SDL2::Core
-    #        SDL2::Image)
-
-    #if (WIN32 OR CYGWIN)
-    #    add_custom_command (TARGET clither POST_BUILD
-    #        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SDL2_PATH}/lib/$<IF:$<EQUAL:${CMAKE_SIZEOF_VOID_P},8>,x64,x86>/SDL2.dll ${CLITHER_BUILD_BINDIR}/SDL2.dll
-    #        COMMENT "Copying SDL2 DLLs to bin directory"
-    #        VERBATIM)
-    #endif ()
-
     set (SDL2_DISABLE_INSTALL ON CACHE STRING "")
     set (SDL2_DISABLE_SDL2MAIN ON CACHE STRING "")
     set (SDL2_DISABLE_UNINSTALL ON CACHE STRING "")

@@ -336,10 +336,13 @@ msg_leave(void)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_controls(const struct cs_vector* controls, uint16_t frame_number)
+msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
 {
     int i, bit, byte;
     struct controls* c;
+    struct msg* m;
+
+    assert(vector_count(controls) > 0);
 
     /*
      * controls structure: 19 bits
@@ -348,13 +351,13 @@ msg_controls(const struct cs_vector* controls, uint16_t frame_number)
      *   - 5 bits for speed
      *   - 4 bits for action, assuming it changes every frame (it shouldn't)
      */
-    struct msg* m = msg_alloc(
+    m = msg_alloc(
         MSG_CONTROLS, 0,
-        sizeof(frame_number) +  /* frame number */
+        sizeof(first_frame_number) +  /* frame number */
         19 + 12*vector_count(controls)/8 + 1);  /* upper bound for all controls */
 
-    m->payload[0] = frame_number >> 8;
-    m->payload[1] = frame_number & 0xFF;
+    m->payload[0] = first_frame_number >> 8;
+    m->payload[1] = first_frame_number & 0xFF;
     m->payload[2] = (uint8_t)(vector_count(controls) - 1);
 
     /* First controls structure */
