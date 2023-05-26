@@ -80,10 +80,11 @@ run_server_instance(const void* args)
         int net_update = tick_advance(&net_tick);
 
         if (net_update)
-            if (server_recv(&server, instance->settings, frame_number) != 0)
+            if (server_recv(&server, instance->settings, &world, frame_number) != 0)
                 break;
 
         /* sim_update */
+        world_step(&world, instance->settings->sim_tick_rate, frame_number);
 
         if (net_update)
             server_send_pending_data(&server, instance->settings);
@@ -228,8 +229,6 @@ run_client(const struct args* a)
     struct tick net_tick;
     int tick_lag;
 
-    struct snake* snake;
-
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
@@ -238,9 +237,6 @@ run_client(const struct args* a)
     world_init(&world);
     client_init(&client);
     camera_init(&camera);
-
-    snake = btree_emplace_new(&world.snakes, 0);
-    snake_init(snake, "username");
 
     /*
      * TODO: In the future the GUI will take care of connecting. Here we do
@@ -275,7 +271,7 @@ run_client(const struct args* a)
         net_update = tick_advance(&net_tick);
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            int action = client_recv(&client);
+            int action = client_recv(&client, &world);
 
             /* Some error occurred */
             if (action == -1)
@@ -293,15 +289,14 @@ run_client(const struct args* a)
                 tick_cfg(&sim_tick, client.sim_tick_rate);
                 tick_cfg(&net_tick, client.net_tick_rate);
                 log_dbg("Sim tick rate: %d, net tick rate: %d\n", client.sim_tick_rate, client.net_tick_rate);
-
-                /* The server's simulation of our snake is currently half rtt
-                 * ahead of us.
             }
         }
 
         /* sim_update */
         if (client.state == CLIENT_CONNECTED)
         {
+            struct snake* snake = world_get_snake(&world, client.snake_id);
+
             /*
              * Map "input" to "controls". This converts the mouse and keyboard
              * information into a structure that lets us step the snake forwards
@@ -317,20 +312,23 @@ run_client(const struct args* a)
              * acknowledges our move, we remove all controls that date back before
              * and up to that point in time from the list again.
              */
-            client_add_controls(&client, &controls);
+            snake_ack_frame(snake, client.frame_number-1);  /* TODO: This will become the mechanism to set the frame to roll back to */
+            snake_queue_controls(snake, &controls, client.frame_number);
 
             /* Update snake and step */
-            snake_update_controls(btree_find(&world.snakes, 0), &controls);
-            world_step(&world, client.sim_tick_rate);
+            world_step(&world, client.sim_tick_rate, client.frame_number);
 
             camera_update(&camera, snake, client.sim_tick_rate);
+
+            if (net_update)
+            {
+                /* Send all unconfirmed controls (unreliable) */
+                client_queue(&client, msg_controls(&snake->controls_buffer));
+            }
         }
 
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            /* Send all unconfirmed controls (unreliable) */
-            client_queue_controls(&client);
-
             if (client_send_pending_data(&client) < 0)
                 break;
         }
@@ -342,7 +340,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait(&sim_tick);
         if (tick_lag == 0)
-            gfx_draw_world(gfx, &world, &camera);
+            gfx_draw_world(gfx, &world, &camera, client.frame_number);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);

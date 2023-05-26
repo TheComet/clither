@@ -417,8 +417,9 @@ draw_bezier(
 
 /* ------------------------------------------------------------------------- */
 static void
-draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake)
+draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake, uint16_t frame_number)
 {
+    struct controls* controls;
     struct spos pos;
     int i;
 
@@ -433,14 +434,16 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
     draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 10);
 
     /* Debug: Draw how the "controls" structure interpreted the mouse position */
+    controls = btree_find(&snake->controls_buffer, frame_number);
+    if (controls != NULL)
     {
         int screen_x, screen_y, max_dist;
         double a;
         SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
         max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
-        a = snake->controls.angle / 256.0 * 2 * M_PI;
-        screen_x = (double)snake->controls.speed / 255 * -cos(a) * max_dist + pos.x;
-        screen_y = (double)snake->controls.speed / 255 * sin(a) * max_dist + pos.y;
+        a = controls->angle / 256.0 * 2 * M_PI;
+        screen_x = (double)controls->speed / 255 * -cos(a) * max_dist + pos.x;
+        screen_y = (double)controls->speed / 255 * sin(a) * max_dist + pos.y;
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
@@ -519,7 +522,7 @@ draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, uint16_t frame_number)
 {
     const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
 
@@ -529,7 +532,7 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     draw_background(g, camera);
 
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        draw_snake(g, camera, snake);
+        draw_snake(g, camera, snake, frame_number);
     WORLD_END_EACH
 
     {

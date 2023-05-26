@@ -179,6 +179,9 @@ btree_set_existing(struct cs_btree* btree, cs_btree_key key, const void* value);
 CSTRUCTURES_PUBLIC_API enum cs_btree_status
 btree_insert_or_get(struct cs_btree* btree, cs_btree_key key, const void* value, void** inserted_value);
 
+CSTRUCTURES_PUBLIC_API void*
+btree_emplace_or_get(struct cs_btree* btree, cs_btree_key key);
+
 /*!
  * @brief Looks for the specified key in the btree and returns a pointer to the
  * value in the structure. This is useful if you need to store data directly in
@@ -191,6 +194,9 @@ btree_insert_or_get(struct cs_btree* btree, cs_btree_key key, const void* value,
  */
 CSTRUCTURES_PUBLIC_API void*
 btree_find(const struct cs_btree* btree, cs_btree_key key);
+
+CSTRUCTURES_PUBLIC_API void*
+btree_find_prev(const struct cs_btree* btree, cs_btree_key key);
 
 /*!
  * @brief Searches for a key that matches the specified value.
@@ -236,15 +242,6 @@ btree_get_any_value(const struct cs_btree* btree);
  */
 CSTRUCTURES_PUBLIC_API int
 btree_key_exists(struct cs_btree* btree, cs_btree_key key);
-
-/*!
- * @brief Returns a key that does not yet exist in the btree.
- * @note Complexity can be up to O(n) in the worst case. O(1) in the best case.
- * @param[in] btree The btree to generate a key from.
- * @return Returns a key that does not yet exist in the btree.
- */
-CSTRUCTURES_PUBLIC_API cs_btree_key
-btree_find_unused_key(struct cs_btree* btree);
 
 /*!
  * @brief Erases an item from the btree matching the specified key.

@@ -1,4 +1,5 @@
 #include "clither/bezier.h"
+#include "clither/controls.h"
 #include "clither/q.h"
 #include "clither/snake.h"
 #include "clither/log.h"
@@ -16,29 +17,26 @@
 #define MIN_SPEED    make_qw2(1, 256)
 #define MAX_SPEED    make_qw2(1, 128)
 #define BOOST_SPEED  make_qw2(1, 64)
-#define ACCELERATION (1.0 / 32)
+#define ACCELERATION         (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_init(struct snake* snake, const char* name)
+snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 {
     snake->name = MALLOC(strlen(name) + 1);
     strcpy(snake->name, name);
 
-    controls_init(&snake->controls);
-
-    snake->head_pos = make_qwposi(0, 0);
-    snake->head_angle = make_qa(0);
-    snake->speed = 0;
-
     vector_init(&snake->points, sizeof(struct qwpos));
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
     vector_init(&snake->bezier_points, sizeof(struct bezier_point));
+    btree_init(&snake->controls_buffer, sizeof(struct controls));
 
-    bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwposi(0, 0));
-    bezier_handle_init(vector_emplace(&snake->bezier_handles),
-            make_qwposi(0, 0));
+    bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
+    bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
+
+    snake->head_pos = spawn_pos;
+    snake->head_angle = make_qa(0);
+    snake->speed = 0;
 
     snake->length = 200;
 }
@@ -48,6 +46,8 @@ void
 snake_deinit(struct snake* snake)
 {
     FREE(snake->name);
+
+    btree_deinit(&snake->controls_buffer);
     vector_deinit(&snake->bezier_points);
     vector_deinit(&snake->bezier_handles);
     vector_deinit(&snake->points);
@@ -55,20 +55,53 @@ snake_deinit(struct snake* snake)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_update_controls(struct snake* snake, const struct controls* controls)
+snake_queue_controls(struct snake* snake, const struct controls* controls, uint16_t frame_number)
 {
-    snake->controls = *controls;
+    if (btree_insert_new(&snake->controls_buffer, frame_number, controls) != BTREE_OK)
+        log_warn("Controls for frame %d were already queued for snake\n");
 }
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step(struct snake* snake, int sim_tick_rate)
+snake_ack_frame(struct snake* snake, uint16_t frame_number)
 {
+    btree_erase(&snake->controls_buffer, frame_number);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
+{
+    struct controls fallback_controls;
     double a;
     double error_squared;
     qw dx, dy;
     qa angle_diff, target_angle;
+    uint16_t next_frame_number;
     uint8_t target_speed;
+
+    next_frame_number = frame_number + 1;
+    struct controls* controls = btree_find(&snake->controls_buffer, next_frame_number);
+    if (controls == NULL)
+    {
+        if (btree_count(&snake->controls_buffer) == 0)
+        {
+            log_warn("\"%s\" snake's controls buffer was empty! Should never happen\n", snake->name);
+            controls_init(&fallback_controls);
+            controls = &fallback_controls;
+        }
+        else
+        {
+            /* Prediction of next controls. For now we simply copy the previously known controls */
+            controls = btree_find_prev(&snake->controls_buffer, next_frame_number);
+            if (controls == NULL)
+            {
+                log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
+                controls_init(&fallback_controls);
+                controls = &fallback_controls;
+            }
+        }
+    }
 
     /*
      * The "controls" structure contains the absolute angle (in world space) of
@@ -76,7 +109,7 @@ snake_step(struct snake* snake, int sim_tick_rate)
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
      * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
-    target_angle = make_qa(snake->controls.angle / 256.0 * 2*M_PI - M_PI);
+    target_angle = make_qa(controls->angle / 256.0 * 2*M_PI - M_PI);
 
     /* Calculate difference between desired angle and actual angle and wrap */
     angle_diff = qa_sub(snake->head_angle, target_angle);
@@ -103,9 +136,9 @@ snake_step(struct snake* snake, int sim_tick_rate)
         snake->head_angle = qa_sub(snake->head_angle, make_qa(2*M_PI));
 
     /* Integrate speed over time */
-    target_speed = snake->controls.action == CONTROLS_ACTION_BOOST ?
+    target_speed = controls->action == CONTROLS_ACTION_BOOST ?
         255 :
-        qw_sub(MAX_SPEED, MIN_SPEED) * snake->controls.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
+        qw_sub(MAX_SPEED, MIN_SPEED) * controls->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
     if (snake->speed - target_speed > (ACCELERATION*256))
         snake->speed -= (ACCELERATION*256);
     else if (snake->speed - target_speed < (-ACCELERATION*256))

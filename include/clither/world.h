@@ -8,13 +8,22 @@ struct world
 };
 
 void
-world_init(struct world* w);
+world_init(struct world* world);
 
 void
-world_deinit(struct world* w);
+world_deinit(struct world* world);
+
+struct snake*
+world_create_snake(struct world* world, uint16_t snake_id, struct qwpos spawn_pos, const char* username);
+
+uint16_t
+world_spawn_snake(struct world* world, const char* username);
+
+#define world_get_snake(world, snake_id) \
+    ((struct snake*)btree_find(&(world)->snakes, snake_id))
 
 void
-world_step(struct world* w, int sim_tick_rate);
+world_step(struct world* w, int sim_tick_rate, uint16_t frame_number);
 
 #define WORLD_FOR_EACH_SNAKE(world, uid, snake) \
     BTREE_FOR_EACH(&(world)->snakes, struct snake, uid, snake)

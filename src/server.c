@@ -3,16 +3,19 @@
 #include "clither/net.h"
 #include "clither/server.h"
 #include "clither/server_settings.h"
+#include "clither/snake.h"
+#include "clither/world.h"
 
+#include "cstructures/btree.h"
 #include "cstructures/vector.h"
 
 #include <string.h>  /* memcpy */
 
 struct client_table_entry
 {
-    struct cs_vector pending_unreliable;  /* struct msg* */
-    struct cs_vector pending_reliable;    /* struct msg* */
+    struct cs_vector pending_msgs;  /* struct msg* */
     int timeout_counter;
+    cs_btree_key snake_id;
 };
 
 #define CLIENT_TABLE_FOR_EACH(table, k, v) \
@@ -76,8 +79,7 @@ server_deinit(struct server* server)
     hashmap_deinit(&server->malicious_clients);
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
-        msg_queue_deinit(&client->pending_reliable);
-        msg_queue_deinit(&client->pending_unreliable);
+        msg_queue_deinit(&client->pending_msgs);
     CLIENT_TABLE_END_EACH
     hashmap_deinit(&server->client_table);
 }
@@ -93,8 +95,10 @@ server_send_pending_data(struct server* server, const struct server_settings* se
         int len = 0;
 
         /* Append unreliable messages first */
-        MSG_FOR_EACH(&client->pending_unreliable, msg)
+        MSG_FOR_EACH(&client->pending_msgs, msg)
             if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
+                continue;
+            if (msg->resend_rate != 0)  /* message is reliable */
                 continue;
 
             type = (uint8_t)msg->type;
@@ -104,15 +108,17 @@ server_send_pending_data(struct server* server, const struct server_settings* se
 
             len += msg->payload_len + 2;
             msg_free(msg);
-            MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+            MSG_ERASE_IN_FOR_LOOP(&client->pending_msgs, msg);
         MSG_END_EACH
 
         /* Append reliable messages */
-        MSG_FOR_EACH(&client->pending_reliable, msg)
+        MSG_FOR_EACH(&client->pending_msgs, msg)
             if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
                 continue;
+            if (msg->resend_rate == 0)  /* message is unreliable */
+                continue;
 
-            if (msg->resend_rate_counter-- > 0)
+            if (--msg->resend_rate_counter > 0)
                 continue;
             msg->resend_rate_counter = msg->resend_rate;
 
@@ -136,8 +142,7 @@ server_send_pending_data(struct server* server, const struct server_settings* se
             char ipstr[MAX_ADDRSTRLEN];
             net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
             log_warn("Client %s timed out\n", ipstr);
-            msg_queue_deinit(&client->pending_reliable);
-            msg_queue_deinit(&client->pending_unreliable);
+            msg_queue_deinit(&client->pending_msgs);
             hashmap_erase(&server->client_table, addr);
         }
     CLIENT_TABLE_END_EACH
@@ -145,7 +150,7 @@ server_send_pending_data(struct server* server, const struct server_settings* se
 
 /* ------------------------------------------------------------------------- */
 int
-server_recv(struct server* server, const struct server_settings* settings, uint16_t frame_number)
+server_recv(struct server* server, const struct server_settings* settings, struct world* world, uint16_t frame_number)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     char client_addr[MAX_ADDRLEN];
@@ -271,26 +276,25 @@ server_recv(struct server* server, const struct server_settings* settings, uint1
 
                     if (client == NULL)
                     {
-                        /* TODO: Create snake in world */
-
                         log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", pp.join_request.username);
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
-                        msg_queue_init(&client->pending_reliable);
-                        msg_queue_init(&client->pending_unreliable);
+                        msg_queue_init(&client->pending_msgs);
                         client->timeout_counter = 0;
+                        client->snake_id = world_spawn_snake(world, pp.join_request.username);
                     }
 
                     /* (Re-)send join accept response */
                     {
-                        struct qwpos spawn_pos = { 32, 32 };
+                        struct snake* snake = world_get_snake(world, client->snake_id);
                         struct msg* response = msg_join_accept(
                             settings->sim_tick_rate,
                             settings->net_tick_rate,
                             pp.join_request.frame,
                             frame_number,
-                            &spawn_pos);
-                        vector_push(&client->pending_unreliable, &response);
+                            client->snake_id,
+                            &snake->head_pos);
+                        vector_push(&client->pending_msgs, &response);
                     }
                 } break;
 
@@ -300,10 +304,11 @@ server_recv(struct server* server, const struct server_settings* settings, uint1
                 case MSG_JOIN_DENY_SERVER_FULL:
                     break;
 
-                case MSG_JOIN_ACK: {
+                case MSG_LEAVE: {
+
                 } break;
 
-                case MSG_LEAVE: {
+                case MSG_CONTROLS: {
 
                 } break;
 
