@@ -6,6 +6,7 @@
 C_BEGIN
 
 struct server_settings;
+struct world;
 
 struct server
 {

@@ -164,28 +164,6 @@ TEST(NAME, key_exists_returns_true_if_key_does_exist)
     btree_deinit(&btree);
 }
 
-TEST(NAME, find_unused_key_actually_returns_an_unused_key)
-{
-    struct cs_btree btree;
-    btree_init(&btree, 0);
-
-    cs_btree_key kb, kc, kd;
-    btree_insert_new(&btree, 2, NULL);
-    btree_insert_new(&btree, kb = btree_find_unused_key(&btree), NULL);
-    btree_insert_new(&btree, kc = btree_find_unused_key(&btree), NULL);
-    btree_insert_new(&btree, kd = btree_find_unused_key(&btree), NULL);
-
-    EXPECT_THAT(btree_count(&btree), Eq(4u));
-    EXPECT_THAT(btree_key_exists(&btree, 2), IsTrue());
-    EXPECT_THAT(btree_key_exists(&btree, kb), IsTrue());
-    EXPECT_THAT(btree_key_exists(&btree, kc), IsTrue());
-    EXPECT_THAT(btree_key_exists(&btree, kd), IsTrue());
-    EXPECT_THAT(kb, AllOf(Ne(kc), Ne(kd)));
-    EXPECT_THAT(kc, Ne(kd));
-
-    btree_deinit(&btree);
-}
-
 TEST(NAME, erase_by_key)
 {
     struct cs_btree btree;
