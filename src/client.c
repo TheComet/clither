@@ -2,6 +2,9 @@
 #include "clither/log.h"
 #include "clither/msg_queue.h"
 #include "clither/net.h"
+#include "clither/world.h"
+
+#include "cstructures/memory.h"
 
 #include <string.h>
 #include <assert.h>
@@ -10,17 +13,16 @@
 void
 client_init(struct client* client)
 {
+    client->username = NULL;
     client->sim_tick_rate = 60;
     client->net_tick_rate = 20;
     client->timeout_counter = 0;
     client->frame_number = 0;
-    client->first_unackknowledged_controls_frame = 0;
+    client->snake_id = 0;
     client->state = CLIENT_DISCONNECTED;
 
-    msg_queue_init(&client->pending_unreliable);
-    msg_queue_init(&client->pending_reliable);
+    msg_queue_init(&client->pending_msgs);
     vector_init(&client->udp_sockfds, sizeof(int));
-    vector_init(&client->controls_buffer, sizeof(struct controls));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -30,10 +32,10 @@ client_deinit(struct client* client)
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
-    vector_deinit(&client->controls_buffer);
     vector_deinit(&client->udp_sockfds);
-    msg_queue_deinit(&client->pending_reliable);
-    msg_queue_deinit(&client->pending_unreliable);
+    msg_queue_deinit(&client->pending_msgs);
+
+    FREE(client->username);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -44,6 +46,10 @@ client_connect(
     const char* port,
     const char* username)
 {
+    assert(client->state == CLIENT_DISCONNECTED);
+    assert(vector_count(&client->udp_sockfds) == 0);
+    assert(client->username == NULL);
+
     if (!*server_address)
     {
         log_err("No server IP address was specified! Can't init client socket\n");
@@ -54,13 +60,13 @@ client_connect(
     if (!*port)
         port = NET_DEFAULT_PORT;
 
-    assert(client->state == CLIENT_DISCONNECTED);
-    assert(vector_count(&client->udp_sockfds) == 0);
-
     if (net_connect(&client->udp_sockfds, server_address, port) < 0)
         return -1;
 
-    client_queue_reliable(client, msg_join_request(0x0000, client->frame_number, username));
+    client->username = MALLOC(strlen(username) + 1);
+    strcpy(client->username, username);
+
+    client_queue(client, msg_join_request(0x0000, client->frame_number, username));
 
     client->state = CLIENT_JOINING;
 
@@ -73,6 +79,10 @@ client_disconnect(struct client* client)
 {
     assert(client->state != CLIENT_DISCONNECTED);
     assert(vector_count(&client->udp_sockfds) != 0);
+    assert(client->username != NULL);
+
+    FREE(client->username);
+    client->username = NULL;
 
     VECTOR_FOR_EACH(&client->udp_sockfds, int, sockfd)
         net_close(*sockfd);
@@ -81,37 +91,7 @@ client_disconnect(struct client* client)
 
     client->state = CLIENT_DISCONNECTED;
 
-    msg_queue_clear(&client->pending_reliable);
-    msg_queue_clear(&client->pending_unreliable);
-}
-
-/* ------------------------------------------------------------------------- */
-void
-client_add_controls(struct client* client, const struct controls* controls)
-{
-    vector_push(&client->controls_buffer, controls);
-}
-
-/* ------------------------------------------------------------------------- */
-void
-client_ack_controls(struct client* client, uint16_t frame_number)
-{
-    while (client->first_unackknowledged_controls_frame != frame_number)
-    {
-        vector_erase_index(&client->controls_buffer, 0);
-        client->first_unackknowledged_controls_frame++;
-    }
-}
-
-/* ------------------------------------------------------------------------- */
-void
-client_queue_controls(struct client* client)
-{
-    client_queue_unreliable(
-        client,
-        msg_controls(
-            &client->controls_buffer,
-            client->first_unackknowledged_controls_frame));
+    msg_queue_clear(&client->pending_msgs);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -122,19 +102,11 @@ client_send_pending_data(struct client* client)
     char buf[MAX_UDP_PACKET_SIZE];
     int len = 0;
 
-    /*
-     * Some messages in the reliable queue contain the frame number they were
-     * sent as part of the message payload. These numbers need to be updated
-     * to the most recent frame number every time they are resent so the server
-     * is able to differentiate them.
-     */
-    MSG_FOR_EACH(&client->pending_reliable, msg)
-        msg_update_frame_number(msg, client->frame_number);
-    MSG_END_EACH
-
     /* Append unreliable messages first */
-    MSG_FOR_EACH(&client->pending_unreliable, msg)
+    MSG_FOR_EACH(&client->pending_msgs, msg)
         if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
+            continue;
+        if (msg_is_reliable(msg))
             continue;
 
         type = (uint8_t)msg->type;
@@ -144,17 +116,27 @@ client_send_pending_data(struct client* client)
 
         len += msg->payload_len + 2;
         msg_free(msg);
-        MSG_ERASE_IN_FOR_LOOP(&client->pending_unreliable, msg);
+        MSG_ERASE_IN_FOR_LOOP(&client->pending_msgs, msg);
     MSG_END_EACH
 
     /* Append reliable messages */
-    MSG_FOR_EACH(&client->pending_reliable, msg)
+    MSG_FOR_EACH(&client->pending_msgs, msg)
         if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
             continue;
+        if (msg_is_unreliable(msg))
+            continue;
 
-        if (msg->resend_rate_counter-- > 0)
+        if (--msg->resend_rate_counter > 0)
             continue;
         msg->resend_rate_counter = msg->resend_rate;
+
+        /*
+         * Some messages in the reliable queue contain the frame number they were
+         * sent on as part of the message payload. These numbers need to be updated
+         * to the most recent frame number every time they are resent so the server
+         * is able to differentiate them.
+         */
+        msg_update_frame_number(msg, client->frame_number);
 
         type = (uint8_t)msg->type;
         memcpy(buf + 0, &type, 1);
@@ -167,7 +149,6 @@ client_send_pending_data(struct client* client)
     if (len > 0)
     {
         assert(vector_count(&client->udp_sockfds) > 0);
-        log_dbg("Sending UDP packet, size=%d\n", len);
 
         /*
          * The client was initialized with a list of possible sockets. This is
@@ -199,7 +180,7 @@ retry_send:
 
 /* ------------------------------------------------------------------------- */
 int
-client_recv(struct client* client)
+client_recv(struct client* client, struct world* world)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     int i;
@@ -249,7 +230,7 @@ retry_recv:
                     break;
 
                 /* Stop sending join request messages */
-                msg_queue_remove_type(&client->pending_reliable, MSG_JOIN_REQUEST);
+                msg_queue_remove_type(&client->pending_msgs, MSG_JOIN_REQUEST);
 
                 /*
                  * Regardless of whether we succeed or fail, the client is
@@ -287,17 +268,15 @@ retry_recv:
                  */
                 client->frame_number = pp.join_accept.server_frame + rtt;
 
-                /*
-                 * The server has begun simulating our snake on the server frame
-                 * number received.
-                 */
-                client->first_unackknowledged_controls_frame = pp.join_accept.server_frame + 1;
-
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
                 client->net_tick_rate = pp.join_accept.net_tick_rate;
 
+                client->snake_id = pp.join_accept.snake_id;
+                world_create_snake(world, client->snake_id, pp.join_accept.spawn, client->username);
+
                 log_dbg("MSG_JOIN_ACCEPT: %d, %d\n", pp.join_accept.spawn.x, pp.join_accept.spawn.y);
+                client->state = CLIENT_CONNECTED;
             } break;
 
             case MSG_JOIN_DENY_BAD_PROTOCOL:
@@ -307,9 +286,6 @@ retry_recv:
                 client_disconnect(client);
                 return 1;  /* Return immediately, as we don't want to process any more messages */
             } break;
-
-            case MSG_JOIN_ACK:
-                break;
         }
 
         i += payload_len + 2;

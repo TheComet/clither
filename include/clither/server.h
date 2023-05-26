@@ -43,6 +43,10 @@ server_init(
 void
 server_deinit(struct server* server);
 
+static inline void
+server_queue(struct server* server, const struct msg* msg)
+{}
+
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
@@ -53,6 +57,6 @@ server_send_pending_data(struct server* server, const struct server_settings* se
  *
  */
 int
-server_recv(struct server* server, const struct server_settings* settings, uint16_t frame_number);
+server_recv(struct server* server, const struct server_settings* settings, struct world* world, uint16_t frame_number);
 
 C_END

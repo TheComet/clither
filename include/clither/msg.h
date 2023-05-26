@@ -7,6 +7,7 @@
 C_BEGIN
 
 struct cs_vector;
+struct cs_btree;
 
 enum msg_type
 {
@@ -15,11 +16,9 @@ enum msg_type
     MSG_JOIN_DENY_BAD_PROTOCOL,
     MSG_JOIN_DENY_BAD_USERNAME,
     MSG_JOIN_DENY_SERVER_FULL,
-    MSG_JOIN_ACK,
     MSG_LEAVE,
 
     MSG_CONTROLS,
-    MSG_CONTROLS_ACK,
 
     MSG_SNAKE_METADATA,
     MSG_SNAKE_METADATA_ACK,
@@ -33,8 +32,8 @@ enum msg_type
 
 struct msg
 {
-    int8_t resend_rate;
-    int8_t resend_rate_counter;
+    uint8_t resend_rate;
+    uint8_t resend_rate_counter;
 
     enum msg_type type;
     uint8_t payload_len;
@@ -52,6 +51,7 @@ union parsed_payload
 
     struct {
         struct qwpos spawn;
+        uint16_t snake_id;
         uint16_t client_frame;
         uint16_t server_frame;
         uint8_t sim_tick_rate;
@@ -78,6 +78,9 @@ msg_parse_paylaod(
 void
 msg_free(struct msg* m);
 
+#define msg_is_reliable(m) ((m)->resend_rate > 0)
+#define msg_is_unreliable(m) ((m)->resend_rate == 0)
+
 void
 msg_update_frame_number(struct msg* m, uint16_t frame_number);
 
@@ -90,6 +93,7 @@ msg_join_accept(
     uint8_t net_tick_rate,
     uint16_t client_frame_number,
     uint16_t server_frame_number,
+    uint16_t snake_id,
     struct qwpos* spawn_pos);
 
 struct msg*
@@ -108,9 +112,9 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls(const struct cs_vector* controls, uint16_t first_frame_number);
+msg_controls(const struct cs_btree* controls);
 
 int
-msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_t payload_len);
+msg_controls_unpack_into(struct cs_btree* controls, const char* payload, uint8_t payload_len);
 
 C_END

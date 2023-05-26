@@ -2,11 +2,12 @@
 #include "clither/msg.h"
 #include "clither/log.h"
 
+#include "cstructures/btree.h"
 #include "cstructures/memory.h"
-#include "cstructures/vector.h"
 
 #include <stddef.h>
 #include <string.h>
+#include <assert.h>
 
 /* Because msg.payload is defined as char[1] */
 #define MSG_SIZE(extra_bytes) \
@@ -17,9 +18,12 @@
 
 /* ------------------------------------------------------------------------- */
 static struct msg*
-msg_alloc(enum msg_type type, int8_t resend_rate, uint8_t size)
+msg_alloc(enum msg_type type, int8_t resend_rate, int size)
 {
-    struct msg* msg = MALLOC_MSG(size);
+    struct msg* msg;
+    assert(size <= 255);  /* The payload length field is 1 byte */
+
+    msg = MALLOC_MSG(size);
     msg->type = type;
     msg->resend_rate = resend_rate;
     msg->resend_rate_counter = 0;
@@ -49,14 +53,10 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     case MSG_JOIN_DENY_BAD_PROTOCOL:
     case MSG_JOIN_DENY_BAD_USERNAME:
     case MSG_JOIN_DENY_SERVER_FULL:
-    case MSG_JOIN_ACK:
     case MSG_LEAVE:
         break;
 
     case MSG_CONTROLS:
-        break;
-
-    case MSG_CONTROLS_ACK:
         break;
 
     case MSG_SNAKE_METADATA:
@@ -124,7 +124,7 @@ msg_parse_paylaod(
         } break;
 
         case MSG_JOIN_ACCEPT: {
-            if (payload_len < 12)
+            if (payload_len < 14)
             {
                 log_warn("MSG_JOIN_ACCEPT payload is too small\n");
                 return -1;
@@ -138,14 +138,17 @@ msg_parse_paylaod(
             pp->join_accept.server_frame =
                 (payload[4] << 8) |
                 (payload[5] << 0);
+            pp->join_accept.snake_id =
+                (payload[5] << 8) |
+                (payload[6] << 0);
             pp->join_accept.spawn.x =
-                (payload[6] << 16) |
-                (payload[7] << 8) |
-                (payload[8] << 0);
+                (payload[8] << 16) |
+                (payload[9] << 8) |
+                (payload[10] << 0);
             pp->join_accept.spawn.y =
-                (payload[9] << 16) |
-                (payload[10] << 8) |
-                (payload[11] << 0);
+                (payload[11] << 16) |
+                (payload[12] << 8) |
+                (payload[13] << 0);
         } break;
 
         case MSG_JOIN_DENY_BAD_PROTOCOL:
@@ -174,9 +177,6 @@ msg_parse_paylaod(
             pp->join_deny.error = &payload[1];
         } break;
 
-        case MSG_JOIN_ACK:
-            break;
-
         case MSG_LEAVE:
             break;
 
@@ -197,9 +197,6 @@ msg_parse_paylaod(
                 (payload[0] << 8) |
                 (payload[1] << 0);
         } break;
-
-        case MSG_CONTROLS_ACK:
-            break;
 
         case MSG_SNAKE_METADATA:
         case MSG_SNAKE_METADATA_ACK:
@@ -249,14 +246,16 @@ msg_join_accept(
     uint8_t net_tick_rate,
     uint16_t client_frame,
     uint16_t server_frame,
+    uint16_t snake_id,
     struct qwpos* spawn_pos)
 {
     struct msg* m = msg_alloc(
-        MSG_JOIN_ACCEPT, 10,
+        MSG_JOIN_ACCEPT, 0,
         sizeof(sim_tick_rate) +
         sizeof(net_tick_rate) +
         sizeof(client_frame) +
         sizeof(server_frame) +
+        sizeof(snake_id) +
         6  /* qwpos is 2x q10.14 (24 bits) = 48 bits */
     );
 
@@ -269,12 +268,16 @@ msg_join_accept(
     m->payload[4] = server_frame >> 8;
     m->payload[5] = server_frame & 0xFF;
 
-    m->payload[6] = spawn_pos->x >> 16;
-    m->payload[7] = spawn_pos->x >> 8;
-    m->payload[8] = spawn_pos->x & 0xFF;
-    m->payload[9] = spawn_pos->y >> 16;
-    m->payload[10] = spawn_pos->y >> 8;
-    m->payload[11] = spawn_pos->y & 0xFF;
+    m->payload[6] = snake_id >> 8;
+    m->payload[7] = snake_id & 0xFF;
+
+    m->payload[8] = spawn_pos->x >> 16;
+    m->payload[9] = spawn_pos->x >> 8;
+    m->payload[10] = spawn_pos->x & 0xFF;
+    m->payload[11] = spawn_pos->y >> 16;
+    m->payload[12] = spawn_pos->y >> 8;
+    m->payload[13] = spawn_pos->y & 0xFF;
+
     return m;
 }
 
@@ -322,13 +325,6 @@ msg_join_deny_server_full(const char* error)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_join_ack(void)
-{
-    return msg_alloc(MSG_JOIN_ACK, 0, 0);
-}
-
-/* ------------------------------------------------------------------------- */
-struct msg*
 msg_leave(void)
 {
     return msg_alloc(MSG_LEAVE, 0, 0);
@@ -336,13 +332,26 @@ msg_leave(void)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
+msg_controls(const struct cs_btree* controls)
 {
-    int i, bit, byte;
+    int i, bit, byte, count;
     struct controls* c;
     struct msg* m;
+    uint16_t first_frame_number;
 
-    assert(vector_count(controls) > 0);
+    assert(btree_count(controls) > 0);
+    first_frame_number = *BTREE_KEY(controls, 0);
+
+    /* 
+     * The largest message payload we limit ourselves to is 255 bytes.
+     * It doesn't really make sense to send more than a full second of inputs.
+     */
+    count = btree_count(controls);
+    if (count > 60)
+    {
+        log_warn("There are more than 60 controls in the buffer (%d). Only sending the first 60\n", count);
+        count = 60;
+    }
 
     /*
      * controls structure: 19 bits
@@ -354,14 +363,14 @@ msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
     m = msg_alloc(
         MSG_CONTROLS, 0,
         sizeof(first_frame_number) +  /* frame number */
-        19 + 12*vector_count(controls)/8 + 1);  /* upper bound for all controls */
+        19 + (12*count + 8) / 8);  /* upper bound for all controls */
 
     m->payload[0] = first_frame_number >> 8;
     m->payload[1] = first_frame_number & 0xFF;
-    m->payload[2] = (uint8_t)(vector_count(controls) - 1);
+    m->payload[2] = (uint8_t)(count - 1);
 
     /* First controls structure */
-    c = vector_front(controls);
+    c = BTREE_VALUE(controls, 0);
     m->payload[3] = c->angle;
     m->payload[4] = c->speed;
     m->payload[5] = c->action; /* 3 bits */
@@ -394,10 +403,13 @@ msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
         else \
             CLEAR_NEXT_BIT(); \
     } while(0)
-    for (i = 1; i < (int)vector_count(controls); ++i)
+    for (i = 1; i < count; ++i)
     {
-        struct controls* prev = vector_get_element(controls, i-1);
-        struct controls* next = vector_get_element(controls, i);
+        struct controls* prev = BTREE_VALUE(controls, i-1);
+        struct controls* next = BTREE_VALUE(controls, i);
+
+        /* We made the assumption that the controls frame numbers have no gaps */
+        assert(*BTREE_KEY(controls, i-1) + 1 == *BTREE_KEY(controls, i));
 
         if (next->action == prev->action)
             CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
@@ -415,10 +427,10 @@ msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
     if (bit != 0)
         byte++;
 
-    for (i = 1; i < (int)vector_count(controls); ++i)
+    for (i = 1; i < count; ++i)
     {
-        struct controls* prev = vector_get_element(controls, i-1);
-        struct controls* next = vector_get_element(controls, i);
+        struct controls* prev = BTREE_VALUE(controls, i-1);
+        struct controls* next = BTREE_VALUE(controls, i);
         int da_i32 = next->angle - prev->angle + 3;
         int ds_i32 = next->speed - prev->speed + 15;
         uint8_t da = (uint8_t)da_i32;
@@ -441,17 +453,23 @@ msg_controls(const struct cs_vector* controls, uint16_t first_frame_number)
 
 /* ------------------------------------------------------------------------- */
 int
-msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_t payload_len)
+msg_controls_unpack_into(struct cs_btree* controls, const char* payload, uint8_t payload_len)
 {
     int i, bit, byte;
     uint8_t controls_count;
-    vector_clear(controls);
+    uint16_t first_frame_number;
 
-    controls_count = payload[2];
+    btree_clear(controls);
+
+    first_frame_number =
+        (payload[0] << 8) |
+        (payload[1] & 0xFF);
+    controls_count =
+        payload[2];
 
     /* Read first controls structure */
     {
-        struct controls* c = vector_emplace(controls);
+        struct controls* c = btree_emplace_or_get(controls, first_frame_number);
         c->angle = payload[3];
         c->speed = payload[4];
         c->action = (payload[5] & 0x07);
@@ -463,7 +481,7 @@ msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_
 #define READ_NEXT_BIT_INTO(x) do { \
         if (byte >= payload_len) { \
             log_warn("Error while unpacking controls: Packet too small\n"); \
-            vector_clear(controls); \
+            btree_clear(controls); \
             return -1; \
         } \
         x = payload[byte] & (1<<bit); \
@@ -476,7 +494,7 @@ msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_
     for (i = 0; i != (int)controls_count; ++i)
     {
         uint8_t b;
-        struct controls* c = vector_emplace(controls);
+        struct controls* c = btree_emplace_or_get(controls, first_frame_number + i + 1);
 
         c->action = 0;
 
@@ -500,13 +518,13 @@ msg_controls_unpack_into(struct cs_vector* controls, const char* payload, uint8_
     for (i = 0; i != (int)controls_count; ++i)
     {
         uint8_t da, ds;
-        struct controls* prev = vector_get_element(controls, i);
-        struct controls* next = vector_get_element(controls, i+1);
+        struct controls* prev = BTREE_VALUE(controls, i);
+        struct controls* next = BTREE_VALUE(controls, i+1);
 
         if (byte >= payload_len)
         {
             log_warn("Error while unpacking controls: Packet too small\n");
-            vector_clear(controls);
+            btree_clear(controls);
             return -1;
         }
         da = payload[byte] & 0x07;

@@ -43,4 +43,4 @@ struct spos
 gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera* camera);
 
 void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera);
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, uint16_t frame_number);
