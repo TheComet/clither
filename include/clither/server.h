@@ -44,9 +44,8 @@ server_init(
 void
 server_deinit(struct server* server);
 
-static inline void
-server_queue(struct server* server, const struct msg* msg)
-{}
+void
+server_queue_snake_data(struct server* server, const struct world* world);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.

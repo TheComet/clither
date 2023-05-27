@@ -1,6 +1,7 @@
 #include "clither/controls.h"
 #include "clither/msg.h"
 #include "clither/log.h"
+#include "clither/snake.h"
 
 #include "cstructures/btree.h"
 #include "cstructures/memory.h"
@@ -26,7 +27,7 @@ msg_alloc(enum msg_type type, int8_t resend_rate, int size)
     msg = MALLOC_MSG(size);
     msg->type = type;
     msg->resend_rate = resend_rate;
-    msg->resend_rate_counter = 0;
+    msg->resend_rate_counter = 1;
     msg->payload_len = size;
     return msg;
 }
@@ -63,7 +64,7 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     case MSG_SNAKE_METADATA_ACK:
         break;
 
-    case MSG_SNAKE_DATA:
+    case MSG_SNAKE_HEAD:
         break;
 
     case MSG_FOOD_CREATE:
@@ -139,8 +140,8 @@ msg_parse_paylaod(
                 (payload[4] << 8) |
                 (payload[5] << 0);
             pp->join_accept.snake_id =
-                (payload[5] << 8) |
-                (payload[6] << 0);
+                (payload[6] << 8) |
+                (payload[7] << 0);
             pp->join_accept.spawn.x =
                 (payload[8] << 16) |
                 (payload[9] << 8) |
@@ -202,8 +203,30 @@ msg_parse_paylaod(
         case MSG_SNAKE_METADATA_ACK:
             break;
 
-        case MSG_SNAKE_DATA:
-            break;
+        case MSG_SNAKE_HEAD: {
+            if (payload_len < 11)
+            {
+                log_warn("MSG_SNAKE_HEAD payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_head.frame_number =
+                (payload[0] << 8) |
+                payload[1];
+            pp->snake_head.pos.x =
+                (payload[2] << 16) |
+                (payload[3] << 8) |
+                payload[4];
+            pp->snake_head.pos.y =
+                (payload[5] << 16) |
+                (payload[6] << 8) |
+                (payload[7]);
+            pp->snake_head.angle =
+                (payload[8] << 8) |
+                payload[9];
+            pp->snake_head.speed =
+                payload[10];
+        } break;
 
         case MSG_FOOD_CREATE:
         case MSG_FOOD_CREATE_ACK:
@@ -453,7 +476,10 @@ msg_controls(const struct cs_btree* controls)
 
 /* ------------------------------------------------------------------------- */
 int
-msg_controls_unpack_into(struct cs_btree* controls, const char* payload, uint8_t payload_len)
+msg_controls_unpack_into(
+    struct cs_btree* controls,
+    const char* payload,
+    uint8_t payload_len)
 {
     int i, bit, byte;
     uint8_t controls_count;
@@ -536,4 +562,34 @@ msg_controls_unpack_into(struct cs_btree* controls, const char* payload, uint8_t
     }
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_snake_head(const struct snake* snake, uint16_t frame_number)
+{
+    struct msg* m = msg_alloc(
+        MSG_SNAKE_HEAD, 0,
+        sizeof(frame_number) +
+        6 +  /* world position (2x 24-bit qwpos) */
+        2 +  /* angle (16-bit) */
+        1);  /* speed (uint8_t) */
+
+    m->payload[0] = (frame_number << 8) & 0xFF;
+    m->payload[1] = (frame_number & 0xFF);
+
+    m->payload[2] = (snake->head_pos.x >> 16) & 0xFF;
+    m->payload[3] = (snake->head_pos.x >> 8) & 0xFF;
+    m->payload[4] = snake->head_pos.x & 0xFF;
+
+    m->payload[5] = (snake->head_pos.y >> 16) & 0xFF;
+    m->payload[6] = (snake->head_pos.y >> 8) & 0xFF;
+    m->payload[7] = snake->head_pos.y & 0xFF;
+
+    m->payload[8] = (snake->head_angle >> 8) & 0xFF;
+    m->payload[9] = snake->head_angle & 0xFF;
+
+    m->payload[10] = snake->speed;
+
+    return m;
 }
