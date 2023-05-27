@@ -13,7 +13,7 @@
 
 struct client_table_entry
 {
-    struct cs_vector pending_msgs;  /* struct msg* */
+    struct cs_vector pending_msgs;     /* struct msg* */
     int timeout_counter;
     cs_btree_key snake_id;
 };
@@ -101,10 +101,12 @@ server_send_pending_data(struct server* server, const struct server_settings* se
             if (msg->resend_rate != 0)  /* message is reliable */
                 continue;
 
+            log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+
             type = (uint8_t)msg->type;
-            memcpy(buf + 0, &type, 1);
-            memcpy(buf + 1, &msg->payload_len, 1);
-            memcpy(buf + 2, msg->payload, msg->payload_len);
+            memcpy(buf + len + 0, &type, 1);
+            memcpy(buf + len + 1, &msg->payload_len, 1);
+            memcpy(buf + len + 2, msg->payload, msg->payload_len);
 
             len += msg->payload_len + 2;
             msg_free(msg);
@@ -122,10 +124,12 @@ server_send_pending_data(struct server* server, const struct server_settings* se
                 continue;
             msg->resend_rate_counter = msg->resend_rate;
 
+            log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+
             type = (uint8_t)msg->type;
-            memcpy(buf + 0, &type, 1);
-            memcpy(buf + 1, &msg->payload_len, 1);
-            memcpy(buf + 2, msg->payload, msg->payload_len);
+            memcpy(buf + len + 0, &type, 1);
+            memcpy(buf + len + 1, &msg->payload_len, 1);
+            memcpy(buf + len + 2, msg->payload, msg->payload_len);
 
             len += msg->payload_len + 2;
         MSG_END_EACH
@@ -133,6 +137,7 @@ server_send_pending_data(struct server* server, const struct server_settings* se
         if (len > 0)
         {
             /* NOTE: The hashmap's key size contains the length of the stored address */
+            log_dbg("Sending UDP packet, size=%d\n", len);
             net_sendto(server->udp_sock, buf, len, addr, server->client_table.key_size);
             client->timeout_counter++;
         }
@@ -149,8 +154,46 @@ server_send_pending_data(struct server* server, const struct server_settings* se
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+server_queue(struct client_table_entry* client, struct msg* msg)
+{
+    vector_push(&client->pending_msgs, &msg);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+server_queue_snake_data(
+    struct server* server,
+    const struct world* world,
+    uint16_t frame_number)
+{
+    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+        struct snake* snake = world_get_snake(world, client->snake_id);
+        server_queue(client, msg_snake_head(snake, frame_number));
+    CLIENT_TABLE_END_EACH
+
+    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+        CLIENT_TABLE_FOR_EACH(&server->client_table, other_addr, other_client)
+            struct snake* snake = world_get_snake(world, client->snake_id);
+            struct snake* other_snake = world_get_snake(world, other_client->snake_id);
+            qw dx = qw_sub(snake->head_pos.x, other_snake->head_pos.x);
+            qw dy = qw_sub(snake->head_pos.y, other_snake->head_pos.y);
+            qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+            if (dist_sq > make_qw(1 * 1))
+                continue;
+
+            /* TODO queue bezier handles */
+        CLIENT_TABLE_END_EACH
+    CLIENT_TABLE_END_EACH
+}
+
+/* ------------------------------------------------------------------------- */
 int
-server_recv(struct server* server, const struct server_settings* settings, struct world* world, uint16_t frame_number)
+server_recv(
+    struct server* server,
+    const struct server_settings* settings,
+    struct world* world,
+    uint16_t frame_number)
 {
     char buf[MAX_UDP_PACKET_SIZE];
     char client_addr[MAX_ADDRLEN];
@@ -183,6 +226,7 @@ server_recv(struct server* server, const struct server_settings* settings, struc
         /* Nothing received or error */
         if (bytes_received <= 0)
             return bytes_received;
+        log_dbg("Received UDP packet, size=%d\n", bytes_received);
 
         /*
          * If we received a packet from a banned client, ignore packet
@@ -232,6 +276,8 @@ server_recv(struct server* server, const struct server_settings* settings, struc
                 mark_client_as_malicious_and_drop(server);
                 break;
             }
+
+            log_dbg("Unpacking msg type=%d, len=%d\n", type, payload_len);
 
             /*
              * Disallow receiving packets from clients that are not registered
@@ -317,10 +363,6 @@ server_recv(struct server* server, const struct server_settings* settings, struc
                 } break;
 
                 case MSG_SNAKE_METADATA_ACK: {
-
-                } break;
-
-                case MSG_SNAKE_DATA: {
 
                 } break;
 

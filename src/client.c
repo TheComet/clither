@@ -109,10 +109,12 @@ client_send_pending_data(struct client* client)
         if (msg_is_reliable(msg))
             continue;
 
+        log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+
         type = (uint8_t)msg->type;
-        memcpy(buf + 0, &type, 1);
-        memcpy(buf + 1, &msg->payload_len, 1);
-        memcpy(buf + 2, msg->payload, msg->payload_len);
+        memcpy(buf + len + 0, &type, 1);
+        memcpy(buf + len + 1, &msg->payload_len, 1);
+        memcpy(buf + len + 2, msg->payload, msg->payload_len);
 
         len += msg->payload_len + 2;
         msg_free(msg);
@@ -138,10 +140,12 @@ client_send_pending_data(struct client* client)
          */
         msg_update_frame_number(msg, client->frame_number);
 
+        log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+
         type = (uint8_t)msg->type;
-        memcpy(buf + 0, &type, 1);
-        memcpy(buf + 1, &msg->payload_len, 1);
-        memcpy(buf + 2, msg->payload, msg->payload_len);
+        memcpy(buf + len + 0, &type, 1);
+        memcpy(buf + len + 1, &msg->payload_len, 1);
+        memcpy(buf + len + 2, msg->payload, msg->payload_len);
 
         len += msg->payload_len + 2;
     MSG_END_EACH
@@ -158,6 +162,7 @@ client_send_pending_data(struct client* client)
          * the next one.
          */
 retry_send:
+        log_dbg("Sending UDP packet, size=%d\n", len);
         if (net_send(*(int*)vector_back(&client->udp_sockfds), buf, len) < 0)
         {
             if (vector_count(&client->udp_sockfds) == 1)
@@ -199,6 +204,7 @@ retry_recv:
         log_info("Attempting to use next socket\n");
         goto retry_recv;
     }
+    log_dbg("Received UDP packet, size=%d\n", bytes_received);
 
     /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
@@ -213,6 +219,8 @@ retry_recv:
             log_warn("Dropping rest of packet\n");
             break;
         }
+
+        log_dbg("Unpacking msg type=%d, len=%d\n", type, payload_len);
 
         /* Process message */
         switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
@@ -286,6 +294,33 @@ retry_recv:
                 client_disconnect(client);
                 return 1;  /* Return immediately, as we don't want to process any more messages */
             } break;
+
+            case MSG_LEAVE:
+            case MSG_CONTROLS:
+                break;
+
+            case MSG_SNAKE_METADATA: {
+
+            } break;
+
+            case MSG_SNAKE_METADATA_ACK:
+                break;
+                
+            case MSG_SNAKE_HEAD: {
+
+            } break;
+
+            case MSG_SNAKE_BEZIER: {
+
+            } break;
+
+            case MSG_SNAKE_BEZIER_ACK:
+
+            case MSG_FOOD_CREATE:
+            case MSG_FOOD_CREATE_ACK:
+            case MSG_FOOD_DESTROY:
+            case MSG_FOOD_DESTROY_ACK:
+                break;
         }
 
         i += payload_len + 2;

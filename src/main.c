@@ -87,10 +87,13 @@ run_server_instance(const void* args)
         world_step(&world, instance->settings->sim_tick_rate, frame_number);
 
         if (net_update)
+        {
+            server_queue_snake_data(&server, &world);
             server_send_pending_data(&server, instance->settings);
+        }
 
         if ((tick_lag = tick_wait(&sim_tick)) > 0)
-            log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag > 1 ? 's' : ' ');
+            log_warn("Server is lagging! Behind by %d tick%c\n", tick_lag, tick_lag == 1 ? ' ' : 's');
 
         frame_number++;
     }

@@ -8,6 +8,7 @@ C_BEGIN
 
 struct cs_vector;
 struct cs_btree;
+struct snake;
 
 enum msg_type
 {
@@ -22,7 +23,9 @@ enum msg_type
 
     MSG_SNAKE_METADATA,
     MSG_SNAKE_METADATA_ACK,
-    MSG_SNAKE_DATA,
+    MSG_SNAKE_HEAD,
+    MSG_SNAKE_BEZIER,
+    MSG_SNAKE_BEZIER_ACK,
 
     MSG_FOOD_CREATE,
     MSG_FOOD_CREATE_ACK,
@@ -62,10 +65,16 @@ union parsed_payload
         const char* error;
     } join_deny;
 
-    struct
-    {
+    struct {
         uint16_t frame_number;
     } controls;
+
+    struct {
+        struct qwpos pos;
+        qa angle;
+        uint16_t frame_number;
+        uint8_t speed;
+    } snake_head;
 };
 
 int
@@ -85,7 +94,10 @@ void
 msg_update_frame_number(struct msg* m, uint16_t frame_number);
 
 struct msg*
-msg_join_request(uint16_t protocol_version, uint16_t frame_number, const char* username);
+msg_join_request(
+    uint16_t protocol_version,
+    uint16_t frame_number,
+    const char* username);
 
 struct msg*
 msg_join_accept(
@@ -106,15 +118,18 @@ struct msg*
 msg_join_deny_server_full(const char* error);
 
 struct msg*
-msg_join_ack(void);
-
-struct msg*
 msg_leave(void);
 
 struct msg*
 msg_controls(const struct cs_btree* controls);
 
 int
-msg_controls_unpack_into(struct cs_btree* controls, const char* payload, uint8_t payload_len);
+msg_controls_unpack_into(
+    struct cs_btree* controls,
+    const char* payload, 
+    uint8_t payload_len);
+
+struct msg*
+msg_snake_head(const struct snake* snake, uint16_t frame_number);
 
 C_END
