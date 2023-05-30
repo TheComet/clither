@@ -7,12 +7,12 @@ C_BEGIN
 
 struct server_settings
 {
-	int max_players;
-	int max_username_len;
-	int sim_tick_rate;
-	int net_tick_rate;
-	int client_timeout;
-	int malicious_timeout;
+	uint16_t max_players;
+	uint16_t client_timeout;
+	uint16_t malicious_timeout;
+	uint8_t max_username_len;
+	uint8_t sim_tick_rate;
+	uint8_t net_tick_rate;
 	char port[6];
 	
 	struct cs_hashmap banned_ips;

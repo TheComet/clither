@@ -70,6 +70,7 @@ add_executable (clither
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
+    "include/clither/snake_head.h"
     "include/clither/thread.h"
     "include/clither/tick.h"
     "include/clither/tests.h"

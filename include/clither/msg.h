@@ -2,6 +2,7 @@
 
 #include "clither/config.h"
 #include "clither/q.h"
+#include "clither/snake_head.h"
 #include <stdint.h>
 
 C_BEGIN
@@ -70,10 +71,8 @@ union parsed_payload
     } controls;
 
     struct {
-        struct qwpos pos;
-        qa angle;
+        struct snake_head head;
         uint16_t frame_number;
-        uint8_t speed;
     } snake_head;
 };
 
