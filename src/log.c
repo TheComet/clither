@@ -159,3 +159,19 @@ void log_note(const char* fmt, ...)
     }
 #endif
 }
+
+/* ------------------------------------------------------------------------- */
+void log_net(const char* fmt, ...)
+{
+#if defined(CLITHER_LOGGING)
+    if (g_log)
+    {
+        va_list va;
+        fprintf(g_log, "[NET  ] %s", g_prefix);
+        va_start(va, fmt);
+        vfprintf(g_log, fmt, va);
+        va_end(va);
+        fflush(g_log);
+    }
+#endif
+}

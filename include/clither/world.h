@@ -1,6 +1,11 @@
 #pragma once
 
+#include "clither/config.h"
+#include "clither/q.h"
+
 #include "cstructures/btree.h"
+
+C_BEGIN
 
 struct world
 {
@@ -23,6 +28,9 @@ world_spawn_snake(struct world* world, const char* username);
     ((struct snake*)btree_find(&(world)->snakes, snake_id))
 
 void
+world_remove_snake(struct world* world, uint16_t snake_id);
+
+void
 world_step(struct world* w, int sim_tick_rate, uint16_t frame_number);
 
 #define WORLD_FOR_EACH_SNAKE(world, uid, snake) \
@@ -30,3 +38,5 @@ world_step(struct world* w, int sim_tick_rate, uint16_t frame_number);
 
 #define WORLD_END_EACH \
     BTREE_END_EACH
+
+C_END

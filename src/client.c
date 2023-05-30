@@ -2,6 +2,7 @@
 #include "clither/log.h"
 #include "clither/msg_queue.h"
 #include "clither/net.h"
+#include "clither/snake.h"
 #include "clither/world.h"
 
 #include "cstructures/memory.h"
@@ -34,8 +35,6 @@ client_deinit(struct client* client)
 
     vector_deinit(&client->udp_sockfds);
     msg_queue_deinit(&client->pending_msgs);
-
-    FREE(client->username);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -99,7 +98,7 @@ int
 client_send_pending_data(struct client* client)
 {
     uint8_t type;
-    char buf[MAX_UDP_PACKET_SIZE];
+    uint8_t buf[MAX_UDP_PACKET_SIZE];
     int len = 0;
 
     /* Append unreliable messages first */
@@ -109,7 +108,7 @@ client_send_pending_data(struct client* client)
         if (msg_is_reliable(msg))
             continue;
 
-        log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+        log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
 
         type = (uint8_t)msg->type;
         memcpy(buf + len + 0, &type, 1);
@@ -140,7 +139,7 @@ client_send_pending_data(struct client* client)
          */
         msg_update_frame_number(msg, client->frame_number);
 
-        log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+        log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
 
         type = (uint8_t)msg->type;
         memcpy(buf + len + 0, &type, 1);
@@ -162,7 +161,7 @@ client_send_pending_data(struct client* client)
          * the next one.
          */
 retry_send:
-        log_dbg("Sending UDP packet, size=%d\n", len);
+        log_net("Sending UDP packet, size=%d\n", len);
         if (net_send(*(int*)vector_back(&client->udp_sockfds), buf, len) < 0)
         {
             if (vector_count(&client->udp_sockfds) == 1)
@@ -187,12 +186,14 @@ retry_send:
 int
 client_recv(struct client* client, struct world* world)
 {
-    char buf[MAX_UDP_PACKET_SIZE];
+    uint8_t buf[MAX_UDP_PACKET_SIZE];
     int i;
     int bytes_received;
     int retval = 0;
 
     assert(vector_count(&client->udp_sockfds) > 0);
+
+    log_net("client_recv() frame=%d\n", client->frame_number);
 
 retry_recv:
     bytes_received = net_recv(*(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
@@ -204,11 +205,12 @@ retry_recv:
         log_info("Attempting to use next socket\n");
         goto retry_recv;
     }
-    log_dbg("Received UDP packet, size=%d\n", bytes_received);
+    log_net("Received UDP packet, size=%d\n", bytes_received);
 
     /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
     {
+        const uint8_t* payload;
         union parsed_payload pp;
         enum msg_type type = buf[i+0];
         uint8_t payload_len = buf[i+1];
@@ -220,10 +222,11 @@ retry_recv:
             break;
         }
 
-        log_dbg("Unpacking msg type=%d, len=%d\n", type, payload_len);
+        log_net("Unpacking msg type=%d, len=%d\n", type, payload_len);
 
         /* Process message */
-        switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i+2]))
+        payload = &buf[i+2];
+        switch (msg_parse_payload(&pp, type, payload, payload_len))
         {
             default: {
                 log_warn("Received unknown message type \"%d\" from server. Malicious?\n", type);
@@ -274,7 +277,7 @@ retry_recv:
                  * relative to the frame it sent back. Therefore, we are a full rtt
                  * into the future now.
                  */
-                client->frame_number = pp.join_accept.server_frame + rtt;
+                client->frame_number = pp.join_accept.server_frame + rtt + 3;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
@@ -283,7 +286,12 @@ retry_recv:
                 client->snake_id = pp.join_accept.snake_id;
                 world_create_snake(world, client->snake_id, pp.join_accept.spawn, client->username);
 
-                log_dbg("MSG_JOIN_ACCEPT: %d, %d\n", pp.join_accept.spawn.x, pp.join_accept.spawn.y);
+                log_net(
+                    "MSG_JOIN_ACCEPT:\n"
+                    "  server frame=%d, client frame=%d, rtt=%d\n"
+                    "  spawn=%d, %d\n",
+                    pp.join_accept.server_frame, client->frame_number, rtt,
+                    pp.join_accept.spawn.x, pp.join_accept.spawn.y);
                 client->state = CLIENT_CONNECTED;
             } break;
 
@@ -305,9 +313,10 @@ retry_recv:
 
             case MSG_SNAKE_METADATA_ACK:
                 break;
-                
-            case MSG_SNAKE_HEAD: {
 
+            case MSG_SNAKE_HEAD: {
+                struct snake* snake = world_get_snake(world, client->snake_id);
+                snake_ack_frame(snake, pp.snake_head.frame_number);
             } break;
 
             case MSG_SNAKE_BEZIER: {

@@ -228,21 +228,21 @@ net_close(int sockfd)
 
 /* ------------------------------------------------------------------------- */
 int
-net_sendto(int sockfd, const char* buf, int len, const void* addr, int addrlen)
+net_sendto(int sockfd, const void* buf, int len, const void* addr, int addrlen)
 {
     return sendto(sockfd, buf, len, 0, addr, addrlen);
 }
 
 /* ------------------------------------------------------------------------- */
 int
-net_send(int sockfd, const char* buf, int len)
+net_send(int sockfd, const void* buf, int len)
 {
     return send(sockfd, buf, len, 0);
 }
 
 /* ------------------------------------------------------------------------- */
 int
-net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen)
+net_recvfrom(int sockfd, void* buf, int capacity, void* addr, int addrlen)
 {
     struct sockaddr_storage addr_received;
     socklen_t addrlen_received = sizeof(addr_received);
@@ -274,7 +274,7 @@ net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen)
 
 /* ------------------------------------------------------------------------- */
 int
-net_recv(int sockfd, char* buf, int capacity)
+net_recv(int sockfd, void* buf, int capacity)
 {
     int bytes_received = recv(sockfd, buf, capacity, 0);
 

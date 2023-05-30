@@ -40,7 +40,7 @@ struct msg
 
     enum msg_type type;
     uint8_t payload_len;
-    char payload[1];
+    uint8_t payload[1];
 };
 
 union parsed_payload
@@ -78,11 +78,11 @@ union parsed_payload
 };
 
 int
-msg_parse_paylaod(
+msg_parse_payload(
     union parsed_payload* pl,
     enum msg_type type,
-    uint8_t payload_len,
-    const char* payload);
+    const uint8_t* payload,
+    uint8_t payload_len);
 
 void
 msg_free(struct msg* m);
@@ -125,9 +125,12 @@ msg_controls(const struct cs_btree* controls);
 
 int
 msg_controls_unpack_into(
-    struct cs_btree* controls,
-    const char* payload, 
-    uint8_t payload_len);
+    struct snake* snake,
+    uint16_t frame_number,
+    const uint8_t* payload,
+    uint8_t payload_len,
+    uint16_t* first_frame,
+    uint16_t* last_frame);
 
 struct msg*
 msg_snake_head(const struct snake* snake, uint16_t frame_number);

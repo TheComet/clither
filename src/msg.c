@@ -2,6 +2,7 @@
 #include "clither/msg.h"
 #include "clither/log.h"
 #include "clither/snake.h"
+#include "clither/wrap.h"
 
 #include "cstructures/btree.h"
 #include "cstructures/memory.h"
@@ -10,7 +11,7 @@
 #include <string.h>
 #include <assert.h>
 
-/* Because msg.payload is defined as char[1] */
+/* Because msg.payload is defined as uint8_t[1] */
 #define MSG_SIZE(extra_bytes) \
     (offsetof(struct msg, payload) + (extra_bytes))
 
@@ -77,11 +78,11 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
 
 /* ------------------------------------------------------------------------- */
 int
-msg_parse_paylaod(
+msg_parse_payload(
     union parsed_payload* pp,
     enum msg_type type,
-    uint8_t payload_len,
-    const char* payload)
+    const uint8_t* payload,
+    uint8_t payload_len)
 {
     switch (type)
     {
@@ -105,7 +106,7 @@ msg_parse_paylaod(
                 (payload[2] << 8) |
                 (payload[3] << 0);
             pp->join_request.username_len = payload[4];
-            pp->join_request.username = &payload[5];
+            pp->join_request.username = (const char*)&payload[5];
 
             if (pp->join_request.username_len == 0)
             {
@@ -175,7 +176,7 @@ msg_parse_paylaod(
                 log_warn("Error string is not properly null-terminated\n");
                 return -1;
             }
-            pp->join_deny.error = &payload[1];
+            pp->join_deny.error = (const char*)&payload[1];
         } break;
 
         case MSG_LEAVE:
@@ -212,18 +213,18 @@ msg_parse_paylaod(
 
             pp->snake_head.frame_number =
                 (payload[0] << 8) |
-                payload[1];
+                (payload[1] << 0);
             pp->snake_head.pos.x =
                 (payload[2] << 16) |
                 (payload[3] << 8) |
-                payload[4];
+                (payload[4] << 0);
             pp->snake_head.pos.y =
                 (payload[5] << 16) |
                 (payload[6] << 8) |
-                (payload[7]);
+                (payload[7] << 0);
             pp->snake_head.angle =
                 (payload[8] << 8) |
-                payload[9];
+                (payload[9] << 0);
             pp->snake_head.speed =
                 payload[10];
         } break;
@@ -365,7 +366,7 @@ msg_controls(const struct cs_btree* controls)
     assert(btree_count(controls) > 0);
     first_frame_number = *BTREE_KEY(controls, 0);
 
-    /* 
+    /*
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
@@ -375,6 +376,9 @@ msg_controls(const struct cs_btree* controls)
         log_warn("There are more than 60 controls in the buffer (%d). Only sending the first 60\n", count);
         count = 60;
     }
+
+    log_net("Packing controls for frames %d-%d\n",
+        first_frame_number, (uint16_t)(first_frame_number + count - 1));
 
     /*
      * controls structure: 19 bits
@@ -452,19 +456,22 @@ msg_controls(const struct cs_btree* controls)
 
     for (i = 1; i < count; ++i)
     {
+        uint8_t da, dv;
         struct controls* prev = BTREE_VALUE(controls, i-1);
         struct controls* next = BTREE_VALUE(controls, i);
         int da_i32 = next->angle - prev->angle + 3;
-        int ds_i32 = next->speed - prev->speed + 15;
-        uint8_t da = (uint8_t)da_i32;
-        uint8_t ds = (uint8_t)ds_i32;
+        int dv_i32 = next->speed - prev->speed + 15;
+        if (da_i32 > 128) da_i32 -= 256;
+        if (da_i32 < -128) da_i32 += 256;
+        da = (uint8_t)da_i32;
+        dv = (uint8_t)dv_i32;
 
         if (da_i32 < 0 || da_i32 > 7-1)
             log_warn("Issue while compressing controls: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
-        if (ds_i32 < 0 || ds_i32 > 31-1)
+        if (dv_i32 < 0 || dv_i32 > 31-1)
             log_warn("Issue while compressing controls: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
 
-        m->payload[byte++] = ((ds << 3) & 0xF8) | (da & 0x07);
+        m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
     }
 
     /* Adjust the actual payload length */
@@ -477,15 +484,17 @@ msg_controls(const struct cs_btree* controls)
 /* ------------------------------------------------------------------------- */
 int
 msg_controls_unpack_into(
-    struct cs_btree* controls,
-    const char* payload,
-    uint8_t payload_len)
+    struct snake* snake,
+    uint16_t frame_number,
+    const uint8_t* payload,
+    uint8_t payload_len,
+    uint16_t* first_frame,
+    uint16_t* last_frame)
 {
-    int i, bit, byte;
+    int i, bit, byte, mouse_data_offset;
     uint8_t controls_count;
     uint16_t first_frame_number;
-
-    btree_clear(controls);
+    struct controls controls;
 
     first_frame_number =
         (payload[0] << 8) |
@@ -493,23 +502,62 @@ msg_controls_unpack_into(
     controls_count =
         payload[2];
 
-    /* Read first controls structure */
-    {
-        struct controls* c = btree_emplace_or_get(controls, first_frame_number);
-        c->angle = payload[3];
-        c->speed = payload[4];
-        c->action = (payload[5] & 0x07);
-    }
+    log_net("Unpacking controls from frames %d-%d, current frame=%d\n",
+            first_frame_number, (uint16_t)(first_frame_number + controls_count), frame_number);
+    *first_frame = first_frame_number;
+    *last_frame = first_frame_number + controls_count;
 
+    /* Read first controls structure */
+    controls.angle = payload[3];
+    controls.speed = payload[4];
+    controls.action = (payload[5] & 0x07);
+    if (u16_gt_wrap(first_frame_number, frame_number))
+        snake_queue_controls(snake, &controls, first_frame_number);
+
+    if (controls_count == 0)
+        return 0;
+
+    /* Determine offset to mouse data because we have to read the button and
+     * mouse data together */
+    /* Offsets from after reading first control structure */
     bit = 3;
     byte = 5;
+    for (i = 0; i != (int)controls_count; ++i)
+    {
+        uint8_t b;
+        if (byte >= payload_len)
+        {
+            log_warn("Error while unpacking controls: Packet too small\n");
+            return -1;
+        }
+
+        b = payload[byte] & (1<<bit);
+
+        bit += b ? 4 : 1;
+        if (bit >= 8) {
+            bit -= 8;
+            byte++;
+        }
+    }
+    /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
+     * the current byte if it is only partially filled */
+    mouse_data_offset = bit == 0 ? byte : byte + 1;
+
+    if (mouse_data_offset + controls_count > payload_len)
+    {
+        log_warn("Error while unpacking controls: Packet too small\n");
+        return -1;
+    }
+
+    /* Offsets from after reading first control structure */
+    bit = 3;
+    byte = 5;
+    for (i = 0; i != (int)controls_count; ++i)
+    {
+        uint8_t b;
+        uint8_t da, dv;
 
 #define READ_NEXT_BIT_INTO(x) do { \
-        if (byte >= payload_len) { \
-            log_warn("Error while unpacking controls: Packet too small\n"); \
-            btree_clear(controls); \
-            return -1; \
-        } \
         x = payload[byte] & (1<<bit); \
         if (++bit >= 8) { \
             bit = 0; \
@@ -517,48 +565,25 @@ msg_controls_unpack_into(
         } \
     } while (0)
 
-    for (i = 0; i != (int)controls_count; ++i)
-    {
-        uint8_t b;
-        struct controls* c = btree_emplace_or_get(controls, first_frame_number + i + 1);
-
-        c->action = 0;
-
         READ_NEXT_BIT_INTO(b);
         if (b)
         {
+            controls.action = 0;
             READ_NEXT_BIT_INTO(b);
-            if (b) c->action |= 0x01;
+            if (b) controls.action |= 0x01;
             READ_NEXT_BIT_INTO(b);
-            if (b) c->action |= 0x02;
+            if (b) controls.action |= 0x02;
             READ_NEXT_BIT_INTO(b);
-            if (b) c->action |= 0x04;
+            if (b) controls.action |= 0x04;
         }
-    }
 
-    /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
-     * the current byte if it is only partially filled */
-    if (bit != 0)
-        byte++;
+        da = payload[mouse_data_offset+i] & 0x07;
+        dv = (payload[mouse_data_offset+i] >> 3) & 0x1F;
+        controls.angle += da - 3;
+        controls.speed += dv - 15;
 
-    for (i = 0; i != (int)controls_count; ++i)
-    {
-        uint8_t da, ds;
-        struct controls* prev = BTREE_VALUE(controls, i);
-        struct controls* next = BTREE_VALUE(controls, i+1);
-
-        if (byte >= payload_len)
-        {
-            log_warn("Error while unpacking controls: Packet too small\n");
-            btree_clear(controls);
-            return -1;
-        }
-        da = payload[byte] & 0x07;
-        ds = (payload[byte] >> 3) & 0x1F;
-        byte++;
-
-        next->angle = prev->angle + da - 3;
-        next->speed = prev->speed + ds - 15;
+        if (u16_gt_wrap(first_frame_number + i + 1, frame_number))
+            snake_queue_controls(snake, &controls, first_frame_number + i + 1);
     }
 
     return 0;
@@ -575,7 +600,7 @@ msg_snake_head(const struct snake* snake, uint16_t frame_number)
         2 +  /* angle (16-bit) */
         1);  /* speed (uint8_t) */
 
-    m->payload[0] = (frame_number << 8) & 0xFF;
+    m->payload[0] = (frame_number >> 8) & 0xFF;
     m->payload[1] = (frame_number & 0xFF);
 
     m->payload[2] = (snake->head_pos.x >> 16) & 0xFF;

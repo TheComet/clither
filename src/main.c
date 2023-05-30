@@ -5,6 +5,7 @@
 #include "clither/client.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
+#include "clither/mcd_wifi.h"
 #include "clither/msg.h"
 #include "clither/mutex.h"
 #include "clither/net.h"
@@ -80,16 +81,21 @@ run_server_instance(const void* args)
         int net_update = tick_advance(&net_tick);
 
         if (net_update)
+        {
             if (server_recv(&server, instance->settings, &world, frame_number) != 0)
                 break;
+        }
 
         /* sim_update */
         world_step(&world, instance->settings->sim_tick_rate, frame_number);
+        WORLD_FOR_EACH_SNAKE(&world, snake_id, snake)
+            snake_ack_frame(snake, frame_number);
+        WORLD_END_EACH
 
         if (net_update)
         {
-            server_queue_snake_data(&server, &world);
-            server_send_pending_data(&server, instance->settings);
+            server_queue_snake_data(&server, &world, frame_number);
+            server_send_pending_data(&server);
         }
 
         if ((tick_lag = tick_wait(&sim_tick)) > 0)
@@ -222,6 +228,7 @@ join_background_server(struct thread t)
 static void
 run_client(const struct args* a)
 {
+    struct thread mcd_thread;
     struct world world;
     struct input input;
     struct controls controls;
@@ -230,6 +237,7 @@ run_client(const struct args* a)
     struct client client;
     struct tick sim_tick;
     struct tick net_tick;
+    const char* port;
     int tick_lag;
 
     /* Change log prefix and color for server log messages */
@@ -237,16 +245,27 @@ run_client(const struct args* a)
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     memory_init_thread();
-    world_init(&world);
-    client_init(&client);
-    camera_init(&camera);
 
-    /*
-     * TODO: In the future the GUI will take care of connecting. Here we do
-     * it immediately because there is no menu.
-     */
-    if (client_connect(&client, a->ip, a->port, "username") < 0)
-        goto net_init_connection_failed;
+    world_init(&world);
+
+    /* If McDonald's WiFi is enabled, start that */
+    client_init(&client);
+    if (a->mcd_latency > 0)
+    {
+        if (thread_start(&mcd_thread, run_mcd_wifi, a) < 0)
+            goto start_mcd_failed;
+        if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
+            goto client_connect_failed;
+    }
+    else
+    {
+        /*
+         * TODO: In the future the GUI will take care of connecting. Here we do
+         * it immediately because there is no menu.
+         */
+        if (client_connect(&client, a->ip, a->port, "username") < 0)
+            goto client_connect_failed;
+    }
 
     /* Init all graphics and create window */
     if (gfx_init() < 0)
@@ -255,6 +274,7 @@ run_client(const struct args* a)
     if (gfx == NULL)
         goto create_gfx_failed;
 
+    camera_init(&camera);
     input_init(&input);
     controls_init(&controls);
 
@@ -315,7 +335,6 @@ run_client(const struct args* a)
              * acknowledges our move, we remove all controls that date back before
              * and up to that point in time from the list again.
              */
-            snake_ack_frame(snake, client.frame_number-1);  /* TODO: This will become the mechanism to set the frame to roll back to */
             snake_queue_controls(snake, &controls, client.frame_number);
 
             /* Update snake and step */
@@ -362,7 +381,14 @@ run_client(const struct args* a)
 create_gfx_failed:
     gfx_deinit();
 init_gfx_failed:
-net_init_connection_failed:
+client_connect_failed:
+    /* Stop McDonald's WiFi if necessary */
+    if (a->mcd_latency > 0)
+    {
+        thread_join(mcd_thread, 0);
+        log_dbg("Joined McDonald's WiFi thread\n");
+    }
+start_mcd_failed:
     client_deinit(&client);
     world_deinit(&world);
     memory_deinit_thread();

@@ -57,22 +57,39 @@ snake_deinit(struct snake* snake)
 void
 snake_queue_controls(struct snake* snake, const struct controls* controls, uint16_t frame_number)
 {
-    if (btree_insert_new(&snake->controls_buffer, frame_number, controls) != BTREE_OK)
-        log_warn("Controls for frame %d were already queued for snake\n");
+    struct controls* existing;
+    if (btree_insert_or_get(&snake->controls_buffer, frame_number, controls, (void**)&existing) == BTREE_EXISTS)
+        if (controls->angle != existing->angle ||
+            controls->speed != existing->speed ||
+            controls->action != existing->action)
+        {
+            log_warn("Tried inserting controls for snake \"%s\" on frame %d, but new controls are different from existing!\n"
+                "  current  : angle=%d, speed=%d, action=%d\n"
+                "  received : angle=%d, speed=%d, action=%d\n",
+                     snake->name, frame_number,
+                     existing->angle, existing->speed, existing->action,
+                     controls->angle, controls->speed, controls->action);
+        }
 }
 
 /* ------------------------------------------------------------------------- */
 void
 snake_ack_frame(struct snake* snake, uint16_t frame_number)
 {
-    btree_erase(&snake->controls_buffer, frame_number);
+    /* Keep the frame that was just simulated around, because it may be required
+     * later for prediction */
+    while (btree_count(&snake->controls_buffer) > 0 &&
+           *BTREE_KEY(&snake->controls_buffer, 0) < frame_number)
+    {
+        btree_erase_index(&snake->controls_buffer, 0);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
 void
 snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
 {
-    struct controls fallback_controls;
+    struct controls* controls;
     double a;
     double error_squared;
     qw dx, dy;
@@ -81,24 +98,28 @@ snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
     uint8_t target_speed;
 
     next_frame_number = frame_number + 1;
-    struct controls* controls = btree_find(&snake->controls_buffer, next_frame_number);
+    controls = btree_find(&snake->controls_buffer, next_frame_number);
     if (controls == NULL)
     {
         if (btree_count(&snake->controls_buffer) == 0)
         {
             log_warn("\"%s\" snake's controls buffer was empty! Should never happen\n", snake->name);
-            controls_init(&fallback_controls);
-            controls = &fallback_controls;
+            controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
+            controls_init(controls);  /* Default controls */
         }
         else
         {
             /* Prediction of next controls. For now we simply copy the previously known controls */
-            controls = btree_find_prev(&snake->controls_buffer, next_frame_number);
-            if (controls == NULL)
+            struct controls* prev_controls = btree_find(&snake->controls_buffer, frame_number);
+            controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
+            if (prev_controls == NULL)
             {
                 log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
-                controls_init(&fallback_controls);
-                controls = &fallback_controls;
+                controls_init(controls);
+            }
+            else
+            {
+                *controls = *prev_controls;
             }
         }
     }

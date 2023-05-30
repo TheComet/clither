@@ -5,6 +5,7 @@
 #include "clither/server_settings.h"
 #include "clither/snake.h"
 #include "clither/world.h"
+#include "clither/wrap.h"
 
 #include "cstructures/btree.h"
 #include "cstructures/vector.h"
@@ -15,6 +16,7 @@ struct client_table_entry
 {
     struct cs_vector pending_msgs;     /* struct msg* */
     int timeout_counter;
+    int dillate_counter;
     cs_btree_key snake_id;
 };
 
@@ -30,9 +32,24 @@ struct client_table_entry
 
 /* ------------------------------------------------------------------------- */
 static void
-mark_client_as_malicious_and_drop(struct server* server)
+client_remove(struct server* server, struct world* world, void* addr, struct client_table_entry* client)
 {
+    world_remove_snake(world, client->snake_id);
+    msg_queue_deinit(&client->pending_msgs);
+    hashmap_erase(&server->client_table, addr);
+}
 
+/* ------------------------------------------------------------------------- */
+static void
+mark_client_as_malicious_and_drop(
+    struct server* server,
+    struct world* world,
+    void* addr,
+    struct client_table_entry* client,
+    int timeout)
+{
+    hashmap_insert(&server->malicious_clients, addr, &timeout);
+    client_remove(server, world, addr, client);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -86,7 +103,7 @@ server_deinit(struct server* server)
 
 /* ------------------------------------------------------------------------- */
 void
-server_send_pending_data(struct server* server, const struct server_settings* settings)
+server_send_pending_data(struct server* server)
 {
     char buf[MAX_UDP_PACKET_SIZE];
 
@@ -101,7 +118,7 @@ server_send_pending_data(struct server* server, const struct server_settings* se
             if (msg->resend_rate != 0)  /* message is reliable */
                 continue;
 
-            log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+            log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
 
             type = (uint8_t)msg->type;
             memcpy(buf + len + 0, &type, 1);
@@ -124,7 +141,7 @@ server_send_pending_data(struct server* server, const struct server_settings* se
                 continue;
             msg->resend_rate_counter = msg->resend_rate;
 
-            log_dbg("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+            log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
 
             type = (uint8_t)msg->type;
             memcpy(buf + len + 0, &type, 1);
@@ -137,18 +154,9 @@ server_send_pending_data(struct server* server, const struct server_settings* se
         if (len > 0)
         {
             /* NOTE: The hashmap's key size contains the length of the stored address */
-            log_dbg("Sending UDP packet, size=%d\n", len);
+            log_net("Sending UDP packet, size=%d\n", len);
             net_sendto(server->udp_sock, buf, len, addr, server->client_table.key_size);
             client->timeout_counter++;
-        }
-
-        if (client->timeout_counter > settings->client_timeout * settings->net_tick_rate)
-        {
-            char ipstr[MAX_ADDRSTRLEN];
-            net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
-            log_warn("Client %s timed out\n", ipstr);
-            msg_queue_deinit(&client->pending_msgs);
-            hashmap_erase(&server->client_table, addr);
         }
     CLIENT_TABLE_END_EACH
 }
@@ -195,14 +203,24 @@ server_recv(
     struct world* world,
     uint16_t frame_number)
 {
-    char buf[MAX_UDP_PACKET_SIZE];
-    char client_addr[MAX_ADDRLEN];
+    uint8_t buf[MAX_UDP_PACKET_SIZE];
+    uint8_t client_addr[MAX_ADDRLEN];
     int bytes_received;
     int i;
+
+    log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         client->timeout_counter++;
+
+        if (client->timeout_counter > settings->client_timeout * settings->net_tick_rate)
+        {
+            char ipstr[MAX_ADDRSTRLEN];
+            net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
+            log_warn("Client %s timed out\n", ipstr);
+            client_remove(server, world, addr, client);
+        }
     CLIENT_TABLE_END_EACH
 
     /* Update malicious client timeouts */
@@ -211,7 +229,7 @@ server_recv(
         {
             char ipstr[MAX_ADDRSTRLEN];
             net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
-            log_dbg("Client %s removed from malicious list\n", ipstr);
+            log_info("Client %s removed from malicious list\n", ipstr);
             hashmap_erase(&server->malicious_clients, addr);
         }
     MALICIOUS_CLIENT_END_EACH
@@ -226,7 +244,7 @@ server_recv(
         /* Nothing received or error */
         if (bytes_received <= 0)
             return bytes_received;
-        log_dbg("Received UDP packet, size=%d\n", bytes_received);
+        log_net("Received UDP packet, size=%d\n", bytes_received);
 
         /*
          * If we received a packet from a banned client, ignore packet
@@ -263,6 +281,7 @@ server_recv(
          */
         for (i = 0; i < bytes_received - 1;)
         {
+            const uint8_t* payload;
             union parsed_payload pp;
             enum msg_type type = buf[i + 0];
             uint8_t payload_len = buf[i + 1];
@@ -273,11 +292,11 @@ server_recv(
                 log_warn("Invalid payload length \"%d\" received from client %s\n",
                     (int)payload_len, ipstr);
                 log_warn("Dropping rest of packet\n");
-                mark_client_as_malicious_and_drop(server);
+                mark_client_as_malicious_and_drop(server, world, client_addr, client, settings->malicious_timeout);
                 break;
             }
 
-            log_dbg("Unpacking msg type=%d, len=%d\n", type, payload_len);
+            log_net("Unpacking msg type=%d, len=%d\n", type, payload_len);
 
             /*
              * Disallow receiving packets from clients that are not registered
@@ -298,12 +317,12 @@ server_recv(
              */
 
             /* Process message */
-            switch (msg_parse_paylaod(&pp, type, payload_len, &buf[i + 2]))
+            payload = &buf[i + 2];
+            switch (msg_parse_payload(&pp, type, payload, payload_len))
             {
                 default: {
-                    mark_client_as_malicious_and_drop(server);
+                    mark_client_as_malicious_and_drop(server, world, client_addr, client, settings->malicious_timeout);
                 } break;
-
 
                 case MSG_JOIN_REQUEST: {
                     if (hashmap_count(&server->client_table) > (uint32_t)settings->max_players)
@@ -320,13 +339,18 @@ server_recv(
                         break;
                     }
 
+                    /* Create new client. This code is not refactored into a
+                     * separate function because this is the only location where
+                     * clients are created. Clients are destroyed by the
+                     * function remove_client() */
                     if (client == NULL)
                     {
-                        log_dbg("Protocol: MSG_JOIN <- \"%s\"\n", pp.join_request.username);
+                        log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_msgs);
                         client->timeout_counter = 0;
+                        client->dillate_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                     }
 
@@ -355,7 +379,18 @@ server_recv(
                 } break;
 
                 case MSG_CONTROLS: {
+                    uint16_t first_frame, last_frame;
+                    struct snake* snake = world_get_snake(world, client->snake_id);
+                    msg_controls_unpack_into(snake, frame_number, payload, payload_len, &first_frame, &last_frame);
 
+                    /*
+                     * If we notice
+                     */
+                    if (u16_le_wrap(last_frame, frame_number))
+                    {
+                        int16_t diff = last_frame - frame_number;
+                        //server_queue(client, msg_feedback(diff));
+                    }
                 } break;
 
                 case MSG_SNAKE_METADATA: {

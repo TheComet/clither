@@ -59,6 +59,9 @@ snake_queue_controls(struct snake* snake, const struct controls* controls, uint1
 void
 snake_ack_frame(struct snake* snake, uint16_t frame_number);
 
+#define snake_controls_count(snake) \
+    (btree_count(&snake->controls_buffer))
+
 void
 snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number);
 
