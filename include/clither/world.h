@@ -31,7 +31,7 @@ void
 world_remove_snake(struct world* world, uint16_t snake_id);
 
 void
-world_step(struct world* w, int sim_tick_rate, uint16_t frame_number);
+world_step(struct world* w, uint16_t frame_number, uint8_t sim_tick_rate);
 
 #define WORLD_FOR_EACH_SNAKE(world, uid, snake) \
     BTREE_FOR_EACH(&(world)->snakes, struct snake, uid, snake)

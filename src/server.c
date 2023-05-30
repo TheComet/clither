@@ -184,8 +184,8 @@ server_queue_snake_data(
         CLIENT_TABLE_FOR_EACH(&server->client_table, other_addr, other_client)
             struct snake* snake = world_get_snake(world, client->snake_id);
             struct snake* other_snake = world_get_snake(world, other_client->snake_id);
-            qw dx = qw_sub(snake->head_pos.x, other_snake->head_pos.x);
-            qw dy = qw_sub(snake->head_pos.y, other_snake->head_pos.y);
+            qw dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
+            qw dy = qw_sub(snake->head.pos.y, other_snake->head.pos.y);
             qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
             if (dist_sq > make_qw(1 * 1))
                 continue;
@@ -363,7 +363,7 @@ server_recv(
                             pp.join_request.frame,
                             frame_number,
                             client->snake_id,
-                            &snake->head_pos);
+                            &snake->head.pos);
                         vector_push(&client->pending_msgs, &response);
                     }
                 } break;

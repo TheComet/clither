@@ -214,18 +214,18 @@ msg_parse_payload(
             pp->snake_head.frame_number =
                 (payload[0] << 8) |
                 (payload[1] << 0);
-            pp->snake_head.pos.x =
+            pp->snake_head.head.pos.x =
                 (payload[2] << 16) |
                 (payload[3] << 8) |
                 (payload[4] << 0);
-            pp->snake_head.pos.y =
+            pp->snake_head.head.pos.y =
                 (payload[5] << 16) |
                 (payload[6] << 8) |
                 (payload[7] << 0);
-            pp->snake_head.angle =
+            pp->snake_head.head.angle =
                 (payload[8] << 8) |
                 (payload[9] << 0);
-            pp->snake_head.speed =
+            pp->snake_head.head.speed =
                 payload[10];
         } break;
 
@@ -603,18 +603,18 @@ msg_snake_head(const struct snake* snake, uint16_t frame_number)
     m->payload[0] = (frame_number >> 8) & 0xFF;
     m->payload[1] = (frame_number & 0xFF);
 
-    m->payload[2] = (snake->head_pos.x >> 16) & 0xFF;
-    m->payload[3] = (snake->head_pos.x >> 8) & 0xFF;
-    m->payload[4] = snake->head_pos.x & 0xFF;
+    m->payload[2] = (snake->head.pos.x >> 16) & 0xFF;
+    m->payload[3] = (snake->head.pos.x >> 8) & 0xFF;
+    m->payload[4] = snake->head.pos.x & 0xFF;
 
-    m->payload[5] = (snake->head_pos.y >> 16) & 0xFF;
-    m->payload[6] = (snake->head_pos.y >> 8) & 0xFF;
-    m->payload[7] = snake->head_pos.y & 0xFF;
+    m->payload[5] = (snake->head.pos.y >> 16) & 0xFF;
+    m->payload[6] = (snake->head.pos.y >> 8) & 0xFF;
+    m->payload[7] = snake->head.pos.y & 0xFF;
 
-    m->payload[8] = (snake->head_angle >> 8) & 0xFF;
-    m->payload[9] = snake->head_angle & 0xFF;
+    m->payload[8] = (snake->head.angle >> 8) & 0xFF;
+    m->payload[9] = snake->head.angle & 0xFF;
 
-    m->payload[10] = snake->speed;
+    m->payload[10] = snake->head.speed;
 
     return m;
 }

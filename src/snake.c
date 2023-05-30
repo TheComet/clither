@@ -34,9 +34,12 @@ snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
     bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
 
-    snake->head_pos = spawn_pos;
-    snake->head_angle = make_qa(0);
-    snake->speed = 0;
+    snake->head.pos = spawn_pos;
+    snake->head.angle = make_qa(0);
+    snake->head.speed = 0;
+
+    snake->head_ackd = snake->head;
+    snake->head_ackd_frame_number = 0;
 
     snake->length = 200;
 }
@@ -73,9 +76,70 @@ snake_queue_controls(struct snake* snake, const struct controls* controls, uint1
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_ack_frame(struct snake* snake, uint16_t frame_number)
+static struct controls*
+snake_get_or_predict_controls(struct snake* snake, uint16_t frame_number)
 {
+    struct controls* prev_controls;
+    struct controls* controls;
+    uint16_t next_frame_number = frame_number + 1;
+
+    controls = btree_find(&snake->controls_buffer, next_frame_number);
+    if (controls != NULL)
+        return controls;
+
+    if (btree_count(&snake->controls_buffer) == 0)
+    {
+        log_warn("\"%s\" snake's controls buffer was empty! Should never happen\n", snake->name);
+        controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
+        controls_init(controls);  /* Default controls */
+        return controls;
+    }
+
+    /* Prediction of next controls. For now we simply copy the previously known controls */
+    controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
+    prev_controls = btree_find(&snake->controls_buffer, frame_number);
+    if (prev_controls != NULL)
+        *controls = *prev_controls;
+    else
+    {
+        log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
+        controls_init(controls);  /* Default controls */
+    }
+
+    return controls;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate)
+{
+    /* 
+     * It's possible the authoritative head position we receive from the server
+     * goes through some packet loss, so may have to catch up with the simulation
+     */
+    if ((uint16_t)(frame_number - snake->head_ackd_frame_number) > 0x7FFF)
+        log_warn("Acknowledged snake_head frame is way behind the current frame number! Acknowledged frame: %d, current frame: %d\n",
+            snake->head_ackd_frame_number, frame_number);
+    while (snake->head_ackd_frame_number != frame_number)
+    {
+        struct controls* controls = snake_get_or_predict_controls(snake, snake->head_ackd_frame_number);
+        snake_step_head(&snake->head_ackd, controls, sim_tick_rate);
+        snake->head_ackd_frame_number++;
+    }
+
+    if (snake_heads_are_equal(&snake->head_ackd, auth) == 0)
+    {
+        /* Rollback */
+        snake->head_ackd = *auth;
+        snake->head = *auth;
+
+        /* Roll forwards */
+        BTREE_FOR_EACH(&snake->controls_buffer, struct controls, frame, controls)
+            if (u16_lt_wrap(frame, frame_number))
+                continue;
+        BTREE_END_EACH
+    }
+
     /* Keep the frame that was just simulated around, because it may be required
      * later for prediction */
     while (btree_count(&snake->controls_buffer) > 0 &&
@@ -87,15 +151,71 @@ snake_ack_frame(struct snake* snake, uint16_t frame_number)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
+snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate)
 {
-    struct controls* controls;
     double a;
-    double error_squared;
     qw dx, dy;
     qa angle_diff, target_angle;
-    uint16_t next_frame_number;
     uint8_t target_speed;
+
+    /*
+     * The "controls" structure contains the absolute angle (in world space) of
+     * the desired angle. That is, the angle from the snake's head to the mouse
+     * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
+     * it to radians [-pi .. pi) using the fixed point angle type "qa"
+     */
+    target_angle = make_qa(controls->angle / 256.0 * 2 * M_PI - M_PI);
+
+    /* Calculate difference between desired angle and actual angle and wrap */
+    angle_diff = qa_sub(head->angle, target_angle);
+    if (angle_diff > make_qa(M_PI))
+        angle_diff = qa_sub(angle_diff, make_qa(2 * M_PI));
+    else if (angle_diff < make_qa(-M_PI))
+        angle_diff = qa_add(angle_diff, make_qa(2 * M_PI));
+
+    /*
+     * Turn the head towards the target angle and make sure to not exceed the
+     * maximum turning speed.
+     */
+    if (angle_diff > TURN_SPEED)
+        head->angle = qa_sub(head->angle, qa_mul(TURN_SPEED, make_qa2(sim_tick_rate, 60)));
+    else if (angle_diff < -TURN_SPEED)
+        head->angle = qa_add(head->angle, TURN_SPEED);
+    else
+        head->angle = target_angle;
+
+    /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
+    if (head->angle < make_qa(-M_PI))
+        head->angle = qa_add(head->angle, make_qa(2 * M_PI));
+    else if (head->angle >= make_qa(M_PI))
+        head->angle = qa_sub(head->angle, make_qa(2 * M_PI));
+
+    /* Integrate speed over time */
+    target_speed = controls->action == CONTROLS_ACTION_BOOST ?
+        255 :
+        qw_sub(MAX_SPEED, MIN_SPEED) * controls->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
+    if (head->speed - target_speed > (ACCELERATION * 256))
+        head->speed -= (ACCELERATION * 256);
+    else if (head->speed - target_speed < (-ACCELERATION * 256))
+        head->speed += (ACCELERATION * 256);
+    else
+        head->speed = target_speed;
+
+    /* Update snake position using the head's current angle and speed */
+    a = qa_to_float(head->angle);
+    dx = make_qw(cos(a) * (head->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
+    dy = make_qw(sin(a) * (head->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
+    head->pos.x = qw_add(head->pos.x, dx);
+    head->pos.y = qw_add(head->pos.y, dy);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_step(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate)
+{
+    struct controls* controls;
+    double error_squared;
+    uint16_t next_frame_number;
 
     next_frame_number = frame_number + 1;
     controls = btree_find(&snake->controls_buffer, next_frame_number);
@@ -115,7 +235,7 @@ snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
             if (prev_controls == NULL)
             {
                 log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
-                controls_init(controls);
+                controls_init(controls);  /* Default controls */
             }
             else
             {
@@ -124,58 +244,10 @@ snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
         }
     }
 
-    /*
-     * The "controls" structure contains the absolute angle (in world space) of
-     * the desired angle. That is, the angle from the snake's head to the mouse
-     * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
-     * it to radians [-pi .. pi) using the fixed point angle type "qa"
-     */
-    target_angle = make_qa(controls->angle / 256.0 * 2*M_PI - M_PI);
-
-    /* Calculate difference between desired angle and actual angle and wrap */
-    angle_diff = qa_sub(snake->head_angle, target_angle);
-    if (angle_diff > make_qa(M_PI))
-        angle_diff = qa_sub(angle_diff, make_qa(2*M_PI));
-    else if (angle_diff < make_qa(-M_PI))
-        angle_diff = qa_add(angle_diff, make_qa(2*M_PI));
-
-    /*
-     * Turn the head towards the target angle and make sure to not exceed the
-     * maximum turning speed.
-     */
-    if (angle_diff > TURN_SPEED)
-        snake->head_angle = qa_sub(snake->head_angle, qa_mul(TURN_SPEED, make_qa2(sim_tick_rate, 60)));
-    else if (angle_diff < -TURN_SPEED)
-        snake->head_angle = qa_add(snake->head_angle, TURN_SPEED);
-    else
-        snake->head_angle = target_angle;
-
-    /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
-    if (snake->head_angle < make_qa(-M_PI))
-        snake->head_angle = qa_add(snake->head_angle, make_qa(2*M_PI));
-    else if (snake->head_angle >= make_qa(M_PI))
-        snake->head_angle = qa_sub(snake->head_angle, make_qa(2*M_PI));
-
-    /* Integrate speed over time */
-    target_speed = controls->action == CONTROLS_ACTION_BOOST ?
-        255 :
-        qw_sub(MAX_SPEED, MIN_SPEED) * controls->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
-    if (snake->speed - target_speed > (ACCELERATION*256))
-        snake->speed -= (ACCELERATION*256);
-    else if (snake->speed - target_speed < (-ACCELERATION*256))
-        snake->speed += (ACCELERATION*256);
-    else
-        snake->speed = target_speed;
-
-    /* Update snake position using the head's current angle and speed */
-    a = qa_to_float(snake->head_angle);
-    dx = make_qw(cos(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
-    dy = make_qw(sin(a) * (snake->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
-    snake->head_pos.x = qw_add(snake->head_pos.x, dx);
-    snake->head_pos.y = qw_add(snake->head_pos.y, dy);
+    snake_step_head(&snake->head, controls, sim_tick_rate);
 
     /* Append new position to the list of points */
-    vector_push(&snake->points, &snake->head_pos);
+    vector_push(&snake->points, &snake->head.pos);
 
     /* Fit current bezier segment to list of points */
     error_squared = bezier_fit_head(
@@ -200,6 +272,6 @@ snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number)
         struct qwpos head_pos = head->pos;
         bezier_handle_init(vector_emplace(&snake->bezier_handles), head_pos);
         vector_clear(&snake->points);
-        vector_push(&snake->points, &snake->head_pos);
+        vector_push(&snake->points, &snake->head.pos);
     }
 }

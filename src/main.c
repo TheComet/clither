@@ -89,7 +89,7 @@ run_server_instance(const void* args)
         /* sim_update */
         world_step(&world, instance->settings->sim_tick_rate, frame_number);
         WORLD_FOR_EACH_SNAKE(&world, snake_id, snake)
-            snake_ack_frame(snake, frame_number);
+            snake_ack_frame(snake, &snake->head, frame_number);
         WORLD_END_EACH
 
         if (net_update)
@@ -237,7 +237,6 @@ run_client(const struct args* a)
     struct client client;
     struct tick sim_tick;
     struct tick net_tick;
-    const char* port;
     int tick_lag;
 
     /* Change log prefix and color for server log messages */
@@ -325,7 +324,7 @@ run_client(const struct args* a)
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            gfx_update_controls(&controls, &input, gfx, &camera, snake->head_pos);
+            gfx_update_controls(&controls, &input, gfx, &camera, snake->head.pos);
 
             /*
              * Append the new controls to the ring buffer of unconfirmed controls.

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/q.h"
+#include "clither/snake_head.h"
 
-#include "cstructures/btree.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
@@ -14,7 +13,7 @@ struct snake
 {
     char* name;
 
-    struct cs_btree controls_buffer;
+    struct cs_vector controls_buffer;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
@@ -34,6 +33,7 @@ struct snake
      * where N is the length of the snake.
      */
     struct cs_vector bezier_points;
+    struct cs_vector bezier_points_ackd;
 
     /*
      * The total length (in points) of the snake. The list of bezier handles
@@ -42,9 +42,8 @@ struct snake
      */
     uint32_t length;
 
-    struct qwpos head_pos;
-    qa head_angle;
-    uint8_t speed;
+    struct snake_head head;
+    struct snake_head head_ackd;
 };
 
 void
@@ -57,12 +56,15 @@ void
 snake_queue_controls(struct snake* snake, const struct controls* controls, uint16_t frame_number);
 
 void
-snake_ack_frame(struct snake* snake, uint16_t frame_number);
+snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate);
 
 #define snake_controls_count(snake) \
     (btree_count(&snake->controls_buffer))
 
 void
-snake_step(struct snake* snake, int sim_tick_rate, uint16_t frame_number);
+snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate);
+
+void
+snake_step(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate);
 
 C_END

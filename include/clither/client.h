@@ -28,11 +28,11 @@ struct client
     char* username;
     struct cs_vector pending_msgs;  /* struct net_msg* */
     struct cs_vector udp_sockfds;   /* int */
-    int sim_tick_rate;
-    int net_tick_rate;
     int timeout_counter;
     uint16_t frame_number;          /* Counts upwards at sim_tick_rate */
     uint16_t snake_id;
+    uint8_t sim_tick_rate;
+    uint8_t net_tick_rate;
     enum client_state state;
 };
 

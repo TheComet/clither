@@ -316,7 +316,7 @@ retry_recv:
 
             case MSG_SNAKE_HEAD: {
                 struct snake* snake = world_get_snake(world, client->snake_id);
-                snake_ack_frame(snake, pp.snake_head.frame_number);
+                snake_ack_frame(snake, &pp.snake_head.head, pp.snake_head.frame_number);
             } break;
 
             case MSG_SNAKE_BEZIER: {

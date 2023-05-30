@@ -119,8 +119,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int max_players;
             UNQUOTE_STRING(value);
             max_players = atoi(value);
-            if (max_players > 0)
-                server->max_players = max_players;
+            if (max_players > 0 && max_players <= 0xFFFF)
+                server->max_players = (uint16_t)max_players;
             else
             {
                 log_err("Invalid value \"%s\" for \"max_players\" in config file\n", value);
@@ -132,8 +132,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int maxlen;
             UNQUOTE_STRING(value);
             maxlen = atoi(value);
-            if (maxlen > 0)
-                server->max_username_len = maxlen;
+            if (maxlen > 0 && maxlen <= 255)
+                server->max_username_len = (uint8_t)maxlen;
             else
             {
                 log_err("Invalid value \"%s\" for \"max_username_len\" in config file\n", value);
@@ -145,8 +145,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int rate;
             UNQUOTE_STRING(value);
             rate = atoi(value);
-            if (rate > 0)
-                server->sim_tick_rate = rate;
+            if (rate > 0 && rate <= 255)
+                server->sim_tick_rate = (uint8_t)rate;
             else
             {
                 log_err("Invalid value \"%s\" for \"sim_tick_rate\" in config file\n", value);
@@ -158,8 +158,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int rate;
             UNQUOTE_STRING(value);
             rate = atoi(value);
-            if (rate > 0)
-                server->net_tick_rate = rate;
+            if (rate > 0 && rate <= 255)
+                server->net_tick_rate = (uint8_t)rate;
             else
             {
                 log_err("Invalid value \"%s\" for \"net_tick_rate\" in config file\n", value);
@@ -171,8 +171,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int seconds;
             UNQUOTE_STRING(value);
             seconds = atoi(value);
-            if (seconds > 0)
-                server->client_timeout = seconds;
+            if (seconds > 0 && seconds <= 0xFFFF)
+                server->client_timeout = (uint16_t)seconds;
             else
             {
                 log_err("Invalid value \"%s\" for \"client_timeout\" in config file\n", value);
@@ -184,8 +184,8 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
             int seconds;
             UNQUOTE_STRING(value);
             seconds = atoi(value);
-            if (seconds > 0)
-                server->malicious_timeout = seconds;
+            if (seconds > 0 && seconds <= 0xFFFF)
+                server->malicious_timeout = (uint16_t)seconds;
             else
             {
                 log_err("Invalid value \"%s\" for \"malicious_timeout\" in config file\n", value);
