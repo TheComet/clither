@@ -31,7 +31,6 @@ struct input
  */
 struct controls
 {
-    uint16_t frame_number;
     uint8_t angle;
     uint8_t speed;
     unsigned action : 3;
@@ -41,6 +40,6 @@ void
 input_init(struct input* i);
 
 void
-controls_init(struct controls* c, uint16_t frame_number);
+controls_init(struct controls* c);
 
 C_END

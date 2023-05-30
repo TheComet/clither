@@ -1,8 +1,9 @@
 #include "clither/bezier.h"
 #include "clither/controls.h"
+#include "clither/log.h"
 #include "clither/q.h"
 #include "clither/snake.h"
-#include "clither/log.h"
+#include "clither/wrap.h"
 
 #include "cstructures/memory.h"
 
@@ -29,7 +30,6 @@ snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     vector_init(&snake->points, sizeof(struct qwpos));
     vector_init(&snake->bezier_handles, sizeof(struct bezier_handle));
     vector_init(&snake->bezier_points, sizeof(struct bezier_point));
-    btree_init(&snake->controls_buffer, sizeof(struct controls));
 
     bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
     bezier_handle_init(vector_emplace(&snake->bezier_handles), spawn_pos);
@@ -37,9 +37,6 @@ snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     snake->head.pos = spawn_pos;
     snake->head.angle = make_qa(0);
     snake->head.speed = 0;
-
-    snake->head_ackd = snake->head;
-    snake->head_ackd_frame_number = 0;
 
     snake->length = 200;
 }
@@ -50,7 +47,6 @@ snake_deinit(struct snake* snake)
 {
     FREE(snake->name);
 
-    btree_deinit(&snake->controls_buffer);
     vector_deinit(&snake->bezier_points);
     vector_deinit(&snake->bezier_handles);
     vector_deinit(&snake->points);
@@ -58,51 +54,65 @@ snake_deinit(struct snake* snake)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_queue_controls(struct snake* snake, const struct controls* controls, uint16_t frame_number)
+controls_buffer(struct cs_btree* buffer, const struct controls* controls, uint16_t frame_number)
 {
     struct controls* existing;
-    if (btree_insert_or_get(&snake->controls_buffer, frame_number, controls, (void**)&existing) == BTREE_EXISTS)
+    if (btree_insert_or_get(buffer, frame_number, controls, (void**)&existing) == BTREE_EXISTS)
         if (controls->angle != existing->angle ||
             controls->speed != existing->speed ||
             controls->action != existing->action)
         {
-            log_warn("Tried inserting controls for snake \"%s\" on frame %d, but new controls are different from existing!\n"
+            log_warn("Tried buffering controls on frame %d, but new controls are different from existing!\n"
                 "  current  : angle=%d, speed=%d, action=%d\n"
                 "  received : angle=%d, speed=%d, action=%d\n",
-                     snake->name, frame_number,
+                     frame_number,
                      existing->angle, existing->speed, existing->action,
                      controls->angle, controls->speed, controls->action);
         }
 }
 
 /* ------------------------------------------------------------------------- */
-static struct controls*
-snake_get_or_predict_controls(struct snake* snake, uint16_t frame_number)
+void
+controls_ack(struct cs_btree* buffer, uint16_t frame_number)
+{
+    /*
+     * Erase all controls that predate the frame number being acknowledged.
+     *
+     * We keep the current frame's controls, because it may be required later
+     * for prediction.
+     */
+    while (btree_count(buffer) > 0 && u16_lt_wrap(*BTREE_KEY(buffer, 0), frame_number))
+        btree_erase_index(buffer, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+struct controls*
+controls_get_or_predict(struct cs_btree* buffer, uint16_t frame_number)
 {
     struct controls* prev_controls;
     struct controls* controls;
     uint16_t next_frame_number = frame_number + 1;
 
-    controls = btree_find(&snake->controls_buffer, next_frame_number);
+    controls = btree_find(buffer, next_frame_number);
     if (controls != NULL)
         return controls;
 
-    if (btree_count(&snake->controls_buffer) == 0)
+    if (btree_count(buffer) == 0)
     {
-        log_warn("\"%s\" snake's controls buffer was empty! Should never happen\n", snake->name);
-        controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
+        log_warn("Controls buffer was empty! Should never happen\n");
+        controls = btree_emplace_new(buffer, next_frame_number);
         controls_init(controls);  /* Default controls */
         return controls;
     }
 
     /* Prediction of next controls. For now we simply copy the previously known controls */
-    controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
-    prev_controls = btree_find(&snake->controls_buffer, frame_number);
+    controls = btree_emplace_new(buffer, next_frame_number);
+    prev_controls = btree_find(buffer, frame_number);
     if (prev_controls != NULL)
         *controls = *prev_controls;
     else
     {
-        log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
+        log_warn("Previous frame's controls don't exist. Can't predict.\n");
         controls_init(controls);  /* Default controls */
     }
 
@@ -111,41 +121,57 @@ snake_get_or_predict_controls(struct snake* snake, uint16_t frame_number)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate)
+snake_ack_head(
+        struct snake_head* pred,
+        struct snake_head* ackd,
+        const struct snake_head* auth,
+        const struct cs_btree* buffer,
+        uint16_t frame_number,
+        uint8_t sim_tick_rate)
 {
-    /* 
+    uint16_t last_ackd_frame = btree_first_key(buffer);
+    uint16_t predicted_frame = btree_last_key(buffer);
+
+    /* last_ackd_frame <= frame_number <= predicted_frame */
+    assert(u16_le_wrap(last_ackd_frame, frame_number));
+    assert(u16_le_wrap(frame_number, predicted_frame));
+
+    /*
      * It's possible the authoritative head position we receive from the server
-     * goes through some packet loss, so may have to catch up with the simulation
+     * goes through some packet loss, so may have to catch up.
      */
-    if ((uint16_t)(frame_number - snake->head_ackd_frame_number) > 0x7FFF)
-        log_warn("Acknowledged snake_head frame is way behind the current frame number! Acknowledged frame: %d, current frame: %d\n",
-            snake->head_ackd_frame_number, frame_number);
-    while (snake->head_ackd_frame_number != frame_number)
+    if ((uint16_t)(frame_number - last_ackd_frame) > 0x7FFF)
+        log_warn("Last acknowledged frame is way behind the current frame number! Acknowledged frame: %d, current frame: %d\n",
+            last_ackd_frame, frame_number);
+    while (last_ackd_frame != frame_number)
     {
-        struct controls* controls = snake_get_or_predict_controls(snake, snake->head_ackd_frame_number);
-        snake_step_head(&snake->head_ackd, controls, sim_tick_rate);
-        snake->head_ackd_frame_number++;
+        last_ackd_frame++;
+        snake_step_head(ackd, btree_find(buffer, last_ackd_frame), sim_tick_rate);
     }
 
-    if (snake_heads_are_equal(&snake->head_ackd, auth) == 0)
+    /*
+     * Our simulation of the last acknowledged head position diverges from the
+     * server's head position. This means the predicted head position is also
+     * incorrect.
+     */
+    if (snake_heads_are_equal(ackd, auth) == 0)
     {
-        /* Rollback */
-        snake->head_ackd = *auth;
-        snake->head = *auth;
+        /* Roll back head to authoritative state */
+        *ackd = *auth;
+        *pred = *auth;
 
-        /* Roll forwards */
-        BTREE_FOR_EACH(&snake->controls_buffer, struct controls, frame, controls)
-            if (u16_lt_wrap(frame, frame_number))
+        /* Simulate head forwards again */
+        BTREE_FOR_EACH(buffer, struct controls, frame, controls)
+            /*
+             * Skip all controls in frames up to and including the currently
+             * acknowledged frame number, because that's what we rolled back
+             * to.
+             */
+            if (u16_le_wrap(frame, frame_number))
                 continue;
-        BTREE_END_EACH
-    }
 
-    /* Keep the frame that was just simulated around, because it may be required
-     * later for prediction */
-    while (btree_count(&snake->controls_buffer) > 0 &&
-           *BTREE_KEY(&snake->controls_buffer, 0) < frame_number)
-    {
-        btree_erase_index(&snake->controls_buffer, 0);
+            snake_step_head(pred, controls, sim_tick_rate);
+        BTREE_END_EACH
     }
 }
 

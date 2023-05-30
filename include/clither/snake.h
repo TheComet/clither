@@ -3,17 +3,22 @@
 #include "clither/config.h"
 #include "clither/snake_head.h"
 
+#include "cstructures/btree.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
 
 struct controls;
 
+struct snake_rollback_state
+{
+    struct snake_head head;
+    struct cs_vector bezier_handles;
+};
+
 struct snake
 {
     char* name;
-
-    struct cs_vector controls_buffer;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
@@ -33,7 +38,6 @@ struct snake
      * where N is the length of the snake.
      */
     struct cs_vector bezier_points;
-    struct cs_vector bezier_points_ackd;
 
     /*
      * The total length (in points) of the snake. The list of bezier handles
@@ -43,7 +47,6 @@ struct snake
     uint32_t length;
 
     struct snake_head head;
-    struct snake_head head_ackd;
 };
 
 void
@@ -53,7 +56,13 @@ void
 snake_deinit(struct snake* snake);
 
 void
-snake_queue_controls(struct snake* snake, const struct controls* controls, uint16_t frame_number);
+controls_buffer(struct cs_btree* buffer, const struct controls* controls, uint16_t frame_number);
+
+void
+controls_ack(struct cs_btree* buffer, uint16_t frame_number);
+
+struct controls*
+controls_get_or_predict(struct cs_btree* buffer, uint16_t frame_number);
 
 void
 snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate);

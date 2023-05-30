@@ -233,6 +233,9 @@ btree_find_and_compare(const struct cs_btree* btree, cs_btree_key key, const voi
 CSTRUCTURES_PUBLIC_API void*
 btree_get_any_value(const struct cs_btree* btree);
 
+#define btree_first_key(btree) (*BTREE_KEY(btree, 0))
+#define btree_last_key(btree) (*BTREE_KEY(btree, btree_count(btree) - 1))
+
 /*!
  * @brief Returns 1 if the specified key exists, 0 if otherwise.
  * @param btree The btree to find the key in.
