@@ -53,7 +53,7 @@ net_addr_to_str(char* str, int len, const void* addr);
 
 /*!
  * \brief Creates a non-blocking socket and binds it to the specified address.
- * This function is designed to work with server_init() and net_socket_sendto().
+ * This function is designed to work with server_init() and net_sendto().
  * \param[in] bind_address Address to bind to. If you pass in an empty string
  * then the address will be determined automatically.
  * \param[in] port Port to bind to.
@@ -72,7 +72,7 @@ net_bind(const char* bind_address, const char* port, int* addrlen);
  * server is using IPv6 or IPv4. This is handled later when sending the first
  * packets by using the first socket that responds successfully and closing the
  * rest.
- * \note This function is designed to work with client_init() and net_socket_send().
+ * \note This function is designed to work with client_init() and net_send().
  * \param[out] sockfds Pointer to an initialized vector with sizeof(int). All
  * potential socket file descriptors are pushed into this vector.
  * \param[in] server_address The server address to connect to.
@@ -90,13 +90,13 @@ net_close(int sockfd);
  * \brief Sends data to the specified address (UDP).
  */
 int
-net_sendto(int sockfd, const char* buf, int len, const void* addr, int addrlen);
+net_sendto(int sockfd, const void* buf, int len, const void* addr, int addrlen);
 
 /*!
  * \brief Sends data over a previously connected socket (see net_connect_socket()).
  */
 int
-net_send(int sockfd, const char* buf, int len);
+net_send(int sockfd, const void* buf, int len);
 
 /*!
  * \brief Receive data (non-blocking) from a socket. Data is written to buf
@@ -107,7 +107,7 @@ net_send(int sockfd, const char* buf, int len);
  * Returns the number of bytes received if successful.
  */
 int
-net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen);
+net_recvfrom(int sockfd, void* buf, int capacity, void* addr, int addrlen);
 
 /*!
  * \brief Receive data (non-blocking) from a connected socket. Data is written
@@ -117,6 +117,6 @@ net_recvfrom(int sockfd, char* buf, int capacity, void* addr, int addrlen);
  * Returns the number of bytes received if successful.
  */
 int
-net_recv(int sockfd, char* buf, int capacity);
+net_recv(int sockfd, void* buf, int capacity);
 
 C_END

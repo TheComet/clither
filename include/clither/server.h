@@ -45,13 +45,16 @@ void
 server_deinit(struct server* server);
 
 void
-server_queue_snake_data(struct server* server, const struct world* world);
+server_queue_snake_data(
+    struct server* server,
+    const struct world* world,
+    uint16_t frame_number);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
 void
-server_send_pending_data(struct server* server, const struct server_settings* settings);
+server_send_pending_data(struct server* server);
 
 /*!
  *

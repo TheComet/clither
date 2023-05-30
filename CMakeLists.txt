@@ -74,6 +74,7 @@ add_executable (clither
     "include/clither/tick.h"
     "include/clither/tests.h"
     "include/clither/world.h"
+    "include/clither/wrap.h"
 
     "src/args.c"
     "src/bezier.c"
@@ -121,6 +122,7 @@ add_executable (clither
         tests/clither/test_msg.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_tick.cpp
+        tests/clither/test_wrap.cpp
         tests/cstructures/test_btree_as_set.cpp
         tests/cstructures/test_btree.cpp
         tests/cstructures/test_hashmap.cpp

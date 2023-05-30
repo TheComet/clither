@@ -2,6 +2,7 @@
 
 #include "clither/controls.h"
 #include "clither/msg.h"
+#include "clither/snake.h"
 
 #include "cstructures/btree.h"
 
@@ -23,12 +24,17 @@ TEST(NAME, compress_single_controls)
 
     *(struct controls*)btree_emplace_new(&b, 20) = c0;
     struct msg* m = msg_controls(&b);
-    ASSERT_THAT(msg_controls_unpack_into(&b, m->payload, m->payload_len), Eq(0));
+
+    struct snake s;
+    snake_init(&s, make_qwposi(0, 0), "test");
+    uint16_t first_frame, last_frame;
+    ASSERT_THAT(msg_controls_unpack_into(&s, 0, m->payload, m->payload_len, &first_frame, &last_frame), Eq(0));
     msg_free(m);
 
-    ASSERT_THAT(btree_count(&b), Eq(1));
-    EXPECT_THAT(*(struct controls*)btree_find(&b, 20), Eq(c0));
+    ASSERT_THAT(btree_count(&s.controls_buffer), Eq(1));
+    EXPECT_THAT(*(struct controls*)btree_find(&s.controls_buffer, 20), Eq(c0));
 
+    snake_deinit(&s);
     btree_deinit(&b);
 }
 
@@ -48,14 +54,18 @@ TEST(NAME, compress_multiple_controls)
     *(struct controls*)btree_emplace_new(&b, 23) = c3;
 
     struct msg* m = msg_controls(&b);
-    ASSERT_THAT(msg_controls_unpack_into(&b, m->payload, m->payload_len), Eq(0));
+    struct snake s;
+    snake_init(&s, make_qwposi(0, 0), "test");
+    uint16_t first_frame, last_frame;
+    ASSERT_THAT(msg_controls_unpack_into(&s, 0, m->payload, m->payload_len, &first_frame, &last_frame), Eq(0));
     msg_free(m);
 
-    ASSERT_THAT(btree_count(&b), Eq(4));
-    EXPECT_THAT(*(struct controls*)btree_find(&b, 20), Eq(c0));
-    EXPECT_THAT(*(struct controls*)btree_find(&b, 21), Eq(c1));
-    EXPECT_THAT(*(struct controls*)btree_find(&b, 22), Eq(c2));
-    EXPECT_THAT(*(struct controls*)btree_find(&b, 23), Eq(c3));
+    ASSERT_THAT(btree_count(&s.controls_buffer), Eq(4));
+    EXPECT_THAT(*(struct controls*)btree_find(&s.controls_buffer, 20), Eq(c0));
+    EXPECT_THAT(*(struct controls*)btree_find(&s.controls_buffer, 21), Eq(c1));
+    EXPECT_THAT(*(struct controls*)btree_find(&s.controls_buffer, 22), Eq(c2));
+    EXPECT_THAT(*(struct controls*)btree_find(&s.controls_buffer, 23), Eq(c3));
 
+    snake_deinit(&s);
     btree_deinit(&b);
 }

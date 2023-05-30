@@ -29,6 +29,8 @@ struct args
     const char* config_file;
     const char* ip;
     const char* port;
+    const char* mcd_port;
+    int mcd_latency, mcd_loss, mcd_dup, mcd_reorder;
     enum mode mode;
 };
 
@@ -41,11 +43,5 @@ struct args
  */
 int
 args_parse(struct args* a, int argc, char* argv[]);
-
-char*
-args_to_string(const char* prog_name, const struct args* a);
-
-void
-args_free_string(char* s);
 
 C_END

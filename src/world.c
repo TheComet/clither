@@ -58,6 +58,22 @@ world_spawn_snake(struct world* world, const char* username)
 
 /* ------------------------------------------------------------------------- */
 void
+world_remove_snake(struct world* world, uint16_t snake_id)
+{
+    struct snake* snake = btree_find(&world->snakes, snake_id);
+    if (snake == NULL)
+    {
+        log_warn("Tried removing snake %d, but it doesn't exist\n", snake_id);
+        return;
+    }
+
+    log_info("Removing snake %d with username \"%s\"\n", snake_id, snake->name);
+    snake_deinit(snake);
+    btree_erase(&world->snakes, snake_id);
+}
+
+/* ------------------------------------------------------------------------- */
+void
 world_step(struct world* world, int sim_tick_rate, uint16_t frame_number)
 {
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
