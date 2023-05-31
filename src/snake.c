@@ -143,11 +143,12 @@ snake_ack_head(
     if ((uint16_t)(frame_number - last_ackd_frame) > 0x7FFF)
         log_warn("Last acknowledged frame is way behind the current frame number! Acknowledged frame: %d, current frame: %d\n",
             last_ackd_frame, frame_number);
-    while (last_ackd_frame != frame_number)
-    {
-        last_ackd_frame++;
-        snake_step_head(ackd, btree_find(buffer, last_ackd_frame), sim_tick_rate);
-    }
+    else
+        while (last_ackd_frame != frame_number)
+        {
+            last_ackd_frame++;
+            snake_step_head(ackd, btree_find(buffer, last_ackd_frame), sim_tick_rate);
+        }
 
     /*
      * Our simulation of the last acknowledged head position diverges from the
@@ -237,40 +238,9 @@ snake_step_head(struct snake_head* head, const struct controls* controls, uint8_
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate)
+snake_update_curve(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate)
 {
-    struct controls* controls;
     double error_squared;
-    uint16_t next_frame_number;
-
-    next_frame_number = frame_number + 1;
-    controls = btree_find(&snake->controls_buffer, next_frame_number);
-    if (controls == NULL)
-    {
-        if (btree_count(&snake->controls_buffer) == 0)
-        {
-            log_warn("\"%s\" snake's controls buffer was empty! Should never happen\n", snake->name);
-            controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
-            controls_init(controls);  /* Default controls */
-        }
-        else
-        {
-            /* Prediction of next controls. For now we simply copy the previously known controls */
-            struct controls* prev_controls = btree_find(&snake->controls_buffer, frame_number);
-            controls = btree_emplace_new(&snake->controls_buffer, next_frame_number);
-            if (prev_controls == NULL)
-            {
-                log_warn("Failed to find controls from previous frame for snake \"%s\". Can't predict.\n", snake->name);
-                controls_init(controls);  /* Default controls */
-            }
-            else
-            {
-                *controls = *prev_controls;
-            }
-        }
-    }
-
-    snake_step_head(&snake->head, controls, sim_tick_rate);
 
     /* Append new position to the list of points */
     vector_push(&snake->points, &snake->head.pos);

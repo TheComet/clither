@@ -74,6 +74,6 @@ void
 snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate);
 
 void
-snake_step(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate);
+snake_update_curve(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate);
 
 C_END
