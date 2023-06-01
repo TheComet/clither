@@ -10,12 +10,6 @@ C_BEGIN
 
 struct controls;
 
-struct snake_rollback_state
-{
-    struct snake_head head;
-    struct cs_vector bezier_handles;
-};
-
 struct snake
 {
     char* name;
@@ -61,8 +55,8 @@ controls_buffer(struct cs_btree* buffer, const struct controls* controls, uint16
 void
 controls_ack(struct cs_btree* buffer, uint16_t frame_number);
 
-struct controls*
-controls_get_or_predict(struct cs_btree* buffer, uint16_t frame_number);
+struct controls
+controls_get_or_predict(const struct cs_btree* buffer, uint16_t frame_number);
 
 void
 snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate);
