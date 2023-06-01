@@ -86,37 +86,36 @@ controls_ack(struct cs_btree* buffer, uint16_t frame_number)
 }
 
 /* ------------------------------------------------------------------------- */
-struct controls*
-controls_get_or_predict(struct cs_btree* buffer, uint16_t frame_number)
+struct controls
+controls_get_or_predict(const struct cs_btree* buffer, uint16_t frame_number)
 {
-    struct controls* prev_controls;
     struct controls* controls;
+    uint16_t first_frame_number;
     uint16_t next_frame_number = frame_number + 1;
 
     controls = btree_find(buffer, next_frame_number);
     if (controls != NULL)
-        return controls;
+        return *controls;
 
-    if (btree_count(buffer) == 0)
+    if (btree_count(buffer) == 0 || frame_number < btree_first_key(buffer))
     {
-        log_warn("Controls buffer was empty! Should never happen\n");
-        controls = btree_emplace_new(buffer, next_frame_number);
-        controls_init(controls);  /* Default controls */
-        return controls;
+        struct controls c;
+        log_warn("Previous frame's controls don't exist. Can't predict. Using default controls as fallback\n");
+        controls_init(&c);  /* Default controls */
+        return c;
     }
 
     /* Prediction of next controls. For now we simply copy the previously known controls */
-    controls = btree_emplace_new(buffer, next_frame_number);
-    prev_controls = btree_find(buffer, frame_number);
-    if (prev_controls != NULL)
-        *controls = *prev_controls;
-    else
+    first_frame_number = btree_first_key(buffer);
+    while (frame_number >= first_frame_number)
     {
-        log_warn("Previous frame's controls don't exist. Can't predict.\n");
-        controls_init(controls);  /* Default controls */
+        controls = btree_find(buffer, frame_number);
+        if (controls != NULL)
+            break;
+        frame_number--;
     }
 
-    return controls;
+    return *controls;
 }
 
 /* ------------------------------------------------------------------------- */
