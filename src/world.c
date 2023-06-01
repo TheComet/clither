@@ -77,6 +77,6 @@ void
 world_step(struct world* world, uint16_t frame_number, uint8_t sim_tick_rate)
 {
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        snake_step(snake, frame_number, sim_tick_rate);
+        snake_update_curve(snake, frame_number, sim_tick_rate);
     WORLD_END_EACH
 }
