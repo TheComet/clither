@@ -381,7 +381,10 @@ server_recv(
                 case MSG_CONTROLS: {
                     uint16_t first_frame, last_frame;
                     struct snake* snake = world_get_snake(world, client->snake_id);
-                    msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame);
+                    if (msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
+                    {
+                        /* TODO something is wrong with the message */
+                    }
 
                     /*
                      * If we notice

@@ -278,7 +278,7 @@ retry_recv:
                  * relative to the frame it sent back. Therefore, we are a full rtt
                  * into the future now.
                  */
-                client->frame_number = pp.join_accept.server_frame + rtt + 3;
+                client->frame_number = pp.join_accept.server_frame + rtt + 6;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
@@ -325,7 +325,6 @@ retry_recv:
                     &snake->controls_buffer,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
-                controls_ack(&snake->controls_buffer, pp.snake_head.frame_number);
             } break;
 
             case MSG_SNAKE_BEZIER: {

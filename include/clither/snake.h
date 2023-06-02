@@ -73,7 +73,7 @@ snake_ack_frame(
     struct snake_head* acknowledged_head,
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
-    const struct cs_btree* controls_buffer,
+    struct cs_btree* controls_buffer,
     uint16_t frame_number,
     uint8_t sim_tick_rate);
 
