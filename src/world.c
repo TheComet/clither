@@ -31,7 +31,7 @@ world_create_snake(struct world* world, uint16_t snake_id, struct qwpos spawn_po
 
     log_info("Creating snake %d at %.2f,%.2f with username \"%s\"\n",
         snake_id,
-        qw_to_float(snake->head_pos.x), qw_to_float(snake->head_pos.y),
+        qw_to_float(snake->head.pos.x), qw_to_float(snake->head.pos.y),
         username);
 
     return snake;
@@ -67,7 +67,7 @@ world_remove_snake(struct world* world, uint16_t snake_id)
         return;
     }
 
-    log_info("Removing snake %d with username \"%s\"\n", snake_id, snake->name);
+    log_info("Removing snake %d with username \"%s\"\n", snake_id, snake->data.name);
     snake_deinit(snake);
     btree_erase(&world->snakes, snake_id);
 }
@@ -77,6 +77,10 @@ void
 world_step(struct world* world, uint16_t frame_number, uint8_t sim_tick_rate)
 {
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        snake_update_curve(snake, frame_number, sim_tick_rate);
+        if (btree_count(&snake->controls_buffer))
+        {
+            struct controls controls = controls_get_or_predict(&snake->controls_buffer, frame_number);
+            snake_step(&snake->data, &snake->head, &controls, sim_tick_rate);
+        }
     WORLD_END_EACH
 }
