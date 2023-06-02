@@ -12,11 +12,13 @@
 
 #include <string.h>  /* memcpy */
 
+#define CBF_WINDOW_SIZE 10
+
 struct client_table_entry
 {
     struct cs_vector pending_msgs;     /* struct msg* */
     int timeout_counter;
-    int dillate_counter;
+    int cbf_window[CBF_WINDOW_SIZE];  /* "Control Buffer Fullness" window */
     cs_btree_key snake_id;
 };
 
@@ -99,6 +101,33 @@ server_deinit(struct server* server)
         msg_queue_deinit(&client->pending_msgs);
     CLIENT_TABLE_END_EACH
     hashmap_deinit(&server->client_table);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+cbf_add(struct client_table_entry* client, int value)
+{
+    memmove(
+        &client->cbf_window[1],
+        &client->cbf_window[0],
+        sizeof(int) * (CBF_WINDOW_SIZE - 1));
+    client->cbf_window[0] = value;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+cbf_bounds(struct client_table_entry* client, int* lower, int* upper)
+{
+    int i;
+    *lower = INT32_MAX;
+    *upper = INT32_MIN;
+    for (i = 0; i != CBF_WINDOW_SIZE; ++i)
+    {
+        if (*lower > client->cbf_window[i])
+            *lower = client->cbf_window[i];
+        if (*upper < client->cbf_window[i])
+            *upper = client->cbf_window[i];
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -345,13 +374,20 @@ server_recv(
                      * function remove_client() */
                     if (client == NULL)
                     {
+                        int n;
                         log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_msgs);
                         client->timeout_counter = 0;
-                        client->dillate_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
+
+                        /* 
+                         * Init "Controls Buffer Fullness" queue with minimum granularity.
+                         * This assumes the clienthas the most stable connection initially.
+                         */
+                        for (n = 0; n != CBF_WINDOW_SIZE; ++n)
+                            client->cbf_window[n] = settings->sim_tick_rate / settings->net_tick_rate;
                     }
 
                     /* (Re-)send join accept response */
@@ -380,19 +416,43 @@ server_recv(
 
                 case MSG_CONTROLS: {
                     uint16_t first_frame, last_frame;
+                    int lower, upper, granularity;
                     struct snake* snake = world_get_snake(world, client->snake_id);
+
+                    /* Returns the first and last frame indices that were unpacked from the message */
                     if (msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
                     {
                         /* TODO something is wrong with the message */
                     }
 
+                    granularity = settings->sim_tick_rate / settings->net_tick_rate;
+
                     /*
-                     * If we notice
+                     * Compare the very last frame received with the current frame
+                     * number. By tracking the lower and upper boundaries of this
+                     * difference over time, it can give a good estimate of how
+                     * "healthy" the client's connection is and whether the controls
+                     * buffer size needs to be increased or decreased.
                      */
-                    if (u16_le_wrap(last_frame, frame_number))
+                    cbf_add(client, last_frame - frame_number);
+                    cbf_bounds(client, &lower, &upper);
+                    if (lower - granularity < 0)
                     {
-                        int16_t diff = last_frame - frame_number;
-                        //server_queue(client, msg_feedback(diff));
+                        /* 
+                         * Means we do NOT have the controls of the current frame
+                         *  -> server is going to make a prediction
+                         *  -> will probably lead to a client-side roll back
+                         * The client needs to warp forwards in time.
+                         */
+                        int16_t diff = lower - granularity;
+                        server_queue(client, msg_feedback(diff, frame_number));
+                        log_dbg("warp forwards: %d\n", diff);
+                    }
+                    else if (lower - granularity > granularity)
+                    {
+                        int16_t diff = lower - granularity;
+                        server_queue(client, msg_feedback(diff, frame_number));
+                        log_dbg("warp backwards: %d\n", lower, upper);
                     }
                 } break;
 

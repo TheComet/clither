@@ -11,6 +11,8 @@ static CLITHER_THREADLOCAL const char* g_col_clr = "";
 
 #if defined(CLITHER_LOGGING)
 static FILE* g_log = NULL;
+static FILE* g_net = NULL;
+static FILE* g_bezier = NULL;
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -37,7 +39,7 @@ log_file_open(const char* log_file)
         log_file_close();
     }
 
-    log_dbg("Opening log file \"%s\"\n", log_file);
+    log_info("Opening log file \"%s\"\n", log_file);
     g_log = fopen(log_file, "w");
     if (g_log == NULL)
         log_err("Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
@@ -47,9 +49,59 @@ log_file_close()
 {
     if (g_log)
     {
-        log_dbg("Closing log file\n");
+        log_info("Closing log file\n");
         fclose(g_log);
         g_log = NULL;
+    }
+}
+
+void
+log_net_open(const char* log_file)
+{
+    if (g_net)
+    {
+        log_warn("log_net_open() called, but a log file is already open. Closing previous file...\n");
+        log_net_close();
+    }
+
+    log_info("Opening networking log file \"%s\"\n", log_file);
+    g_net = fopen(log_file, "w");
+    if (g_net == NULL)
+        log_err("Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
+}
+void
+log_net_close(void)
+{
+    if (g_net)
+    {
+        log_info("Closing net log file\n");
+        fclose(g_net);
+        g_net = NULL;
+    }
+}
+
+void
+log_bezier_open(const char* log_file)
+{
+    if (g_bezier)
+    {
+        log_warn("log_bezier_open() called, but a log file is already open. Closing previous file...\n");
+        log_bezier_close();
+    }
+
+    log_info("Opening bezier log file \"%s\"\n", log_file);
+    g_bezier = fopen(log_file, "w");
+    if (g_bezier == NULL)
+        log_err("Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
+}
+void
+log_bezier_close(void)
+{
+    if (g_bezier)
+    {
+        log_info("Closing bezier log file\n");
+        fclose(g_bezier);
+        g_bezier = NULL;
     }
 }
 #endif
@@ -164,14 +216,29 @@ void log_note(const char* fmt, ...)
 void log_net(const char* fmt, ...)
 {
 #if defined(CLITHER_LOGGING)
-    if (g_log)
+    if (g_net)
     {
         va_list va;
-        fprintf(g_log, "[NET  ] %s", g_prefix);
+        fprintf(g_net, "%s", g_prefix);
         va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
+        vfprintf(g_net, fmt, va);
         va_end(va);
-        fflush(g_log);
+        fflush(g_net);
+    }
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
+void log_bezier(const char* fmt, ...)
+{
+#if defined(CLITHER_LOGGING)
+    if (g_bezier)
+    {
+        va_list va;
+        va_start(va, fmt);
+        vfprintf(g_bezier, fmt, va);
+        va_end(va);
+        fflush(g_bezier);
     }
 #endif
 }

@@ -3,6 +3,7 @@
 
 #include "cstructures/vector.h"
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -98,9 +99,53 @@ bezier_fit_head(
     struct qwpos* p0 = vector_front(points);  /* tail */
     struct qwpos* pm = vector_back(points);   /* head */
 
-    if (vector_count(points) <= 4)
+    if (vector_count(points) <= 2)
     {
         head->pos = *pm;
+        head->angle = qa_add(tail->angle, make_qa(M_PI));
+        head->len_backwards = 0;
+        tail->len_forwards = 0;
+        return 0;
+    }
+    if (vector_count(points) == 3)
+    {
+        struct qwpos* p1 = vector_get_element(points, 1);
+        qw head_dx = qw_sub(p1->x, pm->x);
+        qw head_dy = qw_sub(p1->y, pm->y);
+        qw tail_dx = qw_sub(p0->x, p1->x);
+        qw tail_dy = qw_sub(p0->y, p1->y);
+        qw head_lensq = qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
+        qw tail_lensq = qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
+        double head_len = sqrt(qw_to_float(head_lensq));
+        double tail_len = sqrt(qw_to_float(tail_lensq));
+
+        head->pos = *pm;
+        head->angle = make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
+        head->len_backwards = (uint8_t)(head_len * 255.0);
+
+        tail->len_forwards = (uint8_t)(tail_len * 255.0);
+
+        return 0;
+    }
+    if (vector_count(points) == 4)
+    {
+        struct qwpos* p1 = vector_get_element(points, 1);
+        struct qwpos* p2 = vector_get_element(points, 2);
+        qw head_dx = qw_sub(p2->x, pm->x);
+        qw head_dy = qw_sub(p2->y, pm->y);
+        qw tail_dx = qw_sub(p0->x, p1->x);
+        qw tail_dy = qw_sub(p0->y, p1->y);
+        qw head_lensq = qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
+        qw tail_lensq = qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
+        double head_len = sqrt(qw_to_float(head_lensq));
+        double tail_len = sqrt(qw_to_float(tail_lensq));
+
+        head->pos = *pm;
+        head->angle = make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
+        head->len_backwards = (uint8_t)(head_len * 255.0);
+
+        tail->len_forwards = (uint8_t)(tail_len * 255.0);
+
         return 0;
     }
 
@@ -168,6 +213,7 @@ bezier_fit_head(
         T[1][0] = q16_16_add(T[1][0], t);
         T[1][1] = q16_16_add(T[1][1], t2);
     }
+    log_bezier("T = [%f, %f; %f, %f];\n", q16_16_to_float(T[0][0]), q16_16_to_float(T[0][1]), q16_16_to_float(T[1][0]), q16_16_to_float(T[1][1]));
 
     /*
      * Calculate inverse (T'*T)^-1
@@ -193,6 +239,8 @@ bezier_fit_head(
     T_inv[1][0] = q16_16_div(-T[1][0], det);
     T_inv[1][1] = q16_16_div(T[0][0], det);
 
+    log_bezier("T_inv = [%f, %f; %f, %f];\n", q16_16_to_float(T_inv[0][0]), q16_16_to_float(T_inv[0][1]), q16_16_to_float(T_inv[1][0]), q16_16_to_float(T_inv[1][1]));
+
     /*
      * Calculate f(t) coefficients
      *   f(t) = fm*x + fq
@@ -200,13 +248,13 @@ bezier_fit_head(
      *   fm = (xm-x0) / (tm-t0)
      *   fq = x0 - fm*t0
      */
-    {
-        /* NOTE: t0=0, tm=1 -> fm = xm-x0, fq = x0 */
-        mx = qw_to_q16_16(qw_sub(pm->x, p0->x));
-        qx = qw_to_q16_16(p0->x);
-        my = qw_to_q16_16(qw_sub(pm->y, p0->y));
-        qy = qw_to_q16_16(p0->y);
-    }
+    /* NOTE: t0=0, tm=1 -> fm = xm-x0, fq = x0 */
+    mx = qw_to_q16_16(qw_sub(pm->x, p0->x));
+    qx = qw_to_q16_16(p0->x);
+    my = qw_to_q16_16(qw_sub(pm->y, p0->y));
+    qy = qw_to_q16_16(p0->y);
+    log_bezier("mx = %f; qx = %f\n", q16_16_to_float(mx), q16_16_to_float(qx));
+    log_bezier("my = %f; qy = %f\n", q16_16_to_float(my), q16_16_to_float(qy));
 
     /*
      * (T'*T)^-1 * T' * X = T_inv * T' * X
@@ -324,6 +372,9 @@ bezier_fit_head(
         x1 = q16_16_add(x0, make_q16_16(tail->len_forwards * -cos(qa_to_float(tail->angle)) / 255));
         y1 = q16_16_add(y0, make_q16_16(tail->len_forwards * -sin(qa_to_float(tail->angle)) / 255));
 
+        log_bezier("x = [%f, %f, %f, %f];\n", q16_16_to_float(x0), q16_16_to_float(x1), q16_16_to_float(x2), q16_16_to_float(x3));
+        log_bezier("y = [%f, %f, %f, %f];\n", q16_16_to_float(y0), q16_16_to_float(y1), q16_16_to_float(y2), q16_16_to_float(y3));
+
         /*
          * Calculate new polynomial coefficients:
          *
@@ -346,6 +397,29 @@ bezier_fit_head(
         Ay[2] = q16_16_add(q16_16_sub(_3y0, _6y1), _3y2);
         Ay[3] = q16_16_add(q16_16_sub(q16_16_sub(_3y1, y0), _3y2), y3);
     }
+
+    log_bezier("Ax = [%f, %f, %f, %f];\n", q16_16_to_float(Ax[0]), q16_16_to_float(Ax[1]), q16_16_to_float(Ax[2]), q16_16_to_float(Ax[3]));
+    log_bezier("Ay = [%f, %f, %f, %f];\n", q16_16_to_float(Ay[0]), q16_16_to_float(Ay[1]), q16_16_to_float(Ay[2]), q16_16_to_float(Ay[3]));
+
+    log_bezier("px = [");
+    for (i = 0; i < (int)vector_count(points); ++i)
+    {
+        struct qwpos* p = vector_get_element(points, i);
+        if (i != 0)
+            log_bezier(", ");
+        log_bezier("%f", qw_to_float(p->x));
+    }
+    log_bezier("];\n");
+
+    log_bezier("py = [");
+    for (i = 0; i < (int)vector_count(points); ++i)
+    {
+        struct qwpos* p = vector_get_element(points, i);
+        if (i != 0)
+            log_bezier(", ");
+        log_bezier("%f", qw_to_float(p->y));
+    }
+    log_bezier("];\n");
 
     /* Error estimation */
     mse_error = 0;

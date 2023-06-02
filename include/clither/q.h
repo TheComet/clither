@@ -1,6 +1,8 @@
 #pragma once
 
+#define _USE_MATH_DEFINES
 #include <stdint.h>
+#include <math.h>
 
 typedef int32_t q16_16;
 #define Q16_16_Q 16
@@ -191,24 +193,24 @@ static inline qw qw_div(qw a, qw b)
 #define qa_to_int(q) ((int)((q) / (1 << QA_Q)))
 #define qa_to_float(q) ((double)(q) / (1 << QA_Q))
 
-static inline qa qa_add(qa a, qa b)
+static inline qa qa_wrapvalue(int32_t value)
 {
-    return a + b;
+    /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
+    if (value < make_qa(-M_PI))
+        value += make_qa(2 * M_PI);
+    if (value >= make_qa(M_PI))
+        value -= make_qa(2 * M_PI);
+    return (qa)value;
 }
 
-static inline qa qa_add_sat(qa a, qa b)
+static inline qa qa_add(qa a, qa b)
 {
-    int32_t tmp = (int32_t)a + (int32_t)b;
-    if (tmp > 0x7FFF)
-        tmp = 0x7FFF;
-    if (tmp < -1 * 0x8000)
-        tmp = -1 * 0x8000;
-    return (qa)tmp;
+    return qa_wrapvalue((int32_t)a + (int32_t)b);
 }
 
 static inline qa qa_sub(qa a, qa b)
 {
-    return a - b;
+    return qa_wrapvalue((int32_t)a - (int32_t)b);
 }
 
 /* saturate to range of 16-bit signed int */

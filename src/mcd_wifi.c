@@ -58,8 +58,6 @@ run_mcd_wifi(const void* args)
             memcpy(msg+3, buf, bytes_received);
             vector_push(&client_buf, &msg);
             client_active = 1;
-
-            log_dbg("Received UDP packet from client, size=%d, queue for %d ticks\n", bytes_received, msg[2]);
         }
 
 retry_recv:
@@ -79,8 +77,6 @@ retry_recv:
             msg[2] = TICK_RATE * a->mcd_latency / 1000;
             memcpy(msg+3, buf, bytes_received);
             vector_push(&server_buf, &msg);
-
-            log_dbg("Received UDP packet from server, size=%d, queue for %d ticks\n", bytes_received, msg[2]);
         }
 
         VECTOR_FOR_EACH(&client_buf, char*, pmsg)
@@ -88,7 +84,6 @@ retry_recv:
             if (msg[2] == 0)
             {
                 int len = (msg[0] << 8) | msg[1];
-                log_dbg("Sending UDP packet to server, size=%d\n", len);
                 net_send(*(int*)vector_back(&server_fds), msg+3, len);
                 FREE(msg);
                 VECTOR_ERASE_IN_FOR_LOOP(&client_buf, char*, pmsg);
@@ -103,10 +98,7 @@ retry_recv:
             {
                 int len = (msg[0] << 8) | msg[1];
                 if (client_active)
-                {
-                    log_dbg("Sending UDP packet to client, size=%d\n", len);
                     net_sendto(client_fd, msg+3, len, client_addr, client_addrlen);
-                }
                 FREE(msg);
                 VECTOR_ERASE_IN_FOR_LOOP(&server_buf, char*, pmsg);
             }

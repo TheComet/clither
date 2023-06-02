@@ -359,7 +359,7 @@ run_client(const struct args* a)
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
          */
-        tick_lag = tick_wait(&sim_tick);
+        tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
             gfx_draw_world(gfx, &world, &camera, client.frame_number);
         else
@@ -371,6 +371,11 @@ run_client(const struct args* a)
                 break;
             }
         }
+
+        if (client.warp > 0)
+            client.warp--;
+        if (client.warp < 0)
+            client.warp++;
 
         client.frame_number++;
     }
@@ -421,6 +426,8 @@ int main(int argc, char* argv[])
 #if defined(CLITHER_LOGGING)
     if (*args.log_file)
         log_file_open(args.log_file);
+    log_net_open("net.txt");
+    log_bezier_open("bezier.txt");
 #endif
 
     /* Init networking */
@@ -477,6 +484,8 @@ int main(int argc, char* argv[])
     mutex_deinit(server_mutex);
     net_deinit();
 #if defined(CLITHER_LOGGING)
+    log_bezier_close();
+    log_net_close();
     log_file_close();
 #endif
     signals_remove();

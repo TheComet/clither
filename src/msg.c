@@ -204,6 +204,22 @@ msg_parse_payload(
             log_net("MSG_CONTROLS: frame_number=%x\n", pp->controls.frame_number);
         } break;
 
+        case MSG_FEEDBACK: {
+            if (payload_len < 4)
+            {
+                log_warn("MSG_FEEDBACK payload is too small\n");
+                return -1;
+            }
+
+            pp->feedback.frame_number =
+                (payload[0] << 8) |
+                (payload[1] << 0);
+            pp->feedback.diff =
+                (payload[2] << 8) |
+                (payload[3] << 0);
+            log_net("MSG_FEEDBACK: frame=%d, diff=%d\n", pp->feedback.frame_number, pp->feedback.diff);
+        } break;
+
         case MSG_SNAKE_METADATA:
         case MSG_SNAKE_METADATA_ACK:
             break;
@@ -377,10 +393,10 @@ msg_controls(const struct cs_btree* controls)
      * It doesn't really make sense to send more than a full second of inputs.
      */
     count = btree_count(controls);
-    if (count > 60)
+    if (count > 100)
     {
-        log_warn("There are more than 60 controls in the buffer (%d). Only sending the first 60\n", count);
-        count = 60;
+        log_warn("There are more than 120 controls in the buffer (%d). Only sending the first 100\n", count);
+        count = 100;
     }
 
     log_net("Packing controls for frames %d-%d\n",
@@ -597,6 +613,23 @@ msg_controls_unpack_into(
     }
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_feedback(int16_t diff, uint16_t frame_number)
+{
+    struct msg* m = msg_alloc(
+        MSG_FEEDBACK, 0,
+        sizeof(diff) +
+        sizeof(frame_number));
+
+    m->payload[0] = (frame_number >> 8);
+    m->payload[1] = (frame_number & 0xFF);
+
+    m->payload[2] = (diff >> 8);
+    m->payload[3] = (diff & 0xFF);
+    return m;
 }
 
 /* ------------------------------------------------------------------------- */
