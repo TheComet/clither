@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/controls.h"
 #include "clither/snake_head.h"
 
 #include "cstructures/btree.h"
@@ -8,19 +9,20 @@
 
 C_BEGIN
 
-struct controls;
-
-struct snake
+struct snake_data
 {
     char* name;
 
     /*
      * We keep a local list of points that are drawn out over time as the head
      * moves. These points are used to fit a bezier curve to the front part of
-     * the snake, so the list of points will be as long as the first section of
      * the snake.
+     * 
+     * Due to roll back requirements, this is a list of list of points. We keep
+     * a history of points from previous fits in case we have to restore to
+     * a previous state. Lists are removed as the snake's head position is ACK'd.
      */
-    struct cs_vector points;
+    struct cs_vector points;  /* struct cs_vector of struct qwpos */
 
     /*
      * List of bezier handles that define the shape of the entire snake.
@@ -28,19 +30,19 @@ struct snake
     struct cs_vector bezier_handles;
 
     /*
-     * The entire curve (all bezier segments) is sampled N number of times,
-     * where N is the length of the snake.
+     * The curve is sampled N times (N = length of snake) and the results are
+     * cached here. These are used for rendering.
      */
     struct cs_vector bezier_points;
 
-    /*
-     * The total length (in points) of the snake. The list of bezier handles
-     * should always span a distance that is longer than the total length of
-     * the snake.
-     */
-    uint32_t length;
+};
 
+struct snake
+{
+    struct cs_btree controls_buffer;
+    struct snake_data data;
     struct snake_head head;
+    struct snake_head head_ack;
 };
 
 void
@@ -50,24 +52,31 @@ void
 snake_deinit(struct snake* snake);
 
 void
-controls_buffer(struct cs_btree* buffer, const struct controls* controls, uint16_t frame_number);
+controls_add(struct cs_btree* controls_buffer, const struct controls* controls, uint16_t frame_number);
 
 void
-controls_ack(struct cs_btree* buffer, uint16_t frame_number);
+controls_ack(struct cs_btree* controls_buffer, uint16_t frame_number);
 
 struct controls
-controls_get_or_predict(const struct cs_btree* buffer, uint16_t frame_number);
+controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_number);
 
 void
-snake_ack_frame(struct snake* snake, const struct snake_head* auth, uint16_t frame_number, uint8_t sim_tick_rate);
-
-#define snake_controls_count(snake) \
-    (btree_count(&snake->controls_buffer))
-
-void
-snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate);
+snake_step(
+    struct snake_data* data,
+    struct snake_head* head,
+    struct controls* controls,
+    uint8_t sim_tick_rate);
 
 void
-snake_update_curve(struct snake* snake, uint16_t frame_number, uint8_t sim_tick_rate);
+snake_ack_frame(
+    struct snake_data* data,
+    struct snake_head* acknowledged_head,
+    struct snake_head* predicted_head,
+    const struct snake_head* authoritative_head,
+    const struct cs_btree* controls_buffer,
+    uint16_t frame_number,
+    uint8_t sim_tick_rate);
+
+#define snake_length(snake) (vector_count(&(snake)->bezier_points))
 
 C_END

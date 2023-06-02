@@ -177,7 +177,7 @@ server_queue_snake_data(
 {
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         struct snake* snake = world_get_snake(world, client->snake_id);
-        server_queue(client, msg_snake_head(snake, frame_number));
+        server_queue(client, msg_snake_head(&snake->head, frame_number));
     CLIENT_TABLE_END_EACH
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
@@ -381,7 +381,7 @@ server_recv(
                 case MSG_CONTROLS: {
                     uint16_t first_frame, last_frame;
                     struct snake* snake = world_get_snake(world, client->snake_id);
-                    msg_controls_unpack_into(snake, frame_number, payload, payload_len, &first_frame, &last_frame);
+                    msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame);
 
                     /*
                      * If we notice

@@ -124,14 +124,14 @@ msg_controls(const struct cs_btree* controls);
 
 int
 msg_controls_unpack_into(
-    struct snake* snake,
-    uint16_t frame_number,
+    struct cs_btree* controls_buffer,
     const uint8_t* payload,
     uint8_t payload_len,
+    uint16_t frame_number,
     uint16_t* first_frame,
     uint16_t* last_frame);
 
 struct msg*
-msg_snake_head(const struct snake* snake, uint16_t frame_number);
+msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 
 C_END

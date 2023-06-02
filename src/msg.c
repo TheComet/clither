@@ -144,10 +144,12 @@ msg_parse_payload(
                 (payload[6] << 8) |
                 (payload[7] << 0);
             pp->join_accept.spawn.x =
+                (payload[8] & 0x80 ? 0xFF << 24 : 0) |
                 (payload[8] << 16) |
                 (payload[9] << 8) |
                 (payload[10] << 0);
             pp->join_accept.spawn.y =
+                (payload[11] & 0x80 ? 0xFF << 24 : 0) |
                 (payload[11] << 16) |
                 (payload[12] << 8) |
                 (payload[13] << 0);
@@ -215,10 +217,12 @@ msg_parse_payload(
                 (payload[0] << 8) |
                 (payload[1] << 0);
             pp->snake_head.head.pos.x =
+                (payload[2] & 0x80 ? 0xFF << 24 : 0) |
                 (payload[2] << 16) |
                 (payload[3] << 8) |
                 (payload[4] << 0);
             pp->snake_head.head.pos.y =
+                (payload[5] & 0x80 ? 0xFF << 24 : 0) |
                 (payload[5] << 16) |
                 (payload[6] << 8) |
                 (payload[7] << 0);
@@ -484,10 +488,10 @@ msg_controls(const struct cs_btree* controls)
 /* ------------------------------------------------------------------------- */
 int
 msg_controls_unpack_into(
-    struct snake* snake,
-    uint16_t frame_number,
+    struct cs_btree* controls_buffer,
     const uint8_t* payload,
     uint8_t payload_len,
+    uint16_t frame_number,
     uint16_t* first_frame,
     uint16_t* last_frame)
 {
@@ -512,7 +516,7 @@ msg_controls_unpack_into(
     controls.speed = payload[4];
     controls.action = (payload[5] & 0x07);
     if (u16_gt_wrap(first_frame_number, frame_number))
-        snake_queue_controls(snake, &controls, first_frame_number);
+        controls_add(controls_buffer, &controls, first_frame_number);
 
     if (controls_count == 0)
         return 0;
@@ -583,7 +587,7 @@ msg_controls_unpack_into(
         controls.speed += dv - 15;
 
         if (u16_gt_wrap(first_frame_number + i + 1, frame_number))
-            snake_queue_controls(snake, &controls, first_frame_number + i + 1);
+            controls_add(controls_buffer, &controls, first_frame_number + i + 1);
     }
 
     return 0;
@@ -591,7 +595,7 @@ msg_controls_unpack_into(
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_snake_head(const struct snake* snake, uint16_t frame_number)
+msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 {
     struct msg* m = msg_alloc(
         MSG_SNAKE_HEAD, 0,
@@ -603,18 +607,18 @@ msg_snake_head(const struct snake* snake, uint16_t frame_number)
     m->payload[0] = (frame_number >> 8) & 0xFF;
     m->payload[1] = (frame_number & 0xFF);
 
-    m->payload[2] = (snake->head.pos.x >> 16) & 0xFF;
-    m->payload[3] = (snake->head.pos.x >> 8) & 0xFF;
-    m->payload[4] = snake->head.pos.x & 0xFF;
+    m->payload[2] = (head->pos.x >> 16) & 0xFF;
+    m->payload[3] = (head->pos.x >> 8) & 0xFF;
+    m->payload[4] = head->pos.x & 0xFF;
 
-    m->payload[5] = (snake->head.pos.y >> 16) & 0xFF;
-    m->payload[6] = (snake->head.pos.y >> 8) & 0xFF;
-    m->payload[7] = snake->head.pos.y & 0xFF;
+    m->payload[5] = (head->pos.y >> 16) & 0xFF;
+    m->payload[6] = (head->pos.y >> 8) & 0xFF;
+    m->payload[7] = head->pos.y & 0xFF;
 
-    m->payload[8] = (snake->head.angle >> 8) & 0xFF;
-    m->payload[9] = snake->head.angle & 0xFF;
+    m->payload[8] = (head->angle >> 8) & 0xFF;
+    m->payload[9] = head->angle & 0xFF;
 
-    m->payload[10] = snake->head.speed;
+    m->payload[10] = head->speed;
 
     return m;
 }

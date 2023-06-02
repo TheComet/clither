@@ -371,6 +371,16 @@ bezier_squeeze_step(
 }
 
 /* ------------------------------------------------------------------------- */
+void
+bezier_squeeze_n_recent_step(
+    struct cs_vector* bezier_handles,
+    int n,
+    int sim_tick_rate)
+{
+
+}
+
+/* ------------------------------------------------------------------------- */
 int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,

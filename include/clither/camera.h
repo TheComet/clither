@@ -5,7 +5,7 @@
 
 C_BEGIN
 
-struct snake;
+struct snake_head;
 
 struct camera
 {
@@ -17,6 +17,6 @@ void
 camera_init(struct camera* camera);
 
 void
-camera_update(struct camera* camera, const struct snake* snake, int sim_tick_rate);
+camera_update(struct camera* camera, const struct snake_head* head, int sim_tick_rate);
 
 C_END

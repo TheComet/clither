@@ -87,9 +87,9 @@ run_server_instance(const void* args)
         }
 
         /* sim_update */
-        world_step(&world, instance->settings->sim_tick_rate, frame_number);
+        world_step(&world, frame_number, instance->settings->sim_tick_rate);
         WORLD_FOR_EACH_SNAKE(&world, snake_id, snake)
-            snake_ack_frame(snake, &snake->head, frame_number);
+            controls_ack(&snake->controls_buffer, frame_number);
         WORLD_END_EACH
 
         if (net_update)
@@ -334,12 +334,12 @@ run_client(const struct args* a)
              * acknowledges our move, we remove all controls that date back before
              * and up to that point in time from the list again.
              */
-            snake_queue_controls(snake, &controls, client.frame_number);
+            controls_add(&snake->controls_buffer, &controls, client.frame_number);
 
             /* Update snake and step */
-            world_step(&world, client.sim_tick_rate, client.frame_number);
+            world_step(&world, client.frame_number, client.sim_tick_rate);
 
-            camera_update(&camera, snake, client.sim_tick_rate);
+            camera_update(&camera, &snake->head, client.sim_tick_rate);
 
             if (net_update)
             {
