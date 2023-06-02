@@ -21,6 +21,7 @@ enum msg_type
     MSG_LEAVE,
 
     MSG_CONTROLS,
+    MSG_FEEDBACK,
 
     MSG_SNAKE_METADATA,
     MSG_SNAKE_METADATA_ACK,
@@ -69,6 +70,11 @@ union parsed_payload
     struct {
         uint16_t frame_number;
     } controls;
+
+    struct {
+        uint16_t frame_number;
+        int16_t diff;
+    } feedback;
 
     struct {
         struct snake_head head;
@@ -130,6 +136,9 @@ msg_controls_unpack_into(
     uint16_t frame_number,
     uint16_t* first_frame,
     uint16_t* last_frame);
+
+struct msg*
+msg_feedback(int16_t diff, uint16_t frame_number);
 
 struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);

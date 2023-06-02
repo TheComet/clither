@@ -47,6 +47,9 @@ tick_advance(struct tick* t);
 int
 tick_wait(struct tick* t);
 
+int
+tick_wait_warp(struct tick* t, int warp, int tps);
+
 void
 tick_skip(struct tick* t);
 

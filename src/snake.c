@@ -173,10 +173,6 @@ snake_step_head(struct snake_head* head, const struct controls* controls, uint8_
 
     /* Calculate difference between desired angle and actual angle and wrap */
     angle_diff = qa_sub(head->angle, target_angle);
-    if (angle_diff > make_qa(M_PI))
-        angle_diff = qa_sub(angle_diff, make_qa(2 * M_PI));
-    else if (angle_diff < make_qa(-M_PI))
-        angle_diff = qa_add(angle_diff, make_qa(2 * M_PI));
 
     /*
      * Turn the head towards the target angle and make sure to not exceed the
@@ -188,12 +184,6 @@ snake_step_head(struct snake_head* head, const struct controls* controls, uint8_
         head->angle = qa_add(head->angle, TURN_SPEED);
     else
         head->angle = target_angle;
-
-    /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
-    if (head->angle < make_qa(-M_PI))
-        head->angle = qa_add(head->angle, make_qa(2 * M_PI));
-    else if (head->angle >= make_qa(M_PI))
-        head->angle = qa_sub(head->angle, make_qa(2 * M_PI));
 
     /* Integrate speed over time */
     target_speed = controls->action == CONTROLS_ACTION_BOOST ?

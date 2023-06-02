@@ -20,6 +20,7 @@ client_init(struct client* client)
     client->timeout_counter = 0;
     client->frame_number = 0;
     client->snake_id = 0;
+    client->warp = 0;
     client->state = CLIENT_DISCONNECTED;
 
     msg_queue_init(&client->pending_msgs);
@@ -307,6 +308,15 @@ retry_recv:
             case MSG_LEAVE:
             case MSG_CONTROLS:
                 break;
+
+            case MSG_FEEDBACK: {
+                int rtt2 = client->frame_number - pp.feedback.frame_number;
+                client->warp = pp.feedback.diff * 10;
+                if (rtt2 > 0)
+                    client->warp = client->warp * 2 / rtt2;
+                else
+                    log_warn("rtt/2 is %d??\n", rtt2);
+            } break;
 
             case MSG_SNAKE_METADATA: {
 

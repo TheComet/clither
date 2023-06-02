@@ -14,7 +14,17 @@ log_set_colors(const char* set, const char* clear);
 void
 log_file_open(const char* log_file);
 void
-log_file_close();
+log_file_close(void);
+
+void
+log_net_open(const char* log_file);
+void
+log_net_close(void);
+
+void
+log_bezier_open(const char* log_file);
+void
+log_bezier_close(void);
 
 #endif
 
@@ -38,5 +48,8 @@ log_note(const char* fmt, ...);
 
 PRINTF_FORMAT(1, 2) void
 log_net(const char* fmt, ...);
+
+PRINTF_FORMAT(1, 2) void
+log_bezier(const char* fmt, ...);
 
 C_END
