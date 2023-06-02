@@ -47,6 +47,7 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     switch (m->type)
     {
     case MSG_JOIN_REQUEST:
+        log_net("msg_update_frame_number(): %x -> %x\n", (m->payload[2] << 8) | m->payload[3], frame_number);
         m->payload[2] = frame_number >> 8;
         m->payload[3] = frame_number & 0xFF;
         break;
@@ -200,6 +201,7 @@ msg_parse_payload(
             pp->controls.frame_number =
                 (payload[0] << 8) |
                 (payload[1] << 0);
+            log_net("MSG_CONTROLS: frame_number=%x\n", pp->controls.frame_number);
         } break;
 
         case MSG_SNAKE_METADATA:
@@ -407,6 +409,7 @@ msg_controls(const struct cs_btree* controls)
     m->payload[5] = c->action; /* 3 bits */
     bit = 3;
     byte = 5;
+    log_net("  angle=%x, speed=%x, action=%x\n", c->angle, c->speed, c->action);
 
     /*
      * Delta compress rest of controls. Note that the frame number doesn't need
@@ -476,6 +479,7 @@ msg_controls(const struct cs_btree* controls)
             log_warn("Issue while compressing controls: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
 
         m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
+        log_net("  angle=%x, speed=%x, action=%x\n", next->angle, next->speed, next->action);
     }
 
     /* Adjust the actual payload length */
@@ -517,6 +521,7 @@ msg_controls_unpack_into(
     controls.action = (payload[5] & 0x07);
     if (u16_gt_wrap(first_frame_number, frame_number))
         controls_add(controls_buffer, &controls, first_frame_number);
+    log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
 
     if (controls_count == 0)
         return 0;
@@ -588,6 +593,7 @@ msg_controls_unpack_into(
 
         if (u16_gt_wrap(first_frame_number + i + 1, frame_number))
             controls_add(controls_buffer, &controls, first_frame_number + i + 1);
+        log_net("  angle%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
     }
 
     return 0;

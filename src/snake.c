@@ -110,10 +110,10 @@ controls_ack(struct cs_btree* controls_buffer, uint16_t frame_number)
     /*
      * Erase all controls that predate the frame number being acknowledged.
      *
-     * We keep the current frame's controls, because it may be required later
-     * for prediction.
+     * We keep the current frame's controls and also make sure there is always
+     * at least one entry in the buffer. It may be required later for prediction. 
      */
-    while (btree_count(controls_buffer) > 0 &&
+    while (btree_count(controls_buffer) > 1 &&
         u16_lt_wrap(*BTREE_KEY(controls_buffer, 0), frame_number))
     {
         btree_erase_index(controls_buffer, 0);
@@ -126,13 +126,15 @@ controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_n
 {
     struct controls* controls;
     uint16_t first_frame_number;
-    uint16_t next_frame_number = frame_number + 1;
 
-    controls = btree_find(controls_buffer, next_frame_number);
+    controls = btree_find(controls_buffer, frame_number);
     if (controls != NULL)
         return *controls;
+    log_dbg("controls_get_or_predict(): No controls for frame %d, predicting...\n", frame_number);
 
-    if (btree_count(controls_buffer) == 0 || frame_number < btree_first_key(controls_buffer))
+    frame_number--;  /* Try to find previous frame */
+    first_frame_number = btree_first_key(controls_buffer);
+    if (btree_count(controls_buffer) == 0 || u16_lt_wrap(frame_number, first_frame_number))
     {
         struct controls c;
         log_warn("Previous frame's controls don't exist. Can't predict. Using default controls as fallback\n");
@@ -141,8 +143,7 @@ controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_n
     }
 
     /* Prediction of next controls. For now we simply copy the previously known controls */
-    first_frame_number = btree_first_key(controls_buffer);
-    while (frame_number >= first_frame_number)
+    while (u16_ge_wrap(frame_number, first_frame_number))
     {
         controls = btree_find(controls_buffer, frame_number);
         if (controls != NULL)
@@ -272,7 +273,7 @@ snake_ack_frame(
     struct snake_head* acknowledged_head,
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
-    const struct cs_btree* controls_buffer,
+    struct cs_btree* controls_buffer,
     uint16_t frame_number,
     uint8_t sim_tick_rate)
 {
@@ -305,7 +306,7 @@ snake_ack_frame(
     {
         struct controls* controls;
 
-        /* We are on frame "last_ackd_frame". Get Controls of next frame */
+        /* "last_ackd_frame" refers to a frame that was already simulated */
         last_ackd_frame++;
         controls = btree_find(controls_buffer, last_ackd_frame);
         assert(controls != NULL);
@@ -313,6 +314,7 @@ snake_ack_frame(
         /* Step to next frame */
         snake_step_head(acknowledged_head, controls, sim_tick_rate);
     }
+    controls_ack(controls_buffer, frame_number);
 
     /*
      * Our simulation of the last acknowledged head position diverges from the
@@ -323,7 +325,12 @@ snake_ack_frame(
     {
         int handles_to_squeeze;
 
-        log_dbg("Rollback\n");
+        log_dbg("Rollback to frame %d\n"
+            "  ackd head: pos=%x,%x, angle=%x, speed=%x\n"
+            "  auth head: pos=%x,%x, angle=%x, speed=%x\n",
+            frame_number,
+            acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
+            authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
 
         /*
          * Remove all points generated since the last acknowledged frame.
@@ -372,6 +379,13 @@ snake_ack_frame(
                 snake_add_new_segment(data, predicted_head);
                 handles_to_squeeze++;
             }
+
+            log_dbg("Roll forwards, frame=%d\n"
+                "  controls : %x,%x\n"
+                "  pred head: pos=%x,%x, angle=%x, speed=%x\n",
+                frame,
+                controls->angle, controls->speed,
+                predicted_head->pos.x, predicted_head->pos.y, predicted_head->angle, predicted_head->speed);
 
             /* 
              * The snake's bezier handles are "squeezed" over time. Only have
