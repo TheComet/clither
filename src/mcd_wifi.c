@@ -10,6 +10,7 @@
 #include "cstructures/vector.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
 void*
@@ -30,9 +31,12 @@ run_mcd_wifi(const void* args)
 
     memory_init_thread();
 
+    /* Client will connect to this socket */
     client_fd = net_bind("", a->mcd_port, &client_addrlen);
     if (client_fd < 0)
         goto bind_client_fd_failed;
+
+    /* We connect as a proxy to the server */
     vector_init(&server_fds, sizeof(int));
     if (net_connect(&server_fds, "localhost", *a->port ? a->port : NET_DEFAULT_PORT) < 0)
         goto connect_server_failed;
@@ -51,13 +55,26 @@ run_mcd_wifi(const void* args)
             break;
         if (bytes_received > 0)
         {
-            char* msg = MALLOC(bytes_received + 3);
-            msg[0] = ((uint16_t)bytes_received) >> 8;
-            msg[1] = ((uint16_t)bytes_received) & 0xFF;
-            msg[2] = TICK_RATE * a->mcd_latency / 1000;
-            memcpy(msg+3, buf, bytes_received);
-            vector_push(&client_buf, &msg);
-            client_active = 1;
+            if (rand() > a->mcd_loss * RAND_MAX / 100)
+            {
+                uint8_t* msg = MALLOC(bytes_received + 3);
+                msg[0] = ((uint16_t)bytes_received) >> 8;
+                msg[1] = ((uint16_t)bytes_received) & 0xFF;
+                msg[2] = TICK_RATE * a->mcd_latency / 1000;
+                memcpy(msg + 3, buf, bytes_received);
+                vector_push(&client_buf, &msg);
+                client_active = 1;
+
+                if (rand() > a->mcd_dup * RAND_MAX / 100)
+                {
+                    uint8_t* dup_msg = MALLOC(bytes_received + 3);
+                    memcpy(dup_msg, msg, bytes_received + 3);
+                    vector_push(&client_buf, &dup_msg);
+                }
+
+                if (rand() > a->mcd_reorder * RAND_MAX / 100)
+                    msg[2] -= rand() * 10 / RAND_MAX;
+            }
         }
 
 retry_recv:

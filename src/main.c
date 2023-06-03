@@ -427,7 +427,6 @@ int main(int argc, char* argv[])
     if (*args.log_file)
         log_file_open(args.log_file);
     log_net_open("net.txt");
-    log_bezier_open("bezier.txt");
 #endif
 
     /* Init networking */
@@ -484,7 +483,6 @@ int main(int argc, char* argv[])
     mutex_deinit(server_mutex);
     net_deinit();
 #if defined(CLITHER_LOGGING)
-    log_bezier_close();
     log_net_close();
     log_file_close();
 #endif

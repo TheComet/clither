@@ -41,7 +41,7 @@ struct qwpos
 #define q16_16_to_int(q) ((int)((q) / (1 << Q16_16_Q)))
 #define q16_16_to_float(q) ((double)(q) / (1 << Q16_16_Q))
 #define q16_16_rebase(q, den) ((q) * den / (1 << Q16_16_Q))
-#define qw_to_q16_16(qw) ((qw) * (1 << Q16_16_Q) / (1 << QW_Q))
+#define qw_to_q16_16(qw) ((int64_t)(qw) * (1 << Q16_16_Q) / (1 << QW_Q))
 
 static inline q16_16 q16_16_add(q16_16 a, q16_16 b)
 {
@@ -100,7 +100,7 @@ static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
 #define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
 #define qw_to_float(q) ((double)(q) / (1 << QW_Q))
 #define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
-#define q16_16_to_qw(q16) ((q16) * (1 << QW_Q) / (1 << Q16_16_Q))
+#define q16_16_to_qw(q16) ((int64_t)(q16) * (1 << QW_Q) / (1 << Q16_16_Q))
 
 static inline struct qwpos make_qwposi(int x, int y)
 {
