@@ -12,7 +12,6 @@ static CLITHER_THREADLOCAL const char* g_col_clr = "";
 #if defined(CLITHER_LOGGING)
 static FILE* g_log = NULL;
 static FILE* g_net = NULL;
-static FILE* g_bezier = NULL;
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -77,31 +76,6 @@ log_net_close(void)
         log_info("Closing net log file\n");
         fclose(g_net);
         g_net = NULL;
-    }
-}
-
-void
-log_bezier_open(const char* log_file)
-{
-    if (g_bezier)
-    {
-        log_warn("log_bezier_open() called, but a log file is already open. Closing previous file...\n");
-        log_bezier_close();
-    }
-
-    log_info("Opening bezier log file \"%s\"\n", log_file);
-    g_bezier = fopen(log_file, "w");
-    if (g_bezier == NULL)
-        log_err("Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
-}
-void
-log_bezier_close(void)
-{
-    if (g_bezier)
-    {
-        log_info("Closing bezier log file\n");
-        fclose(g_bezier);
-        g_bezier = NULL;
     }
 }
 #endif
@@ -224,21 +198,6 @@ void log_net(const char* fmt, ...)
         vfprintf(g_net, fmt, va);
         va_end(va);
         fflush(g_net);
-    }
-#endif
-}
-
-/* ------------------------------------------------------------------------- */
-void log_bezier(const char* fmt, ...)
-{
-#if defined(CLITHER_LOGGING)
-    if (g_bezier)
-    {
-        va_list va;
-        va_start(va, fmt);
-        vfprintf(g_bezier, fmt, va);
-        va_end(va);
-        fflush(g_bezier);
     }
 #endif
 }

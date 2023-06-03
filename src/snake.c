@@ -370,14 +370,7 @@ snake_ack_frame(
                 handles_to_squeeze++;
             }
 
-            log_dbg("Roll forwards, frame=%d\n"
-                "  controls : %x,%x\n"
-                "  pred head: pos=%x,%x, angle=%x, speed=%x\n",
-                frame,
-                controls->angle, controls->speed,
-                predicted_head->pos.x, predicted_head->pos.y, predicted_head->angle, predicted_head->speed);
-
-            /* 
+            /*
              * The snake's bezier handles are "squeezed" over time. Only have
              * to re-squeeze the handles that were re-created during forwards
              * simulation.
