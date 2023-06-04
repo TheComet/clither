@@ -269,7 +269,7 @@ msg_join_request(uint16_t protocol_version, uint16_t frame_number, const char* u
     uint8_t name_len = name_len_i32 > 254 ? 254 : (uint8_t)name_len_i32;
 
     struct msg* m = msg_alloc(
-        MSG_JOIN_REQUEST, 10,
+        MSG_JOIN_REQUEST, 1,
         sizeof(protocol_version) +
         sizeof(frame_number) +
         sizeof(name_len) +
@@ -395,7 +395,7 @@ msg_controls(const struct cs_btree* controls)
     count = btree_count(controls);
     if (count > 100)
     {
-        log_warn("There are more than 120 controls in the buffer (%d). Only sending the first 100\n", count);
+        log_warn("There are more than 100 controls in the buffer (%d). Only sending the first 100\n", count);
         count = 100;
     }
 
@@ -535,7 +535,7 @@ msg_controls_unpack_into(
     controls.angle = payload[3];
     controls.speed = payload[4];
     controls.action = (payload[5] & 0x07);
-    if (u16_gt_wrap(first_frame_number, frame_number))
+    if (u16_ge_wrap(first_frame_number, frame_number))
         controls_add(controls_buffer, &controls, first_frame_number);
     log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
 
@@ -607,7 +607,7 @@ msg_controls_unpack_into(
         controls.angle += da - 3;
         controls.speed += dv - 15;
 
-        if (u16_gt_wrap(first_frame_number + i + 1, frame_number))
+        if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
             controls_add(controls_buffer, &controls, first_frame_number + i + 1);
         log_net("  angle%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
     }

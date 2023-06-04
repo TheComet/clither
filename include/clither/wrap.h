@@ -47,3 +47,9 @@ u16_lt_wrap(uint16_t a, uint16_t b) { return !u16_ge_wrap(a, b); }
 
 static inline int
 u16_le_wrap(uint16_t a, uint16_t b) { return !u16_gt_wrap(a, b); }
+
+static inline int16_t
+u16_sub_wrap(uint16_t a, uint16_t b)
+{
+    return a - b;
+}

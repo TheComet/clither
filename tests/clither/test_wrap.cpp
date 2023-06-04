@@ -56,3 +56,14 @@ TEST(NAME, u16_ge_wrap)
     EXPECT_THAT(u16_ge_wrap(a, a), IsTrue());
     EXPECT_THAT(u16_ge_wrap(c, c), IsTrue());
 }
+
+TEST(NAME, u16_sub_wrap)
+{
+    uint16_t a = 5;
+    uint16_t b = 2;
+    uint16_t c = 65532;
+    EXPECT_THAT(u16_sub_wrap(a, b), Eq(3));
+    EXPECT_THAT(u16_sub_wrap(b, a), Eq(-3));
+    EXPECT_THAT(u16_sub_wrap(a, c), Eq(9));
+    EXPECT_THAT(u16_sub_wrap(c, a), Eq(-9));
+}
