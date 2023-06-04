@@ -12,14 +12,15 @@
 
 #include <string.h>  /* memcpy */
 
-#define CBF_WINDOW_SIZE 10
+#define CBF_WINDOW_SIZE 20
 
 struct client_table_entry
 {
     struct cs_vector pending_msgs;     /* struct msg* */
     int timeout_counter;
-    int cbf_window[CBF_WINDOW_SIZE];  /* "Control Buffer Fullness" window */
+    int cbf_window[CBF_WINDOW_SIZE];   /* "Control Buffer Fullness" window */
     cs_btree_key snake_id;
+    uint16_t last_controls_msg_frame;
 };
 
 #define CLIENT_TABLE_FOR_EACH(table, k, v) \
@@ -115,19 +116,15 @@ cbf_add(struct client_table_entry* client, int value)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-cbf_bounds(struct client_table_entry* client, int* lower, int* upper)
+static int
+cbf_lower_bound(struct client_table_entry* client)
 {
     int i;
-    *lower = INT32_MAX;
-    *upper = INT32_MIN;
+    int lower = INT32_MAX;
     for (i = 0; i != CBF_WINDOW_SIZE; ++i)
-    {
-        if (*lower > client->cbf_window[i])
-            *lower = client->cbf_window[i];
-        if (*upper < client->cbf_window[i])
-            *upper = client->cbf_window[i];
-    }
+        if (lower > client->cbf_window[i])
+            lower = client->cbf_window[i];
+    return lower;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -305,7 +302,7 @@ server_recv(
         /*
          * Packet can contain multiple message objects.
          * buf[0] == message type
-         * buf[1] == payload length
+         * buf[1] == message payload length
          * buf[2] == beginning of message payload
          */
         for (i = 0; i < bytes_received - 1;)
@@ -381,6 +378,7 @@ server_recv(
                         msg_queue_init(&client->pending_msgs);
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
+                        client->last_controls_msg_frame = frame_number;
 
                         /* 
                          * Init "Controls Buffer Fullness" queue with minimum granularity.
@@ -416,16 +414,35 @@ server_recv(
 
                 case MSG_CONTROLS: {
                     uint16_t first_frame, last_frame;
-                    int lower, upper, granularity;
+                    int lower;
                     struct snake* snake = world_get_snake(world, client->snake_id);
+                    int granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
-                    /* Returns the first and last frame indices that were unpacked from the message */
+                    /* 
+                     * Measure how many frames are in the client's controls buffer.
+                     * 
+                     * A negative value indicates the client is lagging behind, and
+                     * the server will have to make a prediction, which will lead to
+                     * the client having to re-simulate. A positive value indicates
+                     * there are controls in the buffer. Depending on how stable the
+                     * connection is, the client will be instructed to shrink the
+                     * buffer.
+                     */
+                    int client_controls_buffered = 0;
+                    if (btree_count(&snake->controls_buffer) > 0)
+                        client_controls_buffered = u16_sub_wrap(btree_last_key(&snake->controls_buffer), frame_number);
+
+                    /* Returns the first and last frame numbers that were unpacked from the message */
                     if (msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
-                    {
-                        /* TODO something is wrong with the message */
-                    }
+                        break;  /* something is wrong with the message */
 
-                    granularity = settings->sim_tick_rate / settings->net_tick_rate;
+                    /* 
+                     * This handles packets being reordered by dropping any
+                     * controls older than the last controls received
+                     */
+                    if (u16_le_wrap(last_frame, client->last_controls_msg_frame))
+                        break;
+                    client->last_controls_msg_frame = last_frame;
 
                     /*
                      * Compare the very last frame received with the current frame
@@ -434,9 +451,9 @@ server_recv(
                      * "healthy" the client's connection is and whether the controls
                      * buffer size needs to be increased or decreased.
                      */
-                    cbf_add(client, last_frame - frame_number);
-                    cbf_bounds(client, &lower, &upper);
-                    if (lower - granularity < 0)
+                    cbf_add(client, client_controls_buffered);
+                    lower = cbf_lower_bound(client);
+                    if (client_controls_buffered < 0)
                     {
                         /* 
                          * Means we do NOT have the controls of the current frame
@@ -444,15 +461,14 @@ server_recv(
                          *  -> will probably lead to a client-side roll back
                          * The client needs to warp forwards in time.
                          */
-                        int16_t diff = lower - granularity;
-                        server_queue(client, msg_feedback(diff, frame_number));
-                        log_dbg("warp forwards: %d\n", diff);
+                        server_queue(client, msg_feedback(client_controls_buffered, frame_number));
+                        log_dbg("warp forwards: %d\n", client_controls_buffered);
                     }
-                    else if (lower - granularity > granularity)
+                    else if (lower - granularity*2 > 0)
                     {
-                        int16_t diff = lower - granularity;
+                        int16_t diff = lower - granularity*2;
                         server_queue(client, msg_feedback(diff, frame_number));
-                        log_dbg("warp backwards: %d\n", lower, upper);
+                        log_dbg("warp backwards: %d\n", diff);
                     }
                 } break;
 

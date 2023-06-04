@@ -311,11 +311,12 @@ retry_recv:
 
             case MSG_FEEDBACK: {
                 int rtt2 = client->frame_number - pp.feedback.frame_number;
-                client->warp = pp.feedback.diff * 10;
-                if (rtt2 > 0)
+                if (client->warp == 0)
+                    client->warp = pp.feedback.diff * 10;
+                /*if (rtt2 > 0)
                     client->warp = client->warp * 2 / rtt2;
                 else
-                    log_warn("rtt/2 is %d??\n", rtt2);
+                    log_warn("rtt/2 is %d??\n", rtt2);*/
             } break;
 
             case MSG_SNAKE_METADATA: {
