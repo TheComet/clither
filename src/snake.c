@@ -245,10 +245,10 @@ snake_ack_frame(
     {
         int handles_to_squeeze;
 
-        log_dbg("Rollback to frame %d\n"
+        log_dbg("Rollback from frame %d to %d\n"
             "  ackd head: pos=%x,%x, angle=%x, speed=%x\n"
             "  auth head: pos=%x,%x, angle=%x, speed=%x\n",
-            frame_number,
+            predicted_frame, frame_number,
             acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
             authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
 
@@ -285,14 +285,6 @@ snake_ack_frame(
         /* Simulate head forwards again */
         handles_to_squeeze = 0;
         CONTROLS_RB_FOR_EACH(controls_rb, frame, controls)
-            /*
-             * Skip all controls in frames up to and including the currently
-             * acknowledged frame number, because that's what we rolled back
-             * to.
-             */
-            if (u16_le_wrap(frame, frame_number))
-                continue;
-
             snake_step_head(predicted_head, controls, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
