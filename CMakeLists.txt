@@ -129,6 +129,8 @@ add_executable (clither
         tests/cstructures/test_btree_as_set.cpp
         tests/cstructures/test_btree.cpp
         tests/cstructures/test_hashmap.cpp
+        tests/cstructures/test_memory.cpp
+        tests/cstructures/test_rb.cpp
         tests/cstructures/test_vector.cpp>
 
     $<$<BOOL:${CLITHER_BENCHMARKS}>:

@@ -378,29 +378,29 @@ msg_leave(void)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_controls(const struct cs_btree* controls)
+msg_controls(const struct controls_rb* rb)
 {
-    int i, bit, byte, count;
+    int i, bit, byte, send_count;
     struct controls* c;
     struct msg* m;
     uint16_t first_frame_number;
 
-    assert(btree_count(controls) > 0);
-    first_frame_number = *BTREE_KEY(controls, 0);
+    assert(controls_rb_count(rb) > 0);
+    first_frame_number = controls_rb_first_frame(rb);
 
     /*
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
-    count = btree_count(controls);
-    if (count > 100)
+    send_count = controls_rb_count(rb);
+    if (send_count > 100)
     {
-        log_warn("There are more than 100 controls in the buffer (%d). Only sending the first 100\n", count);
-        count = 100;
+        log_warn("There are more than 100 controls in the buffer (%d). Only sending the first 100\n", send_count);
+        send_count = 100;
     }
 
     log_net("Packing controls for frames %d-%d\n",
-        first_frame_number, (uint16_t)(first_frame_number + count - 1));
+        first_frame_number, (uint16_t)(first_frame_number + send_count - 1));
 
     /*
      * controls structure: 19 bits
@@ -411,15 +411,15 @@ msg_controls(const struct cs_btree* controls)
      */
     m = msg_alloc(
         MSG_CONTROLS, 0,
-        sizeof(first_frame_number) +  /* frame number */
-        19 + (12*count + 8) / 8);  /* upper bound for all controls */
+        sizeof(first_frame_number) +          /* frame number */
+        19 + (12*send_count + 8) / 8);  /* upper bound for all controls */
 
     m->payload[0] = first_frame_number >> 8;
     m->payload[1] = first_frame_number & 0xFF;
-    m->payload[2] = (uint8_t)(count - 1);
+    m->payload[2] = (uint8_t)(send_count - 1);
 
     /* First controls structure */
-    c = BTREE_VALUE(controls, 0);
+    c = controls_rb_peek(rb, 0);
     m->payload[3] = c->angle;
     m->payload[4] = c->speed;
     m->payload[5] = c->action; /* 3 bits */
@@ -453,13 +453,10 @@ msg_controls(const struct cs_btree* controls)
         else \
             CLEAR_NEXT_BIT(); \
     } while(0)
-    for (i = 1; i < count; ++i)
+    for (i = 1; i < send_count; i++)
     {
-        struct controls* prev = BTREE_VALUE(controls, i-1);
-        struct controls* next = BTREE_VALUE(controls, i);
-
-        /* We made the assumption that the controls frame numbers have no gaps */
-        assert(*BTREE_KEY(controls, i-1) + 1 == *BTREE_KEY(controls, i));
+        struct controls* prev = controls_rb_peek(rb, i-1);
+        struct controls* next = controls_rb_peek(rb, i);
 
         if (next->action == prev->action)
             CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
@@ -477,11 +474,11 @@ msg_controls(const struct cs_btree* controls)
     if (bit != 0)
         byte++;
 
-    for (i = 1; i < count; ++i)
+    for (i = 1; i < send_count; ++i)
     {
         uint8_t da, dv;
-        struct controls* prev = BTREE_VALUE(controls, i-1);
-        struct controls* next = BTREE_VALUE(controls, i);
+        struct controls* prev = controls_rb_peek(rb, i-1);
+        struct controls* next = controls_rb_peek(rb, i);
         int da_i32 = next->angle - prev->angle + 3;
         int dv_i32 = next->speed - prev->speed + 15;
         if (da_i32 > 128) da_i32 -= 256;
@@ -508,7 +505,7 @@ msg_controls(const struct cs_btree* controls)
 /* ------------------------------------------------------------------------- */
 int
 msg_controls_unpack_into(
-    struct cs_btree* controls_buffer,
+    struct controls_rb* rb,
     const uint8_t* payload,
     uint8_t payload_len,
     uint16_t frame_number,
@@ -536,7 +533,7 @@ msg_controls_unpack_into(
     controls.speed = payload[4];
     controls.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        controls_add(controls_buffer, &controls, first_frame_number);
+        controls_rb_put(rb, &controls, first_frame_number);
     log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
 
     if (controls_count == 0)
@@ -608,7 +605,7 @@ msg_controls_unpack_into(
         controls.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            controls_add(controls_buffer, &controls, first_frame_number + i + 1);
+            controls_rb_put(rb, &controls, first_frame_number + i + 1);
         log_net("  angle%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
     }
 

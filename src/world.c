@@ -76,11 +76,5 @@ world_remove_snake(struct world* world, uint16_t snake_id)
 void
 world_step(struct world* world, uint16_t frame_number, uint8_t sim_tick_rate)
 {
-    WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        if (btree_count(&snake->controls_buffer))
-        {
-            struct controls controls = controls_get_or_predict(&snake->controls_buffer, frame_number);
-            snake_step(&snake->data, &snake->head, &controls, sim_tick_rate);
-        }
-    WORLD_END_EACH
+
 }

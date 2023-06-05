@@ -4,7 +4,6 @@
 #include "clither/controls.h"
 #include "clither/snake_head.h"
 
-#include "cstructures/btree.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
@@ -39,7 +38,7 @@ struct snake_data
 
 struct snake
 {
-    struct cs_btree controls_buffer;
+    struct controls_rb controls_rb;
     struct snake_data data;
     struct snake_head head;
     struct snake_head head_ack;
@@ -55,22 +54,13 @@ void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
 
 void
-controls_add(struct cs_btree* controls_buffer, const struct controls* controls, uint16_t frame_number);
-
-void
-controls_ack(struct cs_btree* controls_buffer, uint16_t frame_number);
-
-struct controls
-controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_number);
-
-void
 snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate);
 
 void
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
-    struct controls* controls,
+    const struct controls* controls,
     uint8_t sim_tick_rate);
 
 void
@@ -79,7 +69,7 @@ snake_ack_frame(
     struct snake_head* acknowledged_head,
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
-    struct cs_btree* controls_buffer,
+    struct controls_rb* controls_rb,
     uint16_t frame_number,
     uint8_t sim_tick_rate);
 

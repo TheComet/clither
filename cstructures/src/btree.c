@@ -93,7 +93,7 @@ btree_realloc(struct cs_btree* btree, cs_btree_size new_capacity)
 
 /* ------------------------------------------------------------------------- */
 enum cs_btree_status
-btree_create(struct cs_btree** btree, uint32_t value_size)
+btree_create(struct cs_btree** btree, cs_btree_size value_size)
 {
     *btree = MALLOC(sizeof **btree);
     if (*btree == NULL)
@@ -104,7 +104,7 @@ btree_create(struct cs_btree** btree, uint32_t value_size)
 
 /* ------------------------------------------------------------------------- */
 void
-btree_init(struct cs_btree* btree, uint32_t value_size)
+btree_init(struct cs_btree* btree, cs_btree_size value_size)
 {
     assert(btree);
     btree->data = NULL;

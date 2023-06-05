@@ -310,13 +310,8 @@ retry_recv:
                 break;
 
             case MSG_FEEDBACK: {
-                int rtt2 = client->frame_number - pp.feedback.frame_number;
                 if (client->warp == 0)
                     client->warp = pp.feedback.diff * 10;
-                /*if (rtt2 > 0)
-                    client->warp = client->warp * 2 / rtt2;
-                else
-                    log_warn("rtt/2 is %d??\n", rtt2);*/
             } break;
 
             case MSG_SNAKE_METADATA: {
@@ -333,7 +328,7 @@ retry_recv:
                     &snake->head_ack,
                     &snake->head,
                     &pp.snake_head.head,
-                    &snake->controls_buffer,
+                    &snake->controls_rb,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
             } break;
