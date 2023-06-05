@@ -233,7 +233,9 @@ TEST(NAME, for_each_with_wrap)
     // Read everything back
     num_left = 32 - 1;
     RB_FOR_EACH(&rb, uint16_t, value)
-        EXPECT_THAT(value, Pointee(num_left));
         num_left--;
+        EXPECT_THAT(value, Pointee(num_left));
     RB_END_EACH
+
+    rb_deinit(&rb);
 }
