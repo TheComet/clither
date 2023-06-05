@@ -52,6 +52,9 @@ void
 snake_deinit(struct snake* snake);
 
 void
+snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
+
+void
 controls_add(struct cs_btree* controls_buffer, const struct controls* controls, uint16_t frame_number);
 
 void
@@ -59,6 +62,9 @@ controls_ack(struct cs_btree* controls_buffer, uint16_t frame_number);
 
 struct controls
 controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_number);
+
+void
+snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate);
 
 void
 snake_step(

@@ -21,7 +21,7 @@
 #define ACCELERATION         (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
-static void
+void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 {
     head->pos = spawn_pos;
@@ -155,7 +155,7 @@ controls_get_or_predict(const struct cs_btree* controls_buffer, uint16_t frame_n
 }
 
 /* ------------------------------------------------------------------------- */
-static void
+void
 snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate)
 {
     double a;
@@ -372,7 +372,7 @@ snake_ack_frame(
 
             /*
              * The snake's bezier handles are "squeezed" over time. Only have
-             * to re-squeeze the handles that were re-created during forwards
+             * to re-squeeze the handles that were recreated during forwards
              * simulation.
              */
             bezier_squeeze_n_recent_step(&data->bezier_handles, handles_to_squeeze, sim_tick_rate);
