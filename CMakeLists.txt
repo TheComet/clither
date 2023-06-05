@@ -123,6 +123,7 @@ add_executable (clither
         tests/clither/test_msg.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_q.cpp
+        tests/clither/test_snake.cpp
         tests/clither/test_tick.cpp
         tests/clither/test_wrap.cpp
         tests/cstructures/test_btree_as_set.cpp
