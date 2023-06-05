@@ -7,8 +7,7 @@
 
 C_BEGIN
 
-struct cs_vector;
-struct cs_btree;
+struct controls_rb;
 struct snake;
 
 enum msg_type
@@ -126,11 +125,11 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls(const struct cs_btree* controls);
+msg_controls(const struct controls_rb* rb);
 
 int
 msg_controls_unpack_into(
-    struct cs_btree* controls_buffer,
+    struct controls_rb* rb,
     const uint8_t* payload,
     uint8_t payload_len,
     uint16_t frame_number,

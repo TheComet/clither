@@ -87,10 +87,12 @@ run_server_instance(const void* args)
         }
 
         /* sim_update */
-        world_step(&world, frame_number, instance->settings->sim_tick_rate);
-        WORLD_FOR_EACH_SNAKE(&world, snake_id, snake)
-            controls_ack(&snake->controls_buffer, frame_number);
+        WORLD_FOR_EACH_SNAKE(&world, uid, snake)
+            const struct controls* controls = controls_rb_take_or_predict(
+                &snake->controls_rb, frame_number);
+            snake_step(&snake->data, &snake->head, controls, instance->settings->sim_tick_rate);
         WORLD_END_EACH
+        world_step(&world, frame_number, instance->settings->sim_tick_rate);
 
         if (net_update)
         {
@@ -334,9 +336,10 @@ run_client(const struct args* a)
              * acknowledges our move, we remove all controls that date back before
              * and up to that point in time from the list again.
              */
-            controls_add(&snake->controls_buffer, &controls, client.frame_number);
+            controls_rb_put(&snake->controls_rb, &controls, client.frame_number);
 
             /* Update snake and step */
+            snake_step(&snake->data, &snake->head, &controls, client.sim_tick_rate);
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
             camera_update(&camera, &snake->head, client.sim_tick_rate);
@@ -344,7 +347,7 @@ run_client(const struct args* a)
             if (net_update)
             {
                 /* Send all unconfirmed controls (unreliable) */
-                client_queue(&client, msg_controls(&snake->controls_buffer));
+                client_queue(&client, msg_controls(&snake->controls_rb));
             }
         }
 

@@ -77,7 +77,7 @@ struct cs_btree
     void* data;
     cs_btree_size count;
     cs_btree_size capacity;
-    uint32_t value_size;
+    cs_btree_size value_size;
 };
 
 /*!
@@ -95,7 +95,7 @@ struct cs_btree
  * btree_free() when no longer required.
  */
 CSTRUCTURES_PUBLIC_API enum cs_btree_status
-btree_create(struct cs_btree** btree, uint32_t value_size);
+btree_create(struct cs_btree** btree, cs_btree_size value_size);
 
 /*!
  * @brief Initialises an existing btree object.
@@ -105,7 +105,7 @@ btree_create(struct cs_btree** btree, uint32_t value_size);
  * @param[in] btree The btree object to initialise.
  */
 CSTRUCTURES_PUBLIC_API void
-btree_init(struct cs_btree* btree, uint32_t value_size);
+btree_init(struct cs_btree* btree, cs_btree_size value_size);
 
 CSTRUCTURES_PUBLIC_API void
 btree_deinit(struct cs_btree* btree);

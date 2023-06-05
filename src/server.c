@@ -428,12 +428,10 @@ server_recv(
                      * connection is, the client will be instructed to shrink the
                      * buffer.
                      */
-                    int client_controls_buffered = 0;
-                    if (btree_count(&snake->controls_buffer) > 0)
-                        client_controls_buffered = u16_sub_wrap(btree_last_key(&snake->controls_buffer), frame_number);
+                    int client_controls_buffered = controls_rb_count(&snake->controls_rb);
 
                     /* Returns the first and last frame numbers that were unpacked from the message */
-                    if (msg_controls_unpack_into(&snake->controls_buffer, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
+                    if (msg_controls_unpack_into(&snake->controls_rb, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
                         break;  /* something is wrong with the message */
 
                     /* 

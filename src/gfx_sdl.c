@@ -419,7 +419,7 @@ draw_bezier(
 static void
 draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake, uint16_t frame_number)
 {
-    struct controls* controls;
+    const struct controls* controls;
     struct spos pos;
     int i;
 
@@ -434,7 +434,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
     draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 10);
 
     /* Debug: Draw how the "controls" structure interpreted the mouse position */
-    controls = btree_find(&snake->controls_buffer, frame_number);
+    controls = controls_rb_find_or_predict(&snake->controls_rb, frame_number);
     if (controls != NULL)
     {
         int screen_x, screen_y, max_dist;

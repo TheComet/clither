@@ -51,6 +51,7 @@ add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
     "src/hash.c"
     "src/hashmap.c"
     "src/memory.c"
+    "src/rb.c"
     "src/string.c"
     "src/vector.c"
 
@@ -59,6 +60,7 @@ add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
     "include/cstructures/hash.h"
     "include/cstructures/hashmap.h"
     "include/cstructures/memory.h"
+    "include/cstructures/rb.h"
     "include/cstructures/string.h"
     "include/cstructures/vector.h"
 
