@@ -222,7 +222,7 @@ snake_ack_frame(
      * It's possible the authoritative head position we receive from the server
      * goes through some packet loss, so may have to catch up.
      */
-    while (last_ackd_frame != frame_number)
+    while (u16_le_wrap(last_ackd_frame, frame_number))
     {
         const struct controls* controls;
 
@@ -246,8 +246,8 @@ snake_ack_frame(
         int handles_to_squeeze;
 
         log_dbg("Rollback from frame %d to %d\n"
-            "  ackd head: pos=%x,%x, angle=%x, speed=%x\n"
-            "  auth head: pos=%x,%x, angle=%x, speed=%x\n",
+            "  ackd head: pos=%d,%d, angle=%d, speed=%d\n"
+            "  auth head: pos=%d,%d, angle=%d, speed=%d\n",
             predicted_frame, frame_number,
             acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
             authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
@@ -257,7 +257,7 @@ snake_ack_frame(
          * In rare cases this may be on the boundary of two bezier segments,
          * in which case we must also remove the segment and corresponding
          * points list.
-         * 
+         *
          * Also note that the first and last points in two points lists share
          * the same position, so when removing a bezier segment, two points
          * need to be removed.
@@ -282,8 +282,15 @@ snake_ack_frame(
         *acknowledged_head = *authoritative_head;
         *predicted_head = *authoritative_head;
 
-        /* Simulate head forwards again */
         handles_to_squeeze = 0;
+        if (snake_update_curve_from_head(data, predicted_head))
+        {
+            snake_add_new_segment(data, predicted_head);
+            handles_to_squeeze++;
+        }
+        //controls_rb_take_or_predict(controls_rb, frame_number);
+
+        /* Simulate head forwards again */
         CONTROLS_RB_FOR_EACH(controls_rb, frame, controls)
             snake_step_head(predicted_head, controls, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))

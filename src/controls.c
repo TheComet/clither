@@ -47,13 +47,7 @@ controls_rb_put(
     {
         uint16_t expected_frame = rb->first_frame_number + rb_count(&rb->rb);
         if (expected_frame != frame_number)
-        {
-            log_warn("Tried adding controls on frame %d, "
-                "but the last frame added was from frame %d. "
-                "Controls won't be added!\n",
-                frame_number, expected_frame - 1);
             return;
-        }
     }
     else
     {
