@@ -48,36 +48,6 @@ TEST(NAME, roll_back_over_frame_boundary)
     EXPECT_THAT(vector_count(server_pts0), Eq(7));
     EXPECT_THAT(vector_count(&server.data.bezier_handles), Eq(2));
 
-    fprintf(stderr, "pxa0 = [");
-    for (int i = 0; i != vector_count(client_pts0); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->x);
-    }
-    fprintf(stderr, "];\n");
-    fprintf(stderr, "pya0 = [");
-    for (int i = 0; i != vector_count(client_pts0); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->y);
-    }
-    fprintf(stderr, "];\n");
-
-    fprintf(stderr, "pxa1 = [");
-    for (int i = 0; i != vector_count(client_pts1); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->x);
-    }
-    fprintf(stderr, "];\n");
-    fprintf(stderr, "pya1 = [");
-    for (int i = 0; i != vector_count(client_pts1); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->y);
-    }
-    fprintf(stderr, "];\n");
-
     /* Make sure sim agrees up to mispredicted frame */
     EXPECT_THAT(
         ((qwpos*)vector_get_element(client_pts0, 5))->x, Eq(
@@ -115,7 +85,7 @@ TEST(NAME, roll_back_over_frame_boundary)
         else
             snake_step_head(&head, &c_prev, 60);
 
-        qwpos* p = i+1 < vector_count(client_pts0) ?
+        qwpos* p = i+1 < (int)vector_count(client_pts0) ?
             (qwpos*)vector_get_element(client_pts0, i+1) :
             (qwpos*)vector_get_element(client_pts1, i+2 - vector_count(client_pts0));
 
@@ -125,36 +95,6 @@ TEST(NAME, roll_back_over_frame_boundary)
         frame_number++;
         c_prev = c;
     }
-
-    fprintf(stderr, "pxb0 = [");
-    for (int i = 0; i != vector_count(client_pts0); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->x);
-    }
-    fprintf(stderr, "];\n");
-    fprintf(stderr, "pyb0 = [");
-    for (int i = 0; i != vector_count(client_pts0); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->y);
-    }
-    fprintf(stderr, "];\n");
-
-    fprintf(stderr, "pxb1 = [");
-    for (int i = 0; i != vector_count(client_pts1); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->x);
-    }
-    fprintf(stderr, "];\n");
-    fprintf(stderr, "pyb1 = [");
-    for (int i = 0; i != vector_count(client_pts1); ++i)
-    {
-        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
-        fprintf(stderr, "%s%d", i?", ":"", p->y);
-    }
-    fprintf(stderr, "];\n");
 
     snake_deinit(&client);
     snake_deinit(&server);

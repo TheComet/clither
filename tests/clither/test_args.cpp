@@ -13,7 +13,10 @@ TEST(NAME, no_args_check_defaults)
     struct args a;
     ASSERT_THAT(args_parse(&a, 1, (char**)argv), Eq(0));
     EXPECT_THAT(a.ip, StrEq(""));
-    EXPECT_THAT(a.port, StrEq("5555"));
+    EXPECT_THAT(a.port, StrEq(""));
+#if defined(CLITHER_MCD)
+    EXPECT_THAT(a.mcd_port, StrEq("5554"));
+#endif
 #if defined(CLITHER_LOGGING)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
 #endif

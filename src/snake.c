@@ -281,14 +281,12 @@ snake_ack_frame(
         /* Restore head positions to authoritative state */
         *acknowledged_head = *authoritative_head;
         *predicted_head = *authoritative_head;
-
         handles_to_squeeze = 0;
         if (snake_update_curve_from_head(data, predicted_head))
         {
             snake_add_new_segment(data, predicted_head);
             handles_to_squeeze++;
         }
-        //controls_rb_take_or_predict(controls_rb, frame_number);
 
         /* Simulate head forwards again */
         CONTROLS_RB_FOR_EACH(controls_rb, frame, controls)
