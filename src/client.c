@@ -279,7 +279,9 @@ retry_recv:
                  * relative to the frame it sent back. Therefore, we are a full rtt
                  * into the future now.
                  */
-                client->frame_number = pp.join_accept.server_frame + rtt;
+                client->frame_number =
+                        pp.join_accept.server_frame + rtt +
+                        5 * client->sim_tick_rate / client->net_tick_rate;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
