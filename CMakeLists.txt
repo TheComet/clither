@@ -18,9 +18,10 @@ project ("clither"
 include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-option (CLITHER_LOGGING "Enable logging functionality" ON)
 set (CLITHER_GFX "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
 set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL")
+option (CLITHER_LOGGING "Enable logging functionality" ON)
+option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
@@ -58,6 +59,7 @@ add_executable (clither
     "include/clither/client.h"
     "include/clither/controls.h"
     "include/clither/event.h"
+    "include/clither/food_cluster.h"
     "include/clither/gfx.h"
     "include/clither/log.h"
     "include/clither/mcd_wifi.h"
@@ -83,6 +85,7 @@ add_executable (clither
     "src/client.c"
     "src/controls.c"
     "src/event.c"
+    "src/food_cluster.c"
     "src/log.c"
     "src/main.c"
     "src/mcd_wifi.c"

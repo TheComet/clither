@@ -541,5 +541,21 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
         draw_circle(g->renderer, make_SDL_Point(pos.x, pos.y), 20);
     }
 
+    {
+        int i;
+        cs_hash32 h = 250;
+        for (i = 0; i != 255; ++i)
+        {
+            struct qwpos p;
+            struct spos sp;
+            h = hash32_jenkins_oaat(&h, sizeof(h));
+            p.x = h & 0x7FFF;
+            h = hash32_jenkins_oaat(&h, sizeof(h));
+            p.y = h & 0x7FFF;
+            sp = gfx_world_to_screen(p, (const struct gfx*)gfx, camera);
+            draw_circle(g->renderer, make_SDL_Point(sp.x, sp.y), 3);
+        }
+    }
+
     SDL_RenderPresent(g->renderer);
 }
