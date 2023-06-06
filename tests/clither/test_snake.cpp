@@ -33,6 +33,7 @@ TEST(NAME, roll_back_over_frame_boundary)
 
         frame_number++;
     }
+    mispredict_frame++;
 
     /* Make sure we have 2 bezier segments */
     ASSERT_THAT(vector_count(&client.data.points), Eq(2));
@@ -46,6 +47,36 @@ TEST(NAME, roll_back_over_frame_boundary)
     struct cs_vector* server_pts0 = (cs_vector*)vector_get_element(&server.data.points, 0);
     EXPECT_THAT(vector_count(server_pts0), Eq(7));
     EXPECT_THAT(vector_count(&server.data.bezier_handles), Eq(2));
+
+    fprintf(stderr, "pxa0 = [");
+    for (int i = 0; i != vector_count(client_pts0); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->x);
+    }
+    fprintf(stderr, "];\n");
+    fprintf(stderr, "pya0 = [");
+    for (int i = 0; i != vector_count(client_pts0); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->y);
+    }
+    fprintf(stderr, "];\n");
+
+    fprintf(stderr, "pxa1 = [");
+    for (int i = 0; i != vector_count(client_pts1); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->x);
+    }
+    fprintf(stderr, "];\n");
+    fprintf(stderr, "pya1 = [");
+    for (int i = 0; i != vector_count(client_pts1); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->y);
+    }
+    fprintf(stderr, "];\n");
 
     /* Make sure sim agrees up to mispredicted frame */
     EXPECT_THAT(
@@ -65,6 +96,65 @@ TEST(NAME, roll_back_over_frame_boundary)
      * the simulation will match up. Going from mispredict_frame to mispredict_frame+1
      * will cause a roll back */
     snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &client.controls_rb, mispredict_frame, 60);
+
+    ASSERT_THAT(vector_count(&client.data.points), Eq(2));
+    client_pts0 = (cs_vector*)vector_get_element(&client.data.points, 0);
+    client_pts1 = (cs_vector*)vector_get_element(&client.data.points, 1);
+
+    struct controls c_prev = c;
+    controls_init(&c);
+    struct snake_head head;
+    snake_head_init(&head, make_qwposi(2, 2));
+    frame_number = 65535 - 10;
+    for (int i = 0; i < 14; ++i)
+    {
+        c.angle += 2;
+
+        if (frame_number != mispredict_frame)
+            snake_step_head(&head, &c, 60);
+        else
+            snake_step_head(&head, &c_prev, 60);
+
+        qwpos* p = i+1 < vector_count(client_pts0) ?
+            (qwpos*)vector_get_element(client_pts0, i+1) :
+            (qwpos*)vector_get_element(client_pts1, i+2 - vector_count(client_pts0));
+
+        EXPECT_THAT(head.pos.x, Eq(p->x));
+        EXPECT_THAT(head.pos.y, Eq(p->y));
+
+        frame_number++;
+        c_prev = c;
+    }
+
+    fprintf(stderr, "pxb0 = [");
+    for (int i = 0; i != vector_count(client_pts0); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->x);
+    }
+    fprintf(stderr, "];\n");
+    fprintf(stderr, "pyb0 = [");
+    for (int i = 0; i != vector_count(client_pts0); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts0, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->y);
+    }
+    fprintf(stderr, "];\n");
+
+    fprintf(stderr, "pxb1 = [");
+    for (int i = 0; i != vector_count(client_pts1); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->x);
+    }
+    fprintf(stderr, "];\n");
+    fprintf(stderr, "pyb1 = [");
+    for (int i = 0; i != vector_count(client_pts1); ++i)
+    {
+        qwpos* p = (qwpos*)vector_get_element(client_pts1, i);
+        fprintf(stderr, "%s%d", i?", ":"", p->y);
+    }
+    fprintf(stderr, "];\n");
 
     snake_deinit(&client);
     snake_deinit(&server);
