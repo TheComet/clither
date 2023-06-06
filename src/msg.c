@@ -145,12 +145,12 @@ msg_parse_payload(
                 (payload[6] << 8) |
                 (payload[7] << 0);
             pp->join_accept.spawn.x =
-                (payload[8] & 0x80 ? 0xFF << 24 : 0) |
+                (payload[8] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[8] << 16) |
                 (payload[9] << 8) |
                 (payload[10] << 0);
             pp->join_accept.spawn.y =
-                (payload[11] & 0x80 ? 0xFF << 24 : 0) |
+                (payload[11] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[11] << 16) |
                 (payload[12] << 8) |
                 (payload[13] << 0);
@@ -234,12 +234,12 @@ msg_parse_payload(
                 (payload[0] << 8) |
                 (payload[1] << 0);
             pp->snake_head.head.pos.x =
-                (payload[2] & 0x80 ? 0xFF << 24 : 0) |
+                (payload[2] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[2] << 16) |
                 (payload[3] << 8) |
                 (payload[4] << 0);
             pp->snake_head.head.pos.y =
-                (payload[5] & 0x80 ? 0xFF << 24 : 0) |
+                (payload[5] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[5] << 16) |
                 (payload[6] << 8) |
                 (payload[7] << 0);

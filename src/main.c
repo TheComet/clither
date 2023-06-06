@@ -247,6 +247,16 @@ run_client(const struct args* a)
 
     memory_init_thread();
 
+    /* Init all graphics and create window */
+    if (gfx_init() < 0)
+        goto init_gfx_failed;
+    gfx = gfx_create(800, 600);
+    if (gfx == NULL)
+        goto create_gfx_failed;
+
+    input_init(&input);
+    camera_init(&camera);
+    controls_init(&controls);
     world_init(&world);
 
     /* If McDonald's WiFi is enabled, start that */
@@ -267,17 +277,6 @@ run_client(const struct args* a)
         if (client_connect(&client, a->ip, a->port, "username") < 0)
             goto client_connect_failed;
     }
-
-    /* Init all graphics and create window */
-    if (gfx_init() < 0)
-        goto init_gfx_failed;
-    gfx = gfx_create(800, 600);
-    if (gfx == NULL)
-        goto create_gfx_failed;
-
-    camera_init(&camera);
-    input_init(&input);
-    controls_init(&controls);
 
     log_info("Client started\n");
 
@@ -384,10 +383,6 @@ run_client(const struct args* a)
     }
     log_info("Stopping client\n");
 
-    gfx_destroy(gfx);
-create_gfx_failed:
-    gfx_deinit();
-init_gfx_failed:
 client_connect_failed:
     /* Stop McDonald's WiFi if necessary */
     if (a->mcd_latency > 0)
@@ -398,6 +393,10 @@ client_connect_failed:
 start_mcd_failed:
     client_deinit(&client);
     world_deinit(&world);
+    gfx_destroy(gfx);
+create_gfx_failed:
+    gfx_deinit();
+init_gfx_failed:
     memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
