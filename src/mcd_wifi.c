@@ -48,6 +48,7 @@ run_mcd_wifi(const void* args)
     tick_cfg(&tick, TICK_RATE);
 
     client_active = 0;
+    log_info("McDonald's WiFi hosted with %dms ping, %d%% packet loss\n", a->mcd_latency, a->mcd_loss);
     while (signals_exit_requested() == 0)
     {
         bytes_received = net_recvfrom(client_fd, buf, MAX_UDP_PACKET_SIZE, client_addr, client_addrlen);
@@ -55,7 +56,7 @@ run_mcd_wifi(const void* args)
             break;
         if (bytes_received > 0)
         {
-            if (rand() > a->mcd_loss * RAND_MAX / 100)
+            if (rand() > (int64_t)a->mcd_loss * RAND_MAX / 100)
             {
                 uint8_t* msg = MALLOC(bytes_received + 3);
                 msg[0] = ((uint16_t)bytes_received) >> 8;
@@ -65,15 +66,15 @@ run_mcd_wifi(const void* args)
                 vector_push(&client_buf, &msg);
                 client_active = 1;
 
-                if (rand() > a->mcd_dup * RAND_MAX / 100)
+                if (rand() > (int64_t)a->mcd_dup * RAND_MAX / 100)
                 {
                     uint8_t* dup_msg = MALLOC(bytes_received + 3);
                     memcpy(dup_msg, msg, bytes_received + 3);
                     vector_push(&client_buf, &dup_msg);
                 }
 
-                if (rand() > a->mcd_reorder * RAND_MAX / 100)
-                    msg[2] -= rand() * 10 / RAND_MAX;
+                if (rand() > (int64_t)a->mcd_reorder * RAND_MAX / 100)
+                    msg[2] -= (int64_t)rand() * 10 / RAND_MAX;
             }
         }
 
