@@ -8,10 +8,7 @@ struct controls;
 struct input;
 struct world;
 
-struct gfx
-{
-    char unused;
-};
+struct gfx;
 
 int
 gfx_init(void);
@@ -35,12 +32,6 @@ gfx_update_controls(
     const struct gfx* gfx,
     const struct camera* cam,
     struct qwpos snake_head);
-
-struct qwpos
-gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera);
-
-struct spos
-gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera* camera);
 
 void
 gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, uint16_t frame_number);

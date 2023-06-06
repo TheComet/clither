@@ -5,8 +5,6 @@ if (NOT DEFINED CMAKE_BUILD_TYPE)
 endif()
 message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-
 project ("clither"
     VERSION 0.0.1
     LANGUAGES C)
@@ -18,8 +16,8 @@ project ("clither"
 include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-set (CLITHER_GFX "SDL" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
-set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL")
+set (CLITHER_GFX "GLES2" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
+set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL;GLES2")
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
@@ -97,7 +95,11 @@ add_executable (clither
     "src/world.c"
 
     $<$<STREQUAL:${CLITHER_GFX},SDL>:
-        src/gfx_sdl.c>
+        src/sdl/gfx_sdl.c>
+
+    $<$<STREQUAL:${CLITHER_GFX},GLES2>:
+        src/gles2/gfx_gles2.c
+        src/gles2/glad/src/gles2.c>
 
     $<$<PLATFORM_ID:Windows>:
         src/mutex_win32.c
@@ -126,6 +128,7 @@ add_executable (clither
         tests/clither/test_msg.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_q.cpp
+        tests/clither/test_quadtree.cpp
         tests/clither/test_snake.cpp
         tests/clither/test_tick.cpp
         tests/clither/test_wrap.cpp
@@ -146,7 +149,10 @@ target_include_directories (clither
     PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
-        $<INSTALL_INTERFACE:include>)
+        $<INSTALL_INTERFACE:include>
+        
+        $<$<STREQUAL:${CLITHER_GFX},GLES2>:
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gles2/glad/include>>)
 target_compile_definitions (clither
     PRIVATE
         $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>)
@@ -198,6 +204,13 @@ if (CLITHER_GFX STREQUAL "SDL")
     set (SDL2IMAGE_SAMPLES OFF CACHE STRING "")
     add_subdirectory ("thirdparty/SDL_image-2.6.3")
     target_link_libraries (clither PRIVATE SDL2_image)
+elseif (CLITHER_GFX STREQUAL "GLES2")
+    set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
+    set (GLFW_BUILD_TESTS OFF CACHE STRING "")
+    set (GLFW_BUILD_DOCS OFF CACHE STRING "")
+    set (GLFW_INSTALL OFF CACHE STRING "")
+    add_subdirectory ("thirdparty/glfw-3.3.8")
+    target_link_libraries (clither PRIVATE glfw)
 endif ()
 
 if (CLITHER_TESTS)
