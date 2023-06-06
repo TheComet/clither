@@ -72,7 +72,7 @@ union parsed_payload
 
     struct {
         uint16_t frame_number;
-        int16_t diff;
+        int8_t diff;
     } feedback;
 
     struct {
@@ -137,7 +137,7 @@ msg_controls_unpack_into(
     uint16_t* last_frame);
 
 struct msg*
-msg_feedback(int16_t diff, uint16_t frame_number);
+msg_feedback(int8_t diff, uint16_t frame_number);
 
 struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);

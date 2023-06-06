@@ -205,7 +205,7 @@ msg_parse_payload(
         } break;
 
         case MSG_FEEDBACK: {
-            if (payload_len < 4)
+            if (payload_len < 3)
             {
                 log_warn("MSG_FEEDBACK payload is too small\n");
                 return -1;
@@ -215,8 +215,7 @@ msg_parse_payload(
                 (payload[0] << 8) |
                 (payload[1] << 0);
             pp->feedback.diff =
-                (payload[2] << 8) |
-                (payload[3] << 0);
+                payload[2];
             log_net("MSG_FEEDBACK: frame=%d, diff=%d\n", pp->feedback.frame_number, pp->feedback.diff);
         } break;
 
@@ -355,7 +354,7 @@ msg_join_deny_bad_protocol(const char* error)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
- msg_join_deny_bad_username(const char* error)
+msg_join_deny_bad_username(const char* error)
 {
     return msg_alloc_string_payload(
         MSG_JOIN_DENY_BAD_USERNAME, 0, error);
@@ -606,7 +605,7 @@ msg_controls_unpack_into(
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
             controls_rb_put(rb, &controls, first_frame_number + i + 1);
-        log_net("  angle%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
+        log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
     }
 
     return 0;
@@ -614,7 +613,7 @@ msg_controls_unpack_into(
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_feedback(int16_t diff, uint16_t frame_number)
+msg_feedback(int8_t diff, uint16_t frame_number)
 {
     struct msg* m = msg_alloc(
         MSG_FEEDBACK, 0,
@@ -624,8 +623,10 @@ msg_feedback(int16_t diff, uint16_t frame_number)
     m->payload[0] = (frame_number >> 8);
     m->payload[1] = (frame_number & 0xFF);
 
-    m->payload[2] = (diff >> 8);
-    m->payload[3] = (diff & 0xFF);
+    m->payload[2] = diff;
+
+    log_net("MSG_FEEDBACK: frame=%d, diff=%d\n", frame_number, diff);
+
     return m;
 }
 

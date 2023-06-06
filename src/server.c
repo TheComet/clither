@@ -380,7 +380,7 @@ server_recv(
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                         client->last_controls_msg_frame = frame_number;
 
-                        /* 
+                        /*
                          * Init "Controls Buffer Fullness" queue with minimum granularity.
                          * This assumes the clienthas the most stable connection initially.
                          */
@@ -418,9 +418,9 @@ server_recv(
                     struct snake* snake = world_get_snake(world, client->snake_id);
                     int granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
-                    /* 
+                    /*
                      * Measure how many frames are in the client's controls buffer.
-                     * 
+                     *
                      * A negative value indicates the client is lagging behind, and
                      * the server will have to make a prediction, which will lead to
                      * the client having to re-simulate. A positive value indicates
@@ -428,13 +428,15 @@ server_recv(
                      * connection is, the client will be instructed to shrink the
                      * buffer.
                      */
-                    int client_controls_buffered = controls_rb_count(&snake->controls_rb);
+                    int client_controls_buffered = controls_rb_count(&snake->controls_rb) > 0 ?
+                        u16_sub_wrap(controls_rb_last_frame(&snake->controls_rb), frame_number) :
+                        u16_sub_wrap(snake->controls_rb.first_frame_number, frame_number);
 
                     /* Returns the first and last frame numbers that were unpacked from the message */
                     if (msg_controls_unpack_into(&snake->controls_rb, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
                         break;  /* something is wrong with the message */
 
-                    /* 
+                    /*
                      * This handles packets being reordered by dropping any
                      * controls older than the last controls received
                      */
@@ -453,18 +455,20 @@ server_recv(
                     lower = cbf_lower_bound(client);
                     if (client_controls_buffered < 0)
                     {
-                        /* 
+                        /*
                          * Means we do NOT have the controls of the current frame
                          *  -> server is going to make a prediction
                          *  -> will probably lead to a client-side roll back
                          * The client needs to warp forwards in time.
                          */
-                        server_queue(client, msg_feedback(client_controls_buffered, frame_number));
-                        log_dbg("warp forwards: %d\n", client_controls_buffered);
+                        int8_t diff = client_controls_buffered < -10 ? -10 : client_controls_buffered;
+                        server_queue(client, msg_feedback(diff, frame_number));
+                        log_dbg("warp forwards: %d\n", diff);
                     }
                     else if (lower - granularity*2 > 0)
                     {
-                        int16_t diff = lower - granularity*2;
+                        int8_t diff = lower - granularity*2;
+                        diff = diff > 10 ? 10 : diff;
                         server_queue(client, msg_feedback(diff, frame_number));
                         log_dbg("warp backwards: %d\n", diff);
                     }
