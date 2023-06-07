@@ -211,6 +211,8 @@ elseif (CLITHER_GFX STREQUAL "GLES2")
     set (GLFW_INSTALL OFF CACHE STRING "")
     add_subdirectory ("thirdparty/glfw-3.3.8")
     target_link_libraries (clither PRIVATE glfw)
+
+    target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
 endif ()
 
 if (CLITHER_TESTS)
