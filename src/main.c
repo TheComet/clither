@@ -342,6 +342,7 @@ run_client(const struct args* a)
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
             camera_update(&camera, &snake->head, client.sim_tick_rate);
+            camera.scale += make_qw2(input.scroll, 64);
 
             if (net_update)
             {
