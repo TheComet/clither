@@ -22,7 +22,10 @@ enum controls_action
 struct input
 {
     int mousex, mousey;
+    int scroll;
     unsigned boost : 1;
+    unsigned shoot : 1;
+    unsigned split : 1;
     unsigned quit  : 1;
 };
 

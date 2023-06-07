@@ -12,9 +12,8 @@
 #include <SDL_image.h>
 #include <math.h>
 
-struct gfx_sdl
+struct gfx
 {
-    struct gfx base;
     SDL_Window* window;
     SDL_Renderer* renderer;
 
@@ -107,6 +106,70 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
 }
 
 /* ------------------------------------------------------------------------- */
+static struct qwpos
+gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera)
+{
+    int screen_x, screen_y;
+    struct qwpos result = make_qwposi(pos.x, pos.y);
+
+    SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
+    if (screen_x < screen_y)
+    {
+        int pad = (screen_y - screen_x) / 2;
+        result.x = qw_sub(result.x, make_qw(screen_x / 2));
+        result.y = qw_sub(result.y, make_qw(screen_x / 2 + pad));
+        result.x = qw_div(result.x, make_qw(screen_x));
+        result.y = qw_div(result.y, make_qw(-screen_x));
+    }
+    else
+    {
+        int pad = (screen_x - screen_y) / 2;
+        result.x = qw_sub(result.x, make_qw(screen_y / 2 + pad));
+        result.y = qw_sub(result.y, make_qw(screen_y / 2));
+        result.x = qw_div(result.x, make_qw(screen_y));
+        result.y = qw_div(result.y, make_qw(-screen_y));
+    }
+
+    result.x = qw_div(result.x, camera->scale);
+    result.y = qw_div(result.y, camera->scale);
+    result.x = qw_add(result.x, camera->pos.x);
+    result.y = qw_add(result.y, camera->pos.y);
+
+    return result;
+}
+
+/* ------------------------------------------------------------------------- */
+static struct spos
+gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera* camera)
+{
+    struct spos result;
+    int screen_x, screen_y;
+
+    /* world -> camera space */
+    pos.x = qw_sub(pos.x, camera->pos.x);
+    pos.y = qw_sub(pos.y, camera->pos.y);
+    pos.x = qw_mul(pos.x, camera->scale);
+    pos.y = qw_mul(pos.y, camera->scale);
+
+    /* camera space -> screen space + keep aspect ratio */
+    SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
+    if (screen_x < screen_y)
+    {
+        int pad = (screen_y - screen_x) / 2;
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_x)) + (screen_x / 2);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_x)) + (screen_x / 2 + pad);
+    }
+    else
+    {
+        int pad = (screen_x - screen_y) / 2;
+        result.x = qw_mul_to_int(pos.x, make_qw(screen_y)) + (screen_y / 2 + pad);
+        result.y = qw_mul_to_int(pos.y, make_qw(-screen_y)) + (screen_y / 2);
+    }
+
+    return result;
+}
+
+/* ------------------------------------------------------------------------- */
 int
 gfx_init(void)
 {
@@ -140,66 +203,65 @@ gfx_deinit(void)
 struct gfx*
 gfx_create(int initial_width, int initial_height)
 {
-    struct gfx_sdl* g = MALLOC(sizeof *g);
+    struct gfx* gfx = MALLOC(sizeof *gfx);
 
-    g->window = SDL_CreateWindow("clither",
+    gfx->window = SDL_CreateWindow("clither",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         initial_width, initial_height,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
     );
-    if (g->window == NULL)
+    if (gfx->window == NULL)
     {
         log_warn("Failed to create OpenGL window: %s\n", SDL_GetError());
         log_warn("Falling back to software window\n");
-        g->window = SDL_CreateWindow("clither",
+        gfx->window = SDL_CreateWindow("clither",
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             initial_width, initial_height,
             SDL_WINDOW_RESIZABLE
         );
     }
-    if (g->window == NULL)
+    if (gfx->window == NULL)
     {
         log_err("Failed to create window: %s\n", SDL_GetError());
         goto create_window_failed;
     }
 
-    g->renderer = SDL_CreateRenderer(g->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (g->renderer == NULL)
+    gfx->renderer = SDL_CreateRenderer(gfx->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (gfx->renderer == NULL)
     {
         log_warn("Failed to create renderer: %s\n", SDL_GetError());
         log_warn("Falling back to a software renderer\n");
-        g->renderer = SDL_CreateRenderer(g->window, -1, SDL_RENDERER_SOFTWARE);
+        gfx->renderer = SDL_CreateRenderer(gfx->window, -1, SDL_RENDERER_SOFTWARE);
     }
-    if (g->renderer == NULL)
+    if (gfx->renderer == NULL)
     {
         log_err("Failed to create renderer: %s\n", SDL_GetError());
         goto create_renderer_failed;
     }
 
-    g->textures.background = IMG_LoadTexture(g->renderer, "textures/tile.png");
-    if (g->textures.background == NULL)
+    gfx->textures.background = IMG_LoadTexture(gfx->renderer, "textures/tile.png");
+    if (gfx->textures.background == NULL)
     {
         log_err("Failed to load image: textures/tile.png\n");
     }
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
-    return (struct gfx*)g;
+    return gfx;
 
-    create_renderer_failed : SDL_DestroyWindow(g->window);
+    create_renderer_failed : SDL_DestroyWindow(gfx->window);
     create_window_failed   : return NULL;
 }
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_destroy(struct gfx* gb)
+gfx_destroy(struct gfx* gfx)
 {
-    struct gfx_sdl* g = (struct gfx_sdl*)gb;
-    SDL_DestroyRenderer(g->renderer);
-    SDL_DestroyWindow(g->window);
-    FREE(g);
+    SDL_DestroyRenderer(gfx->renderer);
+    SDL_DestroyWindow(gfx->window);
+    FREE(gfx);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -248,10 +310,9 @@ gfx_update_controls(
     int screen_x, screen_y, max_dist, da;
     uint8_t new_angle, new_speed;
     struct spos snake_head_screen;
-    struct gfx_sdl* g = (struct gfx_sdl*)gfx;
 
     /* Scale the speed vector to a quarter of the screen's size */
-    SDL_GetWindowSize(g->window, &screen_x, &screen_y);
+    SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
     max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
 
     snake_head_screen = gfx_world_to_screen(snake_head, gfx, camera);
@@ -297,72 +358,6 @@ gfx_update_controls(
 }
 
 /* ------------------------------------------------------------------------- */
-static struct qwpos
-gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera)
-{
-    int screen_x, screen_y;
-    struct qwpos result = make_qwposi(pos.x, pos.y);
-    struct gfx_sdl* g = (struct gfx_sdl*)gfx;
-
-    SDL_GetWindowSize(g->window, &screen_x, &screen_y);
-    if (screen_x < screen_y)
-    {
-        int pad = (screen_y - screen_x) / 2;
-        result.x = qw_sub(result.x, make_qw(screen_x / 2));
-        result.y = qw_sub(result.y, make_qw(screen_x / 2 + pad));
-        result.x = qw_div(result.x, make_qw(screen_x));
-        result.y = qw_div(result.y, make_qw(-screen_x));
-    }
-    else
-    {
-        int pad = (screen_x - screen_y) / 2;
-        result.x = qw_sub(result.x, make_qw(screen_y / 2 + pad));
-        result.y = qw_sub(result.y, make_qw(screen_y / 2));
-        result.x = qw_div(result.x, make_qw(screen_y));
-        result.y = qw_div(result.y, make_qw(-screen_y));
-    }
-
-    result.x = qw_div(result.x, camera->scale);
-    result.y = qw_div(result.y, camera->scale);
-    result.x = qw_add(result.x, camera->pos.x);
-    result.y = qw_add(result.y, camera->pos.y);
-
-    return result;
-}
-
-/* ------------------------------------------------------------------------- */
-static struct spos
-gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera* camera)
-{
-    struct spos result;
-    int screen_x, screen_y;
-    struct gfx_sdl* g = (struct gfx_sdl*)gfx;
-
-    /* world -> camera space */
-    pos.x = qw_mul(pos.x, camera->scale);
-    pos.y = qw_mul(pos.y, camera->scale);
-    pos.x = qw_sub(pos.x, camera->pos.x);
-    pos.y = qw_sub(pos.y, camera->pos.y);
-
-    /* camera space -> screen space + keep aspect ratio */
-    SDL_GetWindowSize(g->window, &screen_x, &screen_y);
-    if (screen_x < screen_y)
-    {
-        int pad = (screen_y - screen_x) / 2;
-        result.x = qw_mul_to_int(pos.x, make_qw(screen_x)) + (screen_x / 2);
-        result.y = qw_mul_to_int(pos.y, make_qw(-screen_x)) + (screen_x / 2 + pad);
-    }
-    else
-    {
-        int pad = (screen_x - screen_y) / 2;
-        result.x = qw_mul_to_int(pos.x, make_qw(screen_y)) + (screen_y / 2 + pad);
-        result.y = qw_mul_to_int(pos.y, make_qw(-screen_y)) + (screen_y / 2);
-    }
-
-    return result;
-}
-
-/* ------------------------------------------------------------------------- */
 static void
 draw_bezier(
     const struct gfx* gfx,
@@ -374,8 +369,6 @@ draw_bezier(
     SDL_Point* points;
     SDL_Point point_buf[64];
     int i;
-
-    const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
 
     struct spos p0 = gfx_world_to_screen(head->pos, gfx, camera);
     struct spos p1 = gfx_world_to_screen(make_qwposqw(
@@ -409,7 +402,7 @@ draw_bezier(
         points[i].y = (int)(a0 + a1*t1 + a2*t2 + a3*t3);
     }
 
-    SDL_RenderDrawLines(g->renderer, points, num_points);
+    SDL_RenderDrawLines(gfx->renderer, points, num_points);
 
     if (num_points > 64)
         FREE(point_buf);
@@ -417,7 +410,7 @@ draw_bezier(
 
 /* ------------------------------------------------------------------------- */
 static void
-draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct snake* snake, uint16_t frame_number)
+draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snake* snake, uint16_t frame_number)
 {
     const struct controls* controls;
     struct spos pos;
@@ -461,7 +454,7 @@ draw_snake(const struct gfx_sdl* gfx, const struct camera* camera, const struct 
 
 /* ------------------------------------------------------------------------- */
 static void
-draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
+draw_background(const struct gfx* gfx, const struct camera* camera)
 {
 #define TILE_SCALE 2
 
@@ -524,21 +517,19 @@ draw_background(const struct gfx_sdl* gfx, const struct camera* camera)
 void
 gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, uint16_t frame_number)
 {
-    const struct gfx_sdl* g = (const struct gfx_sdl*)gfx;
+    SDL_SetRenderDrawColor(gfx->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(gfx->renderer);
 
-    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
-    SDL_RenderClear(g->renderer);
-
-    draw_background(g, camera);
+    draw_background(gfx, camera);
 
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        draw_snake(g, camera, snake, frame_number);
+        draw_snake(gfx, camera, snake, frame_number);
     WORLD_END_EACH
 
     {
-        struct spos pos = gfx_world_to_screen(make_qwposi(0, 0), (const struct gfx*)gfx, camera);
-        SDL_SetRenderDrawColor(((const struct gfx_sdl*)gfx)->renderer, 0, 255, 0, 255);
-        draw_circle(g->renderer, make_SDL_Point(pos.x, pos.y), 20);
+        struct spos pos = gfx_world_to_screen(make_qwposi(0, 0), gfx, camera);
+        SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
+        draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 20);
     }
 
     {
@@ -552,10 +543,10 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
             p.x = h & 0x7FFF;
             h = hash32_jenkins_oaat(&h, sizeof(h));
             p.y = h & 0x7FFF;
-            sp = gfx_world_to_screen(p, (const struct gfx*)gfx, camera);
-            draw_circle(g->renderer, make_SDL_Point(sp.x, sp.y), 3);
+            sp = gfx_world_to_screen(p, gfx, camera);
+            draw_circle(gfx->renderer, make_SDL_Point(sp.x, sp.y), 3);
         }
     }
 
-    SDL_RenderPresent(g->renderer);
+    SDL_RenderPresent(gfx->renderer);
 }
