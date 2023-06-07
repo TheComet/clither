@@ -1,4 +1,5 @@
 #include "clither/gfx.h"
+#include "clither/camera.h"
 #include "clither/controls.h"
 #include "clither/log.h"
 
@@ -7,13 +8,22 @@
 #include "glad/gles2.h"
 #include "GLFW/glfw3.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 struct gfx
 {
     GLFWwindow* window;
 
+    int width, height;
+
     GLuint bg_program;
     GLuint bg_vbo;
     GLuint bg_ibo;
+    GLuint bg_texture;
+    GLuint bg_uniform_aspect_ratio;
+    GLuint bg_uniform_camera;
+    GLuint bg_uniform_texture;
 
     GLuint sprite_program;
     GLuint sprite_vbo;
@@ -32,7 +42,7 @@ static const struct vertex sprite_vertices[4] = {
     {{ 1, -1}, {1,  1}},
     {{ 1,  1}, {1,  0}}
 };
-static GLushort sprite_indices[6] = {
+static const GLushort sprite_indices[6] = {
     0, 2, 1,
     1, 3, 2
 };
@@ -57,7 +67,7 @@ static const char* sprite_fshader =
 
     "void main()\n"
     "{\n"
-    "    gl_FragColor = vec4(1.0, fTexCoord.x, fTexCoord.y, 1.0);\n"
+    "    gl_FragColor = vec4(1.0, fTexCoord, 1.0);\n"
     "}\n";
 
 static const struct vertex bg_vertices[4] = {
@@ -66,7 +76,7 @@ static const struct vertex bg_vertices[4] = {
     {{ 1, -1}, {1,  1}},
     {{ 1,  1}, {1,  0}}
 };
-static GLushort bg_indices[6] = {
+static const GLushort bg_indices[6] = {
     0, 2, 1,
     1, 3, 2
 };
@@ -87,16 +97,17 @@ static const char* bg_vshader =
     "}\n";
 static const char* bg_fshader =
     "precision mediump float;\n"
-    "#define TILE_SCALE 2\n"
+    "#define TILE_SCALE 2.0\n"
 
-    "varying vec2 fTexCoord;\n"
-
-    "uniform vec2 uAspectRatio;\n"
+    "uniform vec4 uAspectRatio;\n"
     "uniform vec3 uCamera;\n"
+    "uniform sampler2D sBackground;\n"
+    "varying vec2 fTexCoord;\n"
 
     "void main()\n"
     "{\n"
-    "    gl_FragColor = vec4(fTexCoord.x, fTexCoord.y, 0.0, 1.0);\n"
+    "    vec3 color = texture2D(sBackground, fTexCoord * TILE_SCALE * uAspectRatio.xy).rgb;\n"
+    "    gl_FragColor = vec4(color, 1.0);\n"
     "}\n";
 
 /* ------------------------------------------------------------------------- */
@@ -111,6 +122,9 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 static void
 framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
+    struct gfx* gfx = glfwGetWindowUserPointer(window);
+    gfx->width = width;
+    gfx->height = height;
     glViewport(0, 0, width, height);
 }
 
@@ -227,10 +241,13 @@ gfx_deinit(void)
 struct gfx*
 gfx_create(int initial_width, int initial_height)
 {
+    int fbwidth, fbheight;
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
     struct gfx* gfx = MALLOC(sizeof *gfx);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);  /* Required for GL ES */
 
@@ -252,6 +269,27 @@ gfx_create(int initial_width, int initial_height)
     gfx->bg_program = load_shader(bg_vshader, bg_fshader, bg_attr_bindings);
     if (gfx->bg_program == 0)
         goto load_bg_program_failed;
+
+    gfx->bg_uniform_aspect_ratio = glGetUniformLocation(gfx->bg_program, "uAspectRatio");
+    gfx->bg_uniform_camera = glGetUniformLocation(gfx->bg_program, "uCamera");
+    gfx->bg_uniform_texture = glGetUniformLocation(gfx->bg_program, "sBackground");
+
+    glGenTextures(1, &gfx->bg_texture);
+    glBindTexture(GL_TEXTURE_2D, gfx->bg_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    img_data = stbi_load("textures/tile.png", &img_width, &img_height, &img_channels, 4);
+    if (img_data == NULL)
+        log_err("Failed to load image \"textures/tile.png\"");
+    else
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(img_data);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenBuffers(1, &gfx->bg_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->bg_vbo);
@@ -286,10 +324,12 @@ gfx_create(int initial_width, int initial_height)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(sprite_indices), sprite_indices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    glViewport(0, 0, initial_width, initial_height);
+    glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
+    glViewport(0, 0, fbwidth, fbheight);
 
     glfwSetKeyCallback(gfx->window, key_callback);
     glfwSetFramebufferSizeCallback(gfx->window, framebuffer_size_callback);
+    glfwSetWindowUserPointer(gfx->window, gfx);
 
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
@@ -405,12 +445,30 @@ draw_background(const struct gfx* gfx, const struct camera* camera)
         }
 #endif
 
+    GLfloat aspect_x = 1.0, aspect_y = 1.0, padding_x = 0.0, padding_y = 0.0;
+    if (gfx->width > gfx->height)
+    {
+        aspect_x = (GLfloat)gfx->width / gfx->height;
+        padding_x = (aspect_x - 1.0) / 2.0;
+    }
+    else
+    {
+        aspect_y = (GLfloat)gfx->height / gfx->width;
+        padding_y = (aspect_y - 1.0) / 2.0;
+    }
+
     glUseProgram(gfx->bg_program);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->bg_vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->bg_ibo);
+    glBindTexture(GL_TEXTURE_2D, gfx->bg_texture);
+
+    glUniform4f(gfx->bg_uniform_aspect_ratio, aspect_x, aspect_y, padding_x, padding_y);
+    glUniform3f(gfx->bg_uniform_camera, qw_to_float(camera->pos.x), qw_to_float(camera->pos.y), qw_to_float(camera->scale));
+    glUniform1i(gfx->bg_uniform_texture, 0);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
 
+    glBindTexture(GL_TEXTURE_2D, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
