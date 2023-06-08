@@ -92,28 +92,44 @@ static const char* sprite_vshader =
     "uniform float uSize;\n"
 
     "varying vec2 fTexCoord;\n"
+    "varying vec3 fViewDir_cameraSpace;\n"
 
     "void main()\n"
     "{\n"
     "    fTexCoord = vTexCoord;\n"
-    "    vec2 pos = vPosition * uSize * uPosCameraSpace.z + uPosCameraSpace.xy;\n"
-    "    gl_Position = vec4(pos / uAspectRatio, 0.0, 1.0);\n"
+    "    vec2 pos = mat2(uDir.x, uDir.y, uDir.y, -uDir.x) * vPosition;\n"
+    "    pos = pos * uSize * uPosCameraSpace.z + uPosCameraSpace.xy;\n"
+    "    pos = pos / uAspectRatio;\n"
+    "    fViewDir_cameraSpace = vec3(pos, 1.0);\n"
+    "    gl_Position = vec4(pos, 0.0, 1.0);\n"
     "}\n";
 static const char* sprite_fshader =
     "precision mediump float;\n"
 
     "varying vec2 fTexCoord;\n"
+    "varying vec3 fViewDir_cameraSpace;\n"
 
     "uniform sampler2D sDiffuse;\n"
     "uniform sampler2D sNM;\n"
+
+    "vec3 uTint = vec3(0.0, 1.0, 1.0);\n"
 
     "void main()\n"
     "{\n"
     "    vec4 diffuse = texture2D(sDiffuse, fTexCoord);\n"
     "    vec3 nm = texture2D(sNM, fTexCoord).rgb;\n"
-    "    vec2 nxy = nm.xy * 2.0 - 1.0;\n"
-    "    vec3 normal = vec3(nxy, sqrt(1.0 - nxy.x*nxy.x - nxy.y*nxy.y));\n"
-    "    gl_FragColor = vec4(diffuse.rgb + nm * 0.01, 1.0);\n"
+    "    float mask = nm.b * 0.5;\n"
+    "    vec3 color = diffuse.rgb * (1.0-mask) + uTint * mask;\n"
+
+    "    vec3 normal;\n"
+    "    normal.xy = nm.xy;\n"
+    //"    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"  this somehow doesn't work, so we cheat
+    "    normal.z = 0.8;\n"
+    "    vec3 lightDir = vec3(0.0, 0.0, 1.0);\n"
+    "    vec3 viewDir = normalize(fViewDir_cameraSpace);\n"
+    "    color = vec3(1.0, 0.0, 0.0) * clamp(dot(lightDir, viewDir), 0.0, 1.0);\n"
+
+    "    gl_FragColor = vec4(color, diffuse.a);\n"
     "}\n";
 
 static const struct vertex bg_vertices[4] = {
@@ -368,12 +384,12 @@ gfx_create(int initial_width, int initial_height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/tile.png", &img_width, &img_height, &img_channels, 4);
+    img_data = stbi_load("textures/tile.png", &img_width, &img_height, &img_channels, 3);
     if (img_data == NULL)
         log_err("Failed to load image \"textures/tile.png\"\n");
     else
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(img_data);
     }
@@ -390,7 +406,7 @@ gfx_create(int initial_width, int initial_height)
     gfx->sprite.uSize = glGetUniformLocation(gfx->sprite.program, "uSize");
     gfx->sprite.sDiffuse = glGetUniformLocation(gfx->sprite.program, "sDiffuse");
     gfx->sprite.sNM = glGetUniformLocation(gfx->sprite.program, "sNM");
-
+    
     glGenBuffers(1, &gfx->sprite.vbo);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(sprite_vertices), sprite_vertices, GL_STATIC_DRAW);
@@ -429,7 +445,7 @@ gfx_create(int initial_width, int initial_height)
         log_err("Failed to load image \"textures/body0_nm.png\"\n");
     else
     {
-        glTexImage2D(GL_TEXTURE_2D, 1, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(img_data);
     }
@@ -628,8 +644,8 @@ draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect
     glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
     glUniform2f(gfx->sprite.uDir, 0.0, 1.0);
     glUniform1f(gfx->sprite.uSize, 0.5);
-    glUniform1i(gfx->sprite.sDiffuse, 1);
-    glUniform1i(gfx->sprite.sNM, 0);
+    glUniform1i(gfx->sprite.sDiffuse, 0);
+    glUniform1i(gfx->sprite.sNM, 1);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
 
@@ -651,6 +667,10 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         qw_mul(qw_sub(snake->head.pos.y, camera->pos.y), camera->scale)
     };
 
+    GLfloat dir_x = cos(qa_to_float(snake->head.angle));
+    GLfloat dir_y = sin(qa_to_float(snake->head.angle));
+    GLfloat size = 0.125;  /* todo snake size */
+
     glUseProgram(gfx->sprite.program);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite.vbo);
     glEnableVertexAttribArray(0);
@@ -665,8 +685,8 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 
     glUniform2f(gfx->sprite.uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->sprite.uDir, 0.0, 1.0);
-    glUniform1f(gfx->sprite.uSize, 0.5);
+    glUniform2f(gfx->sprite.uDir, dir_x, dir_y);
+    glUniform1f(gfx->sprite.uSize, size);
     glUniform1i(gfx->sprite.sDiffuse, 0);
     glUniform1i(gfx->sprite.sNM, 1);
 
@@ -702,10 +722,9 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     draw_background(gfx, camera, &ar);
     draw_0_0(gfx, camera, &ar);
     
-    /*
     WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
         draw_snake(snake, gfx, camera, &ar);
-    WORLD_END_EACH*/
+    WORLD_END_EACH
 
     glfwSwapBuffers(gfx->window);
 }
