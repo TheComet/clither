@@ -92,7 +92,7 @@ static const char* sprite_vshader =
     "uniform float uSize;\n"
 
     "varying vec2 fTexCoord;\n"
-    "varying vec3 fViewDir_cameraSpace;\n"
+    "varying vec3 vLightDir_tangentSpace;\n"
 
     "void main()\n"
     "{\n"
@@ -100,14 +100,21 @@ static const char* sprite_vshader =
     "    vec2 pos = mat2(uDir.x, uDir.y, uDir.y, -uDir.x) * vPosition;\n"
     "    pos = pos * uSize * uPosCameraSpace.z + uPosCameraSpace.xy;\n"
     "    pos = pos / uAspectRatio;\n"
-    "    fViewDir_cameraSpace = vec3(pos, 1.0);\n"
+
+    "    vec3 lightDir_cameraSpace = vec3(-pos, 1.0);\n"
+    "    mat3 TBN_inv = mat3(\n"
+    "        uDir.x, uDir.y, 0.0,\n"
+    "        uDir.y, -uDir.x, 0.0,\n"
+    "        0.0, 0.0, 1.0);\n"
+    "    vLightDir_tangentSpace = TBN_inv * lightDir_cameraSpace;\n"
+
     "    gl_Position = vec4(pos, 0.0, 1.0);\n"
     "}\n";
 static const char* sprite_fshader =
     "precision mediump float;\n"
 
     "varying vec2 fTexCoord;\n"
-    "varying vec3 fViewDir_cameraSpace;\n"
+    "varying vec3 vLightDir_tangentSpace;\n"
 
     "uniform sampler2D sDiffuse;\n"
     "uniform sampler2D sNM;\n"
@@ -119,17 +126,16 @@ static const char* sprite_fshader =
     "    vec4 diffuse = texture2D(sDiffuse, fTexCoord);\n"
     "    vec3 nm = texture2D(sNM, fTexCoord).rgb;\n"
     "    float mask = nm.b * 0.5;\n"
-    "    vec3 color = diffuse.rgb * (1.0-mask) + uTint * mask;\n"
+    "    vec3 color = diffuse.rgb;\n"
+    //"    color = color * (1.0-mask) + uTint * mask;\n"
 
     "    vec3 normal;\n"
-    "    normal.xy = nm.xy;\n"
-    //"    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"  this somehow doesn't work, so we cheat
-    "    normal.z = 0.8;\n"
-    "    vec3 lightDir = vec3(0.0, 0.0, 1.0);\n"
-    "    vec3 viewDir = normalize(fViewDir_cameraSpace);\n"
-    "    color = vec3(1.0, 0.0, 0.0) * clamp(dot(lightDir, viewDir), 0.0, 1.0);\n"
+    "    normal.xy = nm.xy * 2.0 - 1.0;\n"
+    "    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"
+    "    vec3 lightDir = normalize(vLightDir_tangentSpace);\n"
+    "    float normFac = dot(normal, lightDir);\n"
 
-    "    gl_FragColor = vec4(color, diffuse.a);\n"
+    "    gl_FragColor = vec4(normFac.xxx, diffuse.a);\n"
     "}\n";
 
 static const struct vertex bg_vertices[4] = {
@@ -440,7 +446,7 @@ gfx_create(int initial_width, int initial_height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/body0_nm.png", &img_width, &img_height, &img_channels, 3);
+    img_data = stbi_load("textures/body0_nor.png", &img_width, &img_height, &img_channels, 3);
     if (img_data == NULL)
         log_err("Failed to load image \"textures/body0_nm.png\"\n");
     else
@@ -618,6 +624,7 @@ draw_background(const struct gfx* gfx, const struct camera* camera, const struct
 }
 
 /* ------------------------------------------------------------------------- */
+static GLfloat a = 0.0;
 static void
 draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar)
 {
@@ -642,7 +649,8 @@ draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect
 
     glUniform2f(gfx->sprite.uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->sprite.uDir, 0.0, 1.0);
+    glUniform2f(gfx->sprite.uDir, cos(a), sin(a));
+    a+= 0.01;
     glUniform1f(gfx->sprite.uSize, 0.5);
     glUniform1i(gfx->sprite.sDiffuse, 0);
     glUniform1i(gfx->sprite.sNM, 1);
