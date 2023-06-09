@@ -53,7 +53,9 @@ struct gfx
 
     struct bg bg;
     struct sprite sprite;
+    struct sprite_mat head0;
     struct sprite_mat body0;
+    struct sprite_mat tail0;
 };
 
 struct aspect_ratio
@@ -84,6 +86,8 @@ static const char* sprite_attr_bindings[] = {
     NULL
 };
 static const char* sprite_vshader =
+    "precision mediump float;\n"
+
     "attribute vec2 vPosition;\n"
     "attribute vec2 vTexCoord;\n"
 
@@ -93,7 +97,7 @@ static const char* sprite_vshader =
     "uniform float uSize;\n"
 
     "varying vec2 fTexCoord;\n"
-    "varying vec3 vLightDir_tangentSpace;\n"
+    "varying vec3 fLightDir_tangentSpace;\n"
 
     "void main()\n"
     "{\n"
@@ -102,12 +106,8 @@ static const char* sprite_vshader =
     "    pos = pos * uSize * uPosCameraSpace.z + uPosCameraSpace.xy;\n"
     "    pos = pos / uAspectRatio;\n"
 
-    "    vec3 lightDir_cameraSpace = vec3(0.0, 0.0, 1.0);\n"
-    "    mat3 TBN_inv = mat3(\n"
-    "        -uDir.x, uDir.y, 0.0,\n"
-    "        uDir.y, uDir.x, 0.0,\n"
-    "        0.0, 0.0, 1.0);\n"
-    "    vLightDir_tangentSpace = lightDir_cameraSpace;\n"
+    "    vec2 lightDir_cameraSpace = pos;\n"
+    "    fLightDir_tangentSpace = vec3(mat2(uDir.x, uDir.y, uDir.y, -uDir.x) * lightDir_cameraSpace, -1.0);\n"
 
     "    gl_Position = vec4(pos, 0.0, 1.0);\n"
     "}\n";
@@ -115,12 +115,12 @@ static const char* sprite_fshader =
     "precision mediump float;\n"
 
     "varying vec2 fTexCoord;\n"
-    "varying vec3 vLightDir_tangentSpace;\n"
+    "varying vec3 fLightDir_tangentSpace;\n"
 
     "uniform sampler2D sDiffuse;\n"
     "uniform sampler2D sNM;\n"
 
-    "vec3 uTint = vec3(1.0, 0.5, 0.0) * 1.2;\n"
+    "vec3 uTint = vec3(0.0, 0.5, 0.4) * 1.2;\n"
 
     "void main()\n"
     "{\n"
@@ -129,15 +129,18 @@ static const char* sprite_fshader =
     "    float mask = nm.b * 0.5;\n"
     "    vec3 color = diffuse.rgb;\n"
 
-    "    vec3 normal;\n"
-    "    normal.xy = nm.xy * 2.0 - 1.0;\n"
-    "    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"
-    "    float normFac = clamp(dot(normal, normalize(vLightDir_tangentSpace)), 0.0, 1.0);\n"
-    "    color = color * (1.0-0.7) + normFac * color * 0.7;\n"
+    "    vec3 normal = normalize(nm*2.0-1.0);\n"
+    //"    normal.xy = nm.xy * 2.0 - 1.0;\n"
+    //"    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"
 
-    "    color = color * (1.0-mask) + uTint * mask;\n"
+    "    vec3 lightDir = normalize(fLightDir_tangentSpace);\n"
+    "    float normFac = clamp(dot(normal, -lightDir), 0.0, 1.0);\n"
+    //"    color = color * (1.0-0.7) + normFac * color * 0.7;\n"
+    "    color = vec3(1.0, 1.0, 1.0) * normFac;\n"
 
-    "    gl_FragColor = vec4(color, diffuse.a);\n"
+    //"    color = color * (1.0-mask) + uTint * mask;\n"
+
+    "    gl_FragColor = vec4(normal, diffuse.a);\n"
     "}\n";
 
 static const struct vertex bg_vertices[4] = {
@@ -318,6 +321,47 @@ load_vshader_failed:
 }
 
 /* ------------------------------------------------------------------------- */
+static void load_sprite_mat(struct sprite_mat* mat, const char* col, const char* nm)
+{
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
+
+    glGenTextures(1, &mat->texDiffuse);
+    glBindTexture(GL_TEXTURE_2D, mat->texDiffuse);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    img_data = stbi_load(col, &img_width, &img_height, &img_channels, 4);
+    if (img_data == NULL)
+        log_err("Failed to load image \"%s\"\n", col);
+    else
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(img_data);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenTextures(1, &mat->texNM);
+    glBindTexture(GL_TEXTURE_2D, mat->texNM);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    img_data = stbi_load(nm, &img_width, &img_height, &img_channels, 3);
+    if (img_data == NULL)
+        log_err("Failed to load image \"%s\"\n", nm);
+    else
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(img_data);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+/* ------------------------------------------------------------------------- */
 int
 gfx_init(void)
 {
@@ -392,9 +436,9 @@ gfx_create(int initial_width, int initial_height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/tile.png", &img_width, &img_height, &img_channels, 3);
+    img_data = stbi_load("pack_devel/bg/tile.png", &img_width, &img_height, &img_channels, 3);
     if (img_data == NULL)
-        log_err("Failed to load image \"textures/tile.png\"\n");
+        log_err("Failed to load image \"pack_devel/bg/tile.png\"\n");
     else
     {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
@@ -425,39 +469,8 @@ gfx_create(int initial_width, int initial_height)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(sprite_indices), sprite_indices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    glGenTextures(1, &gfx->body0.texDiffuse);
-    glBindTexture(GL_TEXTURE_2D, gfx->body0.texDiffuse);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/body0_col.png", &img_width, &img_height, &img_channels, 4);
-    if (img_data == NULL)
-        log_err("Failed to load image \"textures/body0_col.png\"\n");
-    else
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(img_data);
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glGenTextures(1, &gfx->body0.texNM);
-    glBindTexture(GL_TEXTURE_2D, gfx->body0.texNM);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/body0_nm.png", &img_width, &img_height, &img_channels, 3);
-    if (img_data == NULL)
-        log_err("Failed to load image \"textures/body0_nm.png\"\n");
-    else
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(img_data);
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
+    load_sprite_mat(&gfx->head0, "pack_devel/head0/base_col.png", "pack_devel/head0/base_nor.png");
+    load_sprite_mat(&gfx->body0, "pack_devel/body0/base_col.png", "pack_devel/body0/base_nor.png");
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -671,6 +684,7 @@ draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect
 static void
 draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar)
 {
+    int i;
     GLfloat size = 0.25;  /* todo snake size */
 
     glUseProgram(gfx->sprite.program);
@@ -690,7 +704,9 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     glUniform1i(gfx->sprite.sDiffuse, 0);
     glUniform1i(gfx->sprite.sNM, 1);
 
-    VECTOR_FOR_EACH_R(&snake->data.bezier_points, struct bezier_point, bp)
+    for (i = vector_count(&snake->data.bezier_points) - 1; i >= 1; --i)
+    {
+        struct bezier_point* bp = vector_get_element(&snake->data.bezier_points, i);
         /* world -> camera space */
         struct qwpos pos_cameraSpace = {
             qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
@@ -700,7 +716,28 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
         glUniform2f(gfx->sprite.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
-    VECTOR_END_EACH
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gfx->head0.texDiffuse);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, gfx->head0.texNM);
+
+    size = 0.4;  /* todo snake size */
+    {
+        struct bezier_point* bp = vector_front(&snake->data.bezier_points);
+        /* world -> camera space */
+        struct qwpos pos_cameraSpace = {
+            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
+            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale)
+        };
+
+        glUniform1f(gfx->sprite.uSize, size);
+        glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
+        glUniform2f(gfx->sprite.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    }
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);

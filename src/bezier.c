@@ -453,8 +453,8 @@ bezier_calc_equidistant_points(
         struct bezier_handle* head = vector_back(bezier_handles);
         bp->pos.x = x;
         bp->pos.y = y;
-        bp->dir.x = qa_cos(head->angle);
-        bp->dir.y = qa_sin(head->angle);
+        bp->dir.x = -qa_cos(head->angle);
+        bp->dir.y = -qa_sin(head->angle);
     }
 
     for (i = vector_count(bezier_handles) - 2; i >= 0; --i)
@@ -535,8 +535,8 @@ bezier_calc_equidistant_points(
                     bp = vector_emplace(bezier_points);
                     bp->pos.x = next_x;
                     bp->pos.y = next_y;
-                    bp->dir.x = qw_add(qw_add(a1, qw_mul(make_qw(2), qw_mul(a2, t))), qw_mul(make_qw(3), qw_mul(a3, t2)));
-                    bp->dir.y = qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
+                    bp->dir.x = -qw_add(qw_add(a1, qw_mul(make_qw(2), qw_mul(a2, t))), qw_mul(make_qw(3), qw_mul(a3, t2)));
+                    bp->dir.y = -qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
                     bp->dir = qwpos_normalize(bp->dir);
 
                     /* Error compensation *
