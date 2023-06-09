@@ -101,12 +101,12 @@ static const char* sprite_vshader =
     "    pos = pos * uSize * uPosCameraSpace.z + uPosCameraSpace.xy;\n"
     "    pos = pos / uAspectRatio;\n"
 
-    "    vec3 lightDir_cameraSpace = vec3(-pos, 1.0);\n"
+    "    vec3 lightDir_cameraSpace = vec3(0.0, 0.0, 1.0);\n"
     "    mat3 TBN_inv = mat3(\n"
-    "        uDir.x, uDir.y, 0.0,\n"
-    "        uDir.y, -uDir.x, 0.0,\n"
+    "        -uDir.x, uDir.y, 0.0,\n"
+    "        uDir.y, uDir.x, 0.0,\n"
     "        0.0, 0.0, 1.0);\n"
-    "    vLightDir_tangentSpace = TBN_inv * lightDir_cameraSpace;\n"
+    "    vLightDir_tangentSpace = lightDir_cameraSpace;\n"
 
     "    gl_Position = vec4(pos, 0.0, 1.0);\n"
     "}\n";
@@ -119,7 +119,7 @@ static const char* sprite_fshader =
     "uniform sampler2D sDiffuse;\n"
     "uniform sampler2D sNM;\n"
 
-    "vec3 uTint = vec3(0.0, 1.0, 1.0);\n"
+    "vec3 uTint = vec3(1.0, 0.5, 0.0) * 1.2;\n"
 
     "void main()\n"
     "{\n"
@@ -127,15 +127,16 @@ static const char* sprite_fshader =
     "    vec3 nm = texture2D(sNM, fTexCoord).rgb;\n"
     "    float mask = nm.b * 0.5;\n"
     "    vec3 color = diffuse.rgb;\n"
-    //"    color = color * (1.0-mask) + uTint * mask;\n"
 
     "    vec3 normal;\n"
     "    normal.xy = nm.xy * 2.0 - 1.0;\n"
     "    normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));\n"
-    "    vec3 lightDir = normalize(vLightDir_tangentSpace);\n"
-    "    float normFac = dot(normal, lightDir);\n"
+    "    float normFac = clamp(dot(normal, normalize(vLightDir_tangentSpace)), 0.0, 1.0);\n"
+    "    color = color * (1.0-0.7) + normFac * color * 0.7;\n"
 
-    "    gl_FragColor = vec4(normFac.xxx, diffuse.a);\n"
+    "    color = color * (1.0-mask) + uTint * mask;\n"
+
+    "    gl_FragColor = vec4(color, diffuse.a);\n"
     "}\n";
 
 static const struct vertex bg_vertices[4] = {
@@ -446,7 +447,7 @@ gfx_create(int initial_width, int initial_height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load("textures/body0_nor.png", &img_width, &img_height, &img_channels, 3);
+    img_data = stbi_load("textures/body0_nm.png", &img_width, &img_height, &img_channels, 3);
     if (img_data == NULL)
         log_err("Failed to load image \"textures/body0_nm.png\"\n");
     else
@@ -650,7 +651,7 @@ draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect
     glUniform2f(gfx->sprite.uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
     glUniform2f(gfx->sprite.uDir, cos(a), sin(a));
-    a+= 0.01;
+    //a+= 0.01;
     glUniform1f(gfx->sprite.uSize, 0.5);
     glUniform1i(gfx->sprite.sDiffuse, 0);
     glUniform1i(gfx->sprite.sNM, 1);

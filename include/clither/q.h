@@ -106,7 +106,8 @@ static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
 #define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
 #define qw_to_float(q) ((double)(q) / (1 << QW_Q))
 #define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
-#define q16_16_to_qw(q16) ((int64_t)(q16) * (1 << QW_Q) / (1 << Q16_16_Q))
+#define qw_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
+#define q16_16_to_qw(q16) qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
 
 static inline struct qaabb make_qaabbi(int x1, int y1, int x2, int y2)
 {
@@ -114,28 +115,6 @@ static inline struct qaabb make_qaabbi(int x1, int y1, int x2, int y2)
     bb.x1 = make_qw(x1); bb.y1 = make_qw(y1);
     bb.x2 = make_qw(x2); bb.y2 = make_qw(y2);
     return bb;
-}
-
-static inline struct qwpos make_qwposi(int x, int y)
-{
-    struct qwpos p;
-    p.x = make_qw(x);
-    p.y = make_qw(y);
-    return p;
-}
-static inline struct qwpos make_qwposf(double x, double y)
-{
-    struct qwpos p;
-    p.x = make_qw(x);
-    p.y = make_qw(y);
-    return p;
-}
-static inline struct qwpos make_qwposqw(qw x, qw y)
-{
-    struct qwpos p;
-    p.x = x;
-    p.y = y;
-    return p;
 }
 
 static inline qw qw_add(qw a, qw b)
@@ -202,6 +181,44 @@ static inline qw qw_div(qw a, qw b)
     return (qw)(temp / b);
 }
 
+static inline qw qw_sqrt(qw q)
+{
+    /* TODO */
+    return make_qw(sqrt(qw_to_float(q)));
+}
+
+static inline struct qwpos make_qwposi(int x, int y)
+{
+    struct qwpos p;
+    p.x = make_qw(x);
+    p.y = make_qw(y);
+    return p;
+}
+static inline struct qwpos make_qwposf(double x, double y)
+{
+    struct qwpos p;
+    p.x = make_qw(x);
+    p.y = make_qw(y);
+    return p;
+}
+static inline struct qwpos make_qwposqw(qw x, qw y)
+{
+    struct qwpos p;
+    p.x = x;
+    p.y = y;
+    return p;
+}
+
+static inline struct qwpos qwpos_normalize(struct qwpos p)
+{
+    qw len = qw_sqrt(qw_add(qw_mul(p.x, p.x), qw_mul(p.y, p.y)));
+    if (len == 0)
+        return make_qwposi(0, 0);
+    p.x = qw_div(p.x, len);
+    p.y = qw_div(p.y, len);
+    return p;
+}
+
 #define make_qa(v) (qa)((v) * (1 << QA_Q))
 #define make_qa2(v, div) (qa)((v) * (1 << QA_Q) / (div))
 #define qa_to_int(q) ((int)((q) / (1 << QA_Q)))
@@ -242,4 +259,16 @@ static inline qa qa_mul(qa a, qa b)
     temp += QA_K;
     /* Correct by dividing by base and saturate result */
     return qa_sat16(temp >> QA_Q);
+}
+
+static inline qw qa_cos(qa q)
+{
+    /* TODO */
+    return make_qw(cos(qa_to_float(q)));
+}
+
+static inline qw qa_sin(qa q)
+{
+    /* TODO */
+    return make_qw(sin(qa_to_float(q)));
 }
