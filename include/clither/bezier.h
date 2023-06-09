@@ -11,9 +11,19 @@ struct cs_vector;
 struct bezier_point
 {
     struct qwpos pos;
-    struct qwpos normal;
+    struct qwpos dir;
 };
 
+/*!
+ * \brief Represents a knot.
+ * 
+ * The start of one bezier curve shares the angle with the end of the next
+ * bezier curve. The vectors [cos(a), sin(a)] of each knot always point
+ * "backwards", i.e. away from the head.
+ * 
+ * len_backwards and len_forwards store the distance to the intermediate
+ * control points. Divide by 255 to convert it into a qw type.
+ */
 struct bezier_handle
 {
     struct qwpos pos;
@@ -62,7 +72,7 @@ int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_vector* bezier_handles,
-    qw distance,
+    qw spacing,
     int snake_length);
 
 C_END
