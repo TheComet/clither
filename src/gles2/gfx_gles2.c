@@ -1,3 +1,4 @@
+#include "clither/bezier.h"
 #include "clither/camera.h"
 #include "clither/controls.h"
 #include "clither/gfx.h"
@@ -670,15 +671,7 @@ draw_0_0(const struct gfx* gfx, const struct camera* camera, const struct aspect
 static void
 draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar)
 {
-    /* world -> camera space */
-    struct qwpos pos_cameraSpace = {
-        qw_mul(qw_sub(snake->head.pos.x, camera->pos.x), camera->scale),
-        qw_mul(qw_sub(snake->head.pos.y, camera->pos.y), camera->scale)
-    };
-
-    GLfloat dir_x = cos(qa_to_float(snake->head.angle));
-    GLfloat dir_y = sin(qa_to_float(snake->head.angle));
-    GLfloat size = 0.125;  /* todo snake size */
+    GLfloat size = 0.25;  /* todo snake size */
 
     glUseProgram(gfx->sprite.program);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite.vbo);
@@ -693,13 +686,21 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     glBindTexture(GL_TEXTURE_2D, gfx->body0.texNM);
 
     glUniform2f(gfx->sprite.uAspectRatio, ar->scale_x, ar->scale_y);
-    glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->sprite.uDir, dir_x, dir_y);
     glUniform1f(gfx->sprite.uSize, size);
     glUniform1i(gfx->sprite.sDiffuse, 0);
     glUniform1i(gfx->sprite.sNM, 1);
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    VECTOR_FOR_EACH_R(&snake->data.bezier_points, struct bezier_point, bp)
+        /* world -> camera space */
+        struct qwpos pos_cameraSpace = {
+            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
+            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale)
+        };
+
+        glUniform3f(gfx->sprite.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
+        glUniform2f(gfx->sprite.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    VECTOR_END_EACH
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
@@ -729,7 +730,7 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     glClear(GL_COLOR_BUFFER_BIT);
 
     draw_background(gfx, camera, &ar);
-    draw_0_0(gfx, camera, &ar);
+    //draw_0_0(gfx, camera, &ar);
     
     WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
         draw_snake(snake, gfx, camera, &ar);

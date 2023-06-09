@@ -72,10 +72,10 @@ binary_search_lsq(
 
 /* ------------------------------------------------------------------------- */
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos pos)
+bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
 {
     bh->pos = pos;
-    bh->angle = 0;
+    bh->angle = angle;
     bh->len_forwards = 0;
     bh->len_backwards = 0;
 }
@@ -99,10 +99,15 @@ bezier_fit_head(
     struct qwpos* p0 = vector_front(points);  /* tail */
     struct qwpos* pm = vector_back(points);   /* head */
 
+    /*
+     * Cubic bezier curve fitting requires at least 5 points for polynomial
+     * regression. The following special cases calculate the coefficients
+     * directly when there are 4 or less points.
+     */
     if (vector_count(points) <= 2)
     {
         head->pos = *pm;
-        head->angle = qa_add(tail->angle, make_qa(M_PI));
+        head->angle = tail->angle;
         head->len_backwards = 0;
         tail->len_forwards = 0;
         return 0;
@@ -437,16 +442,19 @@ bezier_calc_equidistant_points(
     qw x = ((struct bezier_handle*)vector_back(bezier_handles))->pos.x;
     qw y = ((struct bezier_handle*)vector_back(bezier_handles))->pos.y;
 
-    qw spacing_squared = qw_mul(spacing, spacing);
+    qw spacing_sq = qw_mul(spacing, spacing);
+    qw expected_total_spacing = 0;
+    qw actual_total_spacing = 0;
 
     /* Insert first point */
     vector_clear(bezier_points);
     {
         struct bezier_point* bp = vector_emplace(bezier_points);
+        struct bezier_handle* head = vector_back(bezier_handles);
         bp->pos.x = x;
         bp->pos.y = y;
-        bp->dir.x = 0;
-        bp->dir.y = 0;
+        bp->dir.x = qa_cos(head->angle);
+        bp->dir.y = qa_sin(head->angle);
     }
 
     for (i = vector_count(bezier_handles) - 2; i >= 0; --i)
@@ -488,15 +496,6 @@ bezier_calc_equidistant_points(
         const qw b2 = qw_sub(qw_add(_3y0, _3y2), _6y1);
         const qw b3 = qw_sub(qw_sub(qw_add(_3y1, p3.y), _3y2), p0.y);
 
-        /* Special case: Calculate tangent of head point */
-        if (vector_count(bezier_points) == 1)
-        {
-            struct bezier_point* bp = vector_back(bezier_points);
-            bp->dir.x = a1;
-            bp->dir.y = b1;
-            bp->dir = qwpos_normalize(bp->dir);
-        }
-
         qw t = make_qw(0);  /* Begin search at head of curve */
         qw last_t = make_qw(0);
         while (1)
@@ -514,29 +513,37 @@ bezier_calc_equidistant_points(
                 const qw dx = qw_sub(x, next_x);
                 const qw dy = qw_sub(y, next_y);
                 const qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-                if (dist_sq > spacing_squared)
+                if (dist_sq > spacing_sq)
                     t = qw_sub(t, t_step);
                 else
                     t = qw_add(t, t_step);
 
                 if (t >= make_qw(1))
-                    t = make_qw(1) - 1;
+                    t = make_qw(1) - 1;  /* t=1 means we'd be on the next curve segment */
                 if (t < last_t)
                     t = last_t;
 
                 t_step /= 2;
                 if (t_step == 0)
                 {
+                    qw diff;
                     struct bezier_point* bp;
                     if (t == make_qw(1) - 1)
                         goto next_segment;
 
+                    /* Insert new point and calculate tangent vector */
                     bp = vector_emplace(bezier_points);
                     bp->pos.x = next_x;
                     bp->pos.y = next_y;
                     bp->dir.x = qw_add(qw_add(a1, qw_mul(make_qw(2), qw_mul(a2, t))), qw_mul(make_qw(3), qw_mul(a3, t2)));
                     bp->dir.y = qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
                     bp->dir = qwpos_normalize(bp->dir);
+
+                    /* Error compensation *
+                    expected_total_spacing = qw_add(expected_total_spacing, spacing);
+                    actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
+                    spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing));
+                    spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
 
                     x = next_x;
                     y = next_y;
