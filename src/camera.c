@@ -19,8 +19,8 @@ camera_update(struct camera* camera, const struct snake_head* head, int sim_tick
     qw leady = make_qw(sin(qa_to_float(head->angle)) / 32);
     qw targetx = qw_add(head->pos.x, leadx);
     qw targety = qw_add(head->pos.y, leady);
-    qw dx = qw_mul(qw_sub(targetx, camera->pos.x), make_qw2(1, 8));
-    qw dy = qw_mul(qw_sub(targety, camera->pos.y), make_qw2(1, 8));
+    qw dx = qw_mul(qw_sub(targetx, camera->pos.x), make_qw2(1, 4));
+    qw dy = qw_mul(qw_sub(targety, camera->pos.y), make_qw2(1, 4));
 
     dx = qw_mul(dx, make_qw2(sim_tick_rate, 60));
     dy = qw_mul(dy, make_qw2(sim_tick_rate, 60));

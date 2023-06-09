@@ -15,9 +15,9 @@
 #include <stdlib.h>
 
 #define TURN_SPEED   make_qa2(1, 16)
-#define MIN_SPEED    make_qw2(1, 256)
-#define MAX_SPEED    make_qw2(1, 128)
-#define BOOST_SPEED  make_qw2(1, 64)
+#define MIN_SPEED    make_qw2(1, 96)
+#define MAX_SPEED    make_qw2(1, 48)
+#define BOOST_SPEED  make_qw2(1, 16)
 #define ACCELERATION         (1.0 / 32)
 
 /* ------------------------------------------------------------------------- */
@@ -45,8 +45,8 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
     points = vector_emplace(&data->points);
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &spawn_pos);
-    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos);
-    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos);
+    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
+    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
 
     vector_resize(&data->bezier_points, 200);
 }
@@ -162,10 +162,8 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
 static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
-    struct bezier_handle* head_handle = vector_back(&data->bezier_handles);
-    struct qwpos head_handle_pos = head_handle->pos;
     struct cs_vector* points = vector_emplace(&data->points);
-    bezier_handle_init(vector_emplace(&data->bezier_handles), head_handle_pos);
+    bezier_handle_init(vector_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, make_qa(M_PI)));
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &head->pos);
 }
@@ -183,7 +181,7 @@ snake_step(
         snake_add_new_segment(data, head);
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
     /* TODO: distance is a function of the snake's length */
-    bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 32), 200);
+    bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 6), 200);
 }
 
 /* ------------------------------------------------------------------------- */

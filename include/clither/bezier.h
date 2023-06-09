@@ -32,7 +32,7 @@ struct bezier_handle
 };
 
 void
-bezier_handle_init(struct bezier_handle* bh, struct qwpos pos);
+bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle);
 
 /*!
  * \brief Performs a constrained least squares fit on the input data points to
