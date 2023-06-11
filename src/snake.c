@@ -181,7 +181,7 @@ snake_step(
         snake_add_new_segment(data, head);
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
     /* TODO: distance is a function of the snake's length */
-    bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 6), 200);
+    bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 6), 100);
 }
 
 /* ------------------------------------------------------------------------- */
