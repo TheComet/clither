@@ -1,6 +1,8 @@
 #include "clither/log.h"
 #include "clither/net.h"
 #include "clither/server_settings.h"
+#include "clither/utf8.h"
+
 #include "cstructures/string.h"
 
 #include <stdio.h>
@@ -34,7 +36,7 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
     if (!*filename)
         return 0;
 
-    fp = fopen(filename, "r");
+    fp = utf8_fopen_rb(filename, strlen(filename));
     if (fp == NULL)
     {
         log_warn("Failed to open config file \"%s\": %s\n", filename, strerror(errno));
@@ -45,13 +47,13 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
 
     log_dbg("Reading config from file \"%s\"\n", filename);
 #define SCAN_UNTIL_CHAR(s, c) \
-        while (*s != ' ' && *s) \
+        while (*s != c && *s) \
             ++s; \
         if (!*s) \
             continue
 
 #define SCAN_WHILE_CHAR(s, c) \
-        while (*s == ' ') \
+        while (*s == c) \
             ++s; \
         if (!*s) \
             continue
@@ -76,8 +78,6 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
         char* key;
         char* value;
 
-        if (string_length(&line) == 0)
-            continue;
         if (server_section_found == 0)
         {
             if (string_length(&line) < strlen("[server]"))

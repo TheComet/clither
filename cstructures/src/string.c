@@ -3,6 +3,7 @@
 #include "cstructures/memory.h"
 #include <assert.h>
 #include <string.h>
+#include <stdarg.h>
 
 /* ------------------------------------------------------------------------- */
 struct cs_string*
@@ -36,6 +37,61 @@ string_destroy(struct cs_string* str)
 {
     string_deinit(str);
     FREE(str);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+string_set(struct cs_string* str, const char* c)
+{
+    int len = (int)strlen(c);
+    if ((int)vector_count(&str->buf) < len + 1)
+        vector_resize(&str->buf, len + 1);
+    strcpy((char*)vector_data(&str->buf), c);
+}
+
+/* ------------------------------------------------------------------------- */
+struct cs_string*
+string_cat(struct cs_string* str, const char* c_str)
+{
+    int c_len = (int)strlen(c_str);
+    int len = string_length(str);
+    vector_resize(&str->buf, len + c_len + 1);
+    strcpy((char*)vector_data(&str->buf) + len, c_str);
+    return str;
+}
+
+/* ------------------------------------------------------------------------- */
+struct cs_string*
+string_cat_c(struct cs_string* str, const char* s1, const char* s2)
+{
+    int len1 = (int)strlen(s1);
+    int len2 = (int)strlen(s2);
+    vector_resize(&str->buf, len1 + len2 + 1);
+    strcpy((char*)vector_data(&str->buf), s1);
+    strcpy((char*)vector_data(&str->buf) + len1, s2);
+    return str;
+}
+
+/* ------------------------------------------------------------------------- */
+struct cs_string*
+string_join(struct cs_string* str, int n, ...)
+{
+    va_list va;
+    va_start(va, n);
+    while (n--)
+        string_cat(str, va_arg(va, const char*));
+    va_end(va);
+    return str;
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+string_take(struct cs_string* str)
+{
+    char* ret = (char*)vector_data(&str->buf);
+    str->buf.data = NULL;
+    vector_compact(&str->buf);
+    return ret;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -79,29 +135,68 @@ char*
 string_tok(struct cs_string* str, char delimiter, char** saveptr)
 {
     char* begin_ptr;
-    char* end_ptr;
 
-    if(str)
+    if (str)
         *saveptr = (char*)vector_data(&str->buf) - 1;
-
-    /* no more tokens */
-    if(!*saveptr)
-        return NULL;
+    else if (!*saveptr)
+        return NULL;  /* no more tokens */
 
     /* get first occurrence of token in string */
     begin_ptr = *saveptr + 1;
-    end_ptr = (char*)strchr(begin_ptr, delimiter);
-    if(!end_ptr)
-        *saveptr = NULL; /* last token has been reached */
-    else
-    {
-        /* update saveptr and replace delimiter with null terminator */
-        *saveptr = end_ptr;
+    *saveptr = (char*)strchr(begin_ptr, delimiter);
+    if(*saveptr)
         **saveptr = '\0';
-    }
 
     /* empty tokens */
     if(*begin_ptr == '\0')
         return NULL;
     return begin_ptr;
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+string_tok_strip(struct cs_string* str, char delimiter, char strip, char** saveptr)
+{
+    return string_tok_strip_c(string_cstr(str), delimiter, strip, saveptr);
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+string_tok_strip_c(char* str, char delimiter, char strip, char** saveptr)
+{
+    char* begin_ptr;
+    char* end_ptr;
+
+    if (str)
+        *saveptr = str - 1;
+    else if (!*saveptr)
+        return NULL;  /* no more tokens */
+
+    /* get first occurrence of token in string */
+    begin_ptr = *saveptr + 1;
+    *saveptr = (char*)strchr(begin_ptr, delimiter);
+    if (*saveptr)
+        **saveptr = '\0';
+
+    /* empty tokens */
+    if (*begin_ptr == '\0')
+        return NULL;
+
+    while (*begin_ptr && *begin_ptr == strip)
+        *begin_ptr++ = '\0';
+    end_ptr = *saveptr ? *saveptr - 1 : begin_ptr + strlen(begin_ptr) - 1;
+    while (*end_ptr && *end_ptr == strip)
+        *end_ptr-- = '\0';
+    return begin_ptr;
+}
+
+/* ------------------------------------------------------------------------- */
+int
+string_ends_with(const char* str, const char* end)
+{
+    int str_len = (int)strlen(str);
+    int end_len = (int)strlen(end);
+    if (str_len < end_len)
+        return 0;
+    return strcmp(str + str_len - end_len, end) == 0;
 }

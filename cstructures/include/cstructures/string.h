@@ -30,6 +30,21 @@ string_deinit(struct cs_string* str);
 CSTRUCTURES_PUBLIC_API void
 string_destroy(struct cs_string* str);
 
+CSTRUCTURES_PUBLIC_API void
+string_set(struct cs_string* str, const char* c);
+
+CSTRUCTURES_PUBLIC_API struct cs_string*
+string_cat(struct cs_string* str, const char* c_str);
+
+CSTRUCTURES_PUBLIC_API struct cs_string*
+string_cat_c(struct cs_string* str, const char* s1, const char* s2);
+
+CSTRUCTURES_PUBLIC_API struct cs_string*
+string_join(struct cs_string* str, int n, ...);
+
+CSTRUCTURES_PUBLIC_API char*
+string_take(struct cs_string* str);
+
 /*!
  * @brief Reads a line of text from the stream.
  * @note Empty lines are ignored, i.e. this function is guaranteed to return
@@ -42,6 +57,15 @@ string_getline(struct cs_string* str, FILE* fp);
 
 char*
 string_tok(struct cs_string* str, char delimiter, char** saveptr);
+
+char*
+string_tok_strip(struct cs_string* str, char delimiter, char strip, char** saveptr);
+
+char*
+string_tok_strip_c(char* str, char delimiter, char strip, char** saveptr);
+
+int
+string_ends_with(const char* str, const char* end);
 
 #define string_length(str) \
         (vector_count(&(str)->buf) - 1)

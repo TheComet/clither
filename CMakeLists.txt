@@ -57,6 +57,7 @@ add_executable (clither
     "include/clither/client.h"
     "include/clither/controls.h"
     "include/clither/food_cluster.h"
+    "include/clither/fs.h"
     "include/clither/gfx.h"
     "include/clither/log.h"
     "include/clither/mcd_wifi.h"
@@ -73,6 +74,7 @@ add_executable (clither
     "include/clither/thread.h"
     "include/clither/tick.h"
     "include/clither/tests.h"
+	"include/clither/utf8.h"
     "include/clither/world.h"
     "include/clither/wrap.h"
 
@@ -100,24 +102,30 @@ add_executable (clither
         src/gles2/glad/src/gles2.c>
 
     $<$<PLATFORM_ID:Windows>:
+		src/fs_win32.c
         src/mutex_win32.c
         src/net_win32.c
         src/signals_win32.c
         src/thread_win32.c
         src/tick_win32.c
+		src/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
+		src/fs_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
         src/thread_pthread.c
-        src/tick_posix.c>
+        src/tick_posix.c
+		src/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
+		src/fs_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
         src/thread_pthread.c
-        src/tick_posix.c>
+        src/tick_posix.c
+		src/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
