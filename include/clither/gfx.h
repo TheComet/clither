@@ -6,6 +6,7 @@
 struct camera;
 struct controls;
 struct input;
+struct resource_pack;
 struct world;
 
 /*! Opaque type. This is implemented differently depending on the graphics backend */
@@ -40,6 +41,9 @@ gfx_create(int initial_width, int initial_height);
 void
 gfx_destroy(struct gfx* gfx);
 
+int
+gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack);
+
 /*!
  * \brief Poll for mouse and keyboard input. See struct input in controls.h
  * for more details.
@@ -50,17 +54,17 @@ gfx_poll_input(struct gfx* gfx, struct input* input);
 /*!
  * \brief Map user input into a "snake control structure", also known as a
  * "command frame".
- * 
+ *
  * The controls structure stores the world-space target angle of the snake head
  * as well as the target speed. These values need to be calculated by
  * transforming the snake head into screen space (or mouse coordinates into world
  * space).
- * 
+ *
  * \note Very important: Check controls.h struct controls: Due to network
  * optimizations, when calculating new controls you must limit the speed at which
  * the "angle" and "speed" properties are allowed to change. This limitation
  * allows controls to be delta-compressed more efficiently.
- * 
+ *
  * \param[in,out] controls The previously calculated controls are passed in,
  * and the backend can write the newly calculated controls back to this argument.
  * \param[in] input Raw user input.
@@ -75,6 +79,9 @@ gfx_update_controls(
     const struct gfx* gfx,
     const struct camera* cam,
     struct qwpos snake_head);
+
+void
+gfx_step_anim(struct gfx* gfx, int sim_tick_rate);
 
 /*!
  * \brief Draw everything.

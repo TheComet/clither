@@ -10,6 +10,7 @@
 #include "clither/mutex.h"
 #include "clither/net.h"
 #include "clither/log.h"
+#include "clither/resource_pack.h"
 #include "clither/server.h"
 #include "clither/server_settings.h"
 #include "clither/signals.h"
@@ -253,6 +254,16 @@ run_client(const struct args* a)
     gfx = gfx_create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
+    {
+        int ret;
+        struct resource_pack* pack = resource_pack_load("packs/horror");
+        if (pack == NULL)
+            goto load_resource_pack_failed;
+        ret = gfx_load_resource_pack(gfx, pack);
+        resource_pack_destroy(pack);
+        if (ret != 0)
+            goto load_resource_pack_failed;
+    }
 
     input_init(&input);
     camera_init(&camera);
@@ -357,6 +368,8 @@ run_client(const struct args* a)
                 break;
         }
 
+        gfx_step_anim(gfx, client.sim_tick_rate);
+
         /*
          * Skip rendering if we are lagging, as this is most likely the source
          * of the delay. If for some reason we end up 3 seconds behind where we
@@ -364,7 +377,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
-            gfx_draw_world(gfx, &world, &camera, client.frame_number);
+            gfx_draw_world(gfx, &world, &camera);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -394,6 +407,7 @@ client_connect_failed:
 start_mcd_failed:
     client_deinit(&client);
     world_deinit(&world);
+load_resource_pack_failed:
     gfx_destroy(gfx);
 create_gfx_failed:
     gfx_deinit();

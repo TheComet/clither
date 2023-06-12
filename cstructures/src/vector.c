@@ -102,6 +102,17 @@ vector_compact(struct cs_vector* vector)
 }
 
 /* ------------------------------------------------------------------------- */
+void*
+vector_take(struct cs_vector* vector)
+{
+    void* data = vector->data;
+    vector->data = NULL;
+    vector->capacity = 0;
+    vector->count = 0;
+    return data;
+}
+
+/* ------------------------------------------------------------------------- */
 void
 vector_clear_compact(struct cs_vector* vector)
 {
