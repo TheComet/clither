@@ -41,6 +41,12 @@ gfx_create(int initial_width, int initial_height);
 void
 gfx_destroy(struct gfx* gfx);
 
+/*!
+ * \brief Load resources from a resource pack.
+ * \note This function can be called more than once. For example, when switching
+ * resource packs.
+ * \return Return 0 if successful, -1 if an error occurred.
+ */
 int
 gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack);
 
@@ -80,6 +86,9 @@ gfx_update_controls(
     const struct camera* cam,
     struct qwpos snake_head);
 
+/*!
+ * \brief Advance sprite animations. This is called at a frequency of sim_tick_rate.
+ */
 void
 gfx_step_anim(struct gfx* gfx, int sim_tick_rate);
 
