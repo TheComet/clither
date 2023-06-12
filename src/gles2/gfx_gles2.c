@@ -30,7 +30,7 @@ struct bg
     GLuint texNor;
     GLuint uAspectRatio;
     GLuint uCamera;
-    GLuint uRes;
+    GLuint uShadowInvRes;
     GLuint sShadow;
     GLuint sCol;
     GLuint sNM;
@@ -61,7 +61,7 @@ struct sprite_mat
     GLuint uDir;
     GLuint uSize;
     GLuint uAnim;
-    GLuint sDiffuse;
+    GLuint sCol;
     GLuint sNM;
 };
 
@@ -385,7 +385,7 @@ gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     gfx->sprite_shadow.uDir = glGetUniformLocation(gfx->sprite_shadow.program, "uDir");
     gfx->sprite_shadow.uSize = glGetUniformLocation(gfx->sprite_shadow.program, "uSize");
     gfx->sprite_shadow.uAnim = glGetUniformLocation(gfx->sprite_shadow.program, "uAnim");
-    gfx->sprite_shadow.sNM = glGetUniformLocation(gfx->sprite_shadow.program, "sCol");
+    gfx->sprite_shadow.sNM = glGetUniformLocation(gfx->sprite_shadow.program, "sNM");
 
     gfx->sprite_mat.program = load_shader(pack->shaders.glsl.sprite, attr_bindings);
     if (gfx->sprite_mat.program == 0)
@@ -396,16 +396,16 @@ gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     gfx->sprite_mat.uDir = glGetUniformLocation(gfx->sprite_mat.program, "uDir");
     gfx->sprite_mat.uSize = glGetUniformLocation(gfx->sprite_mat.program, "uSize");
     gfx->sprite_mat.uAnim = glGetUniformLocation(gfx->sprite_mat.program, "uAnim");
-    gfx->sprite_mat.sDiffuse = glGetUniformLocation(gfx->sprite_mat.program, "sDiffuse");
+    gfx->sprite_mat.sCol = glGetUniformLocation(gfx->sprite_mat.program, "sCol");
     gfx->sprite_mat.sNM = glGetUniformLocation(gfx->sprite_mat.program, "sNM");
 
-    gfx->bg.program = load_shader(pack->shaders.glsl.shadow, attr_bindings);
+    gfx->bg.program = load_shader(pack->shaders.glsl.background, attr_bindings);
     if (gfx->bg.program == 0)
         goto glsl_background_failed;
 
     gfx->bg.uAspectRatio = glGetUniformLocation(gfx->bg.program, "uAspectRatio");
     gfx->bg.uCamera = glGetUniformLocation(gfx->bg.program, "uCamera");
-    gfx->bg.uRes = glGetUniformLocation(gfx->bg.program, "uRes");
+    gfx->bg.uShadowInvRes = glGetUniformLocation(gfx->bg.program, "uShadowInvRes");
     gfx->bg.sShadow = glGetUniformLocation(gfx->bg.program, "sShadow");
     gfx->bg.sCol = glGetUniformLocation(gfx->bg.program, "sCol");
     gfx->bg.sNM = glGetUniformLocation(gfx->bg.program, "sNM");
@@ -693,7 +693,7 @@ draw_background(const struct gfx* gfx, const struct camera* camera, const struct
 
     glUniform4f(gfx->bg.uAspectRatio, ar->scale_x, ar->scale_y, ar->pad_x, ar->pad_y);
     glUniform3f(gfx->bg.uCamera, qw_to_float(camera->pos.x), qw_to_float(camera->pos.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->bg.uRes, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
+    glUniform2f(gfx->bg.uShadowInvRes, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
     glUniform1i(gfx->bg.sCol, 1);
     glUniform1i(gfx->bg.sNM, 2);
 
@@ -743,7 +743,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         glUseProgram(gfx->sprite_mat.program);
         glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
         glUniform1f(gfx->sprite_mat.uSize, size);
-        glUniform1i(gfx->sprite_mat.sDiffuse, 0);
+        glUniform1i(gfx->sprite_mat.sCol, 0);
         glUniform1i(gfx->sprite_mat.sNM, 1);
 
         glActiveTexture(GL_TEXTURE0);
