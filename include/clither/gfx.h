@@ -8,23 +8,66 @@ struct controls;
 struct input;
 struct world;
 
+/*! Opaque type. This is implemented differently depending on the graphics backend */
 struct gfx;
 
+/*!
+ * \brief Global init. Called once at program start.
+ * \return Returns 0 on success, or a negative value for failure.
+ */
 int
 gfx_init(void);
 
+/*!
+ * \brief Global de-init. Called once at program exit.
+ */
 void
 gfx_deinit(void);
 
+/*!
+ * \brief Create a graphics contet. This will open the window,
+ * load all resources (images, sounds, shaders...) and prepare
+ * everything for rendering.
+ * \return Return a pointer to a new graphics context, or NULL on failure.
+ */
 struct gfx*
 gfx_create(int initial_width, int initial_height);
 
+/*!
+ * \brief Destroy the graphics context.
+ * Delete all resources, close the window, and clean up.
+ */
 void
 gfx_destroy(struct gfx* gfx);
 
+/*!
+ * \brief Poll for mouse and keyboard input. See struct input in controls.h
+ * for more details.
+ */
 void
 gfx_poll_input(struct gfx* gfx, struct input* input);
 
+/*!
+ * \brief Map user input into a "snake control structure", also known as a
+ * "command frame".
+ * 
+ * The controls structure stores the world-space target angle of the snake head
+ * as well as the target speed. These values need to be calculated by
+ * transforming the snake head into screen space (or mouse coordinates into world
+ * space).
+ * 
+ * \note Very important: Check controls.h struct controls: Due to network
+ * optimizations, when calculating new controls you must limit the speed at which
+ * the "angle" and "speed" properties are allowed to change. This limitation
+ * allows controls to be delta-compressed more efficiently.
+ * 
+ * \param[in,out] controls The previously calculated controls are passed in,
+ * and the backend can write the newly calculated controls back to this argument.
+ * \param[in] input Raw user input.
+ * \param[in] gfx Graphics context.
+ * \param[in] cam Camera information required for transformation.
+ * \param[in] snake_head Snake's head position in world space.
+ */
 void
 gfx_update_controls(
     struct controls* controls,
@@ -33,5 +76,8 @@ gfx_update_controls(
     const struct camera* cam,
     struct qwpos snake_head);
 
+/*!
+ * \brief Draw everything.
+ */
 void
 gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera);

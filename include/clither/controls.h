@@ -21,12 +21,12 @@ enum controls_action
  */
 struct input
 {
-    int mousex, mousey;
-    int scroll;
-    unsigned boost : 1;
+    int mousex, mousey;  /* Mouse position in screen coordinates */
+    int scroll;          /* Mouse wheel (difference) */
+    unsigned boost : 1;  /* Boost button is pressed */
     unsigned shoot : 1;
     unsigned split : 1;
-    unsigned quit  : 1;
+    unsigned quit  : 1;  /* User pressed escape or similar */
 };
 
 /*!
