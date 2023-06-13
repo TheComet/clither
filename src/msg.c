@@ -1,4 +1,4 @@
-#include "clither/controls.h"
+#include "clither/command.h"
 #include "clither/msg.h"
 #include "clither/log.h"
 #include "clither/snake.h"
@@ -59,7 +59,7 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     case MSG_LEAVE:
         break;
 
-    case MSG_CONTROLS:
+    case MSG_COMMANDS:
         break;
 
     case MSG_SNAKE_METADATA:
@@ -185,23 +185,23 @@ msg_parse_payload(
         case MSG_LEAVE:
             break;
 
-        case MSG_CONTROLS: {
+        case MSG_COMMANDS: {
             /*
              * 2 bytes for frame number
-             * 1 byte for number of control structures
-             * 3 bytes containing first controls structure
+             * 1 byte for number of command structures
+             * 3 bytes containing first command structure
              * 0-N bytes containing deltas of proceeding control structures
              */
             if (payload_len < 6)
             {
-                log_warn("MSG_CONTROLS payload is too small\n");
+                log_warn("MSG_COMMANDS payload is too small\n");
                 return -1;
             }
 
-            pp->controls.frame_number =
+            pp->command.frame_number =
                 (payload[0] << 8) |
                 (payload[1] << 0);
-            log_net("MSG_CONTROLS: frame_number=%x\n", pp->controls.frame_number);
+            log_net("MSG_COMMANDS: frame_number=%x\n", pp->command.frame_number);
         } break;
 
         case MSG_FEEDBACK: {
@@ -377,48 +377,48 @@ msg_leave(void)
 
 /* ------------------------------------------------------------------------- */
 struct msg*
-msg_controls(const struct controls_rb* rb)
+msg_commands(const struct command_rb* rb)
 {
     int i, bit, byte, send_count;
-    struct controls* c;
+    struct command* c;
     struct msg* m;
     uint16_t first_frame_number;
 
-    assert(controls_rb_count(rb) > 0);
-    first_frame_number = controls_rb_first_frame(rb);
+    assert(command_rb_count(rb) > 0);
+    first_frame_number = command_rb_frame_begin(rb);
 
     /*
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
-    send_count = controls_rb_count(rb);
+    send_count = command_rb_count(rb);
     if (send_count > 100)
     {
-        log_warn("There are more than 100 controls in the buffer (%d). Only sending the first 100\n", send_count);
+        log_warn("There are more than 100 command in the buffer (%d). Only sending the first 100\n", send_count);
         send_count = 100;
     }
 
-    log_net("Packing controls for frames %d-%d\n",
+    log_net("Packing command for frames %d-%d\n",
         first_frame_number, (uint16_t)(first_frame_number + send_count - 1));
 
     /*
-     * controls structure: 19 bits
+     * command structure: 19 bits
      * delta:
      *   - 3 bits for angle
      *   - 5 bits for speed
      *   - 4 bits for action, assuming it changes every frame (it shouldn't)
      */
     m = msg_alloc(
-        MSG_CONTROLS, 0,
+        MSG_COMMANDS, 0,
         sizeof(first_frame_number) +          /* frame number */
-        19 + (12*send_count + 8) / 8);  /* upper bound for all controls */
+        19 + (12*send_count + 8) / 8);  /* upper bound for all command */
 
     m->payload[0] = first_frame_number >> 8;
     m->payload[1] = first_frame_number & 0xFF;
     m->payload[2] = (uint8_t)(send_count - 1);
 
-    /* First controls structure */
-    c = controls_rb_peek(rb, 0);
+    /* First command structure */
+    c = command_rb_peek(rb, 0);
     m->payload[3] = c->angle;
     m->payload[4] = c->speed;
     m->payload[5] = c->action; /* 3 bits */
@@ -427,10 +427,10 @@ msg_controls(const struct controls_rb* rb)
     log_net("  angle=%x, speed=%x, action=%x\n", c->angle, c->speed, c->action);
 
     /*
-     * Delta compress rest of controls. Note that the frame number doesn't need
+     * Delta compress rest of command. Note that the frame number doesn't need
      * to be included because it always increases by 1. First write all speed
      * and angle deltas. These should be guaranteed to always be less than 3
-     * and 5 bits respectively (enforced by function gfx_update_controls()).
+     * and 5 bits respectively (enforced by function gfx_update_command()).
      */
 #define CLEAR_NEXT_BIT() do { \
         m->payload[byte] &= ~(1 << bit); \
@@ -454,8 +454,8 @@ msg_controls(const struct controls_rb* rb)
     } while(0)
     for (i = 1; i < send_count; i++)
     {
-        struct controls* prev = controls_rb_peek(rb, i-1);
-        struct controls* next = controls_rb_peek(rb, i);
+        struct command* prev = command_rb_peek(rb, i-1);
+        struct command* next = command_rb_peek(rb, i);
 
         if (next->action == prev->action)
             CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
@@ -476,8 +476,8 @@ msg_controls(const struct controls_rb* rb)
     for (i = 1; i < send_count; ++i)
     {
         uint8_t da, dv;
-        struct controls* prev = controls_rb_peek(rb, i-1);
-        struct controls* next = controls_rb_peek(rb, i);
+        struct command* prev = command_rb_peek(rb, i-1);
+        struct command* next = command_rb_peek(rb, i);
         int da_i32 = next->angle - prev->angle + 3;
         int dv_i32 = next->speed - prev->speed + 15;
         if (da_i32 > 128) da_i32 -= 256;
@@ -486,9 +486,9 @@ msg_controls(const struct controls_rb* rb)
         dv = (uint8_t)dv_i32;
 
         if (da_i32 < 0 || da_i32 > 7-1)
-            log_warn("Issue while compressing controls: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
+            log_warn("Issue while compressing command: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
         if (dv_i32 < 0 || dv_i32 > 31-1)
-            log_warn("Issue while compressing controls: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
+            log_warn("Issue while compressing command: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
 
         m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
         log_net("  angle=%x, speed=%x, action=%x\n", next->angle, next->speed, next->action);
@@ -503,8 +503,8 @@ msg_controls(const struct controls_rb* rb)
 
 /* ------------------------------------------------------------------------- */
 int
-msg_controls_unpack_into(
-    struct controls_rb* rb,
+msg_commands_unpack_into(
+    struct command_rb* rb,
     const uint8_t* payload,
     uint8_t payload_len,
     uint16_t frame_number,
@@ -512,30 +512,30 @@ msg_controls_unpack_into(
     uint16_t* last_frame)
 {
     int i, bit, byte, mouse_data_offset;
-    uint8_t controls_count;
+    uint8_t command_count;
     uint16_t first_frame_number;
-    struct controls controls;
+    struct command command;
 
     first_frame_number =
         (payload[0] << 8) |
         (payload[1] & 0xFF);
-    controls_count =
+    command_count =
         payload[2];
 
-    log_net("Unpacking controls from frames %d-%d, current frame=%d\n",
-            first_frame_number, (uint16_t)(first_frame_number + controls_count), frame_number);
+    log_net("Unpacking command from frames %d-%d, current frame=%d\n",
+            first_frame_number, (uint16_t)(first_frame_number + command_count), frame_number);
     *first_frame = first_frame_number;
-    *last_frame = first_frame_number + controls_count;
+    *last_frame = first_frame_number + command_count;
 
-    /* Read first controls structure */
-    controls.angle = payload[3];
-    controls.speed = payload[4];
-    controls.action = (payload[5] & 0x07);
+    /* Read first command structure */
+    command.angle = payload[3];
+    command.speed = payload[4];
+    command.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        controls_rb_put(rb, &controls, first_frame_number);
-    log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
+        command_rb_put(rb, &command, first_frame_number);
+    log_net("  angle=%x, speed=%x, action=%x\n", command.angle, command.speed, command.action);
 
-    if (controls_count == 0)
+    if (command_count == 0)
         return 0;
 
     /* Determine offset to mouse data because we have to read the button and
@@ -543,12 +543,12 @@ msg_controls_unpack_into(
     /* Offsets from after reading first control structure */
     bit = 3;
     byte = 5;
-    for (i = 0; i != (int)controls_count; ++i)
+    for (i = 0; i != (int)command_count; ++i)
     {
         uint8_t b;
         if (byte >= payload_len)
         {
-            log_warn("Error while unpacking controls: Packet too small\n");
+            log_warn("Error while unpacking command: Packet too small\n");
             return -1;
         }
 
@@ -564,16 +564,16 @@ msg_controls_unpack_into(
      * the current byte if it is only partially filled */
     mouse_data_offset = bit == 0 ? byte : byte + 1;
 
-    if (mouse_data_offset + controls_count > payload_len)
+    if (mouse_data_offset + command_count > payload_len)
     {
-        log_warn("Error while unpacking controls: Packet too small\n");
+        log_warn("Error while unpacking command: Packet too small\n");
         return -1;
     }
 
     /* Offsets from after reading first control structure */
     bit = 3;
     byte = 5;
-    for (i = 0; i != (int)controls_count; ++i)
+    for (i = 0; i != (int)command_count; ++i)
     {
         uint8_t b;
         uint8_t da, dv;
@@ -589,23 +589,23 @@ msg_controls_unpack_into(
         READ_NEXT_BIT_INTO(b);
         if (b)
         {
-            controls.action = 0;
+            command.action = 0;
             READ_NEXT_BIT_INTO(b);
-            if (b) controls.action |= 0x01;
+            if (b) command.action |= 0x01;
             READ_NEXT_BIT_INTO(b);
-            if (b) controls.action |= 0x02;
+            if (b) command.action |= 0x02;
             READ_NEXT_BIT_INTO(b);
-            if (b) controls.action |= 0x04;
+            if (b) command.action |= 0x04;
         }
 
         da = payload[mouse_data_offset+i] & 0x07;
         dv = (payload[mouse_data_offset+i] >> 3) & 0x1F;
-        controls.angle += da - 3;
-        controls.speed += dv - 15;
+        command.angle += da - 3;
+        command.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            controls_rb_put(rb, &controls, first_frame_number + i + 1);
-        log_net("  angle=%x, speed=%x, action=%x\n", controls.angle, controls.speed, controls.action);
+            command_rb_put(rb, &command, first_frame_number + i + 1);
+        log_net("  angle=%x, speed=%x, action=%x\n", command.angle, command.speed, command.action);
     }
 
     return 0;

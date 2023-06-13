@@ -55,10 +55,11 @@ add_executable (clither
     "include/clither/bezier.h"
     "include/clither/camera.h"
     "include/clither/client.h"
-    "include/clither/controls.h"
+    "include/clither/command.h"
     "include/clither/food_cluster.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
+    "include/clither/input.h"
     "include/clither/log.h"
     "include/clither/mcd_wifi.h"
     "include/clither/msg.h"
@@ -83,8 +84,9 @@ add_executable (clither
     "src/bezier.c"
     "src/camera.c"
     "src/client.c"
-    "src/controls.c"
+    "src/command.c"
     "src/food_cluster.c"
+    "src/input.c"
     "src/log.c"
     "src/main.c"
     "src/mcd_wifi.c"
@@ -133,6 +135,7 @@ add_executable (clither
         tests/tests.cpp
         tests/clither/test_args.cpp
         tests/clither/test_bezier.cpp
+        tests/clither/test_command.cpp
         tests/clither/test_msg.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_q.cpp
