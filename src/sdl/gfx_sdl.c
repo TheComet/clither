@@ -1,7 +1,8 @@
 #include "clither/bezier.h"
 #include "clither/camera.h"
-#include "clither/controls.h"
+#include "clither/command.h"
 #include "clither/gfx.h"
+#include "clither/input.h"
 #include "clither/log.h"
 #include "clither/snake.h"
 #include "clither/world.h"
@@ -265,6 +266,15 @@ gfx_destroy(struct gfx* gfx)
 }
 
 /* ------------------------------------------------------------------------- */
+int
+gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
+{
+    (void)gfx;
+    (void)pack;
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
 void
 gfx_poll_input(struct gfx* gfx, struct input* input)
 {
@@ -299,8 +309,8 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_update_controls(
-    struct controls* controls,
+gfx_input_to_command(
+    struct command* command,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* camera,
@@ -334,27 +344,27 @@ gfx_update_controls(
      * 5 bits seems appropriate (see: snake.c, ACCELERATION is 8 per frame, so
      * we need at least 5 bits)
      */
-    da = new_angle - controls->angle;
+    da = new_angle - command->angle;
     if (da > 128)
         da -= 256;
     if (da < -128)
         da += 256;
     if (da > 3)
-        controls->angle += 3;
+        command->angle += 3;
     else if (da < -3)
-        controls->angle -= 3;
+        command->angle -= 3;
     else
-        controls->angle = new_angle;
+        command->angle = new_angle;
 
     /* (int) cast is necessary because msvc does not correctly deal with bitfields */
-    if (new_speed - (int)controls->speed > 15)
-        controls->speed += 15;
-    else if (new_speed - (int)controls->speed < -15)
-        controls->speed -= 15;
+    if (new_speed - (int)command->speed > 15)
+        command->speed += 15;
+    else if (new_speed - (int)command->speed < -15)
+        command->speed -= 15;
     else
-        controls->speed = new_speed;
+        command->speed = new_speed;
 
-    controls->action = input->boost ? CONTROLS_ACTION_BOOST : CONTROLS_ACTION_NONE;
+    command->action = input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -410,9 +420,9 @@ draw_bezier(
 
 /* ------------------------------------------------------------------------- */
 static void
-draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snake* snake, uint16_t frame_number)
+draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snake* snake)
 {
-    const struct controls* controls;
+
     struct spos pos;
     int i;
 
@@ -431,17 +441,26 @@ draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snak
     pos = gfx_world_to_screen(snake->head.pos, gfx, camera);
     draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 10);
 
-    /* Debug: Draw how the "controls" structure interpreted the mouse position */
-    controls = controls_rb_find_or_predict(&snake->controls_rb, frame_number);
-    if (controls != NULL)
+    /* Debug: Draw how the "command" structure interpreted the mouse position */
+    if (command_rb_count(&snake->command_rb) > 0)
     {
         int screen_x, screen_y, max_dist;
         double a;
+        struct command* command = command_rb_peek(&snake->command_rb, 0);
         SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
         max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
-        a = controls->angle / 256.0 * 2 * M_PI;
-        screen_x = (double)controls->speed / 255 * -cos(a) * max_dist + pos.x;
-        screen_y = (double)controls->speed / 255 * sin(a) * max_dist + pos.y;
+
+        SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
+        a = command->angle / 256.0 * 2 * M_PI;
+        screen_x = (double)command->speed / 255 * -cos(a) * max_dist + pos.x;
+        screen_y = (double)command->speed / 255 * sin(a) * max_dist + pos.y;
+        draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
+
+        SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
+        command = command_rb_peek(&snake->command_rb, command_rb_count(&snake->command_rb) - 1);
+        a = command->angle / 256.0 * 2 * M_PI;
+        screen_x = (double)command->speed / 255 * -cos(a) * max_dist + pos.x;
+        screen_y = (double)command->speed / 255 * sin(a) * max_dist + pos.y;
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
@@ -520,7 +539,15 @@ draw_background(const struct gfx* gfx, const struct camera* camera)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera, uint16_t frame_number)
+gfx_step_anim(struct gfx* gfx, int sim_tick_rate)
+{
+    (void)gfx;
+    (void)sim_tick_rate;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
     SDL_SetRenderDrawColor(gfx->renderer, 0, 0, 0, 255);
     SDL_RenderClear(gfx->renderer);
@@ -528,7 +555,7 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     draw_background(gfx, camera);
 
     WORLD_FOR_EACH_SNAKE(world, uid, snake)
-        draw_snake(gfx, camera, snake, frame_number);
+        draw_snake(gfx, camera, snake);
     WORLD_END_EACH
 
     {

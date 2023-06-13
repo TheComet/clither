@@ -1,8 +1,9 @@
 #include "clither/bezier.h"
 #include "clither/camera.h"
-#include "clither/controls.h"
+#include "clither/command.h"
 #include "clither/fs.h"
 #include "clither/gfx.h"
+#include "clither/input.h"
 #include "clither/log.h"
 #include "clither/resource_pack.h"
 #include "clither/snake.h"
@@ -596,8 +597,8 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 
 /* ------------------------------------------------------------------------- */
 void
-gfx_update_controls(
-    struct controls* controls,
+gfx_input_to_command(
+    struct command* command,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* camera,
@@ -650,27 +651,27 @@ gfx_update_controls(
      * 5 bits seems appropriate (see: snake.c, ACCELERATION is 8 per frame, so
      * we need at least 5 bits)
      */
-    da = new_angle - controls->angle;
+    da = new_angle - command->angle;
     if (da > 128)
         da -= 256;
     if (da < -128)
         da += 256;
     if (da > 3)
-        controls->angle += 3;
+        command->angle += 3;
     else if (da < -3)
-        controls->angle -= 3;
+        command->angle -= 3;
     else
-        controls->angle = new_angle;
+        command->angle = new_angle;
 
     /* (int) cast is necessary because msvc does not correctly deal with bitfields */
-    if (new_speed - (int)controls->speed > 15)
-        controls->speed += 15;
-    else if (new_speed - (int)controls->speed < -15)
-        controls->speed -= 15;
+    if (new_speed - (int)command->speed > 15)
+        command->speed += 15;
+    else if (new_speed - (int)command->speed < -15)
+        command->speed -= 15;
     else
-        controls->speed = new_speed;
+        command->speed = new_speed;
 
-    controls->action = input->boost ? CONTROLS_ACTION_BOOST : CONTROLS_ACTION_NONE;
+    command->action = input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE;
 }
 
 /* ------------------------------------------------------------------------- */

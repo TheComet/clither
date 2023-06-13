@@ -1,5 +1,4 @@
 #include "clither/bezier.h"
-#include "clither/controls.h"
 #include "clither/log.h"
 #include "clither/q.h"
 #include "clither/snake.h"
@@ -70,7 +69,7 @@ snake_data_deinit(struct snake_data* data)
 void
 snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 {
-    controls_rb_init(&snake->controls_rb);
+    command_rb_init(&snake->command_rb);
     snake_data_init(&snake->data, spawn_pos, name);
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
@@ -81,12 +80,12 @@ void
 snake_deinit(struct snake* snake)
 {
     snake_data_deinit(&snake->data);
-    controls_rb_deinit(&snake->controls_rb);
+    command_rb_deinit(&snake->command_rb);
 }
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step_head(struct snake_head* head, const struct controls* controls, uint8_t sim_tick_rate)
+snake_step_head(struct snake_head* head, const struct command* command, uint8_t sim_tick_rate)
 {
     double a;
     qw dx, dy;
@@ -94,12 +93,12 @@ snake_step_head(struct snake_head* head, const struct controls* controls, uint8_
     uint8_t target_speed;
 
     /*
-     * The "controls" structure contains the absolute angle (in world space) of
+     * The command structure contains the absolute angle (in world space) of
      * the desired angle. That is, the angle from the snake's head to the mouse
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
      * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
-    target_angle = make_qa(controls->angle / 256.0 * 2 * M_PI - M_PI);
+    target_angle = make_qa(command->angle / 256.0 * 2 * M_PI - M_PI);
 
     /* Calculate difference between desired angle and actual angle and wrap */
     angle_diff = qa_sub(head->angle, target_angle);
@@ -116,9 +115,9 @@ snake_step_head(struct snake_head* head, const struct controls* controls, uint8_
         head->angle = target_angle;
 
     /* Integrate speed over time */
-    target_speed = controls->action == CONTROLS_ACTION_BOOST ?
+    target_speed = command->action == COMMAND_ACTION_BOOST ?
         255 :
-        qw_sub(MAX_SPEED, MIN_SPEED) * controls->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
+        qw_sub(MAX_SPEED, MIN_SPEED) * command->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
     if (head->speed - target_speed > (ACCELERATION * 256))
         head->speed -= (ACCELERATION * 256);
     else if (head->speed - target_speed < (-ACCELERATION * 256))
@@ -173,10 +172,10 @@ void
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
-    const struct controls* controls,
+    const struct command* command,
     uint8_t sim_tick_rate)
 {
-    snake_step_head(head, controls, sim_tick_rate);
+    snake_step_head(head, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
@@ -191,24 +190,24 @@ snake_ack_frame(
     struct snake_head* acknowledged_head,
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
-    struct controls_rb* controls_rb,
+    struct command_rb* command_rb,
     uint16_t frame_number,
     uint8_t sim_tick_rate)
 {
     uint16_t last_ackd_frame, predicted_frame;
 
-    if (controls_rb_count(controls_rb) == 0)
+    if (command_rb_count(command_rb) == 0)
     {
-        log_warn("snake_ack_frame(): Controls buffer of snake \"%s\" is empty\n", data->name);
+        log_warn("snake_ack_frame(): Command buffer of snake \"%s\" is empty\n", data->name);
         return;
     }
-    last_ackd_frame = controls_rb_first_frame(controls_rb);
-    predicted_frame = controls_rb_last_frame(controls_rb);
+    last_ackd_frame = command_rb_frame_begin(command_rb);
+    predicted_frame = command_rb_frame_end(command_rb);
 
     /* last_ackd_frame <= frame_number <= predicted_frame */
     if (u16_lt_wrap(frame_number, last_ackd_frame) || u16_gt_wrap(frame_number, predicted_frame))
     {
-        log_warn("snake_ack_frame(): Frame number is outside of the controls buffer range! Something is very wrong.\n"
+        log_warn("snake_ack_frame(): Frame number is outside of the command buffer range! Something is very wrong.\n"
             "  frame_number=%d\n"
             "  last_ackd_frame=%d\n"
             "  predicted_frame=%d\n",
@@ -222,14 +221,14 @@ snake_ack_frame(
      */
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
-        const struct controls* controls;
+        const struct command* command;
 
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
-        controls = controls_rb_take_or_predict(controls_rb, last_ackd_frame);
-        assert(controls != NULL);
+        command = command_rb_take_or_predict(command_rb, last_ackd_frame);
+        assert(command != NULL);
 
         /* Step to next frame */
-        snake_step_head(acknowledged_head, controls, sim_tick_rate);
+        snake_step_head(acknowledged_head, command, sim_tick_rate);
 
         last_ackd_frame++;
     }
@@ -287,8 +286,8 @@ snake_ack_frame(
         }
 
         /* Simulate head forwards again */
-        CONTROLS_RB_FOR_EACH(controls_rb, frame, controls)
-            snake_step_head(predicted_head, controls, sim_tick_rate);
+        COMMAND_RB_FOR_EACH(command_rb, frame, command)
+            snake_step_head(predicted_head, command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
                 snake_add_new_segment(data, predicted_head);
@@ -301,7 +300,7 @@ snake_ack_frame(
              * simulation.
              */
             bezier_squeeze_n_recent_step(&data->bezier_handles, handles_to_squeeze, sim_tick_rate);
-        CONTROLS_RB_END_EACH
+        COMMAND_RB_END_EACH
 
         /* TODO: distance is a function of the snake's length */
         bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 16), snake_length(data));

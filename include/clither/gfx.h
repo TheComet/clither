@@ -4,7 +4,7 @@
 #include "clither/q.h"
 
 struct camera;
-struct controls;
+struct command;
 struct input;
 struct resource_pack;
 struct world;
@@ -51,36 +51,36 @@ int
 gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack);
 
 /*!
- * \brief Poll for mouse and keyboard input. See struct input in controls.h
+ * \brief Poll for mouse and keyboard input. See struct input in input.h
  * for more details.
  */
 void
 gfx_poll_input(struct gfx* gfx, struct input* input);
 
 /*!
- * \brief Map user input into a "snake control structure", also known as a
+ * \brief Map user input into a "snake command structure", also known as a
  * "command frame".
  *
- * The controls structure stores the world-space target angle of the snake head
+ * The command structure stores the world-space target angle of the snake head
  * as well as the target speed. These values need to be calculated by
  * transforming the snake head into screen space (or mouse coordinates into world
  * space).
  *
- * \note Very important: Check controls.h struct controls: Due to network
- * optimizations, when calculating new controls you must limit the speed at which
+ * \note Very important: Check command.h struct command: Due to network
+ * optimizations, when calculating new command you must limit the speed at which
  * the "angle" and "speed" properties are allowed to change. This limitation
- * allows controls to be delta-compressed more efficiently.
+ * allows commands to be delta-compressed more efficiently.
  *
- * \param[in,out] controls The previously calculated controls are passed in,
- * and the backend can write the newly calculated controls back to this argument.
+ * \param[in,out] command The previously calculated command is passed in,
+ * and the backend can write the newly calculated command back to this argument.
  * \param[in] input Raw user input.
  * \param[in] gfx Graphics context.
  * \param[in] cam Camera information required for transformation.
  * \param[in] snake_head Snake's head position in world space.
  */
 void
-gfx_update_controls(
-    struct controls* controls,
+gfx_input_to_command(
+    struct command* command,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* cam,

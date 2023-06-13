@@ -308,7 +308,7 @@ retry_recv:
             } break;
 
             case MSG_LEAVE:
-            case MSG_CONTROLS:
+            case MSG_COMMANDS:
                 break;
 
             case MSG_FEEDBACK: {
@@ -330,7 +330,7 @@ retry_recv:
                     &snake->head_ack,
                     &snake->head,
                     &pp.snake_head.head,
-                    &snake->controls_rb,
+                    &snake->command_rb,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
             } break;

@@ -7,7 +7,7 @@
 
 C_BEGIN
 
-struct controls_rb;
+struct command_rb;
 struct snake;
 
 enum msg_type
@@ -19,7 +19,7 @@ enum msg_type
     MSG_JOIN_DENY_SERVER_FULL,
     MSG_LEAVE,
 
-    MSG_CONTROLS,
+    MSG_COMMANDS,
     MSG_FEEDBACK,
 
     MSG_SNAKE_METADATA,
@@ -68,7 +68,7 @@ union parsed_payload
 
     struct {
         uint16_t frame_number;
-    } controls;
+    } command;
 
     struct {
         uint16_t frame_number;
@@ -125,11 +125,11 @@ struct msg*
 msg_leave(void);
 
 struct msg*
-msg_controls(const struct controls_rb* rb);
+msg_commands(const struct command_rb* rb);
 
 int
-msg_controls_unpack_into(
-    struct controls_rb* rb,
+msg_commands_unpack_into(
+    struct command_rb* rb,
     const uint8_t* payload,
     uint8_t payload_len,
     uint16_t frame_number,
