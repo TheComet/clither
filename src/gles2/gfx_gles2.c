@@ -596,17 +596,16 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-void
+struct command
 gfx_input_to_command(
-    struct command* command,
+    struct command prev,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* camera,
     struct qwpos snake_head)
 {
-    double a, d, dx, dy;
-    int max_dist, da;
-    uint8_t new_angle, new_speed;
+    float a, d, dx, dy;
+    int max_dist;
     struct spos snake_head_screen;
 
     /* world -> camera space */
@@ -635,43 +634,12 @@ gfx_input_to_command(
     /* Calc angle and distance from mouse position and snake head position */
     dx = input->mousex - snake_head_screen.x;
     dy = snake_head_screen.y - input->mousey;
-    a = atan2(dy, dx) / (2 * M_PI) + 0.5;
+    a = atan2(dy, dx);
     d = sqrt(dx * dx + dy * dy);
     if (d > max_dist)
         d = max_dist;
 
-    /* Yes, this 256 is not a mistake -- makes sure that not both of -3.141 and 3.141 are included */
-    new_angle = (uint8_t)(a * 256);
-    new_speed = (uint8_t)(d / max_dist * 255);
-
-    /*
-     * The following code is designed to limit the number of bits necessary to
-     * encode input deltas. The snake's turn speed is pretty slow, so we can
-     * get away with 3 bits. Speed is a little more sensitive. Through testing,
-     * 5 bits seems appropriate (see: snake.c, ACCELERATION is 8 per frame, so
-     * we need at least 5 bits)
-     */
-    da = new_angle - command->angle;
-    if (da > 128)
-        da -= 256;
-    if (da < -128)
-        da += 256;
-    if (da > 3)
-        command->angle += 3;
-    else if (da < -3)
-        command->angle -= 3;
-    else
-        command->angle = new_angle;
-
-    /* (int) cast is necessary because msvc does not correctly deal with bitfields */
-    if (new_speed - (int)command->speed > 15)
-        command->speed += 15;
-    else if (new_speed - (int)command->speed < -15)
-        command->speed -= 15;
-    else
-        command->speed = new_speed;
-
-    command->action = input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE;
+    return command_make(prev, a, d, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */

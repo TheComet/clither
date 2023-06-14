@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/q.h"
 #include "cstructures/rb.h"
 #include <stdint.h>
 
@@ -12,7 +13,8 @@ enum command_action
     COMMAND_ACTION_BOOST,
     COMMAND_ACTION_SHOOT,
     COMMAND_ACTION_REVERSE,
-    COMMAND_ACTION_SPLIT
+    COMMAND_ACTION_SPLIT,
+    COMMAND_ACTION_GUARD
 };
 
 /*!
@@ -28,13 +30,37 @@ struct command
 
 struct command_rb
 {
-    uint16_t first_frame;
     struct cs_rb rb;
-    struct command last_predicted;
+    struct command last_command_read;
+    uint16_t first_frame;
 };
 
-void
-command_init(struct command* c);
+struct command
+command_default(void);
+
+/*!
+ * \brief Constructs a new command given the previous command and parameters.
+ * 
+ * Commands are constructed in a way to limit the number of bits necessary to
+ * encode deltas. We do this by limiting the speed at which the "angle" and "speed"
+ * properties can be updated from frame to frame. This function takes care of
+ * the details.
+ * 
+ * \param[in] prev The command from the previous frame
+ * \param[in] radians The angle, in world space, to steer the snake towards
+ * \param[in] speed A value between [0..1]. Here, 0 maps to the minimum speed and
+ * 1 maps to the maximum (non-boost) speed.
+ * \param[in] action The current action to perform.
+ */
+struct command
+command_make(
+    struct command prev,
+    float radians,
+    float normalized_speed,
+    enum command_action action);
+
+#define command_angle_to_qa(command) \
+    make_qa(command.angle / 256.0 * 2 * M_PI - M_PI)
 
 void
 command_rb_init(struct command_rb* rb);

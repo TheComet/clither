@@ -71,16 +71,16 @@ gfx_poll_input(struct gfx* gfx, struct input* input);
  * the "angle" and "speed" properties are allowed to change. This limitation
  * allows commands to be delta-compressed more efficiently.
  *
- * \param[in,out] command The previously calculated command is passed in,
- * and the backend can write the newly calculated command back to this argument.
+ * \param[in] command The previously calculated command from the previous frame.
  * \param[in] input Raw user input.
  * \param[in] gfx Graphics context.
  * \param[in] cam Camera information required for transformation.
  * \param[in] snake_head Snake's head position in world space.
+ * \return The new command. Make sure to use @see command_make()
  */
-void
+struct command
 gfx_input_to_command(
-    struct command* command,
+    struct command prev,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* cam,
