@@ -371,6 +371,7 @@ server_recv(
                      * function remove_client() */
                     if (client == NULL)
                     {
+                        struct snake* snake;
                         int n;
                         log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
@@ -379,6 +380,10 @@ server_recv(
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                         client->last_command_msg_frame = frame_number;
+
+                        /* Hold the snake in place until we receive the first command */
+                        snake = world_get_snake(world, client->snake_id);
+                        snake_set_hold(snake);
 
                         /*
                          * Init "Command Buffer Fullness" queue with minimum granularity.

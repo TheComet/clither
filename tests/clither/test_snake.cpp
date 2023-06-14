@@ -13,8 +13,7 @@ TEST(NAME, roll_back_over_frame_boundary)
     snake_init(&client, make_qwposi(2, 2), "client");
     snake_init(&server, make_qwposi(2, 2), "server");
 
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
 
     uint16_t frame_number = 65535 - 10;
     uint16_t mispredict_frame = frame_number + 4;
@@ -50,17 +49,17 @@ TEST(NAME, roll_back_over_frame_boundary)
 
     /* Make sure sim agrees up to mispredicted frame */
     EXPECT_THAT(
-        ((qwpos*)vector_get_element(client_pts0, 5))->x, Eq(
-        ((qwpos*)vector_get_element(server_pts0, 5))->x));
+        ((qwpos*)vector_get_element(client_pts0, 5))->x,
+        Eq(((qwpos*)vector_get_element(server_pts0, 5))->x));
     EXPECT_THAT(
-        ((qwpos*)vector_get_element(client_pts0, 5))->y, Eq(
-        ((qwpos*)vector_get_element(server_pts0, 5))->y));
+        ((qwpos*)vector_get_element(client_pts0, 5))->y,
+        Eq(((qwpos*)vector_get_element(server_pts0, 5))->y));
     EXPECT_THAT(
-        ((qwpos*)vector_get_element(client_pts0, 6))->x, Ne(
-            ((qwpos*)vector_get_element(server_pts0, 6))->x));
+        ((qwpos*)vector_get_element(client_pts0, 6))->x,
+        Ne(((qwpos*)vector_get_element(server_pts0, 6))->x));
     EXPECT_THAT(
-        ((qwpos*)vector_get_element(client_pts0, 6))->y, Ne(
-            ((qwpos*)vector_get_element(server_pts0, 6))->y));
+        ((qwpos*)vector_get_element(client_pts0, 6))->y,
+        Ne(((qwpos*)vector_get_element(server_pts0, 6))->y));
 
     /* Everything is set up so that "mispredict_frame" is the last frame on which
      * the simulation will match up. Going from mispredict_frame to mispredict_frame+1
@@ -72,7 +71,7 @@ TEST(NAME, roll_back_over_frame_boundary)
     client_pts1 = (cs_vector*)vector_get_element(&client.data.points, 1);
 
     struct command c_prev = c;
-    command_init(&c);
+    c = command_default();
     struct snake_head head;
     snake_head_init(&head, make_qwposi(2, 2));
     frame_number = 65535 - 10;

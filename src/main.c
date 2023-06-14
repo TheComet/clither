@@ -90,8 +90,11 @@ run_server_instance(const void* args)
 
         /* sim_update */
         WORLD_FOR_EACH_SNAKE(&world, uid, snake)
-            struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
-            snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
+            if (!snake_is_held(snake, frame_number))
+            {
+                struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
+                snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
+            }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
 
@@ -267,7 +270,7 @@ run_client(const struct args* a)
 
     input_init(&input);
     camera_init(&camera);
-    command_init(&command);
+    command = command_default();
     world_init(&world);
 
     /* If McDonald's WiFi is enabled, start that */
@@ -336,7 +339,7 @@ run_client(const struct args* a)
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            gfx_input_to_command(&command, &input, gfx, &camera, snake->head.pos);
+            command = gfx_input_to_command(command, &input, gfx, &camera, snake->head.pos);
 
             /*
              * Append the new command to the ring buffer of unconfirmed commands.

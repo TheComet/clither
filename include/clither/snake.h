@@ -33,7 +33,6 @@ struct snake_data
      * cached here. These are used for rendering.
      */
     struct cs_vector bezier_points;
-
 };
 
 struct snake
@@ -42,6 +41,8 @@ struct snake
     struct snake_data data;
     struct snake_head head;
     struct snake_head head_ack;
+
+    unsigned hold : 1;
 };
 
 void
@@ -72,6 +73,17 @@ snake_ack_frame(
     struct command_rb* command_rb,
     uint16_t frame_number,
     uint8_t sim_tick_rate);
+
+#define snake_set_hold(snake) \
+    (snake)->hold = 1
+
+/*!
+ * \brief If a snake is in hold mode (@see snake_set_hold), this
+ * function checks the condition for resetting the hold state.
+ * If the condition applies, the snake's hold state is reset.
+ */
+char
+snake_is_held(struct snake* snake, uint16_t frame_number);
 
 #define snake_length(snake) (vector_count(&(snake)->bezier_points))
 

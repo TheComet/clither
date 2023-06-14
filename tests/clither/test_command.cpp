@@ -10,7 +10,7 @@ TEST(NAME, default_command_agree_with_default_snake_head)
 {
     struct command command;
     struct snake_head head1, head2;
-    command_init(&command);
+    command = command_default();
     snake_head_init(&head1, make_qwposi(0, 0));
     snake_head_init(&head2, make_qwposi(0, 0));
 
@@ -20,8 +20,7 @@ TEST(NAME, default_command_agree_with_default_snake_head)
 
 TEST(NAME, inserting_sequential_commands_works)
 {
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
@@ -42,8 +41,7 @@ TEST(NAME, inserting_sequential_commands_works)
 
 TEST(NAME, inserting_with_frame_gaps_doesnt_work)
 {
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
@@ -62,8 +60,7 @@ TEST(NAME, inserting_with_frame_gaps_doesnt_work)
 
 TEST(NAME, take_first_matching_command)
 {
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
@@ -110,23 +107,21 @@ TEST(NAME, take_first_matching_command)
 
 TEST(NAME, take_command_in_past_uses_last_predicted)
 {
-    struct command c, default_command;
-    command_init(&c);
-    command_init(&default_command);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
     c.angle = 2;  command_rb_put(&rb, c, 65535);
     EXPECT_THAT(command_rb_count(&rb), Eq(1));
 
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 65530).angle, Eq(default_command.angle));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 65533).angle, Eq(default_command.angle));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 65530).angle, Eq(command_default().angle));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 65533).angle, Eq(command_default().angle));
     EXPECT_THAT(command_rb_count(&rb), Eq(1));
     EXPECT_THAT(command_rb_frame_begin(&rb), Eq(65535));
     EXPECT_THAT(command_rb_frame_end(&rb), Eq(0));
 
-    EXPECT_THAT(command_rb_take_or_predict(&rb, 65530).angle, Eq(default_command.angle));
-    EXPECT_THAT(command_rb_take_or_predict(&rb, 65533).angle, Eq(default_command.angle));
+    EXPECT_THAT(command_rb_take_or_predict(&rb, 65530).angle, Eq(command_default().angle));
+    EXPECT_THAT(command_rb_take_or_predict(&rb, 65533).angle, Eq(command_default().angle));
     EXPECT_THAT(command_rb_count(&rb), Eq(1));
     EXPECT_THAT(command_rb_frame_begin(&rb), Eq(65535));
     EXPECT_THAT(command_rb_frame_end(&rb), Eq(0));
@@ -136,13 +131,12 @@ TEST(NAME, take_command_in_past_uses_last_predicted)
 
 TEST(NAME, take_last_command_updates_predicted)
 {
-    struct command c, default_command;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
     c.angle = 2;  command_rb_put(&rb, c, 65535);
-    EXPECT_THAT(command_rb_count(&rb), Eq(5));
+    EXPECT_THAT(command_rb_count(&rb), Eq(1));
 
     // Should update last predicted command
     command_rb_take_or_predict(&rb, 65535);
@@ -152,7 +146,7 @@ TEST(NAME, take_last_command_updates_predicted)
 
     EXPECT_THAT(command_rb_find_or_predict(&rb, 0).angle, Eq(2));
     EXPECT_THAT(command_rb_find_or_predict(&rb, 1).angle, Eq(2));
-    EXPECT_THAT(command_rb_count(&rb), Eq(1));
+    EXPECT_THAT(command_rb_count(&rb), Eq(0));
     EXPECT_THAT(command_rb_frame_begin(&rb), Eq(0));
     EXPECT_THAT(command_rb_frame_end(&rb), Eq(0));
 
@@ -167,8 +161,7 @@ TEST(NAME, take_last_command_updates_predicted)
 
 TEST(NAME, take_command_in_middle)
 {
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 
@@ -185,7 +178,7 @@ TEST(NAME, take_command_in_middle)
     EXPECT_THAT(command_rb_frame_end(&rb), Eq(3));
 
     EXPECT_THAT(command_rb_take_or_predict(&rb, 0).angle, Eq(3));
-    EXPECT_THAT(command_rb_count(&rb), Eq(3));
+    EXPECT_THAT(command_rb_count(&rb), Eq(2));
     EXPECT_THAT(command_rb_frame_begin(&rb), Eq(1));
     EXPECT_THAT(command_rb_frame_end(&rb), Eq(3));
 
@@ -194,8 +187,7 @@ TEST(NAME, take_command_in_middle)
 
 TEST(NAME, take_command_in_future_clears_buffer)
 {
-    struct command c;
-    command_init(&c);
+    struct command c = command_default();
     struct command_rb rb;
     command_rb_init(&rb);
 

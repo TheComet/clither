@@ -73,6 +73,8 @@ snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     snake_data_init(&snake->data, spawn_pos, name);
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
+
+    snake->hold = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -89,7 +91,6 @@ snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tic
 {
     double a;
     qw dx, dy;
-    qa angle_diff, target_angle;
     uint8_t target_speed;
 
     /*
@@ -98,10 +99,10 @@ snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tic
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
      * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
-    target_angle = make_qa(command.angle / 256.0 * 2 * M_PI - M_PI);
+    qa target_angle = command_angle_to_qa(command);
 
     /* Calculate difference between desired angle and actual angle and wrap */
-    angle_diff = qa_sub(head->angle, target_angle);
+    qa angle_diff = qa_sub(head->angle, target_angle);
 
     /*
      * Turn the head towards the target angle and make sure to not exceed the
@@ -302,4 +303,17 @@ snake_ack_frame(
         /* TODO: distance is a function of the snake's length */
         bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 16), snake_length(data));
     }
+}
+
+/* ------------------------------------------------------------------------- */
+char
+snake_is_held(struct snake* snake, uint16_t frame_number)
+{
+    if (command_rb_count(&snake->command_rb) > 0 &&
+        command_rb_frame_begin(&snake->command_rb) == frame_number)
+    {
+        snake->hold = 0;
+    }
+
+    return snake->hold;
 }
