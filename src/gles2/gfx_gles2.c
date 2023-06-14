@@ -282,27 +282,47 @@ create_program_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-load_background_tex(struct bg* bg, const char* col, const char* nor)
+static int
+bg_init(struct bg* bg, int fbwidth, int fbheight)
 {
-    int img_width, img_height, img_channels;
-    stbi_uc* img_data;
+    memset(bg, 0, sizeof * bg);
 
+    /* Set up shadow framebuffer */
+    glGenTextures(1, &bg->texShadow);
+    glBindTexture(GL_TEXTURE_2D, bg->texShadow);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbwidth / SHADOW_MAP_SIZE_FACTOR, fbheight / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenFramebuffers(1, &bg->fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        log_err("Incomplete framebuffer!\n");
+        goto incomplete_shadow_framebuffer;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /* Set up quad mesh */
+    glGenBuffers(1, &bg->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, bg->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &bg->ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bg->ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bg_indices), bg_indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    /* Prepare background textures */
     glGenTextures(1, &bg->texCol);
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load(col, &img_width, &img_height, &img_channels, 3);
-    if (img_data == NULL)
-        log_err("Failed to load image \"%s\"\n", col);
-    else
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(img_data);
-    }
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &bg->texNor);
@@ -311,16 +331,104 @@ load_background_tex(struct bg* bg, const char* col, const char* nor)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load(nor, &img_width, &img_height, &img_channels, 3);
-    if (img_data == NULL)
-        log_err("Failed to load image \"%s\"\n", nor);
-    else
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return 0;
+
+incomplete_shadow_framebuffer:
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &bg->fbo);
+    glDeleteTextures(1, &bg->texShadow);
+
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+bg_deinit(struct bg* bg)
+{
+    glDeleteTextures(1, &bg->texNor);
+    glDeleteTextures(1, &bg->texCol);
+    glDeleteBuffers(1, &bg->ibo);
+    glDeleteBuffers(1, &bg->vbo);
+    glDeleteFramebuffers(1, &bg->fbo);
+    glDeleteTextures(1, &bg->texShadow);
+    if (bg->program != 0)
+        glDeleteProgram(bg->program);
+}
+
+/* ------------------------------------------------------------------------- */
+static GLuint
+get_uniform_location_and_warn(GLuint program, const char* name)
+{
+    GLuint ret = glGetUniformLocation(program, name);
+    if (ret == (GLuint)-1)
+        log_warn("Failed to get uniform location of \"%s\"\n", name);
+    return ret;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+bg_load(struct bg* bg, const struct resource_pack* pack)
+{
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
+
+    /* Clean up previous data */
+    if (bg->program != 0)
+        glDeleteProgram(bg->program);
+    bg->program = 0;
+
+    glBindTexture(GL_TEXTURE_2D, bg->texCol);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, bg->texNor);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    /* For now we only support a single background layer */
+    if (pack->sprites.background[0] == NULL)
     {
+        log_warn("No background texture defined\n");
+        return -1;
+    }
+
+    /* Load shaders */
+    bg->program = load_shader(pack->shaders.glsl.background, attr_bindings);
+    if (bg->program == 0)
+        return -1;
+
+    bg->uAspectRatio = get_uniform_location_and_warn(bg->program, "uAspectRatio");
+    bg->uCamera = get_uniform_location_and_warn(bg->program, "uCamera");
+    bg->uShadowInvRes = get_uniform_location_and_warn(bg->program, "uShadowInvRes");
+    bg->sShadow = get_uniform_location_and_warn(bg->program, "sShadow");
+    bg->sCol = get_uniform_location_and_warn(bg->program, "sCol");
+    bg->sNM = get_uniform_location_and_warn(bg->program, "sNM");
+
+    img_data = stbi_load(pack->sprites.background[0]->texture0, &img_width, &img_height, &img_channels, 3);
+    if (img_data)
+    {
+        glBindTexture(GL_TEXTURE_2D, bg->texCol);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
         stbi_image_free(img_data);
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
+    else
+        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture0);
+
+    img_data = stbi_load(pack->sprites.background[0]->texture1, &img_width, &img_height, &img_channels, 3);
+    if (img_data)
+    {
+        glBindTexture(GL_TEXTURE_2D, bg->texNor);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(img_data);
+    }
+    else
+        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture1);
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -377,6 +485,8 @@ static void load_sprite_tex(
 int
 gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
+    bg_load(&gfx->bg, pack);
+
     gfx->sprite_shadow.program = load_shader(pack->shaders.glsl.shadow, attr_bindings);
     if (gfx->sprite_shadow.program == 0)
         goto glsl_shadow_failed;
@@ -400,21 +510,8 @@ gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     gfx->sprite_mat.sCol = glGetUniformLocation(gfx->sprite_mat.program, "sCol");
     gfx->sprite_mat.sNM = glGetUniformLocation(gfx->sprite_mat.program, "sNM");
 
-    gfx->bg.program = load_shader(pack->shaders.glsl.background, attr_bindings);
-    if (gfx->bg.program == 0)
-        goto glsl_background_failed;
-
-    gfx->bg.uAspectRatio = glGetUniformLocation(gfx->bg.program, "uAspectRatio");
-    gfx->bg.uCamera = glGetUniformLocation(gfx->bg.program, "uCamera");
-    gfx->bg.uShadowInvRes = glGetUniformLocation(gfx->bg.program, "uShadowInvRes");
-    gfx->bg.sShadow = glGetUniformLocation(gfx->bg.program, "sShadow");
-    gfx->bg.sCol = glGetUniformLocation(gfx->bg.program, "sCol");
-    gfx->bg.sNM = glGetUniformLocation(gfx->bg.program, "sNM");
-
     return 0;
 
-glsl_background_failed:
-    glDeleteProgram(gfx->sprite_mat.program);
 glsl_sprite_failed:
     glDeleteProgram(gfx->sprite_shadow.program);
 glsl_shadow_failed:
@@ -465,42 +562,12 @@ gfx_create(int initial_width, int initial_height)
         log_err("GLES2 loader failed\n");
         goto load_gles2_ext_failed;
     }
-    glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
 
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
 
-    /* Load background */
-    glGenTextures(1, &gfx->bg.texShadow);
-    glBindTexture(GL_TEXTURE_2D, gfx->bg.texShadow);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbwidth / SHADOW_MAP_SIZE_FACTOR, fbheight / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glGenFramebuffers(1, &gfx->bg.fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gfx->bg.texShadow, 0);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        log_err("Incomplete framebuffer!\n");
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteFramebuffers(1, &gfx->bg.fbo);
-        goto incomplete_shadow_framebuffer;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    glGenBuffers(1, &gfx->bg.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->bg.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glGenBuffers(1, &gfx->bg.ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->bg.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bg_indices), bg_indices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    load_background_tex(&gfx->bg, "packs/horror/bg/tile_col.png", "packs/horror/bg/tile_nor.png");
+    glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
+    bg_init(&gfx->bg, fbwidth, fbheight);
 
     glGenBuffers(1, &gfx->sprite_mesh.vbo);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
@@ -534,18 +601,6 @@ gfx_create(int initial_width, int initial_height)
 
     return gfx;
 
-load_sprite_program_failed:
-    glDeleteProgram(gfx->sprite_shadow.program);
-load_sprite_shadow_program_failed:
-    glDeleteTextures(1, &gfx->bg.texNor);
-    glDeleteTextures(1, &gfx->bg.texCol);
-    glDeleteBuffers(1, &gfx->bg.ibo);
-    glDeleteBuffers(1, &gfx->bg.vbo);
-    glDeleteFramebuffers(1, &gfx->bg.fbo);
-incomplete_shadow_framebuffer:
-    glDeleteTextures(1, &gfx->bg.texShadow);
-    glDeleteProgram(gfx->bg.program);
-load_bg_program_failed:
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
@@ -571,13 +626,7 @@ gfx_destroy(struct gfx* gfx)
     glDeleteBuffers(1, &gfx->sprite_mesh.ibo);
     glDeleteBuffers(1, &gfx->sprite_mesh.vbo);
 
-    glDeleteTextures(1, &gfx->bg.texNor);
-    glDeleteTextures(1, &gfx->bg.texCol);
-    glDeleteBuffers(1, &gfx->bg.ibo);
-    glDeleteBuffers(1, &gfx->bg.vbo);
-    glDeleteFramebuffers(1, &gfx->bg.fbo);
-    glDeleteTextures(1, &gfx->bg.texShadow);
-    glDeleteProgram(gfx->bg.program);
+    bg_deinit(&gfx->bg);
 
     glfwDestroyWindow(gfx->window);
     FREE(gfx);
