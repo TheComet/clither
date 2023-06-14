@@ -90,10 +90,8 @@ run_server_instance(const void* args)
 
         /* sim_update */
         WORLD_FOR_EACH_SNAKE(&world, uid, snake)
-            const struct command* command = command_rb_take_or_predict(
-                &snake->command_rb, frame_number);
-            if (command != NULL)  /* We have started receiving commands */
-                snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
+            struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
+            snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
 
@@ -348,10 +346,10 @@ run_client(const struct args* a)
              * acknowledges our move, we remove all commands that date back before
              * and up to that point in time from the list again.
              */
-            command_rb_put(&snake->command_rb, &command, client.frame_number);
+            command_rb_put(&snake->command_rb, command, client.frame_number);
 
             /* Update snake and step */
-            snake_step(&snake->data, &snake->head, &command, client.sim_tick_rate);
+            snake_step(&snake->data, &snake->head, command, client.sim_tick_rate);
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
             camera_update(&camera, &snake->head, client.sim_tick_rate);

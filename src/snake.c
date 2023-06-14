@@ -85,7 +85,7 @@ snake_deinit(struct snake* snake)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step_head(struct snake_head* head, const struct command* command, uint8_t sim_tick_rate)
+snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tick_rate)
 {
     double a;
     qw dx, dy;
@@ -98,7 +98,7 @@ snake_step_head(struct snake_head* head, const struct command* command, uint8_t 
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
      * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
-    target_angle = make_qa(command->angle / 256.0 * 2 * M_PI - M_PI);
+    target_angle = make_qa(command.angle / 256.0 * 2 * M_PI - M_PI);
 
     /* Calculate difference between desired angle and actual angle and wrap */
     angle_diff = qa_sub(head->angle, target_angle);
@@ -115,9 +115,9 @@ snake_step_head(struct snake_head* head, const struct command* command, uint8_t 
         head->angle = target_angle;
 
     /* Integrate speed over time */
-    target_speed = command->action == COMMAND_ACTION_BOOST ?
+    target_speed = command.action == COMMAND_ACTION_BOOST ?
         255 :
-        qw_sub(MAX_SPEED, MIN_SPEED) * command->speed / qw_sub(BOOST_SPEED, MIN_SPEED);
+        qw_sub(MAX_SPEED, MIN_SPEED) * command.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
     if (head->speed - target_speed > (ACCELERATION * 256))
         head->speed -= (ACCELERATION * 256);
     else if (head->speed - target_speed < (-ACCELERATION * 256))
@@ -172,7 +172,7 @@ void
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
-    const struct command* command,
+    struct command command,
     uint8_t sim_tick_rate)
 {
     snake_step_head(head, command, sim_tick_rate);
@@ -221,11 +221,8 @@ snake_ack_frame(
      */
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
-        const struct command* command;
-
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
-        command = command_rb_take_or_predict(command_rb, last_ackd_frame);
-        assert(command != NULL);
+         struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
 
         /* Step to next frame */
         snake_step_head(acknowledged_head, command, sim_tick_rate);
@@ -287,7 +284,7 @@ snake_ack_frame(
 
         /* Simulate head forwards again */
         COMMAND_RB_FOR_EACH(command_rb, frame, command)
-            snake_step_head(predicted_head, command, sim_tick_rate);
+            snake_step_head(predicted_head, *command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
                 snake_add_new_segment(data, predicted_head);
