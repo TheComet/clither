@@ -228,9 +228,18 @@ elseif (CLITHER_GFX STREQUAL "GLES2")
 
     target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
 elseif (CLITHER_GFX STREQUAL "VULKAN")
+    find_package(Vulkan REQUIRED)
+
+    set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
+    set (GLFW_BUILD_TESTS OFF CACHE STRING "")
+    set (GLFW_BUILD_DOCS OFF CACHE STRING "")
+    set (GLFW_INSTALL OFF CACHE STRING "")
+
     add_subdirectory ("thirdparty/glfw-3.3.8")
     target_link_libraries (clither PRIVATE glfw)
+    target_link_libraries (clither PRIVATE Vulkan::Vulkan)
 
+    target_include_directories (clither PUBLIC ${VULKAN_INCLUDE_DIRS})
     target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
 endif ()
 
