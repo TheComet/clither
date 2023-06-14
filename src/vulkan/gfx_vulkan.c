@@ -44,6 +44,7 @@ PFN_vkGetSemaphoreCounterValueKHR fpGetSemaphoreCounterValueKHR;
 #define MAX_QUEUE_COUNT 64
 #define MAX_SURFACE_FORMATS 64
 #define MAX_SWAP_CHAIN_PRESENT_MODES 16
+#define MAX_QUEUE_FAMILIES 5
 
 struct VulkanTexture {
 	VkImage image;
@@ -147,8 +148,8 @@ struct SwapChain {
 	VkFormat colorFormat;
 	VkColorSpaceKHR colorSpace;
 	VkSwapchainKHR swapChain;
-	VkImage* images[BUFFER_COUNT];
-	struct Texture* buffers;
+	VkImage images[BUFFER_COUNT];
+	struct VulkanTexture buffers[BUFFER_COUNT];
 	uint32_t queueNodeIndex;
 };
 
@@ -165,8 +166,8 @@ struct gfx
 
 	VkInstance instance;
 	char *supportedInstanceExtensions;
-	VkQueueFamilyProperties* queueFamilyProperties;
-	char* supportedExtensions;
+	VkQueueFamilyProperties queueFamilyProperties[MAX_QUEUE_FAMILIES];
+	char* supportedExtensions[MAX_EXT_COUNT];
 
 	VkPhysicalDevice physicalDevice;
 	VkPhysicalDeviceProperties deviceProperties;
@@ -188,7 +189,7 @@ struct gfx
 	VkCommandBuffer* drawCmdBuffers;
 	// Global render pass for frame buffer writes
 
-	struct RenderPass* renderPass;
+	struct RenderPass renderPass;
 	// List of available frame buffers (same as number of swap chain images)
 	VkFramebuffer* frameBuffers;
 	// Active frame buffer index
@@ -343,6 +344,135 @@ uint32_t getQueueFamilyIndex(const VkQueueFamilyProperties* queueFamilyPropertie
 	}
 }
 
+static
+VkResult createLogicalDevice(struct gfx* gfx, VkPhysicalDeviceFeatures enabledFeatures, const char* enabledExtensions, void* pNextChain, int useSwapChain, VkQueueFlags requestedQueueTypes)
+{
+	// Desired queues need to be requested upon logical device creation
+	// Due to differing queue family configurations of Vulkan implementations this can be a bit tricky, especially if the application
+	// requests different queue types
+
+	VkDeviceQueueCreateInfo queueCreateInfo;
+	int numberOfQueues = 0;
+
+	// Get queue family indices for the requested queue family types
+	// Note that the indices may overlap depending on the implementation
+
+	const float defaultQueuePriority = 0.0f;
+
+	// Graphics queue
+	if (requestedQueueTypes & VK_QUEUE_GRAPHICS_BIT)
+	{
+		gfx->queueFamilyIndices.graphics = getQueueFamilyIndex(gfx->queueFamilyProperties, VK_QUEUE_GRAPHICS_BIT);
+		VkDeviceQueueCreateInfo queueInfo;
+		queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueInfo.queueFamilyIndex = gfx->queueFamilyIndices.graphics;
+		queueInfo.queueCount = 1;
+		queueInfo.pQueuePriorities = &defaultQueuePriority;
+		queueInfo.pNext = 0;
+		queueInfo.flags = 0;
+		queueCreateInfo = queueInfo;
+	}
+	else
+	{
+		gfx->queueFamilyIndices.graphics = 0;
+	}
+
+	/*
+	// Dedicated compute queue
+	if (requestedQueueTypes & VK_QUEUE_COMPUTE_BIT)
+	{
+		pRenderer->queueFamilyIndices.compute = getQueueFamilyIndex(pRenderer->queueFamilyProperties, VK_QUEUE_COMPUTE_BIT);
+		if (pRenderer->queueFamilyIndices.compute != pRenderer->queueFamilyIndices.graphics)
+		{
+			// If compute family index differs, we need an additional queue create info for the compute queue
+			VkDeviceQueueCreateInfo queueInfo{};
+			queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			queueInfo.queueFamilyIndex = pRenderer->queueFamilyIndices.compute;
+			queueInfo.queueCount = 1;
+			queueInfo.pQueuePriorities = &defaultQueuePriority;
+			queueCreateInfos.push_back(queueInfo);
+		}
+	}
+	else
+	{
+		// Else we use the same queue
+		pRenderer->queueFamilyIndices.compute = pRenderer->queueFamilyIndices.graphics;
+	}
+
+	// Dedicated transfer queue
+	if (requestedQueueTypes & VK_QUEUE_TRANSFER_BIT)
+	{
+		pRenderer->queueFamilyIndices.transfer = getQueueFamilyIndex(pRenderer->queueFamilyProperties, VK_QUEUE_TRANSFER_BIT);
+		if ((pRenderer->queueFamilyIndices.transfer != pRenderer->queueFamilyIndices.graphics) && (pRenderer->queueFamilyIndices.transfer != pRenderer->queueFamilyIndices.compute))
+		{
+			// If compute family index differs, we need an additional queue create info for the compute queue
+			VkDeviceQueueCreateInfo queueInfo{};
+			queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			queueInfo.queueFamilyIndex = pRenderer->queueFamilyIndices.transfer;
+			queueInfo.queueCount = 1;
+			queueInfo.pQueuePriorities = &defaultQueuePriority;
+			queueCreateInfos.push_back(queueInfo);
+		}
+	}
+	else
+	{
+		// Else we use the same queue
+		pRenderer->queueFamilyIndices.transfer = pRenderer->queueFamilyIndices.graphics;
+	}
+	*/
+
+	// Create the logical device representation
+	const char* deviceExtensions[MAX_EXT_COUNT];
+#if defined(VK_USE_PLATFORM_MACOS_MVK) && (VK_HEADER_VERSION >= 216)
+	deviceExtensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+#endif
+
+	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature;
+	dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+
+	VkDeviceCreateInfo deviceCreateInfo;
+	memset(&deviceCreateInfo, 0, sizeof(VkDeviceCreateInfo));
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+	deviceCreateInfo.pEnabledFeatures = 0;
+	deviceCreateInfo.pNext = 0;
+
+	/*
+	// If a pNext(Chain) has been passed, we need to add it to the device creation info
+	VkPhysicalDeviceFeatures2 physicalDeviceFeatures2;
+	memset(&physicalDeviceFeatures2, 0, sizeof(VkPhysicalDeviceFeatures2));
+	if (pNextChain) {
+		physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		physicalDeviceFeatures2.features = enabledFeatures;
+		physicalDeviceFeatures2.pNext = pNextChain;
+		deviceCreateInfo.pEnabledFeatures = 0;
+		deviceCreateInfo.pNext = &physicalDeviceFeatures2;
+	}
+	*/
+	// Enable the debug marker extension if it is present (likely meaning a debugging tool is present)
+	//if (extensionSupported(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
+	//{
+	//	deviceExtensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+	//	enableDebugMarkers = true;
+	//}
+
+	deviceExtensions[0] = (VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	
+	deviceCreateInfo.enabledExtensionCount = 1;
+	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
+	
+	gfx->enabledFeatures = enabledFeatures;
+	VkResult result = vkCreateDevice(gfx->physicalDevice, &deviceCreateInfo, 0, &gfx->device);
+	if (result != VK_SUCCESS)
+	{
+		return result;
+	}
+
+	return result;
+}
+
 struct gfx*
 	gfx_create(int initial_width, int initial_height) {
 
@@ -350,13 +480,12 @@ struct gfx*
 	struct gfx* gfx = MALLOC(sizeof * gfx);
 	struct SwapChain* pSwapChain = &gfx->swapChain;
 	gfx->bufferCount = BUFFER_COUNT;
+	gfx->currentBuffer = 0;
+
+	const char* instance_layers = "VK_LAYER_KHRONOS_validation";
 
 	PFN_vkCreateInstance pfnCreateInstance = (PFN_vkCreateInstance)
 		glfwGetInstanceProcAddress(NULL, "vkCreateInstance");
-	PFN_vkCreateDevice pfnCreateDevice = (PFN_vkCreateDevice)
-		glfwGetInstanceProcAddress(gfx->instance, "vkCreateDevice");
-	PFN_vkGetDeviceProcAddr pfnGetDeviceProcAddr = (PFN_vkGetDeviceProcAddr)
-		glfwGetInstanceProcAddress(gfx->instance, "vkGetDeviceProcAddr");
 
 	uint32_t count;
 	const char** extensions = glfwGetRequiredInstanceExtensions(&count);
@@ -370,18 +499,26 @@ struct gfx*
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "clither";
 	appInfo.pEngineName = "Mouse House";
-	appInfo.apiVersion = VK_API_VERSION_1_3;
+	appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
+	appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
+	appInfo.apiVersion = VK_MAKE_VERSION(1, 0, 2);
 
 	VkInstanceCreateInfo ici;
-	memset(&ici, 0, sizeof(ici));
+	memset(&ici, 0, sizeof(VkInstanceCreateInfo));
+	ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	ici.enabledExtensionCount = count;
 	ici.ppEnabledExtensionNames = extensions;
+	ici.enabledLayerCount = 1;
+	ici.ppEnabledLayerNames = &instance_layers;
+	ici.pApplicationInfo = &appInfo;
 
-	VkResult res = vkCreateInstance(&ici, 0, gfx->instance);
+	VkInstance instance;
+	VkResult res = vkCreateInstance(&ici, 0, &instance);
 	if (res != VK_SUCCESS) {
 		log_err("Unable to create vulkan instance\n");
 		return NULL;
 	}
+	gfx->instance = instance;
 
 	// Physical device
 	uint32_t gpuCount = 0;
@@ -394,7 +531,7 @@ struct gfx*
 
 	// Enumerate devices
 	VkPhysicalDevice physicalDevices[MAX_GPU_COUNT+1];
-	vkEnumeratePhysicalDevices(gfx->instance, &gpuCount, physicalDevices[0]);
+	vkEnumeratePhysicalDevices(gfx->instance, &gpuCount, physicalDevices);
 	
 	// GPU selection
 	// Select physical device to be used for the Vulkan example
@@ -428,18 +565,21 @@ struct gfx*
 		}
 	}
 
-	createLogicalDevice(gfx->enabledFeatures, gfx->enabledDeviceExtensions, gfx->deviceCreatepNextChain, 1, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+	memset(&gfx->enabledFeatures, 0, sizeof(VkPhysicalDeviceFeatures));
+	createLogicalDevice(gfx, gfx->enabledFeatures, gfx->enabledDeviceExtensions, gfx->deviceCreatepNextChain, 1, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
 
 	// Get a graphics queue from the device
 	vkGetDeviceQueue(gfx->device, gfx->queueFamilyIndices.graphics, 0, &gfx->queue);
 
 	// Find a suitable depth format
-	VkBool32 validDepthFormat = getSupportedDepthFormat(gfx->physicalDevice, &gfx->depthFormat);
-	assert(validDepthFormat);
+	//VkBool32 validDepthFormat = getSupportedDepthFormat(gfx->physicalDevice, &gfx->depthFormat);
+	//assert(validDepthFormat);
 
 	// Create synchronization objects
 	VkSemaphoreCreateInfo semaphoreCreateInfo;
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreCreateInfo.pNext = 0;
+	semaphoreCreateInfo.flags = 0;
 	// Create a semaphore used to synchronize image presentation
 	// Ensures that the image is displayed before we start submitting new commands to the queue
 
@@ -468,8 +608,9 @@ struct gfx*
 	fpWaitSemaphoresKHR           = (PFN_vkWaitSemaphoresKHR)(vkGetDeviceProcAddr(gfx->device, "vkWaitSemaphoresKHR"));
 	fpGetSemaphoreCounterValueKHR = (PFN_vkGetSemaphoreCounterValueKHR)(vkGetDeviceProcAddr(gfx->device, "vkGetSemaphoreCounterValueKHR"));
 
+	GLFWwindow* window;
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	auto window = glfwCreateWindow(initial_width, initial_height, appInfo.pApplicationName, 0, 0);
+	window = glfwCreateWindow(initial_width, initial_height, appInfo.pApplicationName, 0, 0);
 
 	// make sure we indeed get the surface size we want.
 	glfwGetFramebufferSize(window, &initial_width, &initial_height);
@@ -585,6 +726,7 @@ struct gfx*
 	}
 
 	// Store the current swap chain handle so we can use it later on to ease up recreation
+	pSwapChain->swapChain = VK_NULL_HANDLE;
 	VkSwapchainKHR oldSwapchain = pSwapChain->swapChain;
 
 	// Get physical device surface properties and formats
@@ -707,21 +849,22 @@ struct gfx*
 		swapchainCI.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	}
 
-	fpCreateSwapchainKHR(gfx->device, &swapchainCI, nullptr, &pSwapChain->swapChain);
+	fpCreateSwapchainKHR(gfx->device, &swapchainCI, 0, &pSwapChain->swapChain);
 	// If an existing swap chain is re-created, destroy the old swap chain
 	// This also cleans up all the presentable images
 	if (oldSwapchain != VK_NULL_HANDLE)
 	{
 		for (uint32_t i = 0; i < BUFFER_COUNT; i++)
 		{
-			vkDestroyImageView(gfx->device, pSwapChain->buffers[i].view, nullptr);
+			vkDestroyImageView(gfx->device, pSwapChain->buffers[i].view, 0);
 		}
-		fpDestroySwapchainKHR(gfx->device, oldSwapchain, nullptr);
+		fpDestroySwapchainKHR(gfx->device, oldSwapchain, 0);
 	}
-	fpGetSwapchainImagesKHR(gfx->device, pSwapChain->swapChain, (uint32_t*)BUFFER_COUNT, NULL);
+	uint32_t bufferCount = 0;
+	fpGetSwapchainImagesKHR(gfx->device, pSwapChain->swapChain, &bufferCount, NULL);
 
 	// Get the swap chain images
-	fpGetSwapchainImagesKHR(gfx->device, pSwapChain->swapChain, (uint32_t*)BUFFER_COUNT, pSwapChain->images);
+	fpGetSwapchainImagesKHR(gfx->device, pSwapChain->swapChain, &bufferCount, pSwapChain->images);
 
 	// Get the swap chain buffers containing the image and imageview
 	struct RenderTarget renderTarget;
@@ -747,19 +890,19 @@ struct gfx*
 		pSwapChain->buffers[i].image = pSwapChain->images[i];
 		colorAttachmentView.image = pSwapChain->buffers[i].image;
 
-		vkCreateImageView(gfx->device, &colorAttachmentView, nullptr, &pSwapChain->buffers[i].view);
+		vkCreateImageView(gfx->device, &colorAttachmentView, 0, &pSwapChain->buffers[i].view);
 
 		renderTarget.texture[i].image = pSwapChain->buffers[i].image;
 		renderTarget.texture[i].view = pSwapChain->buffers[i].view;
 	}
 
-	gfx->renderPass->renderTargets[0] = renderTarget;
-	gfx->renderPass->renderTargetCount = 1;
-	gfx->renderPass->clearColor[0] = 0.2f;
-	gfx->renderPass->clearColor[1] = 0.4f;
-	gfx->renderPass->clearColor[2] = 0.6f;
-	gfx->renderPass->clearColor[3] = 1.0f;
-	gfx->renderPass->loadOperations[0] = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	gfx->renderPass.renderTargets[0] = renderTarget;
+	gfx->renderPass.renderTargetCount = 1;
+	gfx->renderPass.clearColor[0] = 0.2f;
+	gfx->renderPass.clearColor[1] = 0.4f;
+	gfx->renderPass.clearColor[2] = 0.6f;
+	gfx->renderPass.clearColor[3] = 1.0f;
+	gfx->renderPass.loadOperations[0] = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	// Create a frame buffer for every image in the swapchain
 
 	VkCommandPoolCreateInfo cmdPoolInfo;
@@ -767,7 +910,7 @@ struct gfx*
 	cmdPoolInfo.queueFamilyIndex = gfx->swapChain.queueNodeIndex;
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	cmdPoolInfo.pNext = 0;
-	vkCreateCommandPool(gfx->device, &cmdPoolInfo, nullptr, &gfx->cmdPool);
+	vkCreateCommandPool(gfx->device, &cmdPoolInfo, 0, &gfx->cmdPool);
 
 
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
@@ -788,10 +931,12 @@ struct gfx*
 	//(*cmd)->waitFences.resize((*cmd)->drawCmdBuffers.size());
 	for (int i = 0; i < 3; i++)
 	{
-		vkCreateFence(gfx->device, &fenceCreateInfo, nullptr, &pCommandBuffer->waitFences[i]);
+		vkCreateFence(gfx->device, &fenceCreateInfo, 0, &pCommandBuffer->waitFences[i]);
 	}
 
 	//return NxtResult::NXT_OK;
+
+	return gfx;
 }
 
 int
@@ -951,8 +1096,9 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 	SubmitCommandBuffers(gfx);
 }
 
+static
 int
-static BeginRecording(struct gfx* gfx) {
+BeginRecording(struct gfx* gfx) {
 
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
 
@@ -978,46 +1124,32 @@ static BeginRecording(struct gfx* gfx) {
 	return 1;
 }
 
+static
 int
-static CmdBeginRenderPass(struct gfx* gfx) {
+CmdBeginRenderPass(struct gfx* gfx) {
 
 	struct CommandBuffer* cmdBuffer = &gfx->cmdBuffer;
-	struct RenderPass* renderPass = gfx->renderPass;
+	struct RenderPass* renderPass = &gfx->renderPass;
 	int curr = gfx->currentBuffer;
 
-	VkClearValue clearValues[1];
-	memset(&clearValues, 0, sizeof(clearValues));
-	clearValues[0].color.float32[0] = 0.2f;
-	clearValues[0].color.float32[1] = 0.4f;
-	clearValues[0].color.float32[2] = 0.6f;
-	clearValues[0].color.float32[3] = 1.0f;// = { { 0.2f, 0.4f, 0.6f, 1.0f } };
+	VkClearValue clearValues;
+	memset(&clearValues, 0, sizeof(VkClearValue));
+	clearValues.color.float32[0] = 0.2f;
+	clearValues.color.float32[1] = 0.4f;
+	clearValues.color.float32[2] = 0.6f;
+	clearValues.color.float32[3] = 1.0f;// = { { 0.2f, 0.4f, 0.6f, 1.0f } };
 
-	VkRenderingAttachmentInfoKHR attachments[8];
-	memset(&attachments, 0, sizeof(VkRenderingAttachmentInfoKHR) * 8);
-
-	//VkRenderingAttachmentInfoKHR depthAttachment;
-
-	/*
-	if (renderPass->depthTarget) {
-		depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-		depthAttachment.imageView = renderPass->depthTarget->texture[curr]->view;
-		depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
-	}*/
+	VkRenderingAttachmentInfoKHR attachments;
+	memset(&attachments, 0, sizeof(VkRenderingAttachmentInfoKHR));
 
 	uint32_t colorAttachmentCount = 0;
-	for (int i = 0; i < renderPass->renderTargetCount; i++) {
-		attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-		attachments[i].imageView = renderPass->renderTargets[i].texture[curr].view;
-		attachments[i].imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-		attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		attachments[i].clearValue = clearValues[0];
-		colorAttachmentCount++;
-	}
-
+	attachments.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+	attachments.imageView = renderPass->renderTargets[0].texture[curr].view;
+	attachments.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+	attachments.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments.clearValue = clearValues;
+		
 	VkRenderingInfoKHR info;
 	memset(&info, 0, sizeof(VkRenderingInfoKHR));
 	info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -1026,8 +1158,8 @@ static CmdBeginRenderPass(struct gfx* gfx) {
 	info.renderArea.extent.width = gfx->width;
 	info.renderArea.extent.height = gfx->height;
 	info.layerCount = 1;
-	info.colorAttachmentCount = colorAttachmentCount;
-	info.pColorAttachments = attachments;
+	info.colorAttachmentCount = 1;
+	info.pColorAttachments = &attachments;
 	info.pNext = 0;
 	//info.pDepthAttachment = (renderPass->depthTarget) ? &depthAttachment : nullptr;
 
@@ -1082,7 +1214,7 @@ static CmdBeginRenderPass(struct gfx* gfx) {
 int
 static CmdEndRenderPass(struct gfx* gfx) {
 
-	struct RenderPass* pRenderPass = gfx->renderPass;
+	struct RenderPass* pRenderPass = &gfx->renderPass;
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
 
 	int i = gfx->currentBuffer;

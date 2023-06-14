@@ -257,7 +257,7 @@ run_client(const struct args* a)
     gfx = gfx_create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
-    {
+   /* {
         int ret;
         struct resource_pack* pack = resource_pack_load("packs/horror");
         if (pack == NULL)
@@ -266,7 +266,7 @@ run_client(const struct args* a)
         resource_pack_destroy(pack);
         if (ret != 0)
             goto load_resource_pack_failed;
-    }
+    }*/
 
     input_init(&input);
     camera_init(&camera);
@@ -300,9 +300,9 @@ run_client(const struct args* a)
     {
         int net_update;
 
-        gfx_poll_input(gfx, &input);
-        if (input.quit)
-            break;
+        //gfx_poll_input(gfx, &input);
+        //if (input.quit)
+        //    break;
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
@@ -378,18 +378,18 @@ run_client(const struct args* a)
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
          */
-        tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
-        if (tick_lag == 0)
+        //tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
+        //if (tick_lag == 0)
             gfx_draw_world(gfx, &world, &camera);
-        else
-        {
-            log_dbg("Client is lagging! %d frames behind\n", tick_lag);
-            if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
-            {
-                tick_skip(&sim_tick);
-                break;
-            }
-        }
+        //else
+        //{
+        //    log_dbg("Client is lagging! %d frames behind\n", tick_lag);
+        //    if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+        //    {
+        //        tick_skip(&sim_tick);
+        //        break;
+        //    }
+        //}
 
         if (client.warp > 0)
             client.warp--;
