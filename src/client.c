@@ -237,7 +237,7 @@ retry_recv:
                 break;
 
             case MSG_JOIN_ACCEPT: {
-                int rtt;
+                uint16_t rtt;
 
                 if (client->state != CLIENT_JOINING)
                     break;
@@ -264,7 +264,7 @@ retry_recv:
                  * on which the join request was sent.
                  */
                 rtt = client->frame_number - pp.join_accept.client_frame;
-                if (rtt < 0 || rtt > 20 * 5)  /* 5 seconds */
+                if (rtt > client->net_tick_rate * 5)  /* 5 seconds */
                 {
                     log_err("Server sent back a client frame number that is unlikely or impossible (ours: %d, theirs: %d).\n",
                         client->frame_number, pp.join_accept.client_frame);

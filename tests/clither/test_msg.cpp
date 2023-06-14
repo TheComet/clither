@@ -2,6 +2,7 @@
 
 #include "clither/command.h"
 #include "clither/msg.h"
+#include "cstructures/vector.h"
 
 #define NAME msg
 
@@ -21,8 +22,12 @@ TEST(NAME, compress_single_controls)
 
     command_rb_put(&rb, c0, 20);
 
-    struct msg* m = msg_commands(&rb);
+    struct cs_vector msgs;
+    vector_init(&msgs, sizeof(struct msg*));
+    msg_commands(&msgs, &rb);
+    struct msg* m = (struct msg*)vector_front(&msgs);
     command_rb_clear(&rb);
+    vector_deinit(&msgs);
 
     uint16_t first_frame, last_frame;
     ASSERT_THAT(msg_commands_unpack_into(&rb, m->payload, m->payload_len, 15, &first_frame, &last_frame), Eq(0));
@@ -49,7 +54,10 @@ TEST(NAME, compress_multiple_controls)
     command_rb_put(&rb, c2, 22);
     command_rb_put(&rb, c3, 23);
 
-    struct msg* m = msg_commands(&rb);
+    struct cs_vector msgs;
+    vector_init(&msgs, sizeof(struct msg*));
+    msg_commands(&msgs, &rb);
+    struct msg* m = (struct msg*)vector_front(&msgs);
     command_rb_clear(&rb);
 
     uint16_t first_frame, last_frame;

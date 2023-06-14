@@ -26,7 +26,7 @@ enum client_state
 struct client
 {
     char* username;
-    struct cs_vector pending_msgs;  /* struct net_msg* */
+    struct cs_vector pending_msgs;  /* struct msg* */
     struct cs_vector udp_sockfds;   /* int */
     int timeout_counter;
     uint16_t frame_number;          /* Counts upwards at sim_tick_rate */
