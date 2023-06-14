@@ -54,13 +54,13 @@ void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
 
 void
-snake_step_head(struct snake_head* head, const struct command* command, uint8_t sim_tick_rate);
+snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tick_rate);
 
 void
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
-    const struct command* command,
+    struct command command,
     uint8_t sim_tick_rate);
 
 void

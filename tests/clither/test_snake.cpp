@@ -21,14 +21,14 @@ TEST(NAME, roll_back_over_frame_boundary)
     for (int i = 0; i < 14; ++i)
     {
         c.angle += 2;
-        command_rb_put(&client.command_rb, &c, frame_number);
-        snake_step(&client.data, &client.head, &c, 60);
+        command_rb_put(&client.command_rb, c, frame_number);
+        snake_step(&client.data, &client.head, c, 60);
 
         if (u16_le_wrap(frame_number, mispredict_frame))
         {
-            snake_step(&server.data, &server.head, &c, 60);
+            snake_step(&server.data, &server.head, c, 60);
             if (frame_number == mispredict_frame)
-                snake_step(&server.data, &server.head, &c, 60);  /* mispredict */
+                snake_step(&server.data, &server.head, c, 60);  /* mispredict */
         }
 
         frame_number++;
@@ -81,9 +81,9 @@ TEST(NAME, roll_back_over_frame_boundary)
         c.angle += 2;
 
         if (frame_number != mispredict_frame)
-            snake_step_head(&head, &c, 60);
+            snake_step_head(&head, c, 60);
         else
-            snake_step_head(&head, &c_prev, 60);
+            snake_step_head(&head, c_prev, 60);
 
         qwpos* p = i+1 < (int)vector_count(client_pts0) ?
             (qwpos*)vector_get_element(client_pts0, i+1) :

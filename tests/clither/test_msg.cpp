@@ -19,7 +19,7 @@ TEST(NAME, compress_single_controls)
 
     struct command c0 = {25, 8, 0};
 
-    command_rb_put(&rb, &c0, 20);
+    command_rb_put(&rb, c0, 20);
 
     struct msg* m = msg_commands(&rb);
     command_rb_clear(&rb);
@@ -29,7 +29,7 @@ TEST(NAME, compress_single_controls)
     msg_free(m);
 
     ASSERT_THAT(command_rb_count(&rb), Eq(1));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 20), Pointee(c0));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 20), Eq(c0));
 
     command_rb_deinit(&rb);
 }
@@ -44,10 +44,10 @@ TEST(NAME, compress_multiple_controls)
     struct command c2 = {31, 30, 2};
     struct command c3 = {34, 40, 3};
 
-    command_rb_put(&rb, &c0, 20);
-    command_rb_put(&rb, &c1, 21);
-    command_rb_put(&rb, &c2, 22);
-    command_rb_put(&rb, &c3, 23);
+    command_rb_put(&rb, c0, 20);
+    command_rb_put(&rb, c1, 21);
+    command_rb_put(&rb, c2, 22);
+    command_rb_put(&rb, c3, 23);
 
     struct msg* m = msg_commands(&rb);
     command_rb_clear(&rb);
@@ -57,10 +57,10 @@ TEST(NAME, compress_multiple_controls)
     msg_free(m);
 
     ASSERT_THAT(command_rb_count(&rb), Eq(4));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 20), Pointee(c0));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 21), Pointee(c1));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 22), Pointee(c2));
-    EXPECT_THAT(command_rb_find_or_predict(&rb, 23), Pointee(c3));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 20), Eq(c0));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 21), Eq(c1));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 22), Eq(c2));
+    EXPECT_THAT(command_rb_find_or_predict(&rb, 23), Eq(c3));
 
     command_rb_deinit(&rb);
 }

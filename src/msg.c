@@ -532,7 +532,7 @@ msg_commands_unpack_into(
     command.speed = payload[4];
     command.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        command_rb_put(rb, &command, first_frame_number);
+        command_rb_put(rb, command, first_frame_number);
     log_net("  angle=%x, speed=%x, action=%x\n", command.angle, command.speed, command.action);
 
     if (command_count == 0)
@@ -604,7 +604,7 @@ msg_commands_unpack_into(
         command.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            command_rb_put(rb, &command, first_frame_number + i + 1);
+            command_rb_put(rb, command, first_frame_number + i + 1);
         log_net("  angle=%x, speed=%x, action=%x\n", command.angle, command.speed, command.action);
     }
 

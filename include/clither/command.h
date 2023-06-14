@@ -45,15 +45,15 @@ command_rb_deinit(struct command_rb* rb);
 void
 command_rb_put(
     struct command_rb* rb,
-    const struct command* command,
+    struct command command,
     uint16_t frame_number);
 
-const struct command*
+struct command
 command_rb_take_or_predict(
     struct command_rb* rb,
     uint16_t frame_number);
 
-const struct command*
+struct command
 command_rb_find_or_predict(
     const struct command_rb* rb,
     uint16_t frame_number);

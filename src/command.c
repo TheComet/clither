@@ -33,7 +33,7 @@ command_rb_deinit(struct command_rb* rb)
 void
 command_rb_put(
     struct command_rb* rb,
-    const struct command* command,
+    struct command command,
     uint16_t frame_number)
 {
     if (rb_count(&rb->rb) > 0)
@@ -47,40 +47,35 @@ command_rb_put(
         rb->first_frame = frame_number;
     }
 
-    rb_put(&rb->rb, command);
+    rb_put(&rb->rb, &command);
 }
 
 /* ------------------------------------------------------------------------- */
-const struct command*
+struct command
 command_rb_take_or_predict(struct command_rb* rb, uint16_t frame_number)
 {
     struct command* command;
-    struct command* prev_command = NULL;
     const uint16_t prev_frame = frame_number - 1;
-    const uint16_t last_frame_received = rb->first_frame;
+
+    if (u16_lt_wrap(frame_number, command_rb_frame_begin(rb)))
+        return rb->last_predicted;
 
     while (rb_count(&rb->rb) > 0)
     {
         command = rb_take(&rb->rb);
         rb->first_frame++;
-        if (last_frame_received == prev_frame)
-            prev_command = command;
-        else if (last_frame_received == frame_number)
+        if (command_rb_frame_begin(rb) == prev_frame)
         {
             rb->last_predicted = *command;
-            return command;
+            return *command;
         }
     }
 
-    if (prev_command == NULL)
-        return &rb->last_predicted;
-
-    rb->last_predicted = *prev_command;
-    return prev_command;
+    return rb->last_predicted;
 }
 
 /* ------------------------------------------------------------------------- */
-const struct command*
+struct command
 command_rb_find_or_predict(const struct command_rb* rb, uint16_t frame_number)
 {
     struct command* prev_command = NULL;
@@ -90,12 +85,12 @@ command_rb_find_or_predict(const struct command_rb* rb, uint16_t frame_number)
         if (frame == prev_frame)
             prev_command = command;
         else if (frame == frame_number)
-            return command;
+            return *command;
         frame++;
     RB_END_EACH
 
     if (prev_command == NULL)
-        return &rb->last_predicted;
+        return rb->last_predicted;
 
-    return prev_command;
+    return *prev_command;
 }
