@@ -7,6 +7,7 @@
 
 C_BEGIN
 
+struct cs_vector;
 struct command_rb;
 struct snake;
 
@@ -124,8 +125,8 @@ msg_join_deny_server_full(const char* error);
 struct msg*
 msg_leave(void);
 
-struct msg*
-msg_commands(const struct command_rb* rb);
+void
+msg_commands(struct cs_vector* msgs, const struct command_rb* rb);
 
 int
 msg_commands_unpack_into(

@@ -361,7 +361,7 @@ run_client(const struct args* a)
             if (net_update)
             {
                 /* Send all unconfirmed commands (unreliable) */
-                client_queue(&client, msg_commands(&snake->command_rb));
+                msg_commands(&client.pending_msgs, &snake->command_rb);
             }
         }
 

@@ -376,10 +376,10 @@ msg_leave(void)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg*
-msg_commands(const struct command_rb* rb)
+void
+msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
 {
-    int i, bit, byte, send_count;
+    int i, bit, byte, send_count, send_idx;
     struct command* c;
     struct msg* m;
     uint16_t first_frame_number;
@@ -391,47 +391,46 @@ msg_commands(const struct command_rb* rb)
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
-    send_count = command_rb_count(rb);
-    if (send_count > 100)
+    for (send_idx = 0; send_idx < (int)command_rb_count(rb); send_idx += 100, first_frame_number += 100)
     {
-        log_warn("There are more than 100 command in the buffer (%d). Only sending the first 100\n", send_count);
-        send_count = 100;
-    }
+        send_count = command_rb_count(rb) - send_idx;
+        if (send_count > 100)
+            send_count = 100;
 
-    log_net("Packing command for frames %d-%d\n",
-        first_frame_number, (uint16_t)(first_frame_number + send_count - 1));
+        log_net("Packing command for frames %d-%d\n",
+            first_frame_number, (uint16_t)(first_frame_number + send_count - 1));
 
-    /*
-     * command structure: 19 bits
-     * delta:
-     *   - 3 bits for angle
-     *   - 5 bits for speed
-     *   - 4 bits for action, assuming it changes every frame (it shouldn't)
-     */
-    m = msg_alloc(
-        MSG_COMMANDS, 0,
-        sizeof(first_frame_number) +          /* frame number */
-        19 + (12*send_count + 8) / 8);  /* upper bound for all command */
+        /*
+         * command structure: 19 bits
+         * delta:
+         *   - 3 bits for angle
+         *   - 5 bits for speed
+         *   - 4 bits for action, assuming it changes every frame (it shouldn't)
+         */
+        m = msg_alloc(
+            MSG_COMMANDS, 0,
+            sizeof(first_frame_number) +          /* frame number */
+            19 + (12*send_count + 8) / 8);  /* upper bound for all command */
 
-    m->payload[0] = first_frame_number >> 8;
-    m->payload[1] = first_frame_number & 0xFF;
-    m->payload[2] = (uint8_t)(send_count - 1);
+        m->payload[0] = first_frame_number >> 8;
+        m->payload[1] = first_frame_number & 0xFF;
+        m->payload[2] = (uint8_t)(send_count - 1);
 
-    /* First command structure */
-    c = command_rb_peek(rb, 0);
-    m->payload[3] = c->angle;
-    m->payload[4] = c->speed;
-    m->payload[5] = c->action; /* 3 bits */
-    bit = 3;
-    byte = 5;
-    log_net("  angle=%x, speed=%x, action=%x\n", c->angle, c->speed, c->action);
+        /* First command structure */
+        c = command_rb_peek(rb, 0);
+        m->payload[3] = c->angle;
+        m->payload[4] = c->speed;
+        m->payload[5] = c->action; /* 3 bits */
+        bit = 3;
+        byte = 5;
+        log_net("  angle=%x, speed=%x, action=%x\n", c->angle, c->speed, c->action);
 
-    /*
-     * Delta compress rest of command. Note that the frame number doesn't need
-     * to be included because it always increases by 1. First write all speed
-     * and angle deltas. These should be guaranteed to always be less than 3
-     * and 5 bits respectively (enforced by function gfx_update_command()).
-     */
+        /*
+         * Delta compress rest of command. Note that the frame number doesn't need
+         * to be included because it always increases by 1. First write all speed
+         * and angle deltas. These should be guaranteed to always be less than 3
+         * and 5 bits respectively (enforced by function gfx_update_command()).
+         */
 #define CLEAR_NEXT_BIT() do { \
         m->payload[byte] &= ~(1 << bit); \
         if (++bit >= 8) { \
@@ -452,53 +451,54 @@ msg_commands(const struct command_rb* rb)
         else \
             CLEAR_NEXT_BIT(); \
     } while(0)
-    for (i = 1; i < send_count; i++)
-    {
-        struct command* prev = command_rb_peek(rb, i-1);
-        struct command* next = command_rb_peek(rb, i);
 
-        if (next->action == prev->action)
-            CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
-        else
+        for (i = 1; i < send_count; i++)
         {
-            SET_NEXT_BIT();  /* Indicate something has changed */
-            SET_OR_CLEAR_NEXT_BIT(next->action & 0x1);
-            SET_OR_CLEAR_NEXT_BIT(next->action & 0x2);
-            SET_OR_CLEAR_NEXT_BIT(next->action & 0x4);
+            struct command* prev = command_rb_peek(rb, i-1);
+            struct command* next = command_rb_peek(rb, i);
+
+            if (next->action == prev->action)
+                CLEAR_NEXT_BIT();  /* Indicate nothing has changed */
+            else
+            {
+                SET_NEXT_BIT();  /* Indicate something has changed */
+                SET_OR_CLEAR_NEXT_BIT(next->action & 0x1);
+                SET_OR_CLEAR_NEXT_BIT(next->action & 0x2);
+                SET_OR_CLEAR_NEXT_BIT(next->action & 0x4);
+            }
         }
+
+        /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
+         * the current byte if it is only partially filled */
+        if (bit != 0)
+            byte++;
+
+        for (i = 1; i < send_count; ++i)
+        {
+            uint8_t da, dv;
+            struct command* prev = command_rb_peek(rb, i-1);
+            struct command* next = command_rb_peek(rb, i);
+            int da_i32 = next->angle - prev->angle + 3;
+            int dv_i32 = next->speed - prev->speed + 15;
+            if (da_i32 > 128) da_i32 -= 256;
+            if (da_i32 < -128) da_i32 += 256;
+            da = (uint8_t)da_i32;
+            dv = (uint8_t)dv_i32;
+
+            if (da_i32 < 0 || da_i32 > 7-1)
+                log_warn("Issue while compressing command: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
+            if (dv_i32 < 0 || dv_i32 > 31-1)
+                log_warn("Issue while compressing command: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
+
+            m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
+            log_net("  angle=%x, speed=%x, action=%x\n", next->angle, next->speed, next->action);
+        }
+
+        /* Adjust the actual payload length */
+        assert(byte <= m->payload_len);
+        m->payload_len = byte;
+        vector_push(msgs, &m);
     }
-
-    /* The next chunk of data neatly aligns to 8 bits, so make sure to skip
-     * the current byte if it is only partially filled */
-    if (bit != 0)
-        byte++;
-
-    for (i = 1; i < send_count; ++i)
-    {
-        uint8_t da, dv;
-        struct command* prev = command_rb_peek(rb, i-1);
-        struct command* next = command_rb_peek(rb, i);
-        int da_i32 = next->angle - prev->angle + 3;
-        int dv_i32 = next->speed - prev->speed + 15;
-        if (da_i32 > 128) da_i32 -= 256;
-        if (da_i32 < -128) da_i32 += 256;
-        da = (uint8_t)da_i32;
-        dv = (uint8_t)dv_i32;
-
-        if (da_i32 < 0 || da_i32 > 7-1)
-            log_warn("Issue while compressing command: Delta angle exceeds limit! Prev: %d, Next: %d\n", prev->angle, next->angle);
-        if (dv_i32 < 0 || dv_i32 > 31-1)
-            log_warn("Issue while compressing command: Delta speed exceeds limit! Prev: %d, Next: %d\n", prev->speed, next->speed);
-
-        m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
-        log_net("  angle=%x, speed=%x, action=%x\n", next->angle, next->speed, next->action);
-    }
-
-    /* Adjust the actual payload length */
-    assert(byte <= m->payload_len);
-    m->payload_len = byte;
-
-    return m;
 }
 
 /* ------------------------------------------------------------------------- */
