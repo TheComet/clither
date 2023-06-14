@@ -101,6 +101,9 @@ add_executable (clither
         src/gles2/gfx_gles2.c
         src/gles2/glad/src/gles2.c>
 
+    $<$<STREQUAL:${CLITHER_GFX},VULKAN>:
+        src/vulkan/gfx_vulkan.c>
+
     $<$<PLATFORM_ID:Windows>:
 		src/fs_win32.c
         src/mutex_win32.c
@@ -215,6 +218,11 @@ elseif (CLITHER_GFX STREQUAL "GLES2")
     set (GLFW_BUILD_TESTS OFF CACHE STRING "")
     set (GLFW_BUILD_DOCS OFF CACHE STRING "")
     set (GLFW_INSTALL OFF CACHE STRING "")
+    add_subdirectory ("thirdparty/glfw-3.3.8")
+    target_link_libraries (clither PRIVATE glfw)
+
+    target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
+elseif (CLITHER_GFX STREQUAL "VULKAN")
     add_subdirectory ("thirdparty/glfw-3.3.8")
     target_link_libraries (clither PRIVATE glfw)
 
