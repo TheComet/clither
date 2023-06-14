@@ -35,6 +35,29 @@ resource_sprite_destroy(struct resource_sprite* res)
 }
 
 /* ------------------------------------------------------------------------- */
+static struct resource_snake_part*
+resource_snake_part_create(void)
+{
+    struct resource_snake_part* part = MALLOC(sizeof *part);
+    memset(part, 0, sizeof *part);
+    return part;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+resource_snake_part_destroy(struct resource_snake_part* part)
+{
+    if (part->base)       resource_sprite_destroy(part->base);
+    if (part->gather)     resource_sprite_destroy(part->gather);
+    if (part->boost)      resource_sprite_destroy(part->boost);
+    if (part->turn)       resource_sprite_destroy(part->turn);
+    if (part->projectile) resource_sprite_destroy(part->projectile);
+    if (part->split)      resource_sprite_destroy(part->split);
+    if (part->armor)      resource_sprite_destroy(part->armor);
+    FREE(part);
+}
+
+/* ------------------------------------------------------------------------- */
 struct resource_pack*
 resource_pack_load(const char* pack_path)
 {
@@ -134,17 +157,17 @@ resource_pack_load(const char* pack_path)
             {
                 current.index = atoi(index);
                 *index = '\0';
+                if (current.index > 50 || current.index < 0)
+                {
+                    log_err("Index %d is larger than reasonable limit of 50. Aborting\n", current.index);
+                    goto parse_error;
+                }
             }
 
             if (strcmp(section, "shaders") == 0)
                 current.section = SEC_SHADERS;
             else if (strcmp(section, "background") == 0)
-            {
                 current.section = SEC_BACKGROUND;
-                while ((int)vector_count(&background_sprites) < current.index + 1)
-                    *(struct resource_sprite**)vector_emplace(&background_sprites) =
-                        resource_sprite_create();
-            }
             else if (strcmp(section, "head") == 0)
                 current.section = SEC_HEAD;
             else if (strcmp(section, "body") == 0)
@@ -157,6 +180,28 @@ resource_pack_load(const char* pack_path)
                 current.section = SEC_NONE;
                 continue;
             }
+
+            /*
+             * As later lines are parsed, they will index into these vectors
+             * and modify the members using current.index. Ensure that these
+             * vectors have the correct size.
+             */
+            if (current.section == SEC_BACKGROUND)
+                while ((int)vector_count(&background_sprites) < current.index + 1)
+                    *(struct resource_sprite**)vector_emplace(&background_sprites) =
+                    resource_sprite_create();
+            if (current.section == SEC_HEAD)
+                while ((int)vector_count(&head_parts) < current.index + 1)
+                    *(struct resource_snake_part**)vector_emplace(&head_parts) =
+                    resource_snake_part_create();
+            if (current.section == SEC_BODY)
+                while ((int)vector_count(&body_parts) < current.index + 1)
+                    *(struct resource_snake_part**)vector_emplace(&body_parts) =
+                    resource_snake_part_create();
+            if (current.section == SEC_TAIL)
+                while ((int)vector_count(&tail_parts) < current.index + 1)
+                    *(struct resource_snake_part**)vector_emplace(&tail_parts) =
+                    resource_snake_part_create();
 
             current.sub = SUB_NONE;
             if (current.section == SEC_SHADERS)
@@ -272,6 +317,7 @@ resource_pack_load(const char* pack_path)
             case SUB_PROJECTILE:
             case SUB_SPLIT:
             case SUB_ARMOR:
+                log_warn("Unknown subsection\n");
                 break;
             }
         } break;
@@ -294,6 +340,108 @@ resource_pack_load(const char* pack_path)
                 FREE(res->texture0); res->texture0 = string_take(&str);
                 string_cat(string_cat2(&str, pack_path, "/"), tex1);
                 FREE(res->texture1); res->texture1 = string_take(&str);
+            }
+            else
+                log_warn("Unknown key \"%s\"\n", key);
+        } break;
+
+        /*
+         * [head0.base]
+         * textures = col.png, nor.png
+         * tile = 4,3
+         * frames = 12
+         * fps = 20
+         * size = 1.0
+         */
+        case SEC_HEAD:
+        case SEC_BODY:
+        case SEC_TAIL: {
+            struct resource_sprite* sprite;
+            struct cs_vector* vec =
+                current.section == SEC_HEAD ? &head_parts :
+                current.section == SEC_BODY ? &body_parts :
+                &tail_parts;
+            struct resource_snake_part* part =
+                *(struct resource_snake_part**)vector_get_element(vec, current.index);
+            struct resource_sprite** psprite =
+                current.sub == SUB_BASE ? &part->base :
+                current.sub == SUB_GATHER ? &part->gather :
+                current.sub == SUB_BOOST ? &part->boost :
+                current.sub == SUB_TURN ? &part->turn :
+                current.sub == SUB_PROJECTILE ? &part->projectile :
+                current.sub == SUB_SPLIT ? &part->split :
+                current.sub == SUB_ARMOR ? &part->armor :
+                NULL;
+
+            if (psprite == NULL)
+            {
+                log_warn("Unknown subsection\n");
+                break;
+            }
+            if (*psprite == NULL)
+                *psprite = resource_sprite_create();
+            sprite = *psprite;
+
+            if (strcmp(key, "textures") == 0)
+            {
+                char* tex1;
+                char* tex0 = value;
+                cstr_split2_strip(&tex0, &tex1, ',', ' ');
+                if (!*tex1)
+                    log_warn("Missing normal map in snake part\n");
+                string_cat(string_cat2(&str, pack_path, "/"), tex0);
+                FREE(sprite->texture0); sprite->texture0 = string_take(&str);
+                string_cat(string_cat2(&str, pack_path, "/"), tex1);
+                FREE(sprite->texture1); sprite->texture1 = string_take(&str);
+            }
+            else if (strcmp(key, "tile") == 0)
+            {
+                int tile_x, tile_y;
+                char* str_y;
+                char* str_x = value;
+                cstr_split2_strip(&str_x, &str_y, ',', ' ');
+                tile_x = atoi(str_x);
+                tile_y = atoi(str_y);
+                if (tile_x < 1 || tile_x > 64)
+                {
+                    log_err("Invalid tile X dimension %s\n", str_x);
+                    break;
+                }
+                if (tile_y < 1 || tile_y > 64)
+                {
+                    log_err("Invalid tile Y dimension %s\n", str_y);
+                    break;
+                }
+                sprite->tile_x = tile_x;
+                sprite->tile_y = tile_y;
+            }
+            else if (strcmp(key, "frames") == 0)
+            {
+                int frames = atoi(value);
+                if (frames < 1 || frames > 64 * 64)
+                {
+                    log_err("Invalid frame count %s\n", value);
+                    break;
+                }
+                sprite->num_frames = frames;
+            }
+            else if (strcmp(key, "fps") == 0)
+            {
+                int fps = atoi(value);
+                if (fps < 1 || fps > 60)
+                {
+                    log_err("Invalid FPS value %s\n", value);
+                    break;
+                }
+            }
+            else if (strcmp(key, "scale") == 0)
+            {
+                float scale = atof(value);
+                if (scale <= 0.0 || scale >= 100.0)
+                {
+                    log_err("Invalid sprite scale %s\n", value);
+                    break;
+                }
             }
             else
                 log_warn("Unknown key \"%s\"\n", key);
@@ -349,8 +497,8 @@ resource_pack_destroy(struct resource_pack* pack)
     FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.shadow, FREE);
     FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.sprite, FREE);
     FREE_ARRAY_OF_ARRAYS(pack->sprites.background, resource_sprite_destroy);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.head, FREE);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.body, FREE);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.tail, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.head, resource_snake_part_destroy);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.body, resource_snake_part_destroy);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.tail, resource_snake_part_destroy);
     FREE(pack);
 }

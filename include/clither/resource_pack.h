@@ -20,17 +20,17 @@ struct resource_sprite
  * activated.
  *
  * Also note that not all parts have all layers. If a layer does not exist,
- * then the sprite's texture name will be an empty string.
+ * then it will be a NULL pointer.
  */
 struct resource_snake_part
 {
-    struct resource_sprite base;
-    struct resource_sprite gather;
-    struct resource_sprite boost;
-    struct resource_sprite turn;
-    struct resource_sprite projectile;
-    struct resource_sprite split;
-    struct resource_sprite armor;
+    struct resource_sprite* base;
+    struct resource_sprite* gather;
+    struct resource_sprite* boost;
+    struct resource_sprite* turn;
+    struct resource_sprite* projectile;
+    struct resource_sprite* split;
+    struct resource_sprite* armor;
 };
 
 struct resource_pack
