@@ -79,6 +79,9 @@ vector_clear(struct cs_vector* vector);
 CSTRUCTURES_PUBLIC_API void
 vector_compact(struct cs_vector* vector);
 
+CSTRUCTURES_PUBLIC_API void*
+vector_take(struct cs_vector* vector);
+
 CSTRUCTURES_PUBLIC_API void
 vector_clear_compact(struct cs_vector* vector);
 

@@ -6,7 +6,7 @@
 C_BEGIN
 
 struct cs_btree;
-struct controls;
+struct command;
 struct msg;
 struct world;
 

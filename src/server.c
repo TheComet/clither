@@ -18,9 +18,9 @@ struct client_table_entry
 {
     struct cs_vector pending_msgs;     /* struct msg* */
     int timeout_counter;
-    int cbf_window[CBF_WINDOW_SIZE];   /* "Control Buffer Fullness" window */
+    int cbf_window[CBF_WINDOW_SIZE];   /* "Command Buffer Fullness" window */
     cs_btree_key snake_id;
-    uint16_t last_controls_msg_frame;
+    uint16_t last_command_msg_frame;
 };
 
 #define CLIENT_TABLE_FOR_EACH(table, k, v) \
@@ -371,6 +371,7 @@ server_recv(
                      * function remove_client() */
                     if (client == NULL)
                     {
+                        struct snake* snake;
                         int n;
                         log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
@@ -378,10 +379,14 @@ server_recv(
                         msg_queue_init(&client->pending_msgs);
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
-                        client->last_controls_msg_frame = frame_number;
+                        client->last_command_msg_frame = frame_number;
+
+                        /* Hold the snake in place until we receive the first command */
+                        snake = world_get_snake(world, client->snake_id);
+                        snake_set_hold(snake);
 
                         /*
-                         * Init "Controls Buffer Fullness" queue with minimum granularity.
+                         * Init "Command Buffer Fullness" queue with minimum granularity.
                          * This assumes the clienthas the most stable connection initially.
                          */
                         for (n = 0; n != CBF_WINDOW_SIZE; ++n)
@@ -412,56 +417,55 @@ server_recv(
 
                 } break;
 
-                case MSG_CONTROLS: {
+                case MSG_COMMANDS: {
                     uint16_t first_frame, last_frame;
                     int lower;
                     struct snake* snake = world_get_snake(world, client->snake_id);
                     int granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
                     /*
-                     * Measure how many frames are in the client's controls buffer.
+                     * Measure how many frames are in the client's command buffer.
                      *
                      * A negative value indicates the client is lagging behind, and
                      * the server will have to make a prediction, which will lead to
                      * the client having to re-simulate. A positive value indicates
-                     * there are controls in the buffer. Depending on how stable the
+                     * there are commands in the buffer. Depending on how stable the
                      * connection is, the client will be instructed to shrink the
                      * buffer.
                      */
-                    int client_controls_buffered = controls_rb_count(&snake->controls_rb) > 0 ?
-                        u16_sub_wrap(controls_rb_last_frame(&snake->controls_rb), frame_number) :
-                        u16_sub_wrap(snake->controls_rb.first_frame_number, frame_number);
+                    int client_commands_queued =
+                        u16_sub_wrap(command_rb_frame_end(&snake->command_rb), frame_number);
 
                     /* Returns the first and last frame numbers that were unpacked from the message */
-                    if (msg_controls_unpack_into(&snake->controls_rb, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
+                    if (msg_commands_unpack_into(&snake->command_rb, payload, payload_len, frame_number, &first_frame, &last_frame) < 0)
                         break;  /* something is wrong with the message */
 
                     /*
                      * This handles packets being reordered by dropping any
-                     * controls older than the last controls received
+                     * commands older than the last command received
                      */
-                    if (u16_le_wrap(last_frame, client->last_controls_msg_frame))
+                    if (u16_le_wrap(last_frame, client->last_command_msg_frame))
                         break;
-                    client->last_controls_msg_frame = last_frame;
+                    client->last_command_msg_frame = last_frame;
 
                     /*
                      * Compare the very last frame received with the current frame
                      * number. By tracking the lower and upper boundaries of this
                      * difference over time, it can give a good estimate of how
-                     * "healthy" the client's connection is and whether the controls
+                     * "healthy" the client's connection is and whether the command
                      * buffer size needs to be increased or decreased.
                      */
-                    cbf_add(client, client_controls_buffered);
+                    cbf_add(client, client_commands_queued);
                     lower = cbf_lower_bound(client);
-                    if (client_controls_buffered < 0)
+                    if (client_commands_queued < 0)
                     {
                         /*
-                         * Means we do NOT have the controls of the current frame
+                         * Means we do NOT have the command of the current frame
                          *  -> server is going to make a prediction
                          *  -> will probably lead to a client-side roll back
                          * The client needs to warp forwards in time.
                          */
-                        int8_t diff = client_controls_buffered < -10 ? -10 : client_controls_buffered;
+                        int8_t diff = client_commands_queued < -10 ? -10 : client_commands_queued;
                         server_queue(client, msg_feedback(diff, frame_number));
                         log_dbg("warp forwards: %d\n", diff);
                     }

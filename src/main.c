@@ -3,13 +3,15 @@
 #include "clither/camera.h"
 #include "clither/cli_colors.h"
 #include "clither/client.h"
-#include "clither/controls.h"
+#include "clither/command.h"
 #include "clither/gfx.h"
+#include "clither/input.h"
+#include "clither/log.h"
 #include "clither/mcd_wifi.h"
 #include "clither/msg.h"
 #include "clither/mutex.h"
 #include "clither/net.h"
-#include "clither/log.h"
+#include "clither/resource_pack.h"
 #include "clither/server.h"
 #include "clither/server_settings.h"
 #include "clither/signals.h"
@@ -88,9 +90,11 @@ run_server_instance(const void* args)
 
         /* sim_update */
         WORLD_FOR_EACH_SNAKE(&world, uid, snake)
-            const struct controls* controls = controls_rb_take_or_predict(
-                &snake->controls_rb, frame_number);
-            snake_step(&snake->data, &snake->head, controls, instance->settings->sim_tick_rate);
+            if (!snake_is_held(snake, frame_number))
+            {
+                struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
+                snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
+            }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
 
@@ -233,7 +237,7 @@ run_client(const struct args* a)
     struct thread mcd_thread;
     struct world world;
     struct input input;
-    struct controls controls;
+    struct command command;
     struct gfx* gfx;
     struct camera camera;
     struct client client;
@@ -253,10 +257,20 @@ run_client(const struct args* a)
     gfx = gfx_create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
+    {
+        int ret;
+        struct resource_pack* pack = resource_pack_load("packs/horror");
+        if (pack == NULL)
+            goto load_resource_pack_failed;
+        ret = gfx_load_resource_pack(gfx, pack);
+        resource_pack_destroy(pack);
+        if (ret != 0)
+            goto load_resource_pack_failed;
+    }
 
     input_init(&input);
     camera_init(&camera);
-    controls_init(&controls);
+    command = command_default();
     world_init(&world);
 
     /* If McDonald's WiFi is enabled, start that */
@@ -321,24 +335,24 @@ run_client(const struct args* a)
             struct snake* snake = world_get_snake(&world, client.snake_id);
 
             /*
-             * Map "input" to "controls". This converts the mouse and keyboard
+             * Map "input" to "command". This converts the mouse and keyboard
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            gfx_update_controls(&controls, &input, gfx, &camera, snake->head.pos);
+            command = gfx_input_to_command(command, &input, gfx, &camera, snake->head.pos);
 
             /*
-             * Append the new controls to the ring buffer of unconfirmed controls.
+             * Append the new command to the ring buffer of unconfirmed commands.
              * This entire list is sent to the server every network update so
              * in the event of packet loss, the server always has a complete
              * history of what our snake has done, frame by frame. When the server
-             * acknowledges our move, we remove all controls that date back before
+             * acknowledges our move, we remove all commands that date back before
              * and up to that point in time from the list again.
              */
-            controls_rb_put(&snake->controls_rb, &controls, client.frame_number);
+            command_rb_put(&snake->command_rb, command, client.frame_number);
 
             /* Update snake and step */
-            snake_step(&snake->data, &snake->head, &controls, client.sim_tick_rate);
+            snake_step(&snake->data, &snake->head, command, client.sim_tick_rate);
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
             camera_update(&camera, &snake->head, client.sim_tick_rate);
@@ -346,8 +360,8 @@ run_client(const struct args* a)
 
             if (net_update)
             {
-                /* Send all unconfirmed controls (unreliable) */
-                client_queue(&client, msg_controls(&snake->controls_rb));
+                /* Send all unconfirmed commands (unreliable) */
+                client_queue(&client, msg_commands(&snake->command_rb));
             }
         }
 
@@ -357,6 +371,8 @@ run_client(const struct args* a)
                 break;
         }
 
+        gfx_step_anim(gfx, client.sim_tick_rate);
+
         /*
          * Skip rendering if we are lagging, as this is most likely the source
          * of the delay. If for some reason we end up 3 seconds behind where we
@@ -364,7 +380,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
-            gfx_draw_world(gfx, &world, &camera, client.frame_number);
+            gfx_draw_world(gfx, &world, &camera);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -394,6 +410,7 @@ client_connect_failed:
 start_mcd_failed:
     client_deinit(&client);
     world_deinit(&world);
+load_resource_pack_failed:
     gfx_destroy(gfx);
 create_gfx_failed:
     gfx_deinit();

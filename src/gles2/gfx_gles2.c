@@ -1,12 +1,13 @@
 #include "clither/bezier.h"
 #include "clither/camera.h"
-#include "clither/controls.h"
+#include "clither/command.h"
 #include "clither/fs.h"
 #include "clither/gfx.h"
+#include "clither/input.h"
 #include "clither/log.h"
+#include "clither/resource_pack.h"
 #include "clither/snake.h"
 #include "clither/world.h"
-#include "clither/utf8.h"
 
 #include "cstructures/memory.h"
 #include "cstructures/string.h"
@@ -30,7 +31,7 @@ struct bg
     GLuint texNor;
     GLuint uAspectRatio;
     GLuint uCamera;
-    GLuint uRes;
+    GLuint uShadowInvRes;
     GLuint sShadow;
     GLuint sCol;
     GLuint sNM;
@@ -61,7 +62,7 @@ struct sprite_mat
     GLuint uDir;
     GLuint uSize;
     GLuint uAnim;
-    GLuint sDiffuse;
+    GLuint sCol;
     GLuint sNM;
 };
 
@@ -222,7 +223,7 @@ static GLuint load_shader_type(const char* code, GLint length, GLenum type)
 
     return shader;
 }
-static GLuint load_shader(const char* shaders[], const char* attribute_bindings[])
+static GLuint load_shader(char* shaders[], const char* attribute_bindings[])
 {
     int i;
     GLuint program;
@@ -244,15 +245,12 @@ static GLuint load_shader(const char* shaders[], const char* attribute_bindings[
             goto load_shaders_failed;
 
         shader = load_shader_type(source, length, string_ends_with(shaders[i], ".vsh") ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER);
+        fs_unmap_file(source, length);
         if (shader == 0)
-        {
-            fs_unmap_file(source, length);
             goto load_shaders_failed;
-        }
 
         glAttachShader(program, shader);
         glDeleteShader(shader);
-        fs_unmap_file(source, length);
     }
 
     for (i = 0; attribute_bindings[i]; ++i)
@@ -284,27 +282,47 @@ create_program_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-static void 
-load_background_tex(struct bg* bg, const char* col, const char* nor)
+static int
+bg_init(struct bg* bg, int fbwidth, int fbheight)
 {
-    int img_width, img_height, img_channels;
-    stbi_uc* img_data;
+    memset(bg, 0, sizeof * bg);
 
+    /* Set up shadow framebuffer */
+    glGenTextures(1, &bg->texShadow);
+    glBindTexture(GL_TEXTURE_2D, bg->texShadow);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbwidth / SHADOW_MAP_SIZE_FACTOR, fbheight / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenFramebuffers(1, &bg->fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        log_err("Incomplete framebuffer!\n");
+        goto incomplete_shadow_framebuffer;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /* Set up quad mesh */
+    glGenBuffers(1, &bg->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, bg->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &bg->ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bg->ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bg_indices), bg_indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    /* Prepare background textures */
     glGenTextures(1, &bg->texCol);
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load(col, &img_width, &img_height, &img_channels, 3);
-    if (img_data == NULL)
-        log_err("Failed to load image \"%s\"\n", col);
-    else
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(img_data);
-    }
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &bg->texNor);
@@ -313,16 +331,104 @@ load_background_tex(struct bg* bg, const char* col, const char* nor)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    img_data = stbi_load(nor, &img_width, &img_height, &img_channels, 3);
-    if (img_data == NULL)
-        log_err("Failed to load image \"%s\"\n", nor);
-    else
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return 0;
+
+incomplete_shadow_framebuffer:
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &bg->fbo);
+    glDeleteTextures(1, &bg->texShadow);
+
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+bg_deinit(struct bg* bg)
+{
+    glDeleteTextures(1, &bg->texNor);
+    glDeleteTextures(1, &bg->texCol);
+    glDeleteBuffers(1, &bg->ibo);
+    glDeleteBuffers(1, &bg->vbo);
+    glDeleteFramebuffers(1, &bg->fbo);
+    glDeleteTextures(1, &bg->texShadow);
+    if (bg->program != 0)
+        glDeleteProgram(bg->program);
+}
+
+/* ------------------------------------------------------------------------- */
+static GLuint
+get_uniform_location_and_warn(GLuint program, const char* name)
+{
+    GLuint ret = glGetUniformLocation(program, name);
+    if (ret == (GLuint)-1)
+        log_warn("Failed to get uniform location of \"%s\"\n", name);
+    return ret;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+bg_load(struct bg* bg, const struct resource_pack* pack)
+{
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
+
+    /* Clean up previous data */
+    if (bg->program != 0)
+        glDeleteProgram(bg->program);
+    bg->program = 0;
+
+    glBindTexture(GL_TEXTURE_2D, bg->texCol);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, bg->texNor);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    /* For now we only support a single background layer */
+    if (pack->sprites.background[0] == NULL)
     {
+        log_warn("No background texture defined\n");
+        return -1;
+    }
+
+    /* Load shaders */
+    bg->program = load_shader(pack->shaders.glsl.background, attr_bindings);
+    if (bg->program == 0)
+        return -1;
+
+    bg->uAspectRatio = get_uniform_location_and_warn(bg->program, "uAspectRatio");
+    bg->uCamera = get_uniform_location_and_warn(bg->program, "uCamera");
+    bg->uShadowInvRes = get_uniform_location_and_warn(bg->program, "uShadowInvRes");
+    bg->sShadow = get_uniform_location_and_warn(bg->program, "sShadow");
+    bg->sCol = get_uniform_location_and_warn(bg->program, "sCol");
+    bg->sNM = get_uniform_location_and_warn(bg->program, "sNM");
+
+    img_data = stbi_load(pack->sprites.background[0]->texture0, &img_width, &img_height, &img_channels, 3);
+    if (img_data)
+    {
+        glBindTexture(GL_TEXTURE_2D, bg->texCol);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
         stbi_image_free(img_data);
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
+    else
+        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture0);
+
+    img_data = stbi_load(pack->sprites.background[0]->texture1, &img_width, &img_height, &img_channels, 3);
+    if (img_data)
+    {
+        glBindTexture(GL_TEXTURE_2D, bg->texNor);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(img_data);
+    }
+    else
+        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture1);
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -376,253 +482,39 @@ static void load_sprite_tex(
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-load_pack(struct gfx* gfx, const char* pack_path)
+int
+gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
-    enum section_name
-    {
-        NONE,
-        SHADERS,
-        BACKGROUND,
-        HEAD,
-        BODY,
-        TAIL
-    };
-    enum section_layer
-    {
-        BASE,
-        GATHER,
-        BOOST,
-        TURN,
-        PROJECTILE,
-        SPLIT,
-        ARMOR
-    };
-    struct section
-    {
-        enum section_name name;
-        int index;
-        int layer;
-    };
+    bg_load(&gfx->bg, pack);
 
-    FILE* fp;
-    struct cs_string str, line;
-    struct section current_section = { NONE, 0, 0 };
-    string_init(&str);
-    string_init(&line);
-    string_cat(string_cat_c(&str, pack_path, "/"), "config.ini");
+    gfx->sprite_shadow.program = load_shader(pack->shaders.glsl.shadow, attr_bindings);
+    if (gfx->sprite_shadow.program == 0)
+        goto glsl_shadow_failed;
 
-    fp = utf8_fopen_rb(string_cstr(&str), string_length(&str));
-    if (fp == NULL)
-    {
-        log_err("Failed to open file \"%s\": \"%s\"\n", string_cstr(&str), strerror(errno));
-        goto open_config_ini_failed;
-    }
+    gfx->sprite_shadow.uAspectRatio = glGetUniformLocation(gfx->sprite_shadow.program, "uAspectRatio");
+    gfx->sprite_shadow.uPosCameraSpace = glGetUniformLocation(gfx->sprite_shadow.program, "uPosCameraSpace");
+    gfx->sprite_shadow.uDir = glGetUniformLocation(gfx->sprite_shadow.program, "uDir");
+    gfx->sprite_shadow.uSize = glGetUniformLocation(gfx->sprite_shadow.program, "uSize");
+    gfx->sprite_shadow.uAnim = glGetUniformLocation(gfx->sprite_shadow.program, "uAnim");
+    gfx->sprite_shadow.sNM = glGetUniformLocation(gfx->sprite_shadow.program, "sNM");
 
-#define SCAN_UNTIL_CHAR(s, c) \
-        while (*s != c && *s) \
-            ++s; \
-        if (!*s) \
-            continue
+    gfx->sprite_mat.program = load_shader(pack->shaders.glsl.sprite, attr_bindings);
+    if (gfx->sprite_mat.program == 0)
+        goto glsl_sprite_failed;
 
-#define SCAN_WHILE_CHAR(s, c) \
-        while (*s == c) \
-            ++s; \
-        if (!*s) \
-            continue
+    gfx->sprite_mat.uAspectRatio = glGetUniformLocation(gfx->sprite_mat.program, "uAspectRatio");
+    gfx->sprite_mat.uPosCameraSpace = glGetUniformLocation(gfx->sprite_mat.program, "uPosCameraSpace");
+    gfx->sprite_mat.uDir = glGetUniformLocation(gfx->sprite_mat.program, "uDir");
+    gfx->sprite_mat.uSize = glGetUniformLocation(gfx->sprite_mat.program, "uSize");
+    gfx->sprite_mat.uAnim = glGetUniformLocation(gfx->sprite_mat.program, "uAnim");
+    gfx->sprite_mat.sCol = glGetUniformLocation(gfx->sprite_mat.program, "sCol");
+    gfx->sprite_mat.sNM = glGetUniformLocation(gfx->sprite_mat.program, "sNM");
 
-#define UNQUOTE_STRING(s, c) \
-        if (*s == c) \
-        { \
-            char* p = s+1; \
-            ++s; \
-            while (*s != c && *s) \
-                ++s; \
-            if (!*s) { \
-                log_err("Syntax error: Expected to find a matching '%c'\n", c); \
-                goto parse_error; \
-            } \
-            *p = '\0'; \
-        }
+    return 0;
 
-    log_dbg("Reading file \"%s\"\n", string_cstr(&str));
-    while (string_getline(&line, fp) > 0)
-    {
-        char* s = string_cstr(&line);
-        char* key;
-        char* value;
-
-        if (s[0] == '[')
-        {
-            char* index;
-            char* layer;
-            char* section = s + 1;
-            layer = s + 1;
-            index = s + 1;
-
-            while (*s && *s != ']')
-                ++s;
-            if (!*s)
-            {
-                log_err("Syntax error: Expected to find a matching ']'\n");
-                goto parse_error;
-            }
-            *s = '\0';
-
-            while (*layer && *layer != '.')
-                ++layer;
-            if (*layer)
-                *layer++ = '\0';
-
-            while (*index && (*index < '0' || *index > '9'))
-                ++index;
-            if (*index)
-            {
-                current_section.index = atoi(index);
-                *index = '\0';
-            }
-
-            if (strcmp(section, "shaders") == 0)
-                current_section.name = SHADERS;
-            else if (strcmp(section, "background") == 0)
-                current_section.name = BACKGROUND;
-            else if (strcmp(section, "head") == 0)
-                current_section.name = HEAD;
-            else if (strcmp(section, "body") == 0)
-                current_section.name = BODY;
-            else if (strcmp(section, "tail") == 0)
-                current_section.name = TAIL;
-            else
-            {
-                log_warn("Unknown section \"%s\", skipping\n", s);
-                current_section.name = NONE;
-                continue;
-            }
-
-            if (!*layer) {}
-            else if (strcmp(layer, "base") == 0)
-                current_section.layer = BASE;
-            else if (strcmp(layer, "gather") == 0)
-                current_section.layer = GATHER;
-            else if (strcmp(layer, "boost") == 0)
-                current_section.layer = BOOST;
-            else if (strcmp(layer, "turn") == 0)
-                current_section.layer = TURN;
-            else if (strcmp(layer, "projectile") == 0)
-                current_section.layer = PROJECTILE;
-            else if (strcmp(layer, "split") == 0)
-                current_section.layer = SPLIT;
-            else if (strcmp(layer, "armor") == 0)
-                current_section.layer = ARMOR;
-            else
-            {
-                log_warn("Unknown layer \"%s\", skipping\n", layer);
-                current_section.name = NONE;
-                continue;
-            }
-
-            /* Section parsed, continue with next line */
-            continue;
-        }
-
-        /* Keys cannot have spaces */
-        key = s;
-        while (*s && *s != ' ' && *s != '=')
-            ++s;
-        if (!*s)
-        {
-            log_err("Syntax error on line \"%s\": Expected '='\n", string_cstr(&line));
-            goto parse_error;
-        }
-        *s = '\0';
-        ++s;
-
-        while (*s && (*s == ' ' || *s == '='))
-            ++s;
-        if (!*s)
-        {
-            log_err("Syntax error on line \"%s\": Expected a value\n", string_cstr(&line));
-            goto parse_error;
-        }
-        value = s;
-
-        /* Remove trailing comments */
-        while (*s && *s != ';' && *s != '#')
-            ++s;
-        *s = '\0';
-
-        switch (current_section.name)
-        {
-        case SHADERS: {
-            char* saveptr;
-            struct cs_vector fnames;
-            vector_init(&fnames, sizeof(char*));
-            for (s = string_tok_strip_c(value, ',', ' ', &saveptr); s; s = string_tok_strip_c(NULL, ',', ' ', &saveptr))
-            {
-                s = string_take(string_cat(string_cat_c(&str, pack_path, "/"), s));
-                vector_push(&fnames, &s);
-            }
-            *(char**)vector_emplace(&fnames) = NULL;
-
-            if (strcmp(key, "shadow") == 0)
-            {
-                gfx->sprite_shadow.program = load_shader((char**)vector_data(&fnames), attr_bindings);
-                if (gfx->sprite_shadow.program == 0)
-                    goto load_shader_failed;
-
-                gfx->sprite_shadow.uAspectRatio = glGetUniformLocation(gfx->sprite_shadow.program, "uAspectRatio");
-                gfx->sprite_shadow.uPosCameraSpace = glGetUniformLocation(gfx->sprite_shadow.program, "uPosCameraSpace");
-                gfx->sprite_shadow.uDir = glGetUniformLocation(gfx->sprite_shadow.program, "uDir");
-                gfx->sprite_shadow.uSize = glGetUniformLocation(gfx->sprite_shadow.program, "uSize");
-                gfx->sprite_shadow.uAnim = glGetUniformLocation(gfx->sprite_shadow.program, "uAnim");
-                gfx->sprite_shadow.sNM = glGetUniformLocation(gfx->sprite_shadow.program, "sCol");
-            }
-            else if (strcmp(key, "sprite") == 0)
-            {
-                gfx->sprite_mat.program = load_shader((char**)vector_data(&fnames), attr_bindings);
-                if (gfx->sprite_mat.program == 0)
-                    goto load_shader_failed;
-
-                gfx->sprite_mat.uAspectRatio = glGetUniformLocation(gfx->sprite_mat.program, "uAspectRatio");
-                gfx->sprite_mat.uPosCameraSpace = glGetUniformLocation(gfx->sprite_mat.program, "uPosCameraSpace");
-                gfx->sprite_mat.uDir = glGetUniformLocation(gfx->sprite_mat.program, "uDir");
-                gfx->sprite_mat.uSize = glGetUniformLocation(gfx->sprite_mat.program, "uSize");
-                gfx->sprite_mat.uAnim = glGetUniformLocation(gfx->sprite_mat.program, "uAnim");
-                gfx->sprite_mat.sDiffuse = glGetUniformLocation(gfx->sprite_mat.program, "sDiffuse");
-                gfx->sprite_mat.sNM = glGetUniformLocation(gfx->sprite_mat.program, "sNM");
-            }
-            else if (strcmp(key, "background") == 0)
-            {
-                gfx->bg.program = load_shader((char**)vector_data(&fnames), attr_bindings);
-                if (gfx->bg.program == 0)
-                    goto load_shader_failed;
-
-                gfx->bg.uAspectRatio = glGetUniformLocation(gfx->bg.program, "uAspectRatio");
-                gfx->bg.uCamera = glGetUniformLocation(gfx->bg.program, "uCamera");
-                gfx->bg.uRes = glGetUniformLocation(gfx->bg.program, "uRes");
-                gfx->bg.sShadow = glGetUniformLocation(gfx->bg.program, "sShadow");
-                gfx->bg.sCol = glGetUniformLocation(gfx->bg.program, "sCol");
-                gfx->bg.sNM = glGetUniformLocation(gfx->bg.program, "sNM");
-            }
-            else
-            {
-                log_warn("Unknown key \"%s\"\n", key);
-            }
-
-        load_shader_failed:
-            VECTOR_FOR_EACH(&fnames, char*, pstr)
-                if (*pstr)
-                    FREE(*pstr);
-            VECTOR_END_EACH
-            vector_deinit(&fnames);
-        } break;
-        }
-    }
-
-parse_error:
-open_config_ini_failed:
-    string_deinit(&line);
-    string_deinit(&str);
+glsl_sprite_failed:
+    glDeleteProgram(gfx->sprite_shadow.program);
+glsl_shadow_failed:
     return -1;
 }
 
@@ -652,22 +544,6 @@ gfx_create(int initial_width, int initial_height)
     int fbwidth, fbheight;
     struct gfx* gfx = MALLOC(sizeof *gfx);
 
-    static const char* bg_shaders[] = {
-        "packs/horror/fx/bg.vsh",
-        "packs/horror/fx/bg.fsh",
-        NULL
-    };
-    static const char* sprite_shadow_shaders[] = {
-        "packs/horror/fx/sprite_shadow.vsh",
-        "packs/horror/fx/sprite_shadow.fsh",
-        NULL
-    };
-    static const char* sprite_shaders[] = {
-        "packs/horror/fx/sprite.vsh",
-        "packs/horror/fx/sprite.fsh",
-        NULL
-    };
-
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
@@ -686,44 +562,12 @@ gfx_create(int initial_width, int initial_height)
         log_err("GLES2 loader failed\n");
         goto load_gles2_ext_failed;
     }
-    glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
 
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
 
-    load_pack(gfx, "packs/horror");
-
-    /* Load background */
-    glGenTextures(1, &gfx->bg.texShadow);
-    glBindTexture(GL_TEXTURE_2D, gfx->bg.texShadow);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbwidth / SHADOW_MAP_SIZE_FACTOR, fbheight / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glGenFramebuffers(1, &gfx->bg.fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gfx->bg.texShadow, 0);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        log_err("Incomplete framebuffer!\n");
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteFramebuffers(1, &gfx->bg.fbo);
-        goto incomplete_shadow_framebuffer;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    glGenBuffers(1, &gfx->bg.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->bg.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glGenBuffers(1, &gfx->bg.ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->bg.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bg_indices), bg_indices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    load_background_tex(&gfx->bg, "packs/horror/bg/tile_col.png", "packs/horror/bg/tile_nor.png");
+    glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
+    bg_init(&gfx->bg, fbwidth, fbheight);
 
     glGenBuffers(1, &gfx->sprite_mesh.vbo);
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
@@ -757,18 +601,6 @@ gfx_create(int initial_width, int initial_height)
 
     return gfx;
 
-load_sprite_program_failed:
-    glDeleteProgram(gfx->sprite_shadow.program);
-load_sprite_shadow_program_failed:
-    glDeleteTextures(1, &gfx->bg.texNor);
-    glDeleteTextures(1, &gfx->bg.texCol);
-    glDeleteBuffers(1, &gfx->bg.ibo);
-    glDeleteBuffers(1, &gfx->bg.vbo);
-    glDeleteFramebuffers(1, &gfx->bg.fbo);
-incomplete_shadow_framebuffer:
-    glDeleteTextures(1, &gfx->bg.texShadow);
-    glDeleteProgram(gfx->bg.program);
-load_bg_program_failed:
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
@@ -794,13 +626,7 @@ gfx_destroy(struct gfx* gfx)
     glDeleteBuffers(1, &gfx->sprite_mesh.ibo);
     glDeleteBuffers(1, &gfx->sprite_mesh.vbo);
 
-    glDeleteTextures(1, &gfx->bg.texNor);
-    glDeleteTextures(1, &gfx->bg.texCol);
-    glDeleteBuffers(1, &gfx->bg.ibo);
-    glDeleteBuffers(1, &gfx->bg.vbo);
-    glDeleteFramebuffers(1, &gfx->bg.fbo);
-    glDeleteTextures(1, &gfx->bg.texShadow);
-    glDeleteProgram(gfx->bg.program);
+    bg_deinit(&gfx->bg);
 
     glfwDestroyWindow(gfx->window);
     FREE(gfx);
@@ -819,17 +645,16 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_update_controls(
-    struct controls* controls,
+struct command
+gfx_input_to_command(
+    struct command prev,
     const struct input* input,
     const struct gfx* gfx,
     const struct camera* camera,
     struct qwpos snake_head)
 {
-    double a, d, dx, dy;
-    int max_dist, da;
-    uint8_t new_angle, new_speed;
+    float a, d, dx, dy;
+    int max_dist;
     struct spos snake_head_screen;
 
     /* world -> camera space */
@@ -858,43 +683,12 @@ gfx_update_controls(
     /* Calc angle and distance from mouse position and snake head position */
     dx = input->mousex - snake_head_screen.x;
     dy = snake_head_screen.y - input->mousey;
-    a = atan2(dy, dx) / (2 * M_PI) + 0.5;
+    a = atan2(dy, dx);
     d = sqrt(dx * dx + dy * dy);
     if (d > max_dist)
         d = max_dist;
 
-    /* Yes, this 256 is not a mistake -- makes sure that not both of -3.141 and 3.141 are included */
-    new_angle = (uint8_t)(a * 256);
-    new_speed = (uint8_t)(d / max_dist * 255);
-
-    /*
-     * The following code is designed to limit the number of bits necessary to
-     * encode input deltas. The snake's turn speed is pretty slow, so we can
-     * get away with 3 bits. Speed is a little more sensitive. Through testing,
-     * 5 bits seems appropriate (see: snake.c, ACCELERATION is 8 per frame, so
-     * we need at least 5 bits)
-     */
-    da = new_angle - controls->angle;
-    if (da > 128)
-        da -= 256;
-    if (da < -128)
-        da += 256;
-    if (da > 3)
-        controls->angle += 3;
-    else if (da < -3)
-        controls->angle -= 3;
-    else
-        controls->angle = new_angle;
-
-    /* (int) cast is necessary because msvc does not correctly deal with bitfields */
-    if (new_speed - (int)controls->speed > 15)
-        controls->speed += 15;
-    else if (new_speed - (int)controls->speed < -15)
-        controls->speed -= 15;
-    else
-        controls->speed = new_speed;
-
-    controls->action = input->boost ? CONTROLS_ACTION_BOOST : CONTROLS_ACTION_NONE;
+    return command_make(prev, a, d, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -917,7 +711,7 @@ draw_background(const struct gfx* gfx, const struct camera* camera, const struct
 
     glUniform4f(gfx->bg.uAspectRatio, ar->scale_x, ar->scale_y, ar->pad_x, ar->pad_y);
     glUniform3f(gfx->bg.uCamera, qw_to_float(camera->pos.x), qw_to_float(camera->pos.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->bg.uRes, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
+    glUniform2f(gfx->bg.uShadowInvRes, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
     glUniform1i(gfx->bg.sCol, 1);
     glUniform1i(gfx->bg.sNM, 2);
 
@@ -967,7 +761,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         glUseProgram(gfx->sprite_mat.program);
         glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
         glUniform1f(gfx->sprite_mat.uSize, size);
-        glUniform1i(gfx->sprite_mat.sDiffuse, 0);
+        glUniform1i(gfx->sprite_mat.sCol, 0);
         glUniform1i(gfx->sprite_mat.sNM, 1);
 
         glActiveTexture(GL_TEXTURE0);
@@ -1093,7 +887,25 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 }
 
 /* ------------------------------------------------------------------------- */
-static int frame_update;
+void
+gfx_step_anim(struct gfx* gfx, int sim_tick_rate)
+{
+    static int frame_update;
+    if (frame_update-- == 0)
+    {
+        frame_update = 3;
+
+        gfx->head0_base.frame++;
+        if (gfx->head0_base.frame >= gfx->head0_base.tile_count)
+            gfx->head0_base.frame = 0;
+
+        gfx->body0_base.frame++;
+        if (gfx->body0_base.frame >= gfx->body0_base.tile_count)
+            gfx->body0_base.frame = 0;
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 void
 gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
@@ -1107,19 +919,6 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
     {
         ar.scale_y = (GLfloat)gfx->height / gfx->width;
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
-    }
-
-    if (frame_update-- == 0)
-    {
-        frame_update = 3;
-
-        gfx->head0_base.frame++;
-        if (gfx->head0_base.frame >= gfx->head0_base.tile_count)
-            gfx->head0_base.frame = 0;
-
-        gfx->body0_base.frame++;
-        if (gfx->body0_base.frame >= gfx->body0_base.tile_count)
-            gfx->body0_base.frame = 0;
     }
 
     WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
