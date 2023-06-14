@@ -11,6 +11,30 @@
 #include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
+static struct resource_sprite*
+resource_sprite_create(void)
+{
+    struct resource_sprite* res = MALLOC(sizeof *res);
+    res->texture0 = cstr_dup("");
+    res->texture1 = cstr_dup("");
+    res->tile_x = 1;
+    res->tile_y = 1;
+    res->num_frames = 1;
+    res->fps = 0;
+    res->scale = 1.0;
+    return res;
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+resource_sprite_destroy(struct resource_sprite* res)
+{
+    cstr_free(res->texture0);
+    cstr_free(res->texture1);
+    FREE(res);
+}
+
+/* ------------------------------------------------------------------------- */
 struct resource_pack*
 resource_pack_load(const char* pack_path)
 {
@@ -53,7 +77,7 @@ resource_pack_load(const char* pack_path)
     struct resource_pack* pack = NULL;
 
     string_init(&str);
-    string_cat(string_cat_c(&str, pack_path, "/"), "config.ini");
+    string_cat(string_cat2(&str, pack_path, "/"), "config.ini");
 
     fp = utf8_fopen_rb(string_cstr(&str), string_length(&str));
     if (fp == NULL)
@@ -115,7 +139,12 @@ resource_pack_load(const char* pack_path)
             if (strcmp(section, "shaders") == 0)
                 current.section = SEC_SHADERS;
             else if (strcmp(section, "background") == 0)
+            {
                 current.section = SEC_BACKGROUND;
+                while ((int)vector_count(&background_sprites) < current.index + 1)
+                    *(struct resource_sprite**)vector_emplace(&background_sprites) =
+                        resource_sprite_create();
+            }
             else if (strcmp(section, "head") == 0)
                 current.section = SEC_HEAD;
             else if (strcmp(section, "body") == 0)
@@ -207,6 +236,12 @@ resource_pack_load(const char* pack_path)
         case SEC_NONE:
             break;
 
+        /*
+         * [shaders.glsl]
+         * shadow = ...
+         * sprite = ...
+         * background = ...
+         */
         case SEC_SHADERS: {
             switch (current.sub)
             {
@@ -214,7 +249,7 @@ resource_pack_load(const char* pack_path)
                 char* saveptr;
                 for (s = string_tok_strip_c(value, ',', ' ', &saveptr); s; s = string_tok_strip_c(NULL, ',', ' ', &saveptr))
                 {
-                    string_cat(string_cat_c(&str, pack_path, "/"), s);
+                    string_cat(string_cat2(&str, pack_path, "/"), s);
                     if (strcmp(key, "shadow") == 0)
                         *(char**)vector_emplace(&glsl_shadow) = string_take(&str);
                     else if (strcmp(key, "sprite") == 0)
@@ -241,8 +276,28 @@ resource_pack_load(const char* pack_path)
             }
         } break;
 
-        case SEC_BACKGROUND:
-            break;
+        /*
+         * [background]
+         * textures = col.png, nor.png
+         */
+        case SEC_BACKGROUND: {
+            if (strcmp(key, "textures") == 0)
+            {
+                struct resource_sprite* res;
+                char* tex1;
+                char* tex0 = value;
+                cstr_split2_strip(&tex0, &tex1, ',', ' ');
+                if (!*tex1)
+                    log_warn("Missing normal map in background texture\n");
+                res = *(struct resource_sprite**)vector_get_element(&background_sprites, current.index);
+                string_cat(string_cat2(&str, pack_path, "/"), tex0);
+                FREE(res->texture0); res->texture0 = string_take(&str);
+                string_cat(string_cat2(&str, pack_path, "/"), tex1);
+                FREE(res->texture1); res->texture1 = string_take(&str);
+            }
+            else
+                log_warn("Unknown key \"%s\"\n", key);
+        } break;
         }
     }
 
@@ -283,19 +338,19 @@ open_config_ini_failed:
 void
 resource_pack_destroy(struct resource_pack* pack)
 {
-#define FREE_ARRAY_OF_ARRAYS(arr) { \
+#define FREE_ARRAY_OF_ARRAYS(arr, free_func) { \
         int i; \
         for (i = 0; arr[i]; ++i) \
-            FREE(arr[i]); \
+            free_func(arr[i]); \
         FREE(arr); \
     }
 
-    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.background);
-    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.shadow);
-    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.sprite);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.background);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.head);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.body);
-    FREE_ARRAY_OF_ARRAYS(pack->sprites.tail);
+    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.background, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.shadow, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->shaders.glsl.sprite, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.background, resource_sprite_destroy);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.head, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.body, FREE);
+    FREE_ARRAY_OF_ARRAYS(pack->sprites.tail, FREE);
     FREE(pack);
 }

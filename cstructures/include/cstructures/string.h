@@ -37,7 +37,7 @@ CSTRUCTURES_PUBLIC_API struct cs_string*
 string_cat(struct cs_string* str, const char* c_str);
 
 CSTRUCTURES_PUBLIC_API struct cs_string*
-string_cat_c(struct cs_string* str, const char* s1, const char* s2);
+string_cat2(struct cs_string* str, const char* s1, const char* s2);
 
 CSTRUCTURES_PUBLIC_API struct cs_string*
 string_join(struct cs_string* str, int n, ...);
@@ -63,6 +63,22 @@ string_tok_strip(struct cs_string* str, char delimiter, char strip, char** savep
 
 char*
 string_tok_strip_c(char* str, char delimiter, char strip, char** saveptr);
+
+char*
+cstr_dup(const char* str);
+
+void
+cstr_free(char* str);
+
+/*!
+ * \brief Removes all occurrences of "strip" from the beginning and end of
+ * the string. This function operates in-place and modifies the buffer.
+ */
+char*
+cstr_strip(char* str, char strip);
+
+void
+cstr_split2_strip(char** str1, char** str2, char delimiter, char strip);
 
 int
 string_ends_with(const char* str, const char* end);

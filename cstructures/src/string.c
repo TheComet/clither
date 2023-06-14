@@ -62,7 +62,7 @@ string_cat(struct cs_string* str, const char* c_str)
 
 /* ------------------------------------------------------------------------- */
 struct cs_string*
-string_cat_c(struct cs_string* str, const char* s1, const char* s2)
+string_cat2(struct cs_string* str, const char* s1, const char* s2)
 {
     int len1 = (int)strlen(s1);
     int len2 = (int)strlen(s2);
@@ -188,6 +188,53 @@ string_tok_strip_c(char* str, char delimiter, char strip, char** saveptr)
     while (*end_ptr && *end_ptr == strip)
         *end_ptr-- = '\0';
     return begin_ptr;
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+cstr_dup(const char* str)
+{
+    char* s2;
+    int len = (int)strlen(str);
+    s2 = MALLOC(len + 1);
+    strcpy(s2, str);
+    return s2;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+cstr_free(char* str)
+{
+    FREE(str);
+}
+
+/* ------------------------------------------------------------------------- */
+char*
+cstr_strip(char* str, char strip)
+{
+    int len = (int)strlen(str);
+    char* end = len > 0 ? str + len - 1 : str;
+    while (*str == strip)
+        *str++ = '\0';
+    while (*end == strip)
+        *end-- = '\0';
+    return str;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+cstr_split2_strip(char** str1, char** str2, char delimiter, char strip)
+{
+    char* tmp = strchr(*str1, delimiter);
+    if (tmp)
+    {
+        *tmp++ = '\0';
+        *str2 = cstr_strip(tmp, strip);
+    }
+    else
+        *str2 = "";
+
+    *str1 = cstr_strip(*str1, strip);
 }
 
 /* ------------------------------------------------------------------------- */
