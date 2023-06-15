@@ -245,11 +245,16 @@ vector_erase_element(struct cs_vector* vector, void* element);
  * If the specified element doesn't exist (index out of bounds), NULL is
  * returned.
  */
-CSTRUCTURES_PUBLIC_API void*
-vector_get_element(const struct cs_vector*, cs_vec_idx index);
+static inline void*
+vector_get(const struct cs_vector* vector, cs_vec_idx index)
+{
+    assert(vector);
+    assert(index < vector->count);
+    return vector->data + index * vector->element_size;
+}
 
 CSTRUCTURES_PUBLIC_API cs_vec_idx
-vector_find_element(const struct cs_vector* vector, const void* element);
+vector_find(const struct cs_vector* vector, const void* element);
 
 CSTRUCTURES_PUBLIC_API void
 vector_reverse(struct cs_vector* vector);

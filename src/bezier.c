@@ -1,6 +1,7 @@
 #include "clither/bezier.h"
 #include "clither/log.h"
 
+#include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
 #define _USE_MATH_DEFINES
@@ -114,7 +115,7 @@ bezier_fit_head(
     }
     if (vector_count(points) == 3)
     {
-        struct qwpos* p1 = vector_get_element(points, 1);
+        struct qwpos* p1 = vector_get(points, 1);
         qw head_dx = qw_sub(p1->x, pm->x);
         qw head_dy = qw_sub(p1->y, pm->y);
         qw tail_dx = qw_sub(p0->x, p1->x);
@@ -134,8 +135,8 @@ bezier_fit_head(
     }
     if (vector_count(points) == 4)
     {
-        struct qwpos* p1 = vector_get_element(points, 1);
-        struct qwpos* p2 = vector_get_element(points, 2);
+        struct qwpos* p1 = vector_get(points, 1);
+        struct qwpos* p2 = vector_get(points, 2);
         qw head_dx = qw_sub(p2->x, pm->x);
         qw head_dy = qw_sub(p2->y, pm->y);
         qw tail_dx = qw_sub(p0->x, p1->x);
@@ -278,7 +279,7 @@ bezier_fit_head(
         q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
 
         /* X = (x - f) / r */
-        struct qwpos* p = vector_get_element(points, i);
+        struct qwpos* p = vector_get(points, i);
         q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
         q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
         for (m = 0; m != 2; ++m)
@@ -402,7 +403,7 @@ bezier_fit_head(
         /* t = [0..1] */
         q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
 
-        const struct qwpos* p = vector_get_element(points, i);
+        const struct qwpos* p = vector_get(points, i);
         mse_error += binary_search_lsq(p, Ax, Ay, t);
     }
 
@@ -412,7 +413,7 @@ bezier_fit_head(
 /* ------------------------------------------------------------------------- */
 void
 bezier_squeeze_step(
-    struct cs_vector* bezier_handles,
+    struct cs_rb* bezier_handles,
     int sim_tick_rate)
 {
 
@@ -421,7 +422,7 @@ bezier_squeeze_step(
 /* ------------------------------------------------------------------------- */
 void
 bezier_squeeze_n_recent_step(
-    struct cs_vector* bezier_handles,
+    struct cs_rb* bezier_handles,
     int n,
     int sim_tick_rate)
 {
@@ -432,7 +433,7 @@ bezier_squeeze_n_recent_step(
 int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
-    const struct cs_vector* bezier_handles,
+    const struct cs_rb* bezier_handles,
     qw spacing,
     int snake_length)
 {
@@ -441,13 +442,13 @@ bezier_calc_equidistant_points(
     /* 
      * Initial x,y positions
      * Calculating coefficients far away from 0,0 results in precision issues,
-     * so we translate everything near 0,0 first, calculate, then translate
+     * so we translate everything to 0,0 first, calculate, then translate
      * the result back
      */
     qw x = 0;
     qw y = 0;
-    const qw offset_x = ((struct bezier_handle*)vector_back(bezier_handles))->pos.x;
-    const qw offset_y = ((struct bezier_handle*)vector_back(bezier_handles))->pos.y;
+    const qw offset_x = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos.x;
+    const qw offset_y = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos.y;
 
     qw spacing_sq = qw_mul(spacing, spacing);
     qw expected_total_spacing = 0;
@@ -457,17 +458,17 @@ bezier_calc_equidistant_points(
     vector_clear(bezier_points);
     {
         struct bezier_point* bp = vector_emplace(bezier_points);
-        struct bezier_handle* head = vector_back(bezier_handles);
+        struct bezier_handle* head = rb_peek_write(bezier_handles);
         bp->pos.x = qw_add(x, offset_x);
         bp->pos.y = qw_add(y, offset_y);
         bp->dir.x = -qa_cos(head->angle);
         bp->dir.y = -qa_sin(head->angle);
     }
 
-    for (i = vector_count(bezier_handles) - 2; i >= 0; --i)
+    for (i = rb_count(bezier_handles) - 2; i >= 0; --i)
     {
-        const struct bezier_handle* head = vector_get_element(bezier_handles, i+1);
-        const struct bezier_handle* tail = vector_get_element(bezier_handles, i+0);
+        const struct bezier_handle* head = rb_peek(bezier_handles, i+1);
+        const struct bezier_handle* tail = rb_peek(bezier_handles, i+0);
 
         /* Calculate bezier control points */
         const struct qwpos p0 = {
@@ -561,7 +562,7 @@ bezier_calc_equidistant_points(
                     x = next_x;
                     y = next_y;
 
-                    if (vector_count(bezier_points) >= snake_length)
+                    if ((int)vector_count(bezier_points) >= snake_length)
                         return i;
 
                     break;

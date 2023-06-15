@@ -93,7 +93,7 @@ run_server_instance(const void* args)
             if (!snake_is_held(snake, frame_number))
             {
                 struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
-                snake_step(&snake->data, &snake->head, command, instance->settings->sim_tick_rate);
+                snake_step(&snake->data, &snake->head, &snake->param, command, instance->settings->sim_tick_rate);
             }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
@@ -352,7 +352,7 @@ run_client(const struct args* a)
             command_rb_put(&snake->command_rb, command, client.frame_number);
 
             /* Update snake and step */
-            snake_step(&snake->data, &snake->head, command, client.sim_tick_rate);
+            snake_step(&snake->data, &snake->head, &snake->param, command, client.sim_tick_rate);
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
             camera_update(&camera, &snake->head, client.sim_tick_rate);

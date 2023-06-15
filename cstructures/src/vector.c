@@ -328,22 +328,13 @@ vector_erase_element(struct cs_vector* vector, void* element)
 }
 
 /* ------------------------------------------------------------------------- */
-void*
-vector_get_element(const struct cs_vector* vector, cs_vec_idx index)
-{
-    assert(vector);
-    assert(index < vector->count);
-    return vector->data + index * vector->element_size;
-}
-
-/* ------------------------------------------------------------------------- */
 cs_vec_idx
-vector_find_element(const struct cs_vector* vector, const void* element)
+vector_find(const struct cs_vector* vector, const void* element)
 {
     cs_vec_idx i;
     for (i = 0; i != vector_count(vector); ++i)
     {
-        void* current_element = vector_get_element(vector, i);
+        void* current_element = vector_get(vector, i);
         if (memcmp(current_element, element, vector->element_size) == 0)
             return i;
     }

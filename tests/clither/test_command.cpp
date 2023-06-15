@@ -6,15 +6,17 @@
 
 using namespace testing;
 
-TEST(NAME, default_command_agree_with_default_snake_head)
+TEST(NAME, default_command_agrees_with_default_snake_head)
 {
     struct command command;
     struct snake_head head1, head2;
+    struct snake_param param;
     command = command_default();
     snake_head_init(&head1, make_qwposi(0, 0));
     snake_head_init(&head2, make_qwposi(0, 0));
+    snake_param_init(&param);
 
-    snake_step_head(&head2, command, 60);
+    snake_step_head(&head2, &param, command, 60);
     EXPECT_THAT(head1.angle, Eq(head2.angle));
 }
 

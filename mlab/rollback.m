@@ -23,4 +23,4 @@ hold on
 scatter(pxb1, pyb1);
 plot(pxb0, pyb0);
 plot(pxb1, pyb1);
-
+scatter([32768, 32937], [32768, 32776]);

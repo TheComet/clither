@@ -35,9 +35,10 @@ check_c_source_compiles ("__declspec(thread) int value; int main(void) { return 
 check_c_source_compiles ("__thread int value; int main(void) { return 0; }" GCC_THREADLOCAL)
 if (MSVC_THREADLOCAL)
     set (CLITHER_THREADLOCAL "__declspec(thread)")
-endif ()
-if (GCC_THREADLOCAL)
+elseif (GCC_THREADLOCAL)
     set (CLITHER_THREADLOCAL "__thread")
+else ()
+    message (FATAL_ERROR "Unable to detect thread local storage semantics!")
 endif ()
 
 configure_file ("templates/config.h.in" "include/clither/config.h")

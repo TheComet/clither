@@ -115,3 +115,18 @@ rb_take(struct cs_rb* rb)
     rb->read = (read + 1u) & (rb->capacity - 1u);
     return data;
 }
+
+/* -------------------------------------------------------------------- */
+void*
+rb_take_write(struct cs_rb* rb)
+{
+    rb_idx write;
+    void* data;
+    if (rb_is_empty(rb))
+        return NULL;
+
+    write = (rb->write - 1u) & (rb->capacity - 1u);
+    data = rb->buffer + write * rb->value_size;
+    rb->write = write;
+    return data;
+}

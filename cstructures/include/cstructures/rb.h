@@ -80,6 +80,9 @@ rb_emplace(struct cs_rb* rb);
 CSTRUCTURES_PUBLIC_API void*
 rb_take(struct cs_rb* rb);
 
+CSTRUCTURES_PUBLIC_API void*
+rb_take_write(struct cs_rb* rb);
+
 #define rb_clear(rb) \
     (rb)->read = (rb)->write
 

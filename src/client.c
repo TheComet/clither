@@ -330,6 +330,7 @@ retry_recv:
                     &snake->head_ack,
                     &snake->head,
                     &pp.snake_head.head,
+                    &snake->param,
                     &snake->command_rb,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
