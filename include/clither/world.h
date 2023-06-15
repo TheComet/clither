@@ -10,6 +10,9 @@ C_BEGIN
 struct world
 {
     struct cs_btree snakes;
+    qw inner_radius;
+    qw ring_start;
+    qw ring_end;
 };
 
 void

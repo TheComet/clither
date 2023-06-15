@@ -10,6 +10,10 @@ void
 world_init(struct world* world)
 {
     btree_init(&world->snakes, sizeof(struct snake));
+
+    world->inner_radius = make_qw(20);
+    world->ring_start = make_qw(40);
+    world->ring_end = make_qw(64);
 }
 
 /* ------------------------------------------------------------------------- */
