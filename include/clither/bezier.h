@@ -7,6 +7,7 @@
 C_BEGIN
 
 struct cs_vector;
+struct cs_rb;
 
 struct bezier_point
 {
@@ -59,19 +60,19 @@ bezier_fit_head(
  */
 void
 bezier_squeeze_step(
-    struct cs_vector* bezier_handles,
+    struct cs_rb* bezier_handles,
     int sim_tick_rate);
 
 void
 bezier_squeeze_n_recent_step(
-    struct cs_vector* bezier_handles,
+    struct cs_rb* bezier_handles,
     int n,
     int sim_tick_rate);
 
 int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
-    const struct cs_vector* bezier_handles,
+    const struct cs_rb* bezier_handles,
     qw spacing,
     int snake_length);
 

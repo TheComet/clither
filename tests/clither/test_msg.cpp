@@ -25,7 +25,7 @@ TEST(NAME, compress_single_controls)
     struct cs_vector msgs;
     vector_init(&msgs, sizeof(struct msg*));
     msg_commands(&msgs, &rb);
-    struct msg* m = (struct msg*)vector_front(&msgs);
+    struct msg* m = *(struct msg**)vector_front(&msgs);
     command_rb_clear(&rb);
     vector_deinit(&msgs);
 
@@ -57,7 +57,7 @@ TEST(NAME, compress_multiple_controls)
     struct cs_vector msgs;
     vector_init(&msgs, sizeof(struct msg*));
     msg_commands(&msgs, &rb);
-    struct msg* m = (struct msg*)vector_front(&msgs);
+    struct msg* m = *(struct msg**)vector_front(&msgs);
     command_rb_clear(&rb);
 
     uint16_t first_frame, last_frame;

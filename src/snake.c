@@ -13,11 +13,16 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define TURN_SPEED   make_qa2(1, 16)
-#define MIN_SPEED    make_qw2(1, 96)
-#define MAX_SPEED    make_qw2(1, 48)
-#define BOOST_SPEED  make_qw2(1, 16)
-#define ACCELERATION         (1.0 / 32)
+/* ------------------------------------------------------------------------- */
+void
+snake_param_init(struct snake_param* param)
+{
+    param->turn_speed = make_qa2(1, 16);
+    param->min_speed = make_qw2(1, 96);
+    param->max_speed = make_qw2(1, 48);
+    param->boost_speed = make_qw2(1, 16);
+    param->acceleration = 8;
+}
 
 /* ------------------------------------------------------------------------- */
 void
@@ -37,15 +42,15 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
     data->name = MALLOC(strlen(name) + 1);
     strcpy(data->name, name);
 
-    vector_init(&data->points, sizeof(struct cs_vector));
-    vector_init(&data->bezier_handles, sizeof(struct bezier_handle));
+    rb_init(&data->points_lists, sizeof(struct cs_vector));
+    rb_init(&data->bezier_handles, sizeof(struct bezier_handle));
     vector_init(&data->bezier_points, sizeof(struct bezier_point));
 
-    points = vector_emplace(&data->points);
+    points = rb_emplace(&data->points_lists);
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &spawn_pos);
-    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
-    bezier_handle_init(vector_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
+    bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
+    bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
 
     vector_resize(&data->bezier_points, 200);
 }
@@ -55,12 +60,12 @@ static void
 snake_data_deinit(struct snake_data* data)
 {
     vector_deinit(&data->bezier_points);
-    vector_deinit(&data->bezier_handles);
+    rb_deinit(&data->bezier_handles);
 
-    VECTOR_FOR_EACH(&data->points, struct cs_vector, points)
+    RB_FOR_EACH(&data->points_lists, struct cs_vector, points)
         vector_deinit(points);
     VECTOR_END_EACH
-    vector_deinit(&data->points);
+    rb_deinit(&data->points_lists);
 
     FREE(data->name);
 }
@@ -70,6 +75,7 @@ void
 snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 {
     command_rb_init(&snake->command_rb);
+    snake_param_init(&snake->param);
     snake_data_init(&snake->data, spawn_pos, name);
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
@@ -87,9 +93,12 @@ snake_deinit(struct snake* snake)
 
 /* ------------------------------------------------------------------------- */
 void
-snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tick_rate)
+snake_step_head(
+    struct snake_head* head,
+    const struct snake_param* param,
+    struct command command,
+    uint8_t sim_tick_rate)
 {
-    double a;
     qw dx, dy;
     uint8_t target_speed;
 
@@ -108,29 +117,35 @@ snake_step_head(struct snake_head* head, struct command command, uint8_t sim_tic
      * Turn the head towards the target angle and make sure to not exceed the
      * maximum turning speed.
      */
-    if (angle_diff > TURN_SPEED)
-        head->angle = qa_sub(head->angle, qa_mul(TURN_SPEED, make_qa2(sim_tick_rate, 60)));
-    else if (angle_diff < -TURN_SPEED)
-        head->angle = qa_add(head->angle, TURN_SPEED);
+    if (angle_diff > param->turn_speed)
+        head->angle = qa_sub(head->angle, qa_mul(param->turn_speed, make_qa2(sim_tick_rate, 60)));
+    else if (angle_diff < -param->turn_speed)
+        head->angle = qa_add(head->angle, param->turn_speed);
     else
         head->angle = target_angle;
 
     /* Integrate speed over time */
     target_speed = command.action == COMMAND_ACTION_BOOST ?
         255 :
-        qw_sub(MAX_SPEED, MIN_SPEED) * command.speed / qw_sub(BOOST_SPEED, MIN_SPEED);
-    if (head->speed - target_speed > (ACCELERATION * 256))
-        head->speed -= (ACCELERATION * 256);
-    else if (head->speed - target_speed < (-ACCELERATION * 256))
-        head->speed += (ACCELERATION * 256);
+        qw_sub(param->max_speed, param->min_speed) * command.speed / qw_sub(param->boost_speed, param->min_speed);
+    if (head->speed - target_speed > param->acceleration)
+        head->speed -= param->acceleration;
+    else if (head->speed - target_speed < -param->acceleration)
+        head->speed += param->acceleration;
     else
         head->speed = target_speed;
 
     /* Update snake position using the head's current angle and speed */
-    a = qa_to_float(head->angle);
-    dx = make_qw(cos(a) * (head->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
-    dy = make_qw(sin(a) * (head->speed / 255.0 * qw_to_float(BOOST_SPEED - MIN_SPEED) + qw_to_float(MIN_SPEED)));
+    dx = qw_sub(param->boost_speed, param->min_speed);
+    dx = qw_rescale(dx, head->speed, 255);
+    dx = qw_add(dx, param->min_speed);
+    dx = qw_mul(qa_cos(head->angle), dx);
     head->pos.x = qw_add(head->pos.x, dx);
+    
+    dy = qw_sub(param->boost_speed, param->min_speed);
+    dy = qw_rescale(dy, head->speed, 255);
+    dy = qw_add(dy, param->min_speed);
+    dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
 }
 
@@ -142,13 +157,13 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
     struct cs_vector* points;
 
     /* Append new position to the list of points */
-    points = vector_back(&data->points);
+    points = rb_peek_write(&data->points_lists);
     vector_push(points, &head->pos);
 
     /* Fit current bezier segment to list of points */
     error_squared = bezier_fit_head(
-        vector_get_element(&data->bezier_handles, vector_count(&data->bezier_handles) - 1),
-        vector_get_element(&data->bezier_handles, vector_count(&data->bezier_handles) - 2),
+        rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 1),
+        rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 2),
         points);
 
     /*
@@ -162,8 +177,8 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
 static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
-    struct cs_vector* points = vector_emplace(&data->points);
-    bezier_handle_init(vector_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, make_qa(M_PI)));
+    struct cs_vector* points = rb_emplace(&data->points_lists);
+    bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &head->pos);
 }
@@ -173,10 +188,11 @@ void
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
+    const struct snake_param* param,
     struct command command,
     uint8_t sim_tick_rate)
 {
-    snake_step_head(head, command, sim_tick_rate);
+    snake_step_head(head, param, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
@@ -191,6 +207,7 @@ snake_ack_frame(
     struct snake_head* acknowledged_head,
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
+    const struct snake_param* param,
     struct command_rb* command_rb,
     uint16_t frame_number,
     uint8_t sim_tick_rate)
@@ -226,7 +243,7 @@ snake_ack_frame(
          struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
 
         /* Step to next frame */
-        snake_step_head(acknowledged_head, command, sim_tick_rate);
+        snake_step_head(acknowledged_head, param, command, sim_tick_rate);
 
         last_ackd_frame++;
     }
@@ -257,17 +274,17 @@ snake_ack_frame(
          * the same position, so when removing a bezier segment, two points
          * need to be removed.
          */
-        struct cs_vector* points = vector_back(&data->points);
+        struct cs_vector* points = rb_peek_write(&data->points_lists);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
             vector_pop(points);
             if (vector_count(points) == 0)
             {
-                vector_deinit(vector_pop(&data->points));
-                points = vector_back(&data->points);
-                vector_pop(points);  /* Duplicate point */
+                vector_deinit(rb_take_write(&data->points_lists));
+                points = rb_peek_write(&data->points_lists);
+                vector_pop(points);  /* Remove duplicate point */
 
-                vector_pop(&data->bezier_handles);
+                rb_take_write(&data->bezier_handles);
             }
 
             predicted_frame--;
@@ -285,7 +302,7 @@ snake_ack_frame(
 
         /* Simulate head forwards again */
         COMMAND_RB_FOR_EACH(command_rb, frame, command)
-            snake_step_head(predicted_head, *command, sim_tick_rate);
+            snake_step_head(predicted_head, param, *command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
                 snake_add_new_segment(data, predicted_head);

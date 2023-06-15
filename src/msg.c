@@ -409,8 +409,8 @@ msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
          */
         m = msg_alloc(
             MSG_COMMANDS, 0,
-            sizeof(first_frame_number) +          /* frame number */
-            19 + (12*send_count + 8) / 8);  /* upper bound for all command */
+            sizeof(first_frame_number) +    /* frame number */
+            3 + (12*send_count + 8) / 8);  /* upper bound for all commands */
 
         m->payload[0] = first_frame_number >> 8;
         m->payload[1] = first_frame_number & 0xFF;

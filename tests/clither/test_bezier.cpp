@@ -1,6 +1,7 @@
 #include "gmock/gmock.h"
 #include "clither/bezier.h"
 #include "clither/q.h"
+#include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
 #define NAME bezier
@@ -197,90 +198,92 @@ TEST_F(NAME, misfit)
 
 TEST_F(NAME, calc_equidistant_points_on_single_curve)
 {
-    cs_vector handles;
-    vector_init(&handles, sizeof(struct bezier_handle));
-    bezier_handle* tail = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* head = (bezier_handle*)vector_emplace(&handles);
-
-    bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
+    cs_rb handles;
+    rb_init(&handles, sizeof(struct bezier_handle));
+    bezier_handle* tail = (bezier_handle*)rb_emplace(&handles);
     bezier_handle_init(tail, make_qwposi(3, 4), make_qa(M_PI / 7));
-    head->len_backwards = 255;
     tail->len_forwards = 255;
+
+    bezier_handle* head = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
+    head->len_backwards = 255;
 
     bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), 5);
 
     ASSERT_THAT(vector_count(&points), Eq(5));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.x, Eq(make_qw(2)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.y, Eq(make_qw(3)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(2)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.y, Eq(make_qw(3)));
 
-    vector_deinit(&handles);
+    rb_deinit(&handles);
 }
 
 TEST_F(NAME, calc_equidistant_points_on_single_curve_no_space)
 {
-    cs_vector handles;
-    vector_init(&handles, sizeof(struct bezier_handle));
-    bezier_handle* tail = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* head = (bezier_handle*)vector_emplace(&handles);
-
-    bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
+    cs_rb handles;
+    rb_init(&handles, sizeof(struct bezier_handle));
+    bezier_handle* tail = (bezier_handle*)rb_emplace(&handles);
     bezier_handle_init(tail, make_qwposi(3, 4), make_qa(M_PI / 7));
-    head->len_backwards = 255;
     tail->len_forwards = 255;
+
+    bezier_handle* head = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
+    head->len_backwards = 255;
 
     bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), 50);
 
-    ASSERT_THAT(vector_count(&points), Eq(21));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.x, Eq(make_qw(2)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.y, Eq(make_qw(3)));
+    ASSERT_THAT(vector_count(&points), Eq(20));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(2)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.y, Eq(make_qw(3)));
 
-    vector_deinit(&handles);
+    rb_deinit(&handles);
 }
 
 TEST_F(NAME, calc_equidistant_points_on_two_curves)
 {
-    cs_vector handles;
-    vector_init(&handles, sizeof(struct bezier_handle));
-    bezier_handle* tail = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* mid = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* head = (bezier_handle*)vector_emplace(&handles);
-
-    bezier_handle_init(head, make_qwposf(0, 2), 0);
-    bezier_handle_init(mid, make_qwposf(0, 1.5), 0);
+    cs_rb handles;
+    rb_init(&handles, sizeof(struct bezier_handle));
+    bezier_handle* tail = (bezier_handle*)rb_emplace(&handles);
     bezier_handle_init(tail, make_qwposf(0, 1), 0);
+
+    bezier_handle* mid = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(mid, make_qwposf(0, 1.5), 0);
+
+    bezier_handle* head = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(head, make_qwposf(0, 2), 0);
 
     bezier_calc_equidistant_points(&points, &handles, make_qw(0.4), 5);
 
     ASSERT_THAT(vector_count(&points), Eq(3));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.x, Eq(make_qw(0)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.y, Eq(make_qw(2)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 1))->pos.x, Eq(0));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 1))->pos.y, Eq(26215));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 2))->pos.x, Eq(0));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 2))->pos.y, Eq(19661));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(0)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.y, Eq(make_qw(2)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 1))->pos.x, Eq(0));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 1))->pos.y, Eq(26215));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 2))->pos.x, Eq(0));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 2))->pos.y, Eq(19661));
 
-    vector_deinit(&handles);
+    rb_deinit(&handles);
 }
 
 TEST_F(NAME, calc_equidistant_points_on_two_curves_spacing_larger_than_curve)
 {
-    cs_vector handles;
-    vector_init(&handles, sizeof(struct bezier_handle));
-    bezier_handle* tail = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* mid = (bezier_handle*)vector_emplace(&handles);
-    bezier_handle* head = (bezier_handle*)vector_emplace(&handles);
-
-    bezier_handle_init(head, make_qwposf(0, 2), 0);
-    bezier_handle_init(mid, make_qwposf(0, 1.5), 0);
+    cs_rb handles;
+    rb_init(&handles, sizeof(struct bezier_handle));
+    bezier_handle* tail = (bezier_handle*)rb_emplace(&handles);
     bezier_handle_init(tail, make_qwposf(0, 1), 0);
 
-    bezier_calc_equidistant_points(&points, &handles, make_qw(0.8), 2);
+    bezier_handle* mid = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(mid, make_qwposf(0, 1.5), 0);
 
-    ASSERT_THAT(vector_count(&points), Eq(3));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.x, Eq(make_qw(0)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 0))->pos.y, Eq(make_qw(2)));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 1))->pos.x, Eq(0));
-    EXPECT_THAT(((bezier_point*)vector_get_element(&points, 1))->pos.y, Eq(19661));
+    bezier_handle* head = (bezier_handle*)rb_emplace(&handles);
+    bezier_handle_init(head, make_qwposf(0, 2), 0);
 
-    vector_deinit(&handles);
+    bezier_calc_equidistant_points(&points, &handles, make_qw(0.8), 3);
+
+    ASSERT_THAT(vector_count(&points), Eq(2));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(0)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.y, Eq(make_qw(2)));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 1))->pos.x, Eq(0));
+    EXPECT_THAT(((bezier_point*)vector_get(&points, 1))->pos.y, Eq(19661));
+
+    rb_deinit(&handles);
 }

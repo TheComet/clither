@@ -163,10 +163,10 @@ TEST_F(NAME, get_element_random_access)
     emplaced = (int*)vector_emplace(&vec); *emplaced = 24;
     emplaced = (int*)vector_emplace(&vec); *emplaced = 73;
     emplaced = (int*)vector_emplace(&vec); *emplaced = 43;
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
 }
 
 TEST_F(NAME, popping_preserves_existing_elements)
@@ -179,10 +179,10 @@ TEST_F(NAME, popping_preserves_existing_elements)
     emplaced = (int*)vector_emplace(&vec); *emplaced = 24;
 
     vector_pop(&vec);
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
 }
 
 TEST_F(NAME, erasing_by_index_preserves_existing_elements)
@@ -195,15 +195,15 @@ TEST_F(NAME, erasing_by_index_preserves_existing_elements)
     emplaced = (int*)vector_emplace(&vec); *emplaced = 65;
 
     vector_erase_index(&vec, 1);
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(65));
 
     vector_erase_index(&vec, 1);
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(65));
 }
 
 TEST_F(NAME, erasing_by_element_preserves_existing_elements)
@@ -215,16 +215,16 @@ TEST_F(NAME, erasing_by_element_preserves_existing_elements)
     emplaced = (int*)vector_emplace(&vec); *emplaced = 43;
     emplaced = (int*)vector_emplace(&vec); *emplaced = 65;
 
-    vector_erase_element(&vec, vector_get_element(&vec, 1));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(65));
+    vector_erase_element(&vec, vector_get(&vec, 1));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(65));
 
-    vector_erase_element(&vec, vector_get_element(&vec, 1));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(65));
+    vector_erase_element(&vec, vector_get(&vec, 1));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(65));
 }
 
 TEST_F(NAME, inserting_preserves_existing_elements)
@@ -239,48 +239,48 @@ TEST_F(NAME, inserting_preserves_existing_elements)
     int x = 68;
     vector_insert(&vec, 2, &x); // middle insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(65));
 
     x = 16;
     vector_insert(&vec, 0, &x); // beginning insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
 
     x = 82;
     vector_insert(&vec, 7, &x); // end insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 7), Eq(82));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 7), Eq(82));
 
     x = 37;
     vector_insert(&vec, 7, &x); // end insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 7), Eq(37));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 8), Eq(82));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 7), Eq(37));
+    EXPECT_THAT(*(int*)vector_get(&vec, 8), Eq(82));
 }
 
 TEST_F(NAME, insert_emplacing_preserves_existing_elements)
@@ -294,45 +294,45 @@ TEST_F(NAME, insert_emplacing_preserves_existing_elements)
 
     emplaced = (int*)vector_insert_emplace(&vec, 2); *emplaced = 68; // middle insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(65));
 
     emplaced = (int*)vector_insert_emplace(&vec, 0); *emplaced = 16; // beginning insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
 
     emplaced = (int*)vector_insert_emplace(&vec, 7); *emplaced = 82; // end insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 7), Eq(82));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 7), Eq(82));
 
     emplaced = (int*)vector_insert_emplace(&vec, 7); *emplaced = 37; // end insertion
 
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 0), Eq(16));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 1), Eq(53));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 2), Eq(24));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 3), Eq(68));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 4), Eq(73));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 5), Eq(43));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 6), Eq(65));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 7), Eq(37));
-    EXPECT_THAT(*(int*)vector_get_element(&vec, 8), Eq(82));
+    EXPECT_THAT(*(int*)vector_get(&vec, 0), Eq(16));
+    EXPECT_THAT(*(int*)vector_get(&vec, 1), Eq(53));
+    EXPECT_THAT(*(int*)vector_get(&vec, 2), Eq(24));
+    EXPECT_THAT(*(int*)vector_get(&vec, 3), Eq(68));
+    EXPECT_THAT(*(int*)vector_get(&vec, 4), Eq(73));
+    EXPECT_THAT(*(int*)vector_get(&vec, 5), Eq(43));
+    EXPECT_THAT(*(int*)vector_get(&vec, 6), Eq(65));
+    EXPECT_THAT(*(int*)vector_get(&vec, 7), Eq(37));
+    EXPECT_THAT(*(int*)vector_get(&vec, 8), Eq(82));
 }
 
 TEST_F(NAME, resizing_larger_than_capacity_reallocates_and_updates_size)
@@ -342,7 +342,7 @@ TEST_F(NAME, resizing_larger_than_capacity_reallocates_and_updates_size)
     old_ptr = (int*)vector_emplace(&vec);
     *old_ptr = 42;
     vector_resize(&vec, CSTRUCTURES_VEC_MIN_CAPACITY * 1024 * 1024);
-    int* new_ptr = (int*)vector_get_element(&vec, 0);
+    int* new_ptr = (int*)vector_get(&vec, 0);
     EXPECT_THAT(old_ptr, Ne(new_ptr));
     EXPECT_THAT(*new_ptr, Eq(42));
     EXPECT_THAT(vec.capacity, Eq(CSTRUCTURES_VEC_MIN_CAPACITY * 1024 * 1024));

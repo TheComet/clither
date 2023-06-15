@@ -2,7 +2,6 @@
 
 #define _USE_MATH_DEFINES
 #include <stdint.h>
-#include <math.h>
 
 typedef int32_t q16_16;
 #define Q16_16_Q 16
@@ -23,6 +22,7 @@ typedef int32_t qw;
 typedef int16_t qa;
 #define QA_Q  12
 #define QA_K  (1 << (QA_Q - 1))
+#define QA_PI 12867
 
 struct spos
 {
@@ -189,6 +189,8 @@ static inline qw qw_div(qw a, qw b)
     return (qw)(temp / b);
 }
 
+#include <math.h>
+
 static inline qw qw_sqrt(qw q)
 {
     /* TODO */
@@ -231,14 +233,15 @@ static inline struct qwpos qwpos_normalize(struct qwpos p)
 #define make_qa2(v, div) (qa)((v) * (1 << QA_Q) / (div))
 #define qa_to_int(q) ((int)((q) / (1 << QA_Q)))
 #define qa_to_float(q) ((double)(q) / (1 << QA_Q))
+#define qa_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 
 static inline qa qa_wrapvalue(int32_t value)
 {
     /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
-    if (value < make_qa(-M_PI))
-        value += make_qa(2 * M_PI);
-    if (value >= make_qa(M_PI))
-        value -= make_qa(2 * M_PI);
+    if (value < -QA_PI)
+        value += 2 * QA_PI;
+    if (value >= QA_PI)
+        value -= 2 * QA_PI;
     return (qa)value;
 }
 

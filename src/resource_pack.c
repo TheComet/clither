@@ -335,7 +335,7 @@ resource_pack_load(const char* pack_path)
                 cstr_split2_strip(&tex0, &tex1, ',', ' ');
                 if (!*tex1)
                     log_warn("Missing normal map in background texture\n");
-                res = *(struct resource_sprite**)vector_get_element(&background_sprites, current.index);
+                res = *(struct resource_sprite**)vector_get(&background_sprites, current.index);
                 string_cat(string_cat2(&str, pack_path, "/"), tex0);
                 FREE(res->texture0); res->texture0 = string_take(&str);
                 string_cat(string_cat2(&str, pack_path, "/"), tex1);
@@ -362,7 +362,7 @@ resource_pack_load(const char* pack_path)
                 current.section == SEC_BODY ? &body_parts :
                 &tail_parts;
             struct resource_snake_part* part =
-                *(struct resource_snake_part**)vector_get_element(vec, current.index);
+                *(struct resource_snake_part**)vector_get(vec, current.index);
             struct resource_sprite** psprite =
                 current.sub == SUB_BASE ? &part->base :
                 current.sub == SUB_GATHER ? &part->gather :

@@ -377,13 +377,9 @@ bg_deinit(struct bg* bg)
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-bg_load(struct bg* bg, const struct resource_pack* pack)
+static void
+bg_unload(struct bg* bg)
 {
-    int img_width, img_height, img_channels;
-    stbi_uc* img_data;
-
-    /* Clean up previous data */
     if (bg->program != 0)
         glDeleteProgram(bg->program);
     bg->program = 0;
@@ -393,6 +389,16 @@ bg_load(struct bg* bg, const struct resource_pack* pack)
     glBindTexture(GL_TEXTURE_2D, bg->texNor);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+bg_load(struct bg* bg, const struct resource_pack* pack)
+{
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
+
+    assert(bg->program == 0);
 
     /* For now we only support a single background layer */
     if (pack->sprites.background[0] == NULL)
@@ -485,9 +491,19 @@ sprite_shadow_deinit(struct sprite_shadow* ss)
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+sprite_shadow_unload(struct sprite_shadow* ss)
+{
+    if (ss->program != 0)
+        glDeleteProgram(ss->program);
+    ss->program = 0;
+}
+
+/* ------------------------------------------------------------------------- */
 static int
 sprite_shadow_load(struct sprite_shadow* ss, const struct resource_pack* pack)
 {
+    assert(ss->program == 0);
     ss->program = load_shader(pack->shaders.glsl.shadow, attr_bindings);
     if (ss->program == 0)
         return -1;
@@ -525,9 +541,19 @@ sprite_mat_deinit(struct sprite_mat* mat)
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+sprite_mat_unload(struct sprite_mat* mat)
+{
+    if (mat->program != 0)
+        glDeleteProgram(mat->program);
+    mat->program = 0;
+}
+
+/* ------------------------------------------------------------------------- */
 static int
 sprite_mat_load(struct sprite_mat* mat, const struct resource_pack* pack)
 {
+    assert(mat->program == 0);
     mat->program = load_shader(pack->shaders.glsl.sprite, attr_bindings);
     if (mat->program == 0)
         return -1;
@@ -574,16 +600,21 @@ sprite_tex_deinit(struct sprite_tex* tex)
 
 /* ------------------------------------------------------------------------- */
 static void
-sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
+sprite_tex_unload(struct sprite_tex* tex)
 {
-    int img_width, img_height, img_channels;
-    stbi_uc* img_data;
-
     glBindTexture(GL_TEXTURE_2D, tex->texNM);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
+{
+    int img_width, img_height, img_channels;
+    stbi_uc* img_data;
 
     img_data = stbi_load(res->texture0, &img_width, &img_height, &img_channels, 4);
     if (img_data != NULL)
@@ -619,9 +650,12 @@ sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
 int
 gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
-    bg_load(&gfx->bg, pack);
-    sprite_shadow_load(&gfx->sprite_shadow, pack);
-    sprite_mat_load(&gfx->sprite_mat, pack);
+    if (bg_load(&gfx->bg, pack) < 0)
+        goto bg_load_failed;
+    if (sprite_shadow_load(&gfx->sprite_shadow, pack) < 0)
+        goto sprite_shadow_load_failed;
+    if (sprite_mat_load(&gfx->sprite_mat, pack) < 0)
+        goto sprite_mat_load_failed;
 
     if (pack->sprites.head[0])
     {
@@ -632,6 +666,13 @@ gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         sprite_tex_load(&gfx->body0_base, pack->sprites.body[0]->base);
 
     return 0;
+
+sprite_mat_load_failed:
+    sprite_shadow_unload(&gfx->sprite_shadow);
+sprite_shadow_load_failed:
+    bg_unload(&gfx->bg);
+bg_load_failed:
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -789,7 +830,7 @@ gfx_input_to_command(
     if (d > max_dist)
         d = max_dist;
 
-    return command_make(prev, a, d/ max_dist, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
+    return command_make(prev, a, d / max_dist, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -874,7 +915,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     /* body parts */
     for (i = vector_count(&snake->data.bezier_points) - 1; i >= 1; --i)
     {
-        struct bezier_point* bp = vector_get_element(&snake->data.bezier_points, i);
+        struct bezier_point* bp = vector_get(&snake->data.bezier_points, i);
         /* world -> camera space */
         struct qwpos pos_cameraSpace = {
             qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
