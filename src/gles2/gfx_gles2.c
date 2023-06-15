@@ -789,7 +789,7 @@ gfx_input_to_command(
     if (d > max_dist)
         d = max_dist;
 
-    return command_make(prev, a, d, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
+    return command_make(prev, a, d/ max_dist, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */

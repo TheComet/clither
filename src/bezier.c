@@ -438,9 +438,16 @@ bezier_calc_equidistant_points(
 {
     int i;
 
-    /* Initial x,y positions */
-    qw x = ((struct bezier_handle*)vector_back(bezier_handles))->pos.x;
-    qw y = ((struct bezier_handle*)vector_back(bezier_handles))->pos.y;
+    /* 
+     * Initial x,y positions
+     * Calculating coefficients far away from 0,0 results in precision issues,
+     * so we translate everything near 0,0 first, calculate, then translate
+     * the result back
+     */
+    qw x = 0;
+    qw y = 0;
+    const qw offset_x = ((struct bezier_handle*)vector_back(bezier_handles))->pos.x;
+    const qw offset_y = ((struct bezier_handle*)vector_back(bezier_handles))->pos.y;
 
     qw spacing_sq = qw_mul(spacing, spacing);
     qw expected_total_spacing = 0;
@@ -451,8 +458,8 @@ bezier_calc_equidistant_points(
     {
         struct bezier_point* bp = vector_emplace(bezier_points);
         struct bezier_handle* head = vector_back(bezier_handles);
-        bp->pos.x = x;
-        bp->pos.y = y;
+        bp->pos.x = qw_add(x, offset_x);
+        bp->pos.y = qw_add(y, offset_y);
         bp->dir.x = -qa_cos(head->angle);
         bp->dir.y = -qa_sin(head->angle);
     }
@@ -463,16 +470,22 @@ bezier_calc_equidistant_points(
         const struct bezier_handle* tail = vector_get_element(bezier_handles, i+0);
 
         /* Calculate bezier control points */
-        const struct qwpos p0 = head->pos;
+        const struct qwpos p0 = {
+            qw_sub(head->pos.x, offset_x),
+            qw_sub(head->pos.y, offset_y)
+        };
+        const struct qwpos p3 = {
+            qw_sub(tail->pos.x, offset_x),
+            qw_sub(tail->pos.y, offset_y)
+        };
         const struct qwpos p1 = {
-            qw_add(head->pos.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
-            qw_add(head->pos.y, qw_rescale(qa_sin(head->angle), head->len_backwards, 255))
+            qw_add(p0.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
+            qw_add(p0.y, qw_rescale(qa_sin(head->angle), head->len_backwards, 255))
         };
         const struct qwpos p2 = {
-            qw_add(tail->pos.x, qw_rescale(-qa_cos(tail->angle), tail->len_forwards, 255)),
-            qw_add(tail->pos.y, qw_rescale(-qa_sin(tail->angle), tail->len_forwards, 255)),
+            qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
+            qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)),
         };
-        const struct qwpos p3 = tail->pos;
 
         /* Calculate polynomial coefficients X dimension */
         const qw a0 = p0.x;
@@ -533,8 +546,8 @@ bezier_calc_equidistant_points(
 
                     /* Insert new point and calculate tangent vector */
                     bp = vector_emplace(bezier_points);
-                    bp->pos.x = next_x;
-                    bp->pos.y = next_y;
+                    bp->pos.x = qw_add(next_x, offset_x);
+                    bp->pos.y = qw_add(next_y, offset_y);
                     bp->dir.x = -qw_add(qw_add(a1, qw_mul(make_qw(2), qw_mul(a2, t))), qw_mul(make_qw(3), qw_mul(a3, t2)));
                     bp->dir.y = -qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
                     bp->dir = qwpos_normalize(bp->dir);
@@ -542,7 +555,7 @@ bezier_calc_equidistant_points(
                     /* Error compensation *
                     expected_total_spacing = qw_add(expected_total_spacing, spacing);
                     actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
-                    spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing));
+                    spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
                     spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
 
                     x = next_x;

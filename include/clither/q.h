@@ -36,7 +36,7 @@ struct qwpos
     qw y;
 };
 
-struct qaabb
+struct qwaabb
 {
     qw x1, y1;
     qw x2, y2;
@@ -109,11 +109,19 @@ static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
 #define qw_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 #define q16_16_to_qw(q16) qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
 
-static inline struct qaabb make_qaabbi(int x1, int y1, int x2, int y2)
+static inline struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
 {
-    struct qaabb bb;
+    struct qwaabb bb;
     bb.x1 = make_qw(x1); bb.y1 = make_qw(y1);
     bb.x2 = make_qw(x2); bb.y2 = make_qw(y2);
+    return bb;
+}
+
+static inline struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
+{
+    struct qwaabb bb;
+    bb.x1 = x1; bb.y1 = y1;
+    bb.x2 = x2; bb.y2 = y2;
     return bb;
 }
 
