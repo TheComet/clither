@@ -136,6 +136,7 @@ struct RenderTarget {
 };
 
 struct RenderPass {
+	VkRenderPass* renderPass;
 	uint32_t renderTargetCount;
 	struct RenderTarget renderTargets[MAX_RENDER_TARGETS];
 	struct RenderTarget depthTarget;
@@ -191,7 +192,7 @@ struct gfx
 
 	struct RenderPass renderPass;
 	// List of available frame buffers (same as number of swap chain images)
-	VkFramebuffer* frameBuffers;
+	VkFramebuffer* frameBuffers[BUFFER_COUNT];
 	// Active frame buffer index
 	uint32_t currentBuffer;
 	uint32_t bufferCount;
@@ -896,6 +897,73 @@ struct gfx*
 		renderTarget.texture[i].view = pSwapChain->buffers[i].view;
 	}
 
+	VkAttachmentDescription attachment;
+	attachment.format = gfx->swapChain.colorFormat;
+	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachment.flags = 0;
+
+	VkAttachmentReference colorReference;
+	colorReference.attachment = 0;
+	colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpassDescription;
+	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassDescription.colorAttachmentCount = 1;
+	subpassDescription.pColorAttachments = &colorReference;
+	subpassDescription.pDepthStencilAttachment = 0;
+	subpassDescription.inputAttachmentCount = 0;
+	subpassDescription.pInputAttachments = 0;
+	subpassDescription.preserveAttachmentCount = 0;
+	subpassDescription.pPreserveAttachments = 0;
+	subpassDescription.pResolveAttachments = 0;
+	subpassDescription.flags = 0;
+
+	VkSubpassDependency dependency;
+	memset(&dependency, 0, sizeof(VkSubpassDependency));
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+	dependency.dependencyFlags = 0;
+
+	VkRenderPassCreateInfo renderPassInfo;
+	memset(&renderPassInfo, 0, sizeof(VkRenderPassCreateInfo));
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &attachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpassDescription;
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	vkCreateRenderPass(gfx->device, &renderPassInfo, 0, &gfx->renderPass.renderPass);
+
+	VkFramebufferCreateInfo frameBufferCreateInfo;
+	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	frameBufferCreateInfo.pNext = NULL;
+	frameBufferCreateInfo.renderPass = gfx->renderPass.renderPass;
+	frameBufferCreateInfo.attachmentCount = 1;
+	frameBufferCreateInfo.pAttachments = &attachment;
+	frameBufferCreateInfo.width = gfx->width;
+	frameBufferCreateInfo.height = gfx->height;
+	frameBufferCreateInfo.layers = 1;
+	frameBufferCreateInfo.flags = 0;
+
+	// Create frame buffers for every swap chain image
+	for (uint32_t i = 0; i < BUFFER_COUNT; i++)
+	{
+		frameBufferCreateInfo.pAttachments = &gfx->swapChain.buffers[i].view;
+		vkCreateFramebuffer(gfx->device, &frameBufferCreateInfo, 0, &gfx->frameBuffers[i]);
+	}
+
 	gfx->renderPass.renderTargets[0] = renderTarget;
 	gfx->renderPass.renderTargetCount = 1;
 	gfx->renderPass.clearColor[0] = 0.2f;
@@ -911,7 +979,6 @@ struct gfx*
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	cmdPoolInfo.pNext = 0;
 	vkCreateCommandPool(gfx->device, &cmdPoolInfo, 0, &gfx->cmdPool);
-
 
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
@@ -1138,29 +1205,18 @@ CmdBeginRenderPass(struct gfx* gfx) {
 	clearValues.color.float32[1] = 0.4f;
 	clearValues.color.float32[2] = 0.6f;
 	clearValues.color.float32[3] = 1.0f;// = { { 0.2f, 0.4f, 0.6f, 1.0f } };
-
-	VkRenderingAttachmentInfoKHR attachments;
-	memset(&attachments, 0, sizeof(VkRenderingAttachmentInfoKHR));
-
-	uint32_t colorAttachmentCount = 0;
-	attachments.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-	attachments.imageView = renderPass->renderTargets[0].texture[curr].view;
-	attachments.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-	attachments.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments.clearValue = clearValues;
 		
-	VkRenderingInfoKHR info;
-	memset(&info, 0, sizeof(VkRenderingInfoKHR));
-	info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-	info.renderArea.offset.x = 0;
-	info.renderArea.offset.y = 0;
-	info.renderArea.extent.width = gfx->width;
-	info.renderArea.extent.height = gfx->height;
-	info.layerCount = 1;
-	info.colorAttachmentCount = 1;
-	info.pColorAttachments = &attachments;
-	info.pNext = 0;
+	VkRenderPassBeginInfo renderPassBeginInfo;
+	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassBeginInfo.pNext = 0;
+	renderPassBeginInfo.framebuffer = gfx->frameBuffers[curr];
+	renderPassBeginInfo.renderPass = renderPass->renderPass;
+	renderPassBeginInfo.renderArea.offset.x = 0;
+	renderPassBeginInfo.renderArea.offset.y = 0;
+	renderPassBeginInfo.renderArea.extent.width = gfx->width;
+	renderPassBeginInfo.renderArea.extent.height = gfx->height;
+	renderPassBeginInfo.clearValueCount = 1;
+	renderPassBeginInfo.pClearValues = &clearValues;
 	//info.pDepthAttachment = (renderPass->depthTarget) ? &depthAttachment : nullptr;
 
 	VkImageMemoryBarrier image_memory_barrier;
@@ -1188,7 +1244,8 @@ CmdBeginRenderPass(struct gfx* gfx) {
 	);
 
 	// Set target frame buffer
-	vkCmdBeginRendering(cmdBuffer->drawCmdBuffers[curr], &info);
+	vkCmdBeginRenderPass(cmdBuffer->drawCmdBuffers[curr], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+	//(cmdBuffer->drawCmdBuffers[curr], &info);
 
 	VkViewport viewport;
 	viewport.width = gfx->width;
@@ -1218,7 +1275,7 @@ static CmdEndRenderPass(struct gfx* gfx) {
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
 
 	int i = gfx->currentBuffer;
-	vkCmdEndRendering(pCommandBuffer->drawCmdBuffers[i]);
+	vkCmdEndRenderPass(pCommandBuffer->drawCmdBuffers[i]);
 
 	VkImageMemoryBarrier image_memory_barrier;
 	memset(&image_memory_barrier, 0, sizeof(VkImageMemoryBarrier));
