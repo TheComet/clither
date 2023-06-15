@@ -1268,8 +1268,9 @@ CmdBeginRenderPass(struct gfx* gfx) {
 	return 1;
 }
 
+static
 int
-static CmdEndRenderPass(struct gfx* gfx) {
+CmdEndRenderPass(struct gfx* gfx) {
 
 	struct RenderPass* pRenderPass = &gfx->renderPass;
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
@@ -1305,7 +1306,7 @@ static CmdEndRenderPass(struct gfx* gfx) {
 	return 1;
 }
 
-int static
+static int
 EndRecording(struct gfx* gfx) {
 	//assert(commandBuffer != VK_NULL_HANDLE);
 
@@ -1317,7 +1318,7 @@ EndRecording(struct gfx* gfx) {
 	return 1;
 }
 
-int static
+static int
 SubmitCommandBuffers(struct gfx* gfx) {
 
 	struct CommandBuffer* pCommandBuffer = &gfx->cmdBuffer;
