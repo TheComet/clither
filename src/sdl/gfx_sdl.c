@@ -432,10 +432,10 @@ draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snak
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
-    for (i = 0; i < (int)vector_count(&snake->data.bezier_handles) - 1; ++i)
+    for (i = 0; i < (int)rb_count(&snake->data.bezier_handles) - 1; ++i)
     {
-        struct bezier_handle* tail = vector_get_element(&snake->data.bezier_handles, i+0);
-        struct bezier_handle* head = vector_get_element(&snake->data.bezier_handles, i+1);
+        struct bezier_handle* tail = rb_peek(&snake->data.bezier_handles, i+0);
+        struct bezier_handle* head = rb_peek(&snake->data.bezier_handles, i+1);
         if (i&1)
             SDL_SetRenderDrawColor(gfx->renderer, 255, 0, 0, 255);
         else
