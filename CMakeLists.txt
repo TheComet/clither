@@ -77,7 +77,7 @@ add_executable (clither
     "include/clither/thread.h"
     "include/clither/tick.h"
     "include/clither/tests.h"
-	"include/clither/utf8.h"
+    "include/clither/utf8.h"
     "include/clither/world.h"
     "include/clither/wrap.h"
 
@@ -107,30 +107,30 @@ add_executable (clither
         src/gles2/glad/src/gles2.c>
 
     $<$<PLATFORM_ID:Windows>:
-		src/fs_win32.c
+        src/fs_win32.c
         src/mutex_win32.c
         src/net_win32.c
         src/signals_win32.c
         src/thread_win32.c
         src/tick_win32.c
-		src/utf8_win32.c
+        src/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
-		src/fs_posix.c
+        src/fs_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
         src/thread_pthread.c
         src/tick_posix.c
-		src/utf8_posix.c>
+        src/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
-		src/fs_posix.c
+        src/fs_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
         src/thread_pthread.c
         src/tick_posix.c
-		src/utf8_posix.c>
+        src/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
@@ -162,7 +162,7 @@ target_include_directories (clither
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
-        
+
         $<$<STREQUAL:${CLITHER_GFX},GLES2>:
             $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gles2/glad/include>>)
 target_compile_definitions (clither
@@ -192,14 +192,12 @@ add_subdirectory ("cstructures")
 target_link_libraries (clither
     PRIVATE
         cstructures
-        $<$<PLATFORM_ID:Windows>:ws2_32>)
+        $<$<PLATFORM_ID:Windows>:ws2_32>
+        $<$<PLATFORM_ID:Linux>:m>
+        $<$<PLATFORM_ID:Darwin>:m>)
 
 find_package(Threads REQUIRED)
 target_link_libraries (clither PRIVATE Threads::Threads)
-
-if (UNIX)
-    target_link_libraries (clither PRIVATE m)
-endif ()
 
 if (CLITHER_GFX STREQUAL "SDL")
     set (SDL2_DISABLE_INSTALL ON CACHE STRING "")
