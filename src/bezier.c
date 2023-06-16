@@ -435,7 +435,7 @@ bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
     qw spacing,
-    int snake_length)
+    qw snake_length)
 {
     int i;
 
@@ -553,16 +553,16 @@ bezier_calc_equidistant_points(
                     bp->dir.y = -qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
                     bp->dir = qwpos_normalize(bp->dir);
 
-                    /* Error compensation *
+                    /* Error compensation */
                     expected_total_spacing = qw_add(expected_total_spacing, spacing);
                     actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
-                    spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
+                    /*spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
                     spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
 
                     x = next_x;
                     y = next_y;
 
-                    if ((int)vector_count(bezier_points) >= snake_length)
+                    if (actual_total_spacing >= snake_length)
                         return i;
 
                     break;

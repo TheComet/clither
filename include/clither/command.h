@@ -61,7 +61,6 @@ command_make(
 
 #define command_angle_to_qa(command) \
     (qa_rescale(2*QA_PI, command.angle, 256) - QA_PI)
-    //make_qa(command.angle / 256.0 * 2 * M_PI - M_PI)
 
 void
 command_rb_init(struct command_rb* rb);

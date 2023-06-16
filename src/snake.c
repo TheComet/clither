@@ -13,6 +13,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#define SNAKE_PART_SPACING make_qw2(1, 6)
+
 /* ------------------------------------------------------------------------- */
 void
 snake_param_init(struct snake_param* param)
@@ -52,7 +54,7 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
 
-    vector_resize(&data->bezier_points, 200);
+    data->food_eaten = 40;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -192,12 +194,34 @@ snake_step(
     struct command command,
     uint8_t sim_tick_rate)
 {
+    int stale_segments;
+
+    head->food_eaten += 1;
+
     snake_step_head(head, param, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
+
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
-    /* TODO: distance is a function of the snake's length */
-    bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 6), 100);
+
+    /* 
+     * This function returns the number of segments that are superfluous. The
+     * data can be popped. In the client's case, the acknowledged head position
+     * will be lagging behind the predicted head position. We assume that the
+     * server and client generally agree on the total length of the snake, which
+     * should be the case 99% of the time. In the worst case, the client may
+     * simulate ahead with maximum boost while the server continuously corrects
+     * the client (roll back), thinking that they are not boosting. In this
+     * hypothetical situation, we would potentially be removing curve segments
+     * that are still required for sampling. If this does turn out to be an issue
+     * then we can add -1 or -2 on this check here.
+     */
+    stale_segments = bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(data)), snake_length(data));
+    while (stale_segments--)
+    {
+        vector_deinit(rb_take(&data->points_lists));
+        rb_take(&data->bezier_handles);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -241,8 +265,6 @@ snake_ack_frame(
     {
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
          struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
-
-        /* Step to next frame */
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
 
         last_ackd_frame++;
@@ -318,7 +340,7 @@ snake_ack_frame(
         COMMAND_RB_END_EACH
 
         /* TODO: distance is a function of the snake's length */
-        bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, make_qw2(1, 16), snake_length(data));
+        bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(data)), snake_length(data));
     }
 }
 

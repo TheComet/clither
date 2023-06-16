@@ -18,6 +18,13 @@ struct snake_param
     uint8_t acceleration;
 };
 
+struct snake_split
+{
+    struct qwpos split_handle;  /* Set to equal the position of a bezier handle where the snake splits into 2 */
+    struct qwpos join_handle;   /* Set to equal the position of a bezier handle where the snake joins up again */
+    struct qwpos axis;          /* Snake is mirrored across this normalized vector */
+};
+
 struct snake_data
 {
     char* name;
@@ -43,6 +50,8 @@ struct snake_data
      * cached here. These are used for rendering.
      */
     struct cs_vector bezier_points;
+
+    struct cs_vector splits;  /* struct snake_split */
 };
 
 struct snake
@@ -67,6 +76,35 @@ snake_param_init(struct snake_param* param);
 
 void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
+
+void
+snake_update_size(struct snake_data* data, struct snake_param* param, uint32_t food_eaten);
+
+/*!
+ * \brief Converts the snake's "food_eaten" parameter into a factor for how
+ * much to scale the snake.
+ * 
+ * This factor determines the spacing in between each sprite, the scale
+ * of each sprite, and controls the camera's zoom.
+ */
+static inline qw
+snake_scale(const struct snake_data* data)
+{
+    return qw_add(make_qw(1), make_qw2(data->food_eaten, 1024*4));
+}
+
+/*!
+ * \brief Converts the snake's "food_eaten" parameter into an expected total
+ * length (in world space) of the snake.
+ *
+ * This is used when sampling the curve and is also used as a metric for when
+ * to remove curve segments from the ring buffer.
+ */
+static inline qw
+snake_length(const struct snake_data* data)
+{
+    return make_qw2(data->food_eaten, 128);
+}
 
 void
 snake_step_head(
@@ -108,7 +146,5 @@ snake_ack_frame(
  */
 char
 snake_is_held(struct snake* snake, uint16_t frame_number);
-
-#define snake_length(snake) (vector_count(&(snake)->bezier_points))
 
 C_END
