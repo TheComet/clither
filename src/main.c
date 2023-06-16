@@ -92,8 +92,9 @@ run_server_instance(const void* args)
         WORLD_FOR_EACH_SNAKE(&world, uid, snake)
             if (!snake_is_held(snake, frame_number))
             {
-                struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
+                struct command command = command_rb_find_or_predict(&snake->command_rb, frame_number);
                 snake_step(&snake->data, &snake->head, &snake->param, command, instance->settings->sim_tick_rate);
+                snake_ack_frame(&snake->data, &snake->head_ack, &snake->head, &snake->head, &snake->param, &snake->command_rb, frame_number, instance->settings->sim_tick_rate);
             }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
