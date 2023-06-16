@@ -103,10 +103,10 @@ struct vertex
 };
 
 static const struct vertex sprite_vertices[4] = {
-    {{-0.5, -0.5}, {0,  1}},
-    {{-0.5,  0.5}, {0,  0}},
-    {{ 0.5, -0.5}, {1,  1}},
-    {{ 0.5,  0.5}, {1,  0}}
+    {{-0.125, -0.125}, {0,  1}},
+    {{-0.125,  0.125}, {0,  0}},
+    {{ 0.125, -0.125}, {1,  1}},
+    {{ 0.125,  0.125}, {1,  0}}
 };
 static const GLushort sprite_indices[6] = {
     0, 2, 1,
@@ -874,8 +874,6 @@ static void
 draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar, char shadow_pass)
 {
     int i;
-    GLfloat size = 0.25;  /* todo snake size */
-
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex), (void*)offsetof(struct vertex, pos));
@@ -888,7 +886,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         const GLint nmUnits[4] = {0, 1, 2, 3};
         glUseProgram(gfx->sprite_shadow.program);
         glUniform2f(gfx->sprite_shadow.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(gfx->sprite_shadow.uSize, size);
+        glUniform1f(gfx->sprite_shadow.uSize, qw_to_float(snake_scale(&snake->data)));
         glUniform1iv(gfx->sprite_shadow.sNM, 4, nmUnits);
 
         glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texNM);
@@ -902,7 +900,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     {
         glUseProgram(gfx->sprite_mat.program);
         glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(gfx->sprite_mat.uSize, size);
+        glUniform1f(gfx->sprite_mat.uSize, qw_to_float(snake_scale(&snake->data)));
         glUniform1i(gfx->sprite_mat.sCol, 0);
         glUniform1i(gfx->sprite_mat.sNM, 1);
 
@@ -953,7 +951,6 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     }
 
     /* head */
-    size = 0.5;  /* todo snake size */
     {
         struct bezier_point* bp = vector_front(&snake->data.bezier_points);
         /* world -> camera space */
@@ -979,7 +976,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
             pos_cameraSpace.x = qw_sub(pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
             pos_cameraSpace.y = qw_sub(pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
 
-            glUniform1f(gfx->sprite_shadow.uSize, size);
+            glUniform1f(gfx->sprite_shadow.uSize, 2 * qw_to_float(snake_scale(&snake->data)));
             glUniform3f(gfx->sprite_shadow.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
             glUniform2f(gfx->sprite_shadow.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
             glUniform4f(gfx->sprite_shadow.uAnim,
@@ -990,7 +987,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         }
         else
         {
-            glUniform1f(gfx->sprite_mat.uSize, size);
+            glUniform1f(gfx->sprite_mat.uSize, 2 * qw_to_float(snake_scale(&snake->data)));
             glUniform3f(gfx->sprite_mat.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
             glUniform2f(gfx->sprite_mat.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
             glUniform4f(gfx->sprite_mat.uAnim,

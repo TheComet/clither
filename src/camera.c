@@ -13,7 +13,11 @@ camera_init(struct camera* camera)
 
 /* ------------------------------------------------------------------------- */
 void
-camera_update(struct camera* camera, const struct snake_head* head, int sim_tick_rate)
+camera_update(
+    struct camera* camera,
+    const struct snake_head* head,
+    const struct snake_data* data,
+    int sim_tick_rate)
 {
     qw leadx = make_qw(cos(qa_to_float(head->angle)) / 32);
     qw leady = make_qw(sin(qa_to_float(head->angle)) / 32);
@@ -27,4 +31,6 @@ camera_update(struct camera* camera, const struct snake_head* head, int sim_tick
 
     camera->pos.x = qw_add(camera->pos.x, dx);
     camera->pos.y = qw_add(camera->pos.y, dy);
+
+    camera->scale = qw_div(make_qw(1), snake_scale(data));
 }

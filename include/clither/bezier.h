@@ -74,6 +74,6 @@ bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
     qw spacing,
-    int snake_length);
+    qw snake_length);
 
 C_END
