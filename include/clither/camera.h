@@ -6,7 +6,7 @@
 C_BEGIN
 
 struct snake_head;
-struct snake_data;
+struct snake_param;
 
 struct camera
 {
@@ -21,7 +21,7 @@ void
 camera_update(
     struct camera* camera,
     const struct snake_head* head,
-    const struct snake_data* data,
+    const struct snake_param* param,
     int sim_tick_rate);
 
 C_END

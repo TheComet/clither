@@ -74,6 +74,7 @@ add_executable (clither
     "include/clither/signals.h"
     "include/clither/snake.h"
     "include/clither/snake_head.h"
+    "include/clither/snake_param.h"
     "include/clither/thread.h"
     "include/clither/tick.h"
     "include/clither/tests.h"
@@ -97,6 +98,7 @@ add_executable (clither
     "src/server.c"
     "src/server_settings.c"
     "src/snake.c"
+    "src/snake_param.c"
     "src/world.c"
 
     $<$<STREQUAL:${CLITHER_GFX},SDL>:

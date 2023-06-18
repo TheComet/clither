@@ -17,17 +17,6 @@
 
 /* ------------------------------------------------------------------------- */
 void
-snake_param_init(struct snake_param* param)
-{
-    param->turn_speed = make_qa2(1, 16);
-    param->min_speed = make_qw2(1, 96);
-    param->max_speed = make_qw2(1, 48);
-    param->boost_speed = make_qw2(1, 16);
-    param->acceleration = 8;
-}
-
-/* ------------------------------------------------------------------------- */
-void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 {
     head->pos = spawn_pos;
@@ -53,8 +42,6 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
     vector_push(points, &spawn_pos);
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
-
-    data->food_eaten = 40;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -119,34 +106,34 @@ snake_step_head(
      * Turn the head towards the target angle and make sure to not exceed the
      * maximum turning speed.
      */
-    if (angle_diff > param->turn_speed)
-        head->angle = qa_sub(head->angle, qa_mul(param->turn_speed, make_qa2(sim_tick_rate, 60)));
-    else if (angle_diff < -param->turn_speed)
-        head->angle = qa_add(head->angle, param->turn_speed);
+    if (angle_diff > snake_turn_speed(param))
+        head->angle = qa_sub(head->angle, qa_mul(snake_turn_speed(param), make_qa2(sim_tick_rate, 60)));
+    else if (angle_diff < -snake_turn_speed(param))
+        head->angle = qa_add(head->angle, snake_turn_speed(param));
     else
         head->angle = target_angle;
 
     /* Integrate speed over time */
     target_speed = command.action == COMMAND_ACTION_BOOST ?
         255 :
-        qw_sub(param->max_speed, param->min_speed) * command.speed / qw_sub(param->boost_speed, param->min_speed);
-    if (head->speed - target_speed > param->acceleration)
-        head->speed -= param->acceleration;
-    else if (head->speed - target_speed < -param->acceleration)
-        head->speed += param->acceleration;
+        qw_sub(snake_max_speed(param), snake_min_speed(param)) * command.speed / qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    if (head->speed - target_speed > snake_acceleration(param))
+        head->speed -= snake_acceleration(param);
+    else if (head->speed - target_speed < -snake_acceleration(param))
+        head->speed += snake_acceleration(param);
     else
         head->speed = target_speed;
 
     /* Update snake position using the head's current angle and speed */
-    dx = qw_sub(param->boost_speed, param->min_speed);
+    dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dx = qw_rescale(dx, head->speed, 255);
-    dx = qw_add(dx, param->min_speed);
+    dx = qw_add(dx, snake_min_speed(param));
     dx = qw_mul(qa_cos(head->angle), dx);
     head->pos.x = qw_add(head->pos.x, dx);
     
-    dy = qw_sub(param->boost_speed, param->min_speed);
+    dy = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dy = qw_rescale(dy, head->speed, 255);
-    dy = qw_add(dy, param->min_speed);
+    dy = qw_add(dy, snake_min_speed(param));
     dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
 }
@@ -196,8 +183,6 @@ snake_step(
 {
     int stale_segments;
 
-    head->food_eaten += 1;
-
     snake_step_head(head, param, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
@@ -216,7 +201,7 @@ snake_step(
      * that are still required for sampling. If this does turn out to be an issue
      * then we can add -1 or -2 on this check here.
      */
-    stale_segments = bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(data)), snake_length(data));
+    stale_segments = bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
     while (stale_segments--)
     {
         vector_deinit(rb_take(&data->points_lists));
@@ -264,7 +249,7 @@ snake_ack_frame(
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
-         struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
+        struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
 
         last_ackd_frame++;
@@ -340,7 +325,7 @@ snake_ack_frame(
         COMMAND_RB_END_EACH
 
         /* TODO: distance is a function of the snake's length */
-        bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(data)), snake_length(data));
+        bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
     }
 }
 
