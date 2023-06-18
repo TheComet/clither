@@ -3,26 +3,19 @@
 #include "clither/config.h"
 #include "clither/command.h"
 #include "clither/snake_head.h"
+#include "clither/snake_param.h"
 
 #include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
 
-struct snake_param
-{
-    qa turn_speed;
-    qw min_speed;
-    qw max_speed;
-    qw boost_speed;
-    uint8_t acceleration;
-};
-
 struct snake_split
 {
     struct qwpos split_handle;  /* Set to equal the position of a bezier handle where the snake splits into 2 */
     struct qwpos join_handle;   /* Set to equal the position of a bezier handle where the snake joins up again */
     struct qwpos axis;          /* Snake is mirrored across this normalized vector */
+    unsigned ack : 1;           /* Server acknowledged this split. Predicted splits can be removed during resimulation */
 };
 
 struct snake_data
@@ -51,7 +44,7 @@ struct snake_data
      */
     struct cs_vector bezier_points;
 
-    struct cs_vector splits;  /* struct snake_split */
+    struct cs_rb splits;  /* struct snake_split */
 };
 
 struct snake
@@ -72,39 +65,29 @@ void
 snake_deinit(struct snake* snake);
 
 void
-snake_param_init(struct snake_param* param);
-
-void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
 
+/*
+ * \brief Holds the snake in-place and doesn't simulate. Only
+ * relevant for the server.
+ */
+#define snake_set_hold(snake) \
+    (snake)->hold = 1
+
+ /*!
+  * \brief If a snake is in hold mode (@see snake_set_hold), this
+  * function checks the condition for resetting the hold state.
+  * If the condition applies, the snake's hold state is reset and
+  * false is returned. Otherwise true is returned,
+  */
+char
+snake_is_held(struct snake* snake, uint16_t frame_number);
+
 void
-snake_update_size(struct snake_data* data, struct snake_param* param, uint32_t food_eaten);
+snake_step_param(struct snake_data* data, struct snake_param* param, uint32_t food_eaten);
 
-/*!
- * \brief Converts the snake's "food_eaten" parameter into a factor for how
- * much to scale the snake.
- * 
- * This factor determines the spacing in between each sprite, the scale
- * of each sprite, and controls the camera's zoom.
- */
-static inline qw
-snake_scale(const struct snake_data* data)
-{
-    return qw_add(make_qw(1), make_qw2(data->food_eaten, 1024*4));
-}
-
-/*!
- * \brief Converts the snake's "food_eaten" parameter into an expected total
- * length (in world space) of the snake.
- *
- * This is used when sampling the curve and is also used as a metric for when
- * to remove curve segments from the ring buffer.
- */
-static inline qw
-snake_length(const struct snake_data* data)
-{
-    return make_qw2(data->food_eaten, 128);
-}
+char
+snake_is_split(const struct snake_data* data);
 
 void
 snake_step_head(
@@ -131,20 +114,5 @@ snake_ack_frame(
     struct command_rb* command_rb,
     uint16_t frame_number,
     uint8_t sim_tick_rate);
-
-/*
- * \brief Holds the snake in-place and doesn't simulate. Only
- * relevant for the server.
- */
-#define snake_set_hold(snake) \
-    (snake)->hold = 1
-
-/*!
- * \brief If a snake is in hold mode (@see snake_set_hold), this
- * function checks the condition for resetting the hold state.
- * If the condition applies, the snake's hold state is reset.
- */
-char
-snake_is_held(struct snake* snake, uint16_t frame_number);
 
 C_END

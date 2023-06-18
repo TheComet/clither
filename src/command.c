@@ -63,11 +63,11 @@ command_make(
 
 /* ------------------------------------------------------------------------- */
 void
-command_rb_init(struct command_rb* rb)
+command_rb_init(struct command_rb* crb)
 {
-    rb_init(&rb->rb, sizeof(struct command));
-    rb->last_command_read = command_default();
-    rb->first_frame = 0;
+    rb_init(&crb->rb, sizeof(struct command));
+    crb->last_command_read = command_default();
+    crb->first_frame = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -80,60 +80,63 @@ command_rb_deinit(struct command_rb* rb)
 /* ------------------------------------------------------------------------- */
 void
 command_rb_put(
-    struct command_rb* rb,
+    struct command_rb* crb,
     struct command command,
     uint16_t frame_number)
 {
-    if (rb_count(&rb->rb) > 0)
+    if (rb_count(&crb->rb) > 0)
     {
-        uint16_t expected_frame = rb->first_frame + rb_count(&rb->rb);
+        uint16_t expected_frame = command_rb_frame_end(crb);
         if (expected_frame != frame_number)
             return;
     }
     else
     {
-        rb->first_frame = frame_number;
+        crb->first_frame = frame_number;
     }
 
-    rb_put(&rb->rb, &command);
+    rb_put(&crb->rb, &command);
 }
 
 /* ------------------------------------------------------------------------- */
 struct command
-command_rb_take_or_predict(struct command_rb* rb, uint16_t frame_number)
+command_rb_take_or_predict(struct command_rb* crb, uint16_t frame_number)
 {
-    if (u16_lt_wrap(frame_number, command_rb_frame_begin(rb)))
-        return rb->last_command_read;
+    if (u16_lt_wrap(frame_number, command_rb_frame_begin(crb)))
+        return crb->last_command_read;
 
-    while (rb_count(&rb->rb) > 0)
+    while (rb_count(&crb->rb) > 0)
     {
-        uint16_t frame = command_rb_frame_begin(rb);
-        rb->last_command_read = *(struct command*)rb_take(&rb->rb);
-        rb->first_frame++;
+        uint16_t frame = command_rb_frame_begin(crb);
+        crb->last_command_read = *(struct command*)rb_take(&crb->rb);
+        crb->first_frame++;
         if (frame == frame_number)
-            return rb->last_command_read;
+            return crb->last_command_read;
     }
 
-    return rb->last_command_read;
+    log_dbg("command_rb_take_or_predict(): No command for frame %d, predicting...\n", frame_number);
+    return crb->last_command_read;
 }
 
 /* ------------------------------------------------------------------------- */
 struct command
-command_rb_find_or_predict(const struct command_rb* rb, uint16_t frame_number)
+command_rb_find_or_predict(const struct command_rb* crb, uint16_t frame_number)
 {
     uint16_t frame;
 
-    if (u16_lt_wrap(frame_number, command_rb_frame_begin(rb)))
-        return rb->last_command_read;
+    if (u16_lt_wrap(frame_number, command_rb_frame_begin(crb)))
+        return crb->last_command_read;
 
-    frame = command_rb_frame_begin(rb);
-    RB_FOR_EACH(&rb->rb, struct command, command)
+    frame = command_rb_frame_begin(crb);
+    RB_FOR_EACH(&crb->rb, struct command, command)
         if (frame == frame_number)
             return *command;
         frame++;
     RB_END_EACH
 
-    return rb_count(&rb->rb) == 0 ?
-        rb->last_command_read :
-        *(struct command*)rb_peek_write(&rb->rb);
+
+    log_dbg("command_rb_find_or_predict(): No command for frame %d, predicting...\n", frame_number);
+    return rb_count(&crb->rb) == 0 ?
+        crb->last_command_read :
+        *(struct command*)rb_peek_write(&crb->rb);
 }
