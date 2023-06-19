@@ -2,6 +2,10 @@
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 
+#if defined(CLITHER_GFX)
+#   include "clither/gfx.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -85,6 +89,13 @@ print_help(const char* prog_name)
 #endif
 #if defined(CLITHER_GFX)
     fprintf(stderr,
+        "     " ARG1 " --gfx" RESET " <" ARG2 "index" RESET ">   Use graphics backend. Currently available:\n");
+    {
+        int i;
+        for (i = 0; gfx_backends[i]; ++i)
+            fprintf(stderr, "                          " ARG2 "%d" RESET ": %s\n", i, gfx_backends[i]->name);
+    }
+    fprintf(stderr,
         "     " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">  Server  address  to  connect to. Can be a URL or an IP\n"
         "                      address. If --host or --server is used, then this sets\n"
         "                      the bind address  rather than the  address to  connect\n"
@@ -161,6 +172,8 @@ args_parse(struct args* a, int argc, char* argv[])
     a->ip = "";
     a->port = "";
 
+    a->gfx_backend = 0;
+
     a->mcd_port = "5554";
     a->mcd_latency = 0;
     a->mcd_dup = 0;
@@ -188,6 +201,24 @@ args_parse(struct args* a, int argc, char* argv[])
                     bench_flag = 1;
 #endif
 #if defined(CLITHER_GFX)
+                else if (strcmp(arg, "gfx") == 0)
+                {
+                    int count;
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err("Missing argument for --gfx\n");
+                        return -1;
+                    }
+                    a->gfx_backend = atoi(argv[i]);
+
+                    for (count = 0; gfx_backends[count]; ++count) {}
+                    if (a->gfx_backend >= count || a->gfx_backend < 0)
+                    {
+                        log_err("Graphics backend index \"%d\" is out of range!\n", a->gfx_backend);
+                        return -1;
+                    }
+                }
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
                 else if (strcmp(arg, "host") == 0)

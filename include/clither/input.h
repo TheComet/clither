@@ -16,6 +16,8 @@ struct input
     unsigned shoot : 1;
     unsigned split : 1;
     unsigned quit  : 1;  /* User pressed escape or similar */
+    unsigned next_gfx_backend : 1;  /* User pressed the key for switching to the next graphics backend*/
+    unsigned prev_gfx_backend : 1;  /* User pressed the key for switching to the previous graphics backend */
 };
 
 void

@@ -30,6 +30,7 @@ struct args
     const char* ip;
     const char* port;
     const char* mcd_port;
+    int gfx_backend;
     int mcd_latency, mcd_loss, mcd_dup, mcd_reorder;
     enum mode mode;
 };

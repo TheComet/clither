@@ -62,7 +62,7 @@ struct resource_pack
 };
 
 struct resource_pack*
-resource_pack_load(const char* pack_path);
+resource_pack_parse(const char* pack_path);
 
 void
 resource_pack_destroy(struct resource_pack* pack);

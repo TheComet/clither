@@ -171,8 +171,8 @@ gfx_world_to_screen(struct qwpos pos, const struct gfx* gfx, const struct camera
 }
 
 /* ------------------------------------------------------------------------- */
-int
-gfx_init(void)
+static int
+gfx_sdl_global_init(void)
 {
     if (SDL_InitSubSystem(SDL_INIT_EVENTS) < 0)
     {
@@ -193,16 +193,16 @@ gfx_init(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_deinit(void)
+static void
+gfx_sdl_global_deinit(void)
 {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_QuitSubSystem(SDL_INIT_EVENTS);
 }
 
 /* ------------------------------------------------------------------------- */
-struct gfx*
-gfx_create(int initial_width, int initial_height)
+static struct gfx*
+gfx_sdl_create(int initial_width, int initial_height)
 {
     struct gfx* gfx = MALLOC(sizeof *gfx);
 
@@ -257,8 +257,8 @@ gfx_create(int initial_width, int initial_height)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_destroy(struct gfx* gfx)
+static void
+gfx_sdl_destroy(struct gfx* gfx)
 {
     SDL_DestroyRenderer(gfx->renderer);
     SDL_DestroyWindow(gfx->window);
@@ -266,8 +266,8 @@ gfx_destroy(struct gfx* gfx)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
+static int
+gfx_sdl_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     (void)gfx;
     (void)pack;
@@ -275,8 +275,8 @@ gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_poll_input(struct gfx* gfx, struct input* input)
+static void
+gfx_sdl_poll_input(struct gfx* gfx, struct input* input)
 {
     SDL_Event e;
     (void)gfx;
@@ -290,6 +290,14 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
             case SDL_KEYDOWN:
                 if (e.key.keysym.sym == SDLK_ESCAPE)
                     input->quit = 1;
+                if (e.key.keysym.sym == SDLK_LEFT)
+                    input->prev_gfx_backend = 1;
+                if (e.key.keysym.sym == SDLK_RIGHT)
+                    input->next_gfx_backend = 1;
+                break;
+            case SDL_KEYUP:
+                input->prev_gfx_backend = 0;
+                input->next_gfx_backend = 0;
                 break;
             case SDL_MOUSEBUTTONDOWN:
                 if (e.button.button == SDL_BUTTON_LEFT)
@@ -308,8 +316,8 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-struct command
-gfx_input_to_command(
+static struct command
+gfx_sdl_input_to_command(
     struct command command,
     const struct input* input,
     const struct gfx* gfx,
@@ -506,16 +514,16 @@ draw_background(const struct gfx* gfx, const struct camera* camera)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_step_anim(struct gfx* gfx, int sim_tick_rate)
+static void
+gfx_sdl_step_anim(struct gfx* gfx, int sim_tick_rate)
 {
     (void)gfx;
     (void)sim_tick_rate;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
+static void
+gfx_sdl_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
     SDL_SetRenderDrawColor(gfx->renderer, 0, 0, 0, 255);
     SDL_RenderClear(gfx->renderer);
@@ -549,3 +557,17 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 
     SDL_RenderPresent(gfx->renderer);
 }
+
+/* ------------------------------------------------------------------------- */
+struct gfx_interface gfx_sdl = {
+    "SDL",
+    &gfx_sdl_global_init,
+    &gfx_sdl_global_deinit,
+    &gfx_sdl_create,
+    &gfx_sdl_destroy,
+    &gfx_sdl_load_resource_pack,
+    &gfx_sdl_poll_input,
+    &gfx_sdl_input_to_command,
+    &gfx_sdl_step_anim,
+    &gfx_sdl_draw_world
+};

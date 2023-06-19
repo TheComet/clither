@@ -132,10 +132,16 @@ static const char* attr_bindings[] = {
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    (void)mods;
-    (void)scancode;
+    struct gfx* gfx = glfwGetWindowUserPointer(window);
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    if (key == GLFW_KEY_LEFT)
+        gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
+    if (key == GLFW_KEY_RIGHT)
+        gfx->input_buffer.next_gfx_backend = (action == GLFW_PRESS);
+
+    (void)mods;
+    (void)scancode;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -144,7 +150,7 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
     if (button == GLFW_MOUSE_BUTTON_LEFT)
-        gfx->input_buffer.boost = action == GLFW_PRESS;
+        gfx->input_buffer.boost = (action == GLFW_PRESS);
     (void)mods;
 }
 
@@ -647,8 +653,8 @@ sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-gfx_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
+static int
+gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     if (bg_load(&gfx->bg, pack) < 0)
         goto bg_load_failed;
@@ -676,8 +682,8 @@ bg_load_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-int
-gfx_init(void)
+static int
+gfx_gles2_global_init(void)
 {
     if (!glfwInit())
     {
@@ -688,15 +694,15 @@ gfx_init(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_deinit(void)
+static void
+gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
 }
 
 /* ------------------------------------------------------------------------- */
-struct gfx*
-gfx_create(int initial_width, int initial_height)
+static struct gfx*
+gfx_gles2_create(int initial_width, int initial_height)
 {
     int fbwidth, fbheight;
     struct gfx* gfx = MALLOC(sizeof *gfx);
@@ -758,8 +764,8 @@ create_window_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_destroy(struct gfx* gfx)
+static void
+gfx_gles2_destroy(struct gfx* gfx)
 {
     sprite_tex_deinit(&gfx->head0_base);
     sprite_tex_deinit(&gfx->head0_gather);
@@ -775,8 +781,8 @@ gfx_destroy(struct gfx* gfx)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_poll_input(struct gfx* gfx, struct input* input)
+static void
+gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 {
     glfwPollEvents();
     *input = gfx->input_buffer;
@@ -787,8 +793,8 @@ gfx_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-struct command
-gfx_input_to_command(
+static struct command
+gfx_gles2_input_to_command(
     struct command prev,
     const struct input* input,
     const struct gfx* gfx,
@@ -1026,8 +1032,8 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_step_anim(struct gfx* gfx, int sim_tick_rate)
+static void
+gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 {
     static int frame_update;
     if (frame_update-- == 0)
@@ -1045,8 +1051,8 @@ gfx_step_anim(struct gfx* gfx, int sim_tick_rate)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
+static void
+gfx_gles2_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
     struct aspect_ratio ar = { 1.0, 1.0, 0.0, 0.0 };
     if (gfx->width > gfx->height)
@@ -1073,3 +1079,17 @@ gfx_draw_world(struct gfx* gfx, const struct world* world, const struct camera* 
 
     glfwSwapBuffers(gfx->window);
 }
+
+/* ------------------------------------------------------------------------- */
+struct gfx_interface gfx_gles2 = {
+    "OpenGL ES 2.0",
+    &gfx_gles2_global_init,
+    &gfx_gles2_global_deinit,
+    &gfx_gles2_create,
+    &gfx_gles2_destroy,
+    &gfx_gles2_load_resource_pack,
+    &gfx_gles2_poll_input,
+    &gfx_gles2_input_to_command,
+    &gfx_gles2_step_anim,
+    &gfx_gles2_draw_world
+};
