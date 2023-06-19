@@ -257,7 +257,7 @@ run_client(const struct args* a)
     gfx = gfx_create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
-   /* {
+    {
         int ret;
         struct resource_pack* pack = resource_pack_load("packs/horror");
         if (pack == NULL)
@@ -266,7 +266,7 @@ run_client(const struct args* a)
         resource_pack_destroy(pack);
         if (ret != 0)
             goto load_resource_pack_failed;
-    }*/
+    }
 
     input_init(&input);
     camera_init(&camera);
