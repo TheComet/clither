@@ -25,6 +25,36 @@ This will configure the project for your platform. Linux/Mac users now type *mak
 If you're on Windows, there will now be Visual Studio project files, inside the *build*
 directory. So go in there and open them up.
 
+## Emscripten
+
+Install [emscripten](https://emscripten.org/docs/getting_started/downloads.html#installation-instructions):
+```sh
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+git pull
+./emsdk update-tags
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+```
+
+Next, configure:
+```sh
+cd path/to/clither
+mkdir build && cd build
+cmake \
+    -DCMAKE_TOOLCHAIN_FILE=/path/to/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+    -DCLITHER_SERVER=OFF \
+    -DCLITHER_MCD=OFF \
+    -DCLITHER_DOC=OFF \
+    -DCLITHER_GFX_GLES2=ON \
+    -DCLITHER_GFX_SDL=OFF \
+    -DCLITHER_GFX_VULKAN=OFF \
+    -DCLITHER_TESTS=OFF \
+    -DCLITHER_BENCHMARKS=OFF ..
+cmake --build .
+```
+
 ## Usage
 
 There are 3 different modes:
