@@ -21,6 +21,7 @@ TEST(NAME, roll_back_over_frame_boundary)
         make_qw2(1, 64),
         8
     };
+    snake_param_update(&param, {}, 1);
 
     struct command c = command_default();
 

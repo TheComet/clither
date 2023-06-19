@@ -166,6 +166,11 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
 static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
+    {
+        if (vector_count((struct cs_vector*)rb_peek_write(&data->points_lists)) < 6)
+            log_dbg("wtf\n");
+    }
+
     struct cs_vector* points = rb_emplace(&data->points_lists);
     bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
     vector_init(points, sizeof(struct qwpos));
