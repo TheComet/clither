@@ -11,7 +11,9 @@
 #cmakedefine CLITHER_TESTS
 
 #if defined(CLITHER_GFX)
-#   define CLITHER_GFX_${CLITHER_GFX}
+#cmakedefine CLITHER_GFX_SDL
+#cmakedefine CLITHER_GFX_GLES2
+#cmakedefine CLITHER_GFX_VULKAN
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}

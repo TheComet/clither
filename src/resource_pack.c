@@ -59,7 +59,7 @@ resource_snake_part_destroy(struct resource_snake_part* part)
 
 /* ------------------------------------------------------------------------- */
 struct resource_pack*
-resource_pack_load(const char* pack_path)
+resource_pack_parse(const char* pack_path)
 {
     enum section_name
     {

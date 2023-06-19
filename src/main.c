@@ -239,7 +239,9 @@ run_client(const struct args* a)
     struct world world;
     struct input input;
     struct command command;
+    const struct gfx_interface* gfx_iface;
     struct gfx* gfx;
+    struct resource_pack* pack;
     struct camera camera;
     struct client client;
     struct tick sim_tick;
@@ -253,21 +255,19 @@ run_client(const struct args* a)
     memory_init_thread();
 
     /* Init all graphics and create window */
-    if (gfx_init() < 0)
+    gfx_iface = gfx_backends[a->gfx_backend];
+    log_info("Using graphics backend: %s\n", gfx_iface->name);
+    if (gfx_iface->global_init() < 0)
         goto init_gfx_failed;
-    gfx = gfx_create(800, 600);
+    gfx = gfx_iface->create(800, 600);
     if (gfx == NULL)
         goto create_gfx_failed;
-    {
-        int ret;
-        struct resource_pack* pack = resource_pack_load("packs/horror");
-        if (pack == NULL)
-            goto load_resource_pack_failed;
-        ret = gfx_load_resource_pack(gfx, pack);
-        resource_pack_destroy(pack);
-        if (ret != 0)
-            goto load_resource_pack_failed;
-    }
+
+    pack = resource_pack_parse("packs/horror");
+    if (pack == NULL)
+        goto parse_resource_pack_failed;
+    if (gfx_iface->load_resource_pack(gfx, pack) < 0)
+        goto load_resource_pack_failed;
 
     input_init(&input);
     camera_init(&camera);
@@ -301,9 +301,58 @@ run_client(const struct args* a)
     {
         int net_update;
 
-        gfx_poll_input(gfx, &input);
+        gfx_iface->poll_input(gfx, &input);
         if (input.quit)
             break;
+
+        /* Switch graphics backends */
+        if (input.next_gfx_backend || input.prev_gfx_backend)
+        {
+            int count;
+            int idx;
+            struct gfx* new_gfx;
+            const struct gfx_interface* new_iface;
+
+            for (count = 0; gfx_backends[count]; ++count)
+            {}
+
+            for (idx = 0; gfx_backends[idx]; ++idx)
+                if (gfx_iface == gfx_backends[idx])
+                    break;
+
+            if (input.next_gfx_backend)
+                idx++;
+            if (input.prev_gfx_backend)
+                idx--;
+            if (idx >= count)
+                idx = 0;
+            if (idx < 0)
+                idx = count - 1;
+
+            new_iface = gfx_backends[idx];
+            if (new_iface->global_init() < 0)
+                goto init_new_gfx_failed;
+
+            new_gfx = new_iface->create(640, 480);
+            if (new_gfx == NULL)
+                goto create_new_gfx_failed;
+
+            if (new_iface->load_resource_pack(new_gfx, pack) < 0)
+                goto load_new_resource_pack_failed;
+
+            gfx_iface->destroy(gfx);
+            gfx_iface->global_deinit();
+            gfx_iface = new_iface;
+            gfx = new_gfx;
+
+            input_init(&input);
+
+            goto create_new_gfx_success;
+
+            load_new_resource_pack_failed : new_iface->destroy(new_gfx);
+            create_new_gfx_failed         : new_iface->global_deinit();
+            init_new_gfx_failed           :;
+        } create_new_gfx_success:;
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
@@ -340,7 +389,7 @@ run_client(const struct args* a)
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            command = gfx_input_to_command(command, &input, gfx, &camera, snake->head.pos);
+            command = gfx_iface->input_to_command(command, &input, gfx, &camera, snake->head.pos);
 
             /*
              * Append the new command to the ring buffer of unconfirmed commands.
@@ -372,7 +421,7 @@ run_client(const struct args* a)
                 break;
         }
 
-        gfx_step_anim(gfx, client.sim_tick_rate);
+        gfx_iface->step_anim(gfx, client.sim_tick_rate);
 
         /*
          * Skip rendering if we are lagging, as this is most likely the source
@@ -381,7 +430,7 @@ run_client(const struct args* a)
          */
         tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
-            gfx_draw_world(gfx, &world, &camera);
+            gfx_iface->draw_world(gfx, &world, &camera);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -412,9 +461,11 @@ start_mcd_failed:
     client_deinit(&client);
     world_deinit(&world);
 load_resource_pack_failed:
-    gfx_destroy(gfx);
+    resource_pack_destroy(pack);
+parse_resource_pack_failed:
+    gfx_iface->destroy(gfx);
 create_gfx_failed:
-    gfx_deinit();
+    gfx_iface->global_deinit();
 init_gfx_failed:
     memory_deinit_thread();
     log_set_colors("", "");

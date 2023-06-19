@@ -16,8 +16,10 @@ project ("clither"
 include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-set (CLITHER_GFX "GLES2" CACHE STRING "Set to an empty string or OFF if you only want to build a server (headless) application.")
-set_property (CACHE CLITHER_GFX PROPERTY STRINGS "OFF;SDL;GLES2")
+option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application.")
+cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" ON "CLITHER_GFX" OFF)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
@@ -88,6 +90,7 @@ add_executable (clither
     "src/client.c"
     "src/command.c"
     "src/food_cluster.c"
+    "src/gfx.c"
     "src/input.c"
     "src/log.c"
     "src/main.c"
@@ -101,12 +104,15 @@ add_executable (clither
     "src/snake_param.c"
     "src/world.c"
 
-    $<$<STREQUAL:${CLITHER_GFX},SDL>:
+    $<$<BOOL:${CLITHER_GFX_SDL}>:
         src/sdl/gfx_sdl.c>
 
-    $<$<STREQUAL:${CLITHER_GFX},GLES2>:
+    $<$<BOOL:${CLITHER_GFX_GLES2}>:
         src/gles2/gfx_gles2.c
         src/gles2/glad/src/gles2.c>
+
+    $<$<BOOL:${CLITHER_GFX_VULKAN}>:
+        src/vulkan/gfx_vulkan.c>
 
     $<$<PLATFORM_ID:Windows>:
         src/fs_win32.c
@@ -165,7 +171,7 @@ target_include_directories (clither
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
 
-        $<$<STREQUAL:${CLITHER_GFX},GLES2>:
+        $<$<BOOL:${CLITHER_GFX_GLES2}>:
             $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gles2/glad/include>>)
 target_compile_definitions (clither
     PRIVATE
@@ -201,7 +207,7 @@ target_link_libraries (clither
 find_package(Threads REQUIRED)
 target_link_libraries (clither PRIVATE Threads::Threads)
 
-if (CLITHER_GFX STREQUAL "SDL")
+if (CLITHER_GFX_SDL)
     set (SDL2_DISABLE_INSTALL ON CACHE STRING "")
     set (SDL2_DISABLE_SDL2MAIN ON CACHE STRING "")
     set (SDL2_DISABLE_UNINSTALL ON CACHE STRING "")
@@ -216,7 +222,9 @@ if (CLITHER_GFX STREQUAL "SDL")
     set (SDL2IMAGE_SAMPLES OFF CACHE STRING "")
     add_subdirectory ("thirdparty/SDL_image-2.6.3")
     target_link_libraries (clither PRIVATE SDL2_image)
-elseif (CLITHER_GFX STREQUAL "GLES2")
+endif ()
+
+if (CLITHER_GFX_GLES2)
     set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
     set (GLFW_BUILD_TESTS OFF CACHE STRING "")
     set (GLFW_BUILD_DOCS OFF CACHE STRING "")
