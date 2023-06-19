@@ -153,32 +153,33 @@ args_parse(struct args* a, int argc, char* argv[])
     int i;
     char tests_flag = 0;
     char bench_flag = 0;
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
     char server_flag = 0;
     char host_flag = 0;
 #endif
 
     /* Set defaults */
+    a->config_file = DEFAULT_CONFIG_FILE;
+    a->ip = "";
+    a->port = "";
 #if defined(CLITHER_LOGGING)
     a->log_file = DEFAULT_LOG_FILE;
 #endif
-    a->config_file = DEFAULT_CONFIG_FILE;
 #if defined(CLITHER_GFX)
     a->mode = MODE_CLIENT;
 #else
     a->mode = MODE_HEADLESS;
 #endif
-
-    a->ip = "";
-    a->port = "";
-
+#if defined(CLITHER_GFX)
     a->gfx_backend = 0;
-
+#endif
+#if defined(CLITHER_MCD)
     a->mcd_port = "5554";
     a->mcd_latency = 0;
     a->mcd_dup = 0;
     a->mcd_loss = 0;
     a->mcd_reorder = 0;
+#endif
 
     for (i = 1; i < argc; ++i)
     {
@@ -219,6 +220,8 @@ args_parse(struct args* a, int argc, char* argv[])
                         return -1;
                     }
                 }
+#endif
+#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
                 else if (strcmp(arg, "host") == 0)
@@ -244,6 +247,7 @@ args_parse(struct args* a, int argc, char* argv[])
                     }
                     a->port = argv[i];
                 }
+#if defined(CLITHER_MCD)
                 else if (strcmp(arg, "mcd") == 0)
                 {
                     if (i + 4 >= argc)
@@ -257,6 +261,7 @@ args_parse(struct args* a, int argc, char* argv[])
                     a->mcd_reorder = atoi(argv[i+4]);
                     i += 4;
                 }
+#endif
 #if defined(CLITHER_LOGGING)
                 else if (strcmp(arg, "log") == 0)
                 {
@@ -292,7 +297,7 @@ args_parse(struct args* a, int argc, char* argv[])
                         }
                         a->port = argv[i];
                     }
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
                     else if (*p == 's')
                         server_flag = 1;
                     else if (*p == 'h')
@@ -340,7 +345,7 @@ args_parse(struct args* a, int argc, char* argv[])
     else if (bench_flag)
         a->mode = MODE_BENCHMARKS;
 #endif
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
     else if (server_flag && host_flag)
     {
         log_err("Can't use \"--server\" and \"--host\" at the same time\n");

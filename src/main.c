@@ -29,6 +29,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#if defined(CLITHER_SERVER)
+
 static int server_instances = 0;
 static struct mutex server_mutex;
 
@@ -229,13 +231,16 @@ join_background_server(struct thread t)
     thread_join(t, 0);
     log_dbg("Joined background server thread\n");
 }
+#endif  /* CLITHER_SERVER */
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_GFX)
 static void
 run_client(const struct args* a)
 {
+#if defined(CLITHER_MCD)
     struct thread mcd_thread;
+#endif
     struct world world;
     struct input input;
     struct command command;
@@ -253,6 +258,27 @@ run_client(const struct args* a)
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     memory_init_thread();
+
+    /* If McDonald's WiFi is enabled, start that */
+    client_init(&client);
+#if defined(CLITHER_MCD)
+    if (a->mcd_latency > 0)
+    {
+        if (thread_start(&mcd_thread, run_mcd_wifi, a) < 0)
+            goto start_mcd_failed;
+        if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
+            goto client_connect_failed;
+    }
+    else
+#endif
+    {
+        /*
+         * TODO: In the future the GUI will take care of connecting. Here we do
+         * it immediately because there is no menu.
+         */
+        if (client_connect(&client, a->ip, a->port, "username") < 0)
+            goto client_connect_failed;
+    }
 
     /* Init all graphics and create window */
     gfx_iface = gfx_backends[a->gfx_backend];
@@ -274,25 +300,6 @@ run_client(const struct args* a)
     command = command_default();
     world_init(&world);
 
-    /* If McDonald's WiFi is enabled, start that */
-    client_init(&client);
-    if (a->mcd_latency > 0)
-    {
-        if (thread_start(&mcd_thread, run_mcd_wifi, a) < 0)
-            goto start_mcd_failed;
-        if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
-            goto client_connect_failed;
-    }
-    else
-    {
-        /*
-         * TODO: In the future the GUI will take care of connecting. Here we do
-         * it immediately because there is no menu.
-         */
-        if (client_connect(&client, a->ip, a->port, "username") < 0)
-            goto client_connect_failed;
-    }
-
     log_info("Client started\n");
 
     tick_cfg(&sim_tick, client.sim_tick_rate);
@@ -309,9 +316,7 @@ run_client(const struct args* a)
         if (input.next_gfx_backend || input.prev_gfx_backend)
         {
             int count;
-            int idx;
-            struct gfx* new_gfx;
-            const struct gfx_interface* new_iface;
+            int idx, new_idx;
 
             for (count = 0; gfx_backends[count]; ++count)
             {}
@@ -321,38 +326,46 @@ run_client(const struct args* a)
                     break;
 
             if (input.next_gfx_backend)
-                idx++;
+                new_idx = idx + 1;
             if (input.prev_gfx_backend)
-                idx--;
-            if (idx >= count)
-                idx = 0;
-            if (idx < 0)
-                idx = count - 1;
-
-            new_iface = gfx_backends[idx];
-            if (new_iface->global_init() < 0)
-                goto init_new_gfx_failed;
-
-            new_gfx = new_iface->create(640, 480);
-            if (new_gfx == NULL)
-                goto create_new_gfx_failed;
-
-            if (new_iface->load_resource_pack(new_gfx, pack) < 0)
-                goto load_new_resource_pack_failed;
+                new_idx = idx - 1;
+            if (new_idx >= count)
+                new_idx = 0;
+            if (new_idx < 0)
+                new_idx = count - 1;
 
             gfx_iface->destroy(gfx);
             gfx_iface->global_deinit();
-            gfx_iface = new_iface;
-            gfx = new_gfx;
+
+            gfx_iface = gfx_backends[new_idx];
+            if (gfx_iface->global_init() < 0)
+                goto init_new_gfx_failed;
+
+            gfx = gfx_iface->create(640, 480);
+            if (gfx == NULL)
+                goto create_new_gfx_failed;
+
+            if (gfx_iface->load_resource_pack(gfx, pack) < 0)
+                goto load_new_resource_pack_failed;
 
             input_init(&input);
             gfx_iface->poll_input(gfx, &input);
 
             goto create_new_gfx_success;
 
-            load_new_resource_pack_failed : new_iface->destroy(new_gfx);
-            create_new_gfx_failed         : new_iface->global_deinit();
-            init_new_gfx_failed           :;
+        load_new_resource_pack_failed : gfx_iface->destroy(gfx);
+        create_new_gfx_failed         : gfx_iface->global_deinit();
+        init_new_gfx_failed           :
+            /* Jesus */
+            gfx_iface = gfx_backends[idx];
+            if (gfx_iface->global_init() < 0)
+                break;
+            gfx = gfx_iface->create(640, 480);
+            if (gfx == NULL)
+            {
+                gfx_iface->global_deinit();
+                break;
+            }
         } create_new_gfx_success:;
 
         /* Receive net data */
@@ -451,15 +464,6 @@ run_client(const struct args* a)
     }
     log_info("Stopping client\n");
 
-client_connect_failed:
-    /* Stop McDonald's WiFi if necessary */
-    if (a->mcd_latency > 0)
-    {
-        thread_join(mcd_thread, 0);
-        log_dbg("Joined McDonald's WiFi thread\n");
-    }
-start_mcd_failed:
-    client_deinit(&client);
     world_deinit(&world);
 load_resource_pack_failed:
     resource_pack_destroy(pack);
@@ -468,6 +472,18 @@ parse_resource_pack_failed:
 create_gfx_failed:
     gfx_iface->global_deinit();
 init_gfx_failed:
+    client_disconnect(&client);
+client_connect_failed:
+    /* Stop McDonald's WiFi if necessary */
+#if defined(CLITHER_MCD)
+    if (a->mcd_latency > 0)
+    {
+        thread_join(mcd_thread, 0);
+        log_dbg("Joined McDonald's WiFi thread\n");
+    }
+start_mcd_failed:
+#endif
+    client_deinit(&client);
     memory_deinit_thread();
     log_set_colors("", "");
     log_set_prefix("");
@@ -506,8 +522,10 @@ int main(int argc, char* argv[])
     if (net_init() < 0)
         goto net_init_failed;
 
+#if defined(CLITHER_SERVER)
     mutex_init(&server_mutex);
     server_instances = 0;
+#endif
 
     retval = 0;
     switch (args.mode)
@@ -522,13 +540,17 @@ int main(int argc, char* argv[])
             retval = benchmarks_run(argc, argv);
             break;
 #endif
+#if defined(CLITHER_SERVER)
         case MODE_HEADLESS: {
             retval = (int)(intptr_t)run_server(&args);
         } break;
+#endif
 #if defined(CLITHER_GFX)
         case MODE_CLIENT:
             run_client(&args);
             break;
+#endif
+#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
         case MODE_CLIENT_AND_SERVER: {
             struct thread server_thread;
             struct args server_args = args;
@@ -553,7 +575,9 @@ int main(int argc, char* argv[])
 #endif
     }
 
+#if defined(CLITHER_SERVER)
     mutex_deinit(server_mutex);
+#endif
     net_deinit();
 #if defined(CLITHER_LOGGING)
     log_net_close();

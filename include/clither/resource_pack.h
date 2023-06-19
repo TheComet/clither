@@ -47,10 +47,9 @@ struct resource_pack
     } shaders;
 
     struct {
-        /*! List of textures that make up the background. There are multiple
-         * layers of textures with different grid spacings that make up the
-         * background. The details of how they're pieced together is all part
-         * of the background shader */
+        /*! List of textures that make up the background. There can be multiple
+         * layers of textures with different grid spacings. The details of how
+         * they're pieced together is all part of the background shader */
         struct resource_sprite** background;
         /*! List of head parts. List is NULL terminated */
         struct resource_snake_part** head;
