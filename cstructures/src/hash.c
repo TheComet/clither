@@ -32,13 +32,13 @@ hash32_ptr(const void* ptr, uintptr_t len)
     );
 }
 #elif CSTRUCTURES_SIZEOF_VOID_P == 4
-hash32_t
+cs_hash32
 hash32_ptr(const void* ptr, uintptr_t len)
 {
     assert(len == sizeof(void*));
     assert(sizeof(uintptr_t) == sizeof(void*));
 
-    return (hash32_t)*(uintptr_t*)ptr;
+    return (cs_hash32)*(uintptr_t*)ptr;
 }
 #endif
 
@@ -53,13 +53,13 @@ hash32_aligned_ptr(const void* ptr, uintptr_t len)
     return (cs_hash32)((*(uintptr_t*)ptr / sizeof(void*)) & 0xFFFFFFFF);
 }
 #elif CSTRUCTURES_SIZEOF_VOID_P == 4
-hash32_t
+cs_hash32
 hash32_aligned_ptr(const void* ptr, uintptr_t len)
 {
     assert(len == sizeof(void*));
     assert(sizeof(uintptr_t) == sizeof(void*));
 
-    return (hash32_t)(*(uintptr_t*)ptr / sizeof(void*));
+    return (cs_hash32)(*(uintptr_t*)ptr / sizeof(void*));
 }
 #endif
 

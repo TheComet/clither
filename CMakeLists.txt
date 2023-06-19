@@ -22,6 +22,7 @@ cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend
 cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
+option (CLITHER_SERVER "Build the server component. Requires threads." ON)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
@@ -94,15 +95,19 @@ add_executable (clither
     "src/input.c"
     "src/log.c"
     "src/main.c"
-    "src/mcd_wifi.c"
     "src/msg.c"
     "src/msg_queue.c"
     "src/resource_pack.c"
-    "src/server.c"
-    "src/server_settings.c"
     "src/snake.c"
     "src/snake_param.c"
     "src/world.c"
+
+    $<$<BOOL:${CLITHER_SERVER}>:
+        src/server.c
+        src/server_settings.c>
+
+    $<$<BOOL:${CLITHER_MCD}>:
+        src/mcd_wifi.c>
 
     $<$<BOOL:${CLITHER_GFX_SDL}>:
         src/sdl/gfx_sdl.c>
@@ -138,6 +143,12 @@ add_executable (clither
         src/signals_posix.c
         src/thread_pthread.c
         src/tick_posix.c
+        src/utf8_posix.c>
+    $<$<PLATFORM_ID:Emscripten>:
+        src/fs_posix.c
+        src/net_em.c
+        src/signals_em.c
+        src/tick_em.c
         src/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
@@ -191,6 +202,13 @@ set_target_properties (clither
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CLITHER_BUILD_BINDIR}
         INSTALL_RPATH ${CLITHER_INSTALL_LIBDIR})
 
+if (EMSCRIPTEN)
+    set_target_properties(clither
+        PROPERTIES
+            SUFFIX ".html"
+            LINK_FLAGS "-sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs --bind")
+endif ()
+
 ###############################################################################
 # Dependencies
 ###############################################################################
@@ -225,12 +243,15 @@ if (CLITHER_GFX_SDL)
 endif ()
 
 if (CLITHER_GFX_GLES2)
-    set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
-    set (GLFW_BUILD_TESTS OFF CACHE STRING "")
-    set (GLFW_BUILD_DOCS OFF CACHE STRING "")
-    set (GLFW_INSTALL OFF CACHE STRING "")
-    add_subdirectory ("thirdparty/glfw-3.3.8")
-    target_link_libraries (clither PRIVATE glfw)
+    # Emscripten ships with GLFW already
+    if (NOT EMSCRIPTEN)
+        set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
+        set (GLFW_BUILD_TESTS OFF CACHE STRING "")
+        set (GLFW_BUILD_DOCS OFF CACHE STRING "")
+        set (GLFW_INSTALL OFF CACHE STRING "")
+        add_subdirectory ("thirdparty/glfw-3.3.8")
+        target_link_libraries (clither PRIVATE glfw)
+    endif ()
 
     target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
 endif ()

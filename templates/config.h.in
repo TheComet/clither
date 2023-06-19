@@ -8,6 +8,7 @@
 #cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
+#cmakedefine CLITHER_SERVER
 #cmakedefine CLITHER_TESTS
 
 #if defined(CLITHER_GFX)
