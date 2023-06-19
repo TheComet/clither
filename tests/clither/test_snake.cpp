@@ -14,20 +14,20 @@ TEST(NAME, roll_back_over_frame_boundary)
     snake_init(&client, make_qwposi(2, 2), "client");
     snake_init(&server, make_qwposi(2, 2), "server");
 
-    struct snake_param param = {
-        make_qa2(1, 16),
-        make_qw2(1, 256),
-        make_qw2(1, 128),
-        make_qw2(1, 64),
-        8
-    };
-    snake_param_update(&param, {}, 1);
+    struct snake_param param;
+    snake_param_init(&param);
+    param.base_stats.turn_speed = make_qa2(1, 16);
+    param.base_stats.min_speed = make_qw2(1, 256);
+    param.base_stats.max_speed = make_qw2(1, 128);
+    param.base_stats.boost_speed = make_qw2(1, 64);
+    param.base_stats.acceleration = 8;
+    snake_param_update(&param, {}, 1024);
 
     struct command c = command_default();
 
     uint16_t frame_number = 65535 - 10;
     uint16_t mispredict_frame = frame_number + 4;
-    for (int i = 0; i < 14; ++i)
+    for (int i = 0; i < 200; ++i)
     {
         c.angle += 2;
         command_rb_put(&client.command_rb, c, frame_number);
@@ -44,30 +44,40 @@ TEST(NAME, roll_back_over_frame_boundary)
     }
     mispredict_frame++;
 
-    /* Make sure we have 2 bezier segments */
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(2));
+    /* Make sure we have 7 bezier segments */
+    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7));
     struct cs_vector* client_pts0 = (cs_vector*)rb_peek(&client.data.points_lists, 0);
     struct cs_vector* client_pts1 = (cs_vector*)rb_peek(&client.data.points_lists, 1);
-    EXPECT_THAT(vector_count(client_pts0), Eq(11));
-    EXPECT_THAT(vector_count(client_pts1), Eq(5));
-    EXPECT_THAT(rb_count(&client.data.bezier_handles), Eq(3));
+    struct cs_vector* client_pts2 = (cs_vector*)rb_peek(&client.data.points_lists, 2);
+    struct cs_vector* client_pts3 = (cs_vector*)rb_peek(&client.data.points_lists, 3);
+    struct cs_vector* client_pts4 = (cs_vector*)rb_peek(&client.data.points_lists, 4);
+    struct cs_vector* client_pts5 = (cs_vector*)rb_peek(&client.data.points_lists, 5);
+    struct cs_vector* client_pts6 = (cs_vector*)rb_peek(&client.data.points_lists, 6);
+    ASSERT_THAT(vector_count(client_pts0), Eq(10));
+    ASSERT_THAT(vector_count(client_pts1), Eq(36));
+    ASSERT_THAT(vector_count(client_pts2), Eq(33));
+    ASSERT_THAT(vector_count(client_pts3), Eq(33));
+    ASSERT_THAT(vector_count(client_pts4), Eq(33));
+    ASSERT_THAT(vector_count(client_pts5), Eq(33));
+    ASSERT_THAT(vector_count(client_pts6), Eq(29));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8));
 
     ASSERT_THAT(rb_count(&server.data.points_lists), Eq(1));
     struct cs_vector* server_pts0 = (cs_vector*)rb_peek(&server.data.points_lists, 0);
-    EXPECT_THAT(vector_count(server_pts0), Eq(7));
-    EXPECT_THAT(rb_count(&server.data.bezier_handles), Eq(2));
+    ASSERT_THAT(vector_count(server_pts0), Eq(7));
+    ASSERT_THAT(rb_count(&server.data.bezier_handles), Eq(2));
 
     /* Make sure sim agrees up to mispredicted frame */
-    EXPECT_THAT(
+    ASSERT_THAT(
         ((qwpos*)vector_get(client_pts0, 5))->x,
         Eq(((qwpos*)vector_get(server_pts0, 5))->x));
-    EXPECT_THAT(
+    ASSERT_THAT(
         ((qwpos*)vector_get(client_pts0, 5))->y,
         Eq(((qwpos*)vector_get(server_pts0, 5))->y));
-    EXPECT_THAT(
+    ASSERT_THAT(
         ((qwpos*)vector_get(client_pts0, 6))->x,
         Ne(((qwpos*)vector_get(server_pts0, 6))->x));
-    EXPECT_THAT(
+    ASSERT_THAT(
         ((qwpos*)vector_get(client_pts0, 6))->y,
         Ne(((qwpos*)vector_get(server_pts0, 6))->y));
 
