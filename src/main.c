@@ -346,6 +346,7 @@ run_client(const struct args* a)
             gfx = new_gfx;
 
             input_init(&input);
+            gfx_iface->poll_input(gfx, &input);
 
             goto create_new_gfx_success;
 
