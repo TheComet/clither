@@ -75,7 +75,10 @@ binary_search_lsq(
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
 {
+    static uint16_t id = 0;
+
     bh->pos = pos;
+    bh->id = (++id) & 0xFFF;  /* Enforce 12-bit IDs (4096 handles max is reasonable) */
     bh->angle = angle;
     bh->len_forwards = 0;
     bh->len_backwards = 0;

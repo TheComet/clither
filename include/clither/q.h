@@ -235,6 +235,13 @@ static inline struct qwpos qwpos_normalize(struct qwpos p)
 #define qa_to_float(q) ((double)(q) / (1 << QA_Q))
 #define qa_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 
+/*! \brief Converts an 8-bit angle into fixed-point radians */
+#define u8_to_qa(u) \
+    (qa_rescale(2*QA_PI, u, 256) - QA_PI)
+
+#define qa_to_u8(q) \
+    qa_rescale((q + QA_PI), 256, 2*QA_PI)
+
 static inline qa qa_wrapvalue(int32_t value)
 {
     /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */

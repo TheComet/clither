@@ -120,10 +120,6 @@ command_rb_find_or_predict(
 /*! \brief Clear all commands */
 #define command_rb_clear(crb) rb_clear(&(crb)->rb)
 
-/*! \brief Converts a commands angle attribute into fixed-point radians (@see qa) */
-#define command_angle_to_qa(command) \
-    (qa_rescale(2*QA_PI, command.angle, 256) - QA_PI)
-
 #define COMMAND_RB_FOR_EACH(crb, frame_var, command_var) { \
     uint16_t frame_var = (crb)->first_frame - 1;             \
     RB_FOR_EACH(&(crb)->rb, struct command, command_var)   \
