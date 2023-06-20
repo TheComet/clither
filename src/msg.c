@@ -1,3 +1,4 @@
+#include "clither/bezier.h"
 #include "clither/command.h"
 #include "clither/msg.h"
 #include "clither/log.h"
@@ -660,4 +661,47 @@ msg_snake_head(const struct snake_head* head, uint16_t frame_number)
     log_net("MSG_SNAKE_HEAD: pos=%d,%d, angle=%d, speed=%d, frame=%d\n", head->pos.x, head->pos.y, head->angle, head->speed, frame_number);
 
     return m;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+bezier_handle_is_ackd(
+    const struct bezier_handle* handle,
+    const struct cs_rb* bezier_handles_ackd)
+{
+    RB_FOR_EACH(bezier_handles_ackd, struct bezier_handle, other)
+        if (bezier_handles_equal(handle, other))
+            return 1;
+    RB_END_EACH
+    return 0;
+}
+static int
+bezier_handles_pending(
+    const struct cs_rb* bezier_handles,
+    const struct cs_rb* bezier_handles_ackd)
+{
+    int count = 0;
+    RB_FOR_EACH(bezier_handles, struct bezier_handle, handle)
+        if (!bezier_handle_is_ackd(handle, bezier_handles_ackd))
+            count++;
+    RB_END_EACH
+    return count;
+}
+void
+msg_snake_bezier(
+    struct cs_vector* msgs,
+    const struct cs_rb* bezier_handles,
+    const struct cs_rb* bezier_handles_ackd)
+{
+    int handle_size = 
+        6 +   /* World position (2x 24-bit qwpos) */
+        1 +   /* Angle */
+        2;    /* Length forwards + backwards */
+    int pending_count =
+        bezier_handles_pending(bezier_handles, bezier_handles_ackd);
+
+    struct msg* m = msg_alloc(
+        MSG_SNAKE_BEZIER, 2,
+        sizeof(uint16_t) +  /* Bezier handle count */
+        handle_size * pending_count);
 }
