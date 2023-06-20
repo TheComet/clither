@@ -15,20 +15,6 @@
 
 #define SNAKE_PART_SPACING make_qw2(1, 6)
 
-static void
-check_consistency(struct snake_data* data)
-{
-    struct qwpos* last = NULL;
-    RB_FOR_EACH(&data->points_lists, struct cs_vector, points)
-        VECTOR_FOR_EACH(points, struct qwpos, current)
-            if (last)
-                if (abs(last->x - current->x) > 512 || abs(last->y - current->y) > 512)
-                    log_dbg("wtf2\n");
-            last = current;
-        VECTOR_END_EACH
-    RB_END_EACH
-}
-
 /* ------------------------------------------------------------------------- */
 void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
@@ -202,7 +188,6 @@ snake_step(
 {
     int stale_segments;
 
-    check_consistency(data);
     snake_step_head(head, param, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
@@ -292,8 +277,6 @@ snake_ack_frame(
             acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
             authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
 
-        check_consistency(data);
-
         /*
          * Remove all points generated since the last acknowledged frame.
          * In rare cases this may be on the boundary of two bezier segments,
@@ -319,7 +302,6 @@ snake_ack_frame(
 
             predicted_frame--;
         }
-        check_consistency(data);
 
         /* Restore head positions to authoritative state */
         *acknowledged_head = *authoritative_head;
@@ -330,7 +312,6 @@ snake_ack_frame(
             snake_add_new_segment(data, predicted_head);
             handles_to_squeeze++;
         }
-        check_consistency(data);
 
         /* Simulate head forwards again */
         COMMAND_RB_FOR_EACH(command_rb, frame, command)

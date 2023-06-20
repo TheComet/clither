@@ -26,7 +26,10 @@ msg_alloc(enum msg_type type, int8_t resend_rate, int size)
     struct msg* msg;
     assert(size <= 255);  /* The payload length field is 1 byte */
 
-    msg = MALLOC_MSG(size);
+    if (size < 0)
+        size = 255;
+
+    msg = MALLOC_MSG(255);
     msg->type = type;
     msg->resend_rate = resend_rate;
     msg->resend_rate_counter = 1;
@@ -693,15 +696,38 @@ msg_snake_bezier(
     const struct cs_rb* bezier_handles,
     const struct cs_rb* bezier_handles_ackd)
 {
+    int i;
+    int byte = 0;
+    int nibble = 0;
     int handle_size = 
         6 +   /* World position (2x 24-bit qwpos) */
         1 +   /* Angle */
         2;    /* Length forwards + backwards */
-    int pending_count =
-        bezier_handles_pending(bezier_handles, bezier_handles_ackd);
 
-    struct msg* m = msg_alloc(
-        MSG_SNAKE_BEZIER, 2,
-        sizeof(uint16_t) +  /* Bezier handle count */
-        handle_size * pending_count);
+    struct msg* m = msg_alloc(MSG_SNAKE_BEZIER, 2, -1);
+    for (i = 0; i != rb_count(bezier_handles); ++i)
+    {
+        const struct bezier_handle* handle = rb_peek(bezier_handles, i);
+        const struct bezier_handle* next_handle = i + 1 < rb_count(bezier_handles) ? rb_peek(bezier_handles, i + 1) : NULL;
+        if (bezier_handle_is_ackd(handle, bezier_handles_ackd) &&
+            bezier_handle_is_ackd(next_handle, bezier_handles_ackd))
+        {
+            continue;
+        }
+
+        m->payload[byte++] = (handle->id >> 4) & 0xFF;
+        m->payload[byte++] = ((handle->id << 4) & 0xF0) | (next_handle ? ((next_handle->id >> 8) & 0x0F) : 0);
+        if (next_handle)
+            m->payload[byte++] = next_handle->id & 0xFF;
+
+        m->payload[byte++] = (handle->pos.x >> 16) & 0xFF;
+        m->payload[byte++] = (handle->pos.x >> 8) & 0xFF;
+        m->payload[byte++] = (handle->pos.x >> 0) & 0xFF;
+
+        m->payload[byte++] = (handle->pos.y >> 16) & 0xFF;
+        m->payload[byte++] = (handle->pos.y >> 8) & 0xFF;
+        m->payload[byte++] = (handle->pos.y >> 0) & 0xFF;
+
+        m->payload[byte++] = qa_to_u8(handle->angle);
+    }
 }

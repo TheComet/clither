@@ -6,6 +6,8 @@
 
 C_BEGIN
 
+#define BEZIER_HANDLE_ID_MAX 4095
+
 struct cs_vector;
 struct cs_rb;
 
@@ -16,7 +18,7 @@ struct bezier_point
 };
 
 /*!
- * \brief Represents a knot.
+ * \brief Represents a knot in the bezier curve.
  * 
  * The start of one bezier curve shares the angle with the end of the next
  * bezier curve. The vectors [cos(a), sin(a)] of each knot always point
@@ -29,6 +31,7 @@ struct bezier_handle
 {
     struct qwpos pos;
     qa angle;
+    uint16_t id;
     uint8_t len_backwards, len_forwards;
 };
 
