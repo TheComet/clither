@@ -30,6 +30,9 @@ log_bezier_close(void);
 
 /* General logging functions ----------------------------------------------- */
 PRINTF_FORMAT(1, 2) void
+log_raw(const char* fmt, ...);
+
+PRINTF_FORMAT(1, 2) void
 log_dbg(const char* fmt, ...);
 
 PRINTF_FORMAT(1, 2) void
@@ -48,8 +51,5 @@ log_note(const char* fmt, ...);
 
 PRINTF_FORMAT(1, 2) void
 log_net(const char* fmt, ...);
-
-PRINTF_FORMAT(1, 2) void
-log_bezier(const char* fmt, ...);
 
 C_END

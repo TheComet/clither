@@ -97,6 +97,7 @@ run_server_instance(const void* args)
                 struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
                 snake_param_update(&snake->param, snake->param.upgrades, snake->param.food_eaten + 1);
                 snake_step(&snake->data, &snake->head, &snake->param, command, instance->settings->sim_tick_rate);
+                log_dbg("head (%d): %d,%d\n", frame_number, snake->head.pos.x, snake->head.pos.y);
             }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);

@@ -81,6 +81,25 @@ log_net_close(void)
 #endif
 
 /* ------------------------------------------------------------------------- */
+void log_raw(const char* fmt, ...)
+{
+    va_list va;
+    va_start(va, fmt);
+    vfprintf(stderr, fmt, va);
+    va_end(va);
+
+#if defined(CLITHER_LOGGING)
+    if (g_log)
+    {
+        va_start(va, fmt);
+        vfprintf(g_log, fmt, va);
+        va_end(va);
+        fflush(g_log);
+    }
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
 void log_dbg(const char* fmt, ...)
 {
     va_list va;
