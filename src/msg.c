@@ -657,5 +657,7 @@ msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 
     m->payload[10] = head->speed;
 
+    log_net("MSG_SNAKE_HEAD: pos=%d,%d, angle=%d, speed=%d, frame=%d\n", head->pos.x, head->pos.y, head->angle, head->speed, frame_number);
+
     return m;
 }

@@ -1,5 +1,6 @@
 #include "gmock/gmock.h"
 #include "clither/command.h"
+#include "clither/log.h"
 #include "clither/snake.h"
 #include "clither/wrap.h"
 #include "cstructures/rb.h"
@@ -7,6 +8,49 @@
 #define NAME snake
 
 using namespace testing;
+
+static void print_points_lists(const struct cs_vector* points)
+{
+    int points_offset = -1;
+    const struct cs_vector* points_ptr = points;
+    log_raw("px = [");
+    for (int i = 0; i < 199; ++i)
+    {
+        if (i - points_offset >= (int)vector_count(points_ptr) - 1)
+        {
+            points_offset = i;
+            points_ptr++;
+        }
+
+        printf("%d ", i);
+        qwpos* p = (qwpos*)vector_get(points_ptr, i - points_offset);
+
+        if (i != 0)
+            log_raw(", ");
+        log_raw("%d", p->x);
+    }
+    log_raw("];\n");
+
+    points_offset = -1;
+    points_ptr = points;
+    log_raw("py = [");
+    for (int i = 0; i < 199; ++i)
+    {
+        if (i - points_offset >= (int)vector_count(points_ptr) - 1)
+        {
+            points_offset = i;
+            points_ptr++;
+        }
+
+        printf("%d ", i);
+        qwpos* p = (qwpos*)vector_get(points_ptr, i - points_offset);
+
+        if (i != 0)
+            log_raw(", ");
+        log_raw("%d", p->y);
+    }
+    log_raw("];\n");
+}
 
 TEST(NAME, roll_back_over_frame_boundary)
 {
@@ -46,56 +90,55 @@ TEST(NAME, roll_back_over_frame_boundary)
 
     /* Make sure we have 7 bezier segments */
     ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7));
-    struct cs_vector* client_pts0 = (cs_vector*)rb_peek(&client.data.points_lists, 0);
-    struct cs_vector* client_pts1 = (cs_vector*)rb_peek(&client.data.points_lists, 1);
-    struct cs_vector* client_pts2 = (cs_vector*)rb_peek(&client.data.points_lists, 2);
-    struct cs_vector* client_pts3 = (cs_vector*)rb_peek(&client.data.points_lists, 3);
-    struct cs_vector* client_pts4 = (cs_vector*)rb_peek(&client.data.points_lists, 4);
-    struct cs_vector* client_pts5 = (cs_vector*)rb_peek(&client.data.points_lists, 5);
-    struct cs_vector* client_pts6 = (cs_vector*)rb_peek(&client.data.points_lists, 6);
-    ASSERT_THAT(vector_count(client_pts0), Eq(10));
-    ASSERT_THAT(vector_count(client_pts1), Eq(36));
-    ASSERT_THAT(vector_count(client_pts2), Eq(33));
-    ASSERT_THAT(vector_count(client_pts3), Eq(33));
-    ASSERT_THAT(vector_count(client_pts4), Eq(33));
-    ASSERT_THAT(vector_count(client_pts5), Eq(33));
-    ASSERT_THAT(vector_count(client_pts6), Eq(29));
+    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(vector_count(&client_pts[0]), Eq(10));
+    ASSERT_THAT(vector_count(&client_pts[1]), Eq(36));
+    ASSERT_THAT(vector_count(&client_pts[2]), Eq(33));
+    ASSERT_THAT(vector_count(&client_pts[3]), Eq(33));
+    ASSERT_THAT(vector_count(&client_pts[4]), Eq(33));
+    ASSERT_THAT(vector_count(&client_pts[5]), Eq(33));
+    ASSERT_THAT(vector_count(&client_pts[6]), Eq(29));
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8));
 
+    print_points_lists(client_pts);
+
     ASSERT_THAT(rb_count(&server.data.points_lists), Eq(1));
-    struct cs_vector* server_pts0 = (cs_vector*)rb_peek(&server.data.points_lists, 0);
-    ASSERT_THAT(vector_count(server_pts0), Eq(7));
+    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.points_lists, 0);
+    ASSERT_THAT(vector_count(&server_pts[0]), Eq(7));
     ASSERT_THAT(rb_count(&server.data.bezier_handles), Eq(2));
 
     /* Make sure sim agrees up to mispredicted frame */
     ASSERT_THAT(
-        ((qwpos*)vector_get(client_pts0, 5))->x,
-        Eq(((qwpos*)vector_get(server_pts0, 5))->x));
+        ((qwpos*)vector_get(&client_pts[0], 5))->x,
+        Eq(((qwpos*)vector_get(&server_pts[0], 5))->x));
     ASSERT_THAT(
-        ((qwpos*)vector_get(client_pts0, 5))->y,
-        Eq(((qwpos*)vector_get(server_pts0, 5))->y));
+        ((qwpos*)vector_get(&client_pts[0], 5))->y,
+        Eq(((qwpos*)vector_get(&server_pts[0], 5))->y));
     ASSERT_THAT(
-        ((qwpos*)vector_get(client_pts0, 6))->x,
-        Ne(((qwpos*)vector_get(server_pts0, 6))->x));
+        ((qwpos*)vector_get(&client_pts[0], 6))->x,
+        Ne(((qwpos*)vector_get(&server_pts[0], 6))->x));
     ASSERT_THAT(
-        ((qwpos*)vector_get(client_pts0, 6))->y,
-        Ne(((qwpos*)vector_get(server_pts0, 6))->y));
+        ((qwpos*)vector_get(&client_pts[0], 6))->y,
+        Ne(((qwpos*)vector_get(&server_pts[0], 6))->y));
 
     /* Everything is set up so that "mispredict_frame" is the last frame on which
      * the simulation will match up. Going from mispredict_frame to mispredict_frame+1
      * will cause a roll back */
     snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, mispredict_frame, 60);
 
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(2));
-    client_pts0 = (cs_vector*)rb_peek(&client.data.points_lists, 0);
-    client_pts1 = (cs_vector*)rb_peek(&client.data.points_lists, 1);
+    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7));
+    client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8));
+
+    print_points_lists(client_pts);
 
     struct command c_prev = c;
     c = command_default();
     struct snake_head head;
     snake_head_init(&head, make_qwposi(2, 2));
     frame_number = 65535 - 10;
-    for (int i = 0; i < 14; ++i)
+    int points_offset = -1;
+    for (int i = 0; i < 199; ++i)
     {
         c.angle += 2;
 
@@ -104,12 +147,17 @@ TEST(NAME, roll_back_over_frame_boundary)
         else
             snake_step_head(&head, &param, c_prev, 60);
 
-        qwpos* p = i+1 < (int)vector_count(client_pts0) ?
-            (qwpos*)vector_get(client_pts0, i+1) :
-            (qwpos*)vector_get(client_pts1, i+2 - vector_count(client_pts0));
+        if (i - points_offset >= (int)vector_count(client_pts) - 1)
+        {
+            points_offset = i;
+            client_pts++;
+        }
 
-        EXPECT_THAT(head.pos.x, Eq(p->x));
-        EXPECT_THAT(head.pos.y, Eq(p->y));
+        printf("%d ", i);
+        qwpos* p = (qwpos*)vector_get(client_pts, i - points_offset);
+
+        ASSERT_THAT(head.pos.x, Eq(p->x));
+        ASSERT_THAT(head.pos.y, Eq(p->y));
 
         frame_number++;
         c_prev = c;
