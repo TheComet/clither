@@ -1,3 +1,4 @@
+#include "clither/bezier.h"
 #include "clither/log.h"
 #include "clither/msg_queue.h"
 #include "clither/net.h"
@@ -8,6 +9,7 @@
 #include "clither/wrap.h"
 
 #include "cstructures/btree.h"
+#include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
 #include <string.h>  /* memcpy */
@@ -16,9 +18,10 @@
 
 struct client_table_entry
 {
-    struct cs_vector pending_msgs;     /* struct msg* */
+    struct cs_vector pending_msgs;       /* struct msg* */
+    struct cs_btree bezier_handles_ack;  /* struct bezier_handle */
     int timeout_counter;
-    int cbf_window[CBF_WINDOW_SIZE];   /* "Command Buffer Fullness" window */
+    int cbf_window[CBF_WINDOW_SIZE];     /* "Command Buffer Fullness" window */
     cs_btree_key snake_id;
     uint16_t last_command_msg_frame;
 };
@@ -208,8 +211,17 @@ server_queue_snake_data(
 
     CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
         CLIENT_TABLE_FOR_EACH(&server->client_table, other_addr, other_client)
-            struct snake* snake = world_get_snake(world, client->snake_id);
-            struct snake* other_snake = world_get_snake(world, other_client->snake_id);
+            struct snake* snake;
+            struct snake* other_snake;
+
+            /* OK to compare pointers here -- they're from the same hashmap */
+            if (addr == other_addr)
+                continue;
+
+            snake = world_get_snake(world, client->snake_id);
+            other_snake = world_get_snake(world, other_client->snake_id);
+
+            /* TODO better distance check using bezier AABBs */
             qw dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
             qw dy = qw_sub(snake->head.pos.y, other_snake->head.pos.y);
             qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
@@ -217,6 +229,7 @@ server_queue_snake_data(
                 continue;
 
             /* TODO queue bezier handles */
+
         CLIENT_TABLE_END_EACH
     CLIENT_TABLE_END_EACH
 }
@@ -377,6 +390,7 @@ server_recv(
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_msgs);
+                        rb_init(&client->bezier_handles_ack, sizeof(struct bezier_handle));
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                         client->last_command_msg_frame = frame_number;

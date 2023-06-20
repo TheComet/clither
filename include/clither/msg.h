@@ -143,4 +143,11 @@ msg_feedback(int8_t diff, uint16_t frame_number);
 struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 
+void
+msg_snake_bezier(
+    struct cs_vector* msgs,
+    const struct cs_rb* bezier_handles,
+    const struct cs_rb* bezier_handles_ack,
+    uint16_t frame_number);
+
 C_END
