@@ -263,7 +263,7 @@ msg_parse_payload(
                 1 +   /* Angle */
                 2;    /* Length forwards + backwards */
 
-            if (payload_len < 3)
+            if (payload_len < 6)
             {
                 log_warn("MSG_SNAKE_BEZIER: Payload is too small (%d) < 4\n", payload_len);
                 return -1;
@@ -272,13 +272,24 @@ msg_parse_payload(
             pp->snake_bezier.snake_id =
                 (payload[0] << 8) |
                 (payload[1] << 0);
-            pp->snake_bezier.handle_count =
-                payload[2];
+            pp->snake_bezier.handle_idx_start =
+                (payload[2] << 8) |
+                (payload[3] << 0);
+            pp->snake_bezier.handle_idx_end =
+                (payload[4] << 8) |
+                (payload[5] << 0);
 
-            if (3 + pp->snake_bezier.handle_count * handle_size != payload_len)
+            if (pp->snake_bezier.handle_idx_start <= pp->snake_bezier.handle_idx_end)
             {
-                log_warn("MSG_SNAKE_BEZIER: Invalid handle count!\n");
+                log_warn("MSG_SNAKE_BEZIER: Invalid start and end indices: start=%d, end=%d\n",
+                    pp->snake_bezier.handle_idx_start, pp->snake_bezier.handle_idx_end);
                 return -2;
+            }
+
+            if (6 + (pp->snake_bezier.handle_idx_end - pp->snake_bezier.handle_idx_start) * handle_size != payload_len)
+            {
+                log_warn("MSG_SNAKE_BEZIER: Handle indices point outside of payload range!\n");
+                return -3;
             }
         } break;
 
@@ -729,7 +740,8 @@ msg_snake_bezier(
     const struct cs_rb* bezier_handles_ackd)
 {
     struct msg* m;
-    uint8_t handle_count;
+    uint16_t handle_idx_start, handle_idx_end;
+    int i;
     int byte;
     int handle_size = 
         6 +   /* World position (2x 24-bit qwpos) */
@@ -737,8 +749,10 @@ msg_snake_bezier(
         2;    /* Length forwards + backwards */
 
     m = NULL;
-    handle_count = 0;
-    RB_FOR_EACH(bezier_handles, struct bezier_handle, handle)
+    for (i = 0; i != rb_count(bezier_handles); ++i)
+    {
+        uint16_t handle_idx;
+        const struct bezier_handle* handle = rb_peek(bezier_handles, i);
         if (bezier_handle_is_ackd(handle, bezier_handles_ackd))
             continue;
 
@@ -746,21 +760,22 @@ msg_snake_bezier(
         {
             if (m)
             {
-                m->payload[2] = handle_count;
+                handle_idx_end = (uint16_t)i;
+                m->payload[2] = (handle_idx_start >> 8) & 0xFF;
+                m->payload[3] = (handle_idx_start >> 0) & 0xFF;
+                m->payload[4] = (handle_idx_end >> 8) & 0xFF;
+                m->payload[5] = (handle_idx_end >> 0) & 0xFF;
                 m->payload_len = byte;
                 vector_push(msgs, &m);
-
-                handle_count = 0;
             }
 
             byte = 0;
+            handle_idx_start = (uint16_t)i;
             m = msg_alloc(MSG_SNAKE_BEZIER, 2, -1);
             m->payload[byte++] = (snake_id >> 8) & 0xFF;
             m->payload[byte++] = (snake_id >> 0) & 0xFF;
-            byte += 1;  /* Make room for handle count */
+            byte += 4;  /* Make room for handle indices */
         }
-
-        handle_count++;
 
         m->payload[byte++] = (handle->pos.x >> 16) & 0xFF;
         m->payload[byte++] = (handle->pos.x >> 8) & 0xFF;
@@ -774,11 +789,15 @@ msg_snake_bezier(
 
         m->payload[byte++] = handle->len_backwards;
         m->payload[byte++] = handle->len_forwards;
-    RB_END_EACH
+    }
 
     if (m)
     {
-        m->payload[2] = handle_count;
+        handle_idx_end = (uint16_t)i;
+        m->payload[2] = (handle_idx_start >> 8) & 0xFF;
+        m->payload[3] = (handle_idx_start >> 0) & 0xFF;
+        m->payload[4] = (handle_idx_end >> 8) & 0xFF;
+        m->payload[5] = (handle_idx_end >> 0) & 0xFF;
         m->payload_len = byte;
         vector_push(msgs, &m);
     }
@@ -788,18 +807,8 @@ msg_snake_bezier(
 struct msg*
 msg_snake_bezier_ack(
     struct cs_rb* bezier_handles,
-    const uint8_t* payload,
-    uint8_t payload_len)
+    const union parsed_payload* pp)
 {
-    /* 
-     * We can assume that the payload_len fits the number of handles exactly here,
-     * because this is enforced in msg_parse_payload().
-     */
-    int i;
-    for (i = 0; i < payload_len; ++i)
-    {
-
-    }
 
     return NULL;
 }
