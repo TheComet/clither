@@ -316,11 +316,15 @@ retry_recv:
                     client->warp = pp.feedback.diff * 10;
             } break;
 
-            case MSG_SNAKE_METADATA: {
-
+            case MSG_SNAKE_CREATE: {
+                struct snake* snake = world_create_snake(
+                    world,
+                    pp.snake_metadata.snake_id,
+                    make_qwposi(0, 0),  /* Dummy location, not used */
+                    pp.snake_metadata.username);
             } break;
 
-            case MSG_SNAKE_METADATA_ACK:
+            case MSG_SNAKE_CREATE_ACK:
                 break;
 
             case MSG_SNAKE_HEAD: {
@@ -337,6 +341,10 @@ retry_recv:
             } break;
 
             case MSG_SNAKE_BEZIER: {
+                struct snake* snake = world_get_snake(world, pp.snake_bezier.snake_id);
+                if (snake == NULL)
+                    break;  /* Have to wait for MSG_SNAKE_CREATE to arrive */
+
 
             } break;
 

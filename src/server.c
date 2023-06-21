@@ -492,11 +492,11 @@ server_recv(
                     }
                 } break;
 
-                case MSG_SNAKE_METADATA: {
+                case MSG_SNAKE_CREATE: {
 
                 } break;
 
-                case MSG_SNAKE_METADATA_ACK: {
+                case MSG_SNAKE_CREATE_ACK: {
 
                 } break;
 

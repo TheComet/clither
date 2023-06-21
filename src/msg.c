@@ -66,8 +66,8 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     case MSG_COMMANDS:
         break;
 
-    case MSG_SNAKE_METADATA:
-    case MSG_SNAKE_METADATA_ACK:
+    case MSG_SNAKE_CREATE:
+    case MSG_SNAKE_CREATE_ACK:
         break;
 
     case MSG_SNAKE_HEAD:
@@ -116,17 +116,17 @@ msg_parse_payload(
             if (pp->join_request.username_len == 0)
             {
                 log_warn("Name has zero length\n");
-                return -1;
+                return -2;
             }
-            if (5+pp->join_request.username_len > payload_len)
+            if (5 + pp->join_request.username_len + 1 > payload_len)
             {
                 log_warn("Name length points outside of payload\n");
-                return -1;
+                return -3;
             }
             if (payload[5+pp->join_request.username_len] != '\0')
             {
                 log_warn("Name string is not properly null-terminated\n");
-                return -1;
+                return -4;
             }
         } break;
 
@@ -173,15 +173,15 @@ msg_parse_payload(
 
             error_len = payload[0];
 
-            if (1+error_len > payload_len)
+            if (1 + error_len + 1 > payload_len)
             {
                 log_warn("Error string length points outside of payload\n");
-                return -1;
+                return -2;
             }
-            if (payload[1+error_len] != '\0')
+            if (payload[1 + error_len] != '\0')
             {
                 log_warn("Error string is not properly null-terminated\n");
-                return -1;
+                return -3;
             }
             pp->join_deny.error = (const char*)&payload[1];
         } break;
@@ -223,8 +223,11 @@ msg_parse_payload(
             log_net("MSG_FEEDBACK: frame=%d, diff=%d\n", pp->feedback.frame_number, pp->feedback.diff);
         } break;
 
-        case MSG_SNAKE_METADATA:
-        case MSG_SNAKE_METADATA_ACK:
+        case MSG_SNAKE_CREATE: {
+
+        } break;
+
+        case MSG_SNAKE_CREATE_ACK:
             break;
 
         case MSG_SNAKE_HEAD: {
@@ -253,6 +256,34 @@ msg_parse_payload(
             pp->snake_head.head.speed =
                 payload[10];
         } break;
+
+        case MSG_SNAKE_BEZIER: {
+            int handle_size =
+                6 +   /* World position (2x 24-bit qwpos) */
+                1 +   /* Angle */
+                2;    /* Length forwards + backwards */
+
+            if (payload_len < 3)
+            {
+                log_warn("MSG_SNAKE_BEZIER: Payload is too small (%d) < 4\n", payload_len);
+                return -1;
+            }
+
+            pp->snake_bezier.snake_id =
+                (payload[0] << 8) |
+                (payload[1] << 0);
+            pp->snake_bezier.handle_count =
+                payload[2];
+
+            if (3 + pp->snake_bezier.handle_count * handle_size != payload_len)
+            {
+                log_warn("MSG_SNAKE_BEZIER: Invalid handle count!\n");
+                return -2;
+            }
+        } break;
+
+        case MSG_SNAKE_BEZIER_ACK:
+            break;
 
         case MSG_FOOD_CREATE:
         case MSG_FOOD_CREATE_ACK:
@@ -693,32 +724,43 @@ bezier_handles_pending(
 void
 msg_snake_bezier(
     struct cs_vector* msgs,
+    uint16_t snake_id,
     const struct cs_rb* bezier_handles,
     const struct cs_rb* bezier_handles_ackd)
 {
-    int i;
-    int byte = 0;
-    int nibble = 0;
+    struct msg* m;
+    uint8_t handle_count;
+    int byte;
     int handle_size = 
         6 +   /* World position (2x 24-bit qwpos) */
         1 +   /* Angle */
         2;    /* Length forwards + backwards */
 
-    struct msg* m = msg_alloc(MSG_SNAKE_BEZIER, 2, -1);
-    for (i = 0; i != rb_count(bezier_handles); ++i)
-    {
-        const struct bezier_handle* handle = rb_peek(bezier_handles, i);
-        const struct bezier_handle* next_handle = i + 1 < rb_count(bezier_handles) ? rb_peek(bezier_handles, i + 1) : NULL;
-        if (bezier_handle_is_ackd(handle, bezier_handles_ackd) &&
-            bezier_handle_is_ackd(next_handle, bezier_handles_ackd))
-        {
+    m = NULL;
+    handle_count = 0;
+    RB_FOR_EACH(bezier_handles, struct bezier_handle, handle)
+        if (bezier_handle_is_ackd(handle, bezier_handles_ackd))
             continue;
+
+        if (m == NULL || byte + handle_size >= m->payload_len)
+        {
+            if (m)
+            {
+                m->payload[2] = handle_count;
+                m->payload_len = byte;
+                vector_push(msgs, &m);
+
+                handle_count = 0;
+            }
+
+            byte = 0;
+            m = msg_alloc(MSG_SNAKE_BEZIER, 2, -1);
+            m->payload[byte++] = (snake_id >> 8) & 0xFF;
+            m->payload[byte++] = (snake_id >> 0) & 0xFF;
+            byte += 1;  /* Make room for handle count */
         }
 
-        m->payload[byte++] = (handle->id >> 4) & 0xFF;
-        m->payload[byte++] = ((handle->id << 4) & 0xF0) | (next_handle ? ((next_handle->id >> 8) & 0x0F) : 0);
-        if (next_handle)
-            m->payload[byte++] = next_handle->id & 0xFF;
+        handle_count++;
 
         m->payload[byte++] = (handle->pos.x >> 16) & 0xFF;
         m->payload[byte++] = (handle->pos.x >> 8) & 0xFF;
@@ -729,5 +771,35 @@ msg_snake_bezier(
         m->payload[byte++] = (handle->pos.y >> 0) & 0xFF;
 
         m->payload[byte++] = qa_to_u8(handle->angle);
+
+        m->payload[byte++] = handle->len_backwards;
+        m->payload[byte++] = handle->len_forwards;
+    RB_END_EACH
+
+    if (m)
+    {
+        m->payload[2] = handle_count;
+        m->payload_len = byte;
+        vector_push(msgs, &m);
     }
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_snake_bezier_ack(
+    struct cs_rb* bezier_handles,
+    const uint8_t* payload,
+    uint8_t payload_len)
+{
+    /* 
+     * We can assume that the payload_len fits the number of handles exactly here,
+     * because this is enforced in msg_parse_payload().
+     */
+    int i;
+    for (i = 0; i < payload_len; ++i)
+    {
+
+    }
+
+    return NULL;
 }

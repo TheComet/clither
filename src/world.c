@@ -31,6 +31,8 @@ struct snake*
 world_create_snake(struct world* world, uint16_t snake_id, struct qwpos spawn_pos, const char* username)
 {
     struct snake* snake = btree_emplace_new(&world->snakes, snake_id);
+    if (snake == NULL)
+        return NULL;
     snake_init(snake, spawn_pos, username);
 
     log_info("Creating snake %d at %.2f,%.2f with username \"%s\"\n",
