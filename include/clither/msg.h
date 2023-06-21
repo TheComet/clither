@@ -88,8 +88,10 @@ union parsed_payload
     } snake_head;
 
     struct {
+        uint8_t* handles_buf;
+        int handle_idx_start;
+        int handle_idx_end;
         uint16_t snake_id;
-        uint8_t handle_count;
     } snake_bezier;
 };
 
@@ -164,7 +166,6 @@ msg_snake_bezier(
 struct msg*
 msg_snake_bezier_ack(
     struct cs_rb* bezier_handles,
-    const uint8_t* payload,
-    uint8_t payload_len);
+    const union parsed_payload* pp);
 
 C_END
