@@ -7,6 +7,7 @@
 
 C_BEGIN
 
+struct cs_rb;
 struct cs_vector;
 struct command_rb;
 struct snake;
@@ -23,8 +24,8 @@ enum msg_type
     MSG_COMMANDS,
     MSG_FEEDBACK,
 
-    MSG_SNAKE_METADATA,
-    MSG_SNAKE_METADATA_ACK,
+    MSG_SNAKE_CREATE,
+    MSG_SNAKE_CREATE_ACK,
     MSG_SNAKE_HEAD,
     MSG_SNAKE_BEZIER,
     MSG_SNAKE_BEZIER_ACK,
@@ -77,9 +78,19 @@ union parsed_payload
     } feedback;
 
     struct {
+        uint16_t snake_id;
+        const char* username;
+    } snake_metadata;
+
+    struct {
         struct snake_head head;
         uint16_t frame_number;
     } snake_head;
+
+    struct {
+        uint16_t snake_id;
+        uint8_t handle_count;
+    } snake_bezier;
 };
 
 int
@@ -149,5 +160,11 @@ msg_snake_bezier(
     const struct cs_rb* bezier_handles,
     const struct cs_rb* bezier_handles_ack,
     uint16_t frame_number);
+
+struct msg*
+msg_snake_bezier_ack(
+    struct cs_rb* bezier_handles,
+    const uint8_t* payload,
+    uint8_t payload_len);
 
 C_END

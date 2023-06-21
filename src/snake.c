@@ -97,7 +97,7 @@ snake_step_head(
      * cursor. It is stored in an unsigned char [0 .. 255]. We need to convert
      * it to radians [-pi .. pi) using the fixed point angle type "qa"
      */
-    qa target_angle = command_angle_to_qa(command);
+    qa target_angle = u8_to_qa(command.angle);
 
     /* Calculate difference between desired angle and actual angle and wrap */
     qa angle_diff = qa_sub(head->angle, target_angle);
