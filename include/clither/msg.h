@@ -7,6 +7,7 @@
 
 C_BEGIN
 
+struct cs_hashmap;
 struct cs_rb;
 struct cs_vector;
 struct command_rb;
@@ -159,9 +160,9 @@ msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 void
 msg_snake_bezier(
     struct cs_vector* msgs,
+    uint16_t snake_id,
     const struct cs_rb* bezier_handles,
-    const struct cs_rb* bezier_handles_ack,
-    uint16_t frame_number);
+    const struct cs_hashmap* bezier_handles_ackd);
 
 struct msg*
 msg_snake_bezier_ack(

@@ -8,7 +8,7 @@
 #include "clither/world.h"
 #include "clither/wrap.h"
 
-#include "cstructures/btree.h"
+#include "cstructures/hashmap.h"
 #include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
@@ -19,7 +19,7 @@
 struct client_table_entry
 {
     struct cs_vector pending_msgs;       /* struct msg* */
-    struct cs_btree bezier_handles_ack;  /* struct bezier_handle */
+    struct cs_hashmap bezier_handles_ack;  /* struct bezier_handle */
     int timeout_counter;
     int cbf_window[CBF_WINDOW_SIZE];     /* "Command Buffer Fullness" window */
     cs_btree_key snake_id;
@@ -390,7 +390,7 @@ server_recv(
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_msgs);
-                        rb_init(&client->bezier_handles_ack, sizeof(struct bezier_handle));
+                        hashmap_init(&client->bezier_handles_ack, sizeof(struct bezier_handle), 0);
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                         client->last_command_msg_frame = frame_number;
