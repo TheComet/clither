@@ -328,7 +328,7 @@ run_client(const struct args* a)
 
             if (input.next_gfx_backend)
                 new_idx = idx + 1;
-            if (input.prev_gfx_backend)
+            else
                 new_idx = idx - 1;
             if (new_idx >= count)
                 new_idx = 0;

@@ -105,10 +105,6 @@ hashmap_deinit(struct cs_hashmap* hm);
 CSTRUCTURES_PRIVATE_API void
 hashmap_free(struct cs_hashmap* hm);
 
-CSTRUCTURES_PRIVATE_API enum cs_hashmap_status
-hashmap_reserve(struct cs_hashmap* hm,
-                uint32_t table_count);
-
 /*!
  * @brief Inserts a key and value into the hashmap.
  * @note Complexity is generally O(1). Inserting may cause a rehash if the
@@ -135,25 +131,15 @@ hashmap_emplace(
     struct cs_hashmap* hm,
     const void* key);
 
-CSTRUCTURES_PRIVATE_API enum cs_hashmap_status
-hashmap_insert_str(struct cs_hashmap* hm,
-                   const char* key,
-                   const void* value);
-
 CSTRUCTURES_PRIVATE_API void*
 hashmap_erase(struct cs_hashmap* hm,
               const void* key);
 
 CSTRUCTURES_PRIVATE_API void*
-hashmap_erase_str(struct cs_hashmap* hm,
-                  const char* key,
-                  enum cs_hashmap_status* status);
-
-CSTRUCTURES_PRIVATE_API void*
 hashmap_find(const struct cs_hashmap* hm, const void* key);
 
-CSTRUCTURES_PRIVATE_API void*
-hashmap_find_str(struct cs_hashmap* hm, const char* key);
+CSTRUCTURES_PRIVATE_API int
+hashmap_exists(struct cs_hashmap* hm, const char* key);
 
 #define hashmap_count(hm) ((hm)->slots_used)
 

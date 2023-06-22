@@ -5,7 +5,7 @@
 #include "clither/snake.h"
 #include "clither/wrap.h"
 
-#include "cstructures/btree.h"
+#include "cstructures/hashmap.h"
 #include "cstructures/memory.h"
 
 #include <stddef.h>
@@ -710,17 +710,6 @@ msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 
 /* ------------------------------------------------------------------------- */
 static int
-bezier_handle_is_ackd(
-    const struct bezier_handle* handle,
-    const struct cs_rb* bezier_handles_ackd)
-{
-    RB_FOR_EACH(bezier_handles_ackd, struct bezier_handle, other)
-        if (bezier_handles_equal(handle, other))
-            return 1;
-    RB_END_EACH
-    return 0;
-}
-static int
 bezier_handles_pending(
     const struct cs_rb* bezier_handles,
     const struct cs_rb* bezier_handles_ackd)
@@ -737,7 +726,7 @@ msg_snake_bezier(
     struct cs_vector* msgs,
     uint16_t snake_id,
     const struct cs_rb* bezier_handles,
-    const struct cs_rb* bezier_handles_ackd)
+    const struct cs_hashmap* bezier_handles_ackd)
 {
     struct msg* m;
     uint16_t handle_idx_start, handle_idx_end;
@@ -749,9 +738,10 @@ msg_snake_bezier(
         2;    /* Length forwards + backwards */
 
     m = NULL;
-    for (i = 0; i != rb_count(bezier_handles); ++i)
+    byte = 0;
+    handle_idx_start = 0;
+    for (i = 0; i != (int)rb_count(bezier_handles); ++i)
     {
-        uint16_t handle_idx;
         const struct bezier_handle* handle = rb_peek(bezier_handles, i);
         if (bezier_handle_is_ackd(handle, bezier_handles_ackd))
             continue;

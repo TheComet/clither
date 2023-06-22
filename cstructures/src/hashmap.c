@@ -242,7 +242,7 @@ hashmap_insert(struct cs_hashmap* hm, const void* key, const void* value)
 
     /* Init values */
     hash = hash_wrapper(hm, key, hm->key_size);
-    pos = hash % hm->table_count;
+    pos = hash & (hm->table_count - 1);
     i = 0;
     last_tombstone = HM_SLOT_INVALID;
 
@@ -264,7 +264,7 @@ hashmap_insert(struct cs_hashmap* hm, const void* key, const void* value)
          * size is a power of two, this will visit every slot */
         i++;
         pos += i;
-        pos = pos % hm->table_count;
+        pos &= (hm->table_count - 1);
         STATS_INSERTION_PROBE(hm);
     }
 
@@ -305,7 +305,7 @@ hashmap_emplace(
 
     /* Init values */
     hash = hash_wrapper(hm, key, hm->key_size);
-    pos = hash % hm->table_count;
+    pos = hash & (hm->table_count - 1);
     i = 0;
     last_tombstone = HM_SLOT_INVALID;
 
@@ -327,7 +327,7 @@ hashmap_emplace(
          * size is a power of two, this will visit every slot */
         i++;
         pos += i;
-        pos = pos % hm->table_count;
+        pos &= (hm->table_count - 1);
         STATS_INSERTION_PROBE(hm);
     }
 
@@ -356,7 +356,7 @@ void*
 hashmap_erase(struct cs_hashmap* hm, const void* key)
 {
     cs_hash32 hash = hash_wrapper(hm, key, hm->key_size);
-    cs_hash32 pos = hash % hm->table_count;
+    cs_hash32 pos = hash & (hm->table_count - 1);
     cs_hash32 i = 0;
 
     while (1)
@@ -376,7 +376,7 @@ hashmap_erase(struct cs_hashmap* hm, const void* key)
          * size is a power of two, this will visit every slot */
         i++;
         pos += i;
-        pos = pos % hm->table_count;
+        pos &= (hm->table_count - 1);
         STATS_DELETION_PROBE(hm);
     }
 
@@ -392,7 +392,7 @@ void*
 hashmap_find(const struct cs_hashmap* hm, const void* key)
 {
     cs_hash32 hash = hash_wrapper(hm, key, hm->key_size);
-    cs_hash32 pos = hash % hm->table_count;
+    cs_hash32 pos = hash & (hm->table_count - 1);
     cs_hash32 i = 0;
     while (1)
     {
@@ -411,8 +411,36 @@ hashmap_find(const struct cs_hashmap* hm, const void* key)
          * size is a power of two, this will visit every slot */
         i++;
         pos += i;
-        pos = pos % hm->table_count;
+        pos &= (hm->table_count - 1);
     }
 
     return VALUE(hm, pos);
+}
+
+/* ------------------------------------------------------------------------- */
+int
+hashmap_exists(struct cs_hashmap* hm, const char* key)
+{
+    cs_hash32 hash = hash_wrapper(hm, key, hm->key_size);
+    cs_hash32 pos = hash & (hm->table_count - 1);
+    cs_hash32 i = 0;
+    while (1)
+    {
+        if (SLOT(hm, pos) == hash)
+        {
+            if (memcmp(KEY(hm, pos), key, hm->key_size) == 0)
+                return 1;
+        }
+        else
+        {
+            if (SLOT(hm, pos) == HM_SLOT_UNUSED)
+                return 0;
+        }
+
+        /* Quadratic probing following p(K,i)=(i^2+i)/2. If the hash table
+         * size is a power of two, this will visit every slot */
+        i++;
+        pos += i;
+        pos &= (hm->table_count - 1);
+    }
 }
