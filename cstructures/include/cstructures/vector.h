@@ -211,7 +211,7 @@ vector_insert_emplace(struct cs_vector* vector, cs_vec_idx index);
  * created. If this is not the case then it could cause undefined behaviour.
  */
 CSTRUCTURES_PUBLIC_API int
-vector_insert(struct cs_vector* vector, cs_vec_idx index, void* data);
+vector_insert(struct cs_vector* vector, cs_vec_idx index, const void* data);
 
 /*!
  * @brief Erases the specified element from the vector.

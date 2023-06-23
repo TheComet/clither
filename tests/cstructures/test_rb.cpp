@@ -214,6 +214,101 @@ TEST(NAME, if_it_dont_fit_dont_shit_single)
     rb_deinit(&rb);
 }
 
+TEST(NAME, insert_erase)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+
+    uint16_t a = 0xA, b = 0xB, c = 0xC;
+    EXPECT_THAT(rb_insert(&rb, 0, &a), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 0, &b), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 0, &c), Eq(0));
+
+    EXPECT_THAT(rb_count(&rb), Eq(3));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(c));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 1), Pointee(b));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 2), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(2));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(b));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 1), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(1));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(0));
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, insert_erase_wrap)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+    rb_realloc(&rb, 8);
+
+    // We want to test the wraparound behavior of inserting at the very end
+    rb.read = 7;
+    rb.write = 7;
+
+    uint16_t a = 0xA, b = 0xB, c = 0xC;
+    EXPECT_THAT(rb_insert(&rb, 0, &a), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 0, &b), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 0, &c), Eq(0));
+
+    EXPECT_THAT(rb_count(&rb), Eq(3));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(c));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 1), Pointee(b));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 2), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(2));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(b));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 1), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(1));
+    EXPECT_THAT((uint16_t*)rb_peek(&rb, 0), Pointee(a));
+
+    rb_erase(&rb, 0);
+    EXPECT_THAT(rb_count(&rb), Eq(0));
+
+    EXPECT_THAT(rb.read, Eq(7));
+    EXPECT_THAT(rb.write, Eq(7));
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, insert_at_end_same_as_put)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+
+    uint16_t a = 0xA, b = 0xB, c = 0xC;
+    EXPECT_THAT(rb_insert(&rb, 0, &a), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 1, &b), Eq(0));
+    EXPECT_THAT(rb_insert(&rb, 2, &c), Eq(0));
+
+    uint16_t *d, *e, *f;
+    ASSERT_THAT((d = (uint16_t*)rb_take(&rb)), NotNull());
+    ASSERT_THAT((e = (uint16_t*)rb_take(&rb)), NotNull());
+    ASSERT_THAT((f = (uint16_t*)rb_take(&rb)), NotNull());
+    EXPECT_THAT(rb_take(&rb), IsNull());
+
+    EXPECT_THAT(rb_count(&rb), Eq(0));
+    EXPECT_THAT(rb.read, Eq(3));
+    EXPECT_THAT(rb.write, Eq(3));
+
+    EXPECT_THAT(d, Pointee(a));
+    EXPECT_THAT(e, Pointee(b));
+    EXPECT_THAT(f, Pointee(c));
+
+    rb_deinit(&rb);
+}
+
 TEST(NAME, for_each_with_wrap)
 {
     cs_rb rb;

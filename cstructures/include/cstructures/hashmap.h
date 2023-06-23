@@ -8,7 +8,7 @@
 #define HM_SLOT_INVALID   ((cs_hash32)-1)
 #define HM_REHASH_AT_PERCENT   70
 #define HM_DEFAULT_TABLE_COUNT 128
-#define HM_EXPAND_FACTOR 3
+#define HM_EXPAND_FACTOR 4  /* MUST be power of 2! */
 
 C_BEGIN
 
@@ -139,7 +139,7 @@ CSTRUCTURES_PRIVATE_API void*
 hashmap_find(const struct cs_hashmap* hm, const void* key);
 
 CSTRUCTURES_PRIVATE_API int
-hashmap_exists(struct cs_hashmap* hm, const char* key);
+hashmap_exists(const struct cs_hashmap* hm, const void* key);
 
 #define hashmap_count(hm) ((hm)->slots_used)
 

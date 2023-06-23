@@ -89,7 +89,7 @@ union parsed_payload
     } snake_head;
 
     struct {
-        uint8_t* handles_buf;
+        const uint8_t* handles_buf;
         int handle_idx_start;
         int handle_idx_end;
         uint16_t snake_id;

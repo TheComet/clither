@@ -267,9 +267,10 @@ TEST(NAME, parse_snake_bezier_payload_too_small)
 
 TEST(NAME, parse_snake_bezier_invalid_handle_count_1)
 {
-    uint8_t payload[12] = {
+    uint8_t payload[15] = {
         0xAA, 0xBB,        // Snake ID
-        0x01,              // Handle count
+        0x00, 0x02,        // Handle start idx
+        0x00, 0x03,        // Handle end idx
         0x12, 0x34, 0x56,  // X Position
         0x65, 0x43, 0x21,  // Y Position
         0x50,              // Angle
@@ -277,15 +278,16 @@ TEST(NAME, parse_snake_bezier_invalid_handle_count_1)
     };
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 11), Eq(-2));
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 13), Eq(-2));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14), Eq(-3));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 16), Eq(-3));
 }
 
 TEST(NAME, parse_snake_bezier_invalid_handle_count_2)
 {
-    uint8_t payload[22] = {
+    uint8_t payload[24] = {
         0xAA, 0xBB,        // Snake ID
-        0x02,              // Handle count
+        0x00, 0x02,        // Handle start idx
+        0x00, 0x04,        // Handle end idx
 
         0x12, 0x34, 0x56,  // X Position
         0x65, 0x43, 0x21,  // Y Position
@@ -299,15 +301,60 @@ TEST(NAME, parse_snake_bezier_invalid_handle_count_2)
     };
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 20), Eq(-2));
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 22), Eq(-2));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 23), Eq(-3));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 25), Eq(-3));
+}
+
+TEST(NAME, parse_snake_bezier_invalid_handle_indices_1)
+{
+    uint8_t payload[24] = {
+        0xAA, 0xBB,        // Snake ID
+        0x00, 0x02,        // Handle start idx
+        0x00, 0x02,        // Handle end idx
+
+        0x12, 0x34, 0x56,  // X Position
+        0x65, 0x43, 0x21,  // Y Position
+        0x50,              // Angle
+        0x20, 0x21,        // Length backwards/forwards
+
+        0x23, 0x45, 0x67,  // X Position
+        0x76, 0x54, 0x32,  // Y Position
+        0x60,              // Angle
+        0x40, 0x41,        // Length backwards/forwards
+    };
+
+    parsed_payload pp;
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24), Eq(-2));
+}
+
+TEST(NAME, parse_snake_bezier_invalid_handle_indices_2)
+{
+    uint8_t payload[24] = {
+        0xAA, 0xBB,        // Snake ID
+        0x00, 0x03,        // Handle start idx
+        0x00, 0x02,        // Handle end idx
+
+        0x12, 0x34, 0x56,  // X Position
+        0x65, 0x43, 0x21,  // Y Position
+        0x50,              // Angle
+        0x20, 0x21,        // Length backwards/forwards
+
+        0x23, 0x45, 0x67,  // X Position
+        0x76, 0x54, 0x32,  // Y Position
+        0x60,              // Angle
+        0x40, 0x41,        // Length backwards/forwards
+    };
+
+    parsed_payload pp;
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24), Eq(-2));
 }
 
 TEST(NAME, parse_snake_bezier)
 {
-    uint8_t payload[21] = {
+    uint8_t payload[24] = {
         0xAA, 0xBB,        // Snake ID
-        0x02,              // Handle count
+        0x00, 0x02,        // Handle start idx
+        0x00, 0x04,        // Handle end idx
 
         0x12, 0x34, 0x56,  // X Position
         0x65, 0x43, 0x21,  // Y Position
@@ -321,7 +368,11 @@ TEST(NAME, parse_snake_bezier)
     };
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 21), Eq(MSG_SNAKE_BEZIER));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24), Eq(MSG_SNAKE_BEZIER));
     EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
-    EXPECT_THAT(pp.snake_bezier.handle_count, Eq(2));
+    EXPECT_THAT(pp.snake_bezier.handle_idx_start, Eq(2));
+    EXPECT_THAT(pp.snake_bezier.handle_idx_end, Eq(4));
+    EXPECT_THAT(pp.snake_bezier.handles_buf[0], Eq(0x12));
+    EXPECT_THAT(pp.snake_bezier.handles_buf[1], Eq(0x34));
+    EXPECT_THAT(pp.snake_bezier.handles_buf[2], Eq(0x56));
 }

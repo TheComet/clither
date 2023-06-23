@@ -130,3 +130,69 @@ rb_take_write(struct cs_rb* rb)
     rb->write = write;
     return data;
 }
+
+/* -------------------------------------------------------------------- */
+void*
+rb_insert_emplace(struct cs_rb* rb, rb_idx idx)
+{
+    rb_idx insert, src, dst;
+
+    assert(idx >= 0 && idx < rb_count(rb));
+
+    if (rb_is_full(rb))
+        if (rb_realloc(rb, rb->capacity * 2) < 0)
+            return NULL;
+
+    insert = (rb->read + idx) & (rb->capacity - 1);
+    dst = rb->write; 
+    src = (rb->write - 1u) & (rb->capacity - 1u);
+    while (dst != insert)
+    {
+        memcpy(
+            rb->buffer + dst * rb->value_size,
+            rb->buffer + src * rb->value_size,
+            rb->value_size);
+        dst = src;
+        src = (src - 1u) & (rb->capacity - 1u);
+    }
+
+    rb->write = (rb->write + 1u) & (rb->capacity - 1u);
+
+    return rb->buffer + insert * rb->value_size;
+}
+
+/* -------------------------------------------------------------------- */
+int
+rb_insert(struct cs_rb* rb, rb_idx idx, const void* data)
+{
+    void* value = rb_insert_emplace(rb, idx);
+    if (value == NULL)
+        return -1;
+
+    memcpy(value, data, rb->value_size);
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------- */
+void
+rb_erase(struct cs_rb* rb, rb_idx idx)
+{
+    rb_idx src, dst;
+
+    assert(idx >= 0 && idx < rb_count(rb));
+
+    dst = (rb->read + idx) & (rb->capacity - 1u);
+    src = (dst + 1u) & (rb->capacity - 1u);
+    while (src != rb->write)
+    {
+        memcpy(
+            rb->buffer + dst * rb->value_size,
+            rb->buffer + src * rb->value_size,
+            rb->value_size);
+        dst = src;
+        src = (src + 1u) & (rb->capacity - 1u);
+    }
+
+    rb->write = dst;
+}

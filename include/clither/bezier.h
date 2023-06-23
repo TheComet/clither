@@ -29,6 +29,7 @@ struct bezier_handle
 {
     struct qwpos pos;
     qa angle;
+    uint16_t id;
     uint8_t len_backwards, len_forwards;
 };
 
@@ -85,6 +86,14 @@ bezier_handles_equal(const struct bezier_handle* a, const struct bezier_handle* 
         a->angle == b->angle &&
         a->len_backwards == b->len_backwards &&
         a->len_forwards == b->len_forwards;
+}
+
+static inline int
+bezier_handles_equal_pos(const struct bezier_handle* a, const struct bezier_handle* b)
+{
+    return
+        a->pos.x == b->pos.x &&
+        a->pos.y == b->pos.y;
 }
 
 C_END
