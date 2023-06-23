@@ -22,7 +22,7 @@ food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_cou
 		fc->seed = hash32_jenkins_oaat(&fc->seed, sizeof(fc->seed));
 		fc->food[i].y = qw_add(fc->aabb.y1, fc->seed & (food_cluster_size() - 1) & ~0xFF);
 	}
-	/* Note: X and Y positions should be quantized with mask 0x7F00 (7 bits)*/
+	/* Note: X and Y positions are quantized with mask 0x7F00 (7 bits) at this point */
 
 	return seed;
 }

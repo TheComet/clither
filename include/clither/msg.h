@@ -11,6 +11,7 @@ struct cs_hashmap;
 struct cs_rb;
 struct cs_vector;
 struct command_rb;
+struct food_cluster;
 struct snake;
 
 enum msg_type
@@ -31,10 +32,12 @@ enum msg_type
     MSG_SNAKE_BEZIER,
     MSG_SNAKE_BEZIER_ACK,
 
-    MSG_FOOD_CREATE,
-    MSG_FOOD_CREATE_ACK,
-    MSG_FOOD_DESTROY,
-    MSG_FOOD_DESTROY_ACK
+    MSG_FOOD_GRID_PARAMS,
+    MSG_FOOD_GRID_PARAMS_ACK,
+    MSG_FOOD_CLUSTER_CREATE,
+    MSG_FOOD_CLUSTER_CREATE_ACK,
+    MSG_FOOD_CLUSTER_UPDATE,
+    MSG_FOOD_CLUSTER_UPDATE_ACK,
 };
 
 struct msg
@@ -168,5 +171,10 @@ struct msg*
 msg_snake_bezier_ack(
     struct cs_rb* bezier_handles,
     const union parsed_payload* pp);
+
+struct msg*
+msg_food_cluster_create(
+    const struct food_cluster* fc,
+    uint16_t frame_number);
 
 C_END

@@ -44,6 +44,17 @@ else ()
     message (FATAL_ERROR "Unable to detect thread local storage semantics!")
 endif ()
 
+check_c_source_compiles ("int main(void) { return __popcnt(0xAAAA); }" MSVC_POPCOUNT)
+check_c_source_compiles ("int main(void) { return __builtin_popcount(0xAAAA); }" GCC_POPCOUNT)
+if (MSVC_POPCOUNT)
+    set (CLITHER_POPCOUNT "__popcnt")
+elseif (GCC_POPCOUNT)
+    set (CLITHER_POPCOUNT "__builtin_popcount")
+else ()
+    message (WARNING "Could not detect a popcount intrinsic, falling back to slow implementation")
+    set (CLITHER_POPCOUNT OFF)
+endif ()
+
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################
@@ -70,6 +81,7 @@ add_executable (clither
     "include/clither/msg_queue.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
+    "include/clither/popcount.h"
     "include/clither/q.h"
     "include/clither/resource_pack.h"
     "include/clither/server.h"
