@@ -279,7 +279,7 @@ msg_parse_payload(
                 (payload[4] << 8) |
                 (payload[5] << 0);
 
-            if (pp->snake_bezier.handle_idx_start <= pp->snake_bezier.handle_idx_end)
+            if (pp->snake_bezier.handle_idx_end <= pp->snake_bezier.handle_idx_start)
             {
                 log_warn("MSG_SNAKE_BEZIER: Invalid start and end indices: start=%d, end=%d\n",
                     pp->snake_bezier.handle_idx_start, pp->snake_bezier.handle_idx_end);
@@ -291,6 +291,8 @@ msg_parse_payload(
                 log_warn("MSG_SNAKE_BEZIER: Handle indices point outside of payload range!\n");
                 return -3;
             }
+
+            pp->snake_bezier.handles_buf = payload + 6;
         } break;
 
         case MSG_SNAKE_BEZIER_ACK:
@@ -712,11 +714,11 @@ msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 static int
 bezier_handles_pending(
     const struct cs_rb* bezier_handles,
-    const struct cs_rb* bezier_handles_ackd)
+    const struct cs_hashmap* bezier_handles_ackd)
 {
     int count = 0;
     RB_FOR_EACH(bezier_handles, struct bezier_handle, handle)
-        if (!bezier_handle_is_ackd(handle, bezier_handles_ackd))
+        if (!hashmap_exists(bezier_handles_ackd, handle))
             count++;
     RB_END_EACH
     return count;
@@ -743,7 +745,7 @@ msg_snake_bezier(
     for (i = 0; i != (int)rb_count(bezier_handles); ++i)
     {
         const struct bezier_handle* handle = rb_peek(bezier_handles, i);
-        if (bezier_handle_is_ackd(handle, bezier_handles_ackd))
+        if (hashmap_find(bezier_handles_ackd, handle))
             continue;
 
         if (m == NULL || byte + handle_size >= m->payload_len)
@@ -794,11 +796,58 @@ msg_snake_bezier(
 }
 
 /* ------------------------------------------------------------------------- */
+static struct bezier_handle*
+find_bezier_handle_in_rb(const struct bezier_handle* handle, const struct cs_rb* rb)
+{
+    RB_FOR_EACH(rb, struct bezier_handle, existing_handle)
+        if (bezier_handles_equal_pos(handle, existing_handle))
+            return existing_handle;
+    RB_END_EACH
+    return NULL;
+}
 struct msg*
 msg_snake_bezier_ack(
     struct cs_rb* bezier_handles,
     const union parsed_payload* pp)
 {
+    int i;
+    int byte = 0;
+    const uint8_t* buf = pp->snake_bezier.handles_buf;
+    for (i = pp->snake_bezier.handle_idx_start; i != pp->snake_bezier.handle_idx_end; ++i, buf += 9)
+    {
+        struct bezier_handle* existing_handle;
+        struct bezier_handle handle;
+        handle.pos.x =
+            (buf[0] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
+            (buf[0] << 16) |
+            (buf[1] << 8)  |
+            (buf[2] << 0);
+        handle.pos.y =
+            (buf[3] & 0x80 ? 0xFF << 24 : 0) |  /* Don't forget to sign extend 24-bit to 32-bit */
+            (buf[3] << 16) |
+            (buf[4] << 8) |
+            (buf[5] << 0);
+        handle.angle =
+            u8_to_qa(buf[6]);
+        handle.len_backwards =
+            buf[7];
+        handle.len_forwards =
+            buf[8];
+
+        existing_handle = find_bezier_handle_in_rb(&handle, bezier_handles);
+        if (existing_handle != NULL)
+        {
+            /*
+             * The length forwards from the second-to-front handle can change continuously
+             * because the front segment is always being updated. Make sure to update it here,
+             * regardless of whether we've acknowledged this handle or not
+             */
+            existing_handle->len_forwards = handle.len_forwards;
+            continue;
+        }
+
+
+    }
 
     return NULL;
 }

@@ -36,7 +36,7 @@ server_settings_load_or_set_defaults(struct server_settings* server, const char*
     if (!*filename)
         return 0;
 
-    fp = utf8_fopen_rb(filename, strlen(filename));
+    fp = utf8_fopen_rb(filename, (int)strlen(filename));
     if (fp == NULL)
     {
         log_warn("Failed to open config file \"%s\": %s\n", filename, strerror(errno));

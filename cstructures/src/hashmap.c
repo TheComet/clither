@@ -3,6 +3,8 @@
 #include <string.h>
 #include <assert.h>
 
+#define IS_POWER_OF_2(x) (((x) & ((x)-1)) == 0)
+
 #define SLOT(hm, pos)  (*(cs_hash32*)((uint8_t*)hm->storage + (sizeof(cs_hash32) + hm->key_size) * pos))
 #define KEY(hm, pos)   ((void*)((uint8_t*)hm->storage + (sizeof(cs_hash32) + hm->key_size) * pos + sizeof(cs_hash32)))
 #define VALUE(hm, pos) ((void*)((uint8_t*)hm->storage + (sizeof(cs_hash32) + hm->key_size) * hm->table_count + hm->value_size * pos))
@@ -108,8 +110,11 @@ hash_wrapper(const struct cs_hashmap* hm, const void* data, cs_hash32 len)
 static void*
 malloc_and_init_storage(cs_hash32 key_size, cs_hash32 value_size, cs_hash32 table_count)
 {
+    void* storage;
+    assert(IS_POWER_OF_2(table_count));
+
     /* Store the hashes, keys and values in one contiguous chunk of memory */
-    void* storage = MALLOC((sizeof(cs_hash32) + key_size + value_size) * table_count);
+    storage = MALLOC((sizeof(cs_hash32) + key_size + value_size) * table_count);
     if (storage == NULL)
         return NULL;
 
@@ -126,6 +131,7 @@ resize_rehash(struct cs_hashmap* hm, cs_hash32 new_table_count)
     cs_hash32 i;
 
     STATS_REHASH(hm);
+    assert(IS_POWER_OF_2(new_table_count));
 
     memcpy(&new_hm, hm, sizeof(struct cs_hashmap));
     new_hm.table_count = new_table_count;
@@ -198,6 +204,7 @@ hashmap_init_with_options(struct cs_hashmap* hm,
     assert(key_size > 0);
     assert(table_count > 0);
     assert(hash_func);
+    assert(IS_POWER_OF_2(table_count));
 
     hm->key_size = key_size;
     hm->value_size = value_size;
@@ -419,7 +426,7 @@ hashmap_find(const struct cs_hashmap* hm, const void* key)
 
 /* ------------------------------------------------------------------------- */
 int
-hashmap_exists(struct cs_hashmap* hm, const char* key)
+hashmap_exists(const struct cs_hashmap* hm, const void* key)
 {
     cs_hash32 hash = hash_wrapper(hm, key, hm->key_size);
     cs_hash32 pos = hash & (hm->table_count - 1);
