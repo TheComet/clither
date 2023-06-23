@@ -349,11 +349,6 @@ retry_recv:
             } break;
 
             case MSG_SNAKE_BEZIER_ACK:
-
-            case MSG_FOOD_CREATE:
-            case MSG_FOOD_CREATE_ACK:
-            case MSG_FOOD_DESTROY:
-            case MSG_FOOD_DESTROY_ACK:
                 break;
         }
 

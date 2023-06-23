@@ -1,7 +1,9 @@
 #include "clither/bezier.h"
 #include "clither/command.h"
+#include "clither/food_cluster.h"
 #include "clither/msg.h"
 #include "clither/log.h"
+#include "clither/popcount.h"
 #include "clither/snake.h"
 #include "clither/wrap.h"
 
@@ -73,10 +75,9 @@ msg_update_frame_number(struct msg* m, uint16_t frame_number)
     case MSG_SNAKE_HEAD:
         break;
 
-    case MSG_FOOD_CREATE:
-    case MSG_FOOD_CREATE_ACK:
-    case MSG_FOOD_DESTROY:
-    case MSG_FOOD_DESTROY_ACK:
+    case MSG_FOOD_GRID_PARAMS:
+    case MSG_FOOD_GRID_PARAMS_ACK:
+    case MSG_FOOD_CLUSTER_UPDATE:
         break;
     }
 }
@@ -298,10 +299,9 @@ msg_parse_payload(
         case MSG_SNAKE_BEZIER_ACK:
             break;
 
-        case MSG_FOOD_CREATE:
-        case MSG_FOOD_CREATE_ACK:
-        case MSG_FOOD_DESTROY:
-        case MSG_FOOD_DESTROY_ACK:
+        case MSG_FOOD_GRID_PARAMS:
+        case MSG_FOOD_GRID_PARAMS_ACK:
+        case MSG_FOOD_CLUSTER_UPDATE:
             break;
     }
 
@@ -850,4 +850,56 @@ msg_snake_bezier_ack(
     }
 
     return NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_food_cluster_create(
+    const struct food_cluster* fc,
+    uint16_t frame_number)
+{
+#if FOOD_CLUSTER_SIZE != 0x8000 || FOOD_CLUSTER_QUANT != 0x7F00
+#   error "You violated my assumptions!"
+#endif
+    int i;
+    int byte;
+    int bit;
+
+    struct msg* m = msg_alloc(
+        MSG_FOOD_CLUSTER_UPDATE, 0,
+        2 +  /* frame number */
+        4 +  /* Seed */
+        6 +  /* AABB bottom-left coordinate (x1,y1) */
+        1 +  /* Food count */
+        (fc->food_count * 7 + 8) / 8);  /* 7 bits per food */
+
+    byte = 0;  bit = 0;
+    m->payload[byte++] = (frame_number >> 8) & 0xFF;
+    m->payload[byte++] = (frame_number >> 0) & 0xFF;
+
+    m->payload[byte++] = (fc->seed >> 24) & 0xFF;
+    m->payload[byte++] = (fc->seed >> 16) & 0xFF;
+    m->payload[byte++] = (fc->seed >> 8) & 0xFF;
+    m->payload[byte++] = (fc->seed >> 0) & 0xFF;
+
+    m->payload[byte++] = (fc->aabb.x1 >> 16) & 0xFF;
+    m->payload[byte++] = (fc->aabb.x1 >> 8) & 0xFF;
+    m->payload[byte++] = (fc->aabb.x1 >> 0) & 0xFF;
+
+    m->payload[byte++] = (fc->aabb.y1 >> 16) & 0xFF;
+    m->payload[byte++] = (fc->aabb.y1 >> 8) & 0xFF;
+    m->payload[byte++] = (fc->aabb.y1 >> 0) & 0xFF;
+
+    m->payload[byte++] = fc->food_count;
+
+    for (i = 0; i != fc->food_count; ++i)
+    {
+        uint8_t x1 = (fc->food[i].x >> 7) & 0xFE;
+        uint8_t x2 = x1 << (8 - bit);
+        uint8_t mask1 = 0xFE >> bit;
+        uint8_t mask2 = 0xFE << (8 - bit);
+        x1 >>= bit;
+
+        m->payload[byte] = (m->payload[byte] & ~mask1) | x1;
+    }
 }

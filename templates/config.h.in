@@ -8,6 +8,7 @@
 #cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
+#cmakedefine CLITHER_POPCOUNT
 #cmakedefine CLITHER_SERVER
 #cmakedefine CLITHER_TESTS
 
@@ -18,6 +19,11 @@
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
+
+#if defined(CLITHER_POPCOUNT)
+#   undef CLITHER_POPCOUNT
+#   define CLITHER_POPCOUNT ${CLITHER_POPCOUNT}
+#endif
 
 /* Version string ---------------------------------------------------------- */
 #define CLITHER_VERSION_MAJOR ${PROJECT_VERSION_MAJOR}

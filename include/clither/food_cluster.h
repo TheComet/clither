@@ -34,14 +34,15 @@ struct food_corpse
 struct food_cluster
 {
 	struct qwaabb aabb;
-	struct qwpos food[255];
+	struct qwpos food[254];
 	uint8_t food_count;
 	cs_hash32 seed;
 };
 
 /* NOTE: Changing this also changes the quantization resolution and bit offsets.
  *       you'll need to make sure to update those in food_cluster.c */
-#define food_cluster_size() 0x8000
+#define FOOD_CLUSTER_SIZE  0x8000
+#define FOOD_CLUSTER_QUANT 0x7F00  /* Top 7 bits are used */
 
 cs_hash32
 food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, cs_hash32 seed);
