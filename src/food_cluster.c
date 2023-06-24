@@ -6,7 +6,7 @@ cs_hash32
 food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, cs_hash32 seed)
 {
 	int i;
-	const qw size_2 = food_cluster_size() / 2 - 1;
+	const qw size_2 = FOOD_CLUSTER_SIZE / 2 - 1;
 	fc->food_count = food_count;
 	fc->aabb = make_qwaabbqw(
 		qw_sub(center.x, size_2), qw_sub(center.y, size_2),
@@ -16,11 +16,11 @@ food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_cou
 	for (i = 0; i != (int)food_count; ++i)
 	{
 		/* Distribute linearly on X axis*/
-		fc->food[i].x = qw_add(fc->aabb.x1, (i * food_cluster_size() / i) & ~0xFF);
+		fc->food[i].x = qw_add(fc->aabb.x1, (i * FOOD_CLUSTER_SIZE / i) & ~0xFF);
 
 		/* Distribute randomly on Y axis */
 		fc->seed = hash32_jenkins_oaat(&fc->seed, sizeof(fc->seed));
-		fc->food[i].y = qw_add(fc->aabb.y1, fc->seed & (food_cluster_size() - 1) & ~0xFF);
+		fc->food[i].y = qw_add(fc->aabb.y1, fc->seed & (FOOD_CLUSTER_SIZE - 1) & ~0xFF);
 	}
 	/* Note: X and Y positions are quantized with mask 0x7F00 (7 bits) at this point */
 

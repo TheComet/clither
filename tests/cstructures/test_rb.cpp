@@ -72,7 +72,7 @@ TEST(NAME, is_full_and_is_empty_macros)
     EXPECT_THAT(rb_is_empty(&rb), IsFalse());
 }
 
-TEST(NAME, write_some_bytes_single)
+TEST(NAME, put)
 {
     cs_rb rb;
     rb_init(&rb, sizeof(uint16_t));
@@ -90,7 +90,7 @@ TEST(NAME, write_some_bytes_single)
     rb_deinit(&rb);
 }
 
-TEST(NAME, read_some_bytes_single)
+TEST(NAME, take)
 {
     cs_rb rb;
     rb_init(&rb, sizeof(uint16_t));
@@ -117,7 +117,7 @@ TEST(NAME, read_some_bytes_single)
     rb_deinit(&rb);
 }
 
-TEST(NAME, read_from_empty_rb_single)
+TEST(NAME, take_from_empty_rb)
 {
     cs_rb rb;
     rb_init(&rb, sizeof(uint16_t));
@@ -136,7 +136,7 @@ TEST(NAME, read_from_empty_rb_single)
     rb_deinit(&rb);
 }
 
-TEST(NAME, write_and_read_bytes_with_wrap_around_single)
+TEST(NAME, put_and_take_wrap)
 {
     cs_rb rb;
     rb_init(&rb, sizeof(uint16_t));
@@ -159,6 +159,103 @@ TEST(NAME, write_and_read_bytes_with_wrap_around_single)
         EXPECT_THAT((uint16_t*)rb_take(&rb), Pointee(a));
         EXPECT_THAT((uint16_t*)rb_take(&rb), Pointee(b));
         EXPECT_THAT((uint16_t*)rb_take(&rb), Pointee(c));
+
+        EXPECT_THAT(rb_count(&rb), Eq(0));
+        EXPECT_THAT(rb.write, Eq(rb.read));
+        EXPECT_THAT(rb.write, Lt(rb.capacity));
+        EXPECT_THAT(rb.read, Lt(rb.capacity));
+    }
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, putr)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+    EXPECT_THAT(rb_count(&rb), Eq(0));
+
+    uint16_t a = 0xA, b = 0xB, c = 0xC;
+    EXPECT_THAT(rb_putr(&rb, &a), Eq(0));
+    EXPECT_THAT(rb_putr(&rb, &b), Eq(0));
+    EXPECT_THAT(rb_putr(&rb, &c), Eq(0));
+
+    EXPECT_THAT(rb.write, Eq(2));
+    EXPECT_THAT(rb_count(&rb), Eq(3));
+    EXPECT_THAT(rb.read, Eq(3));
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, takew)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+
+    uint16_t a = 0xA, b = 0xB, c = 0xC;
+    EXPECT_THAT(rb_put(&rb, &a), Eq(0));
+    EXPECT_THAT(rb_put(&rb, &b), Eq(0));
+    EXPECT_THAT(rb_put(&rb, &c), Eq(0));
+
+    uint16_t* d, * e, * f;
+    ASSERT_THAT((d = (uint16_t*)rb_takew(&rb)), NotNull());
+    ASSERT_THAT((e = (uint16_t*)rb_takew(&rb)), NotNull());
+    ASSERT_THAT((f = (uint16_t*)rb_takew(&rb)), NotNull());
+    EXPECT_THAT(rb_takew(&rb), IsNull());
+
+    EXPECT_THAT(rb_count(&rb), Eq(0));
+    EXPECT_THAT(rb.read, Eq(0));
+    EXPECT_THAT(rb.write, Eq(0));
+
+    EXPECT_THAT(d, Pointee(c));
+    EXPECT_THAT(e, Pointee(b));
+    EXPECT_THAT(f, Pointee(a));
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, takew_from_empty_rb)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+
+    uint16_t a = 0xA;
+    EXPECT_THAT(rb_put(&rb, &a), Eq(0));
+
+    uint16_t* b;
+    EXPECT_THAT((b = (uint16_t*)rb_takew(&rb)), NotNull());
+    EXPECT_THAT(b, Pointee(a));
+    EXPECT_THAT(rb_takew(&rb), IsNull());
+    EXPECT_THAT(rb_takew(&rb), IsNull());
+    EXPECT_THAT(rb_takew(&rb), IsNull());
+    EXPECT_THAT(b, Pointee(a));
+
+    rb_deinit(&rb);
+}
+
+TEST(NAME, putr_and_takew_wrap)
+{
+    cs_rb rb;
+    rb_init(&rb, sizeof(uint16_t));
+    rb_realloc(&rb, 32);
+
+    // We want to write an odd number of bytes to the ring buffer,
+    // so all possible ways in which the pointers wrap are tested.
+    // For this to work, the buffer size must be an even number.
+    ASSERT_THAT(rb.capacity % 2, Eq(0));
+
+    uint32_t a = 0xA, b = 0xB, c = 0xC;
+    for (int i = 0; i != rb.capacity * 64; ++i)
+    {
+        // write 3 bytes
+        EXPECT_THAT(rb_putr(&rb, &a), Eq(0));
+        EXPECT_THAT(rb_putr(&rb, &b), Eq(0));
+        EXPECT_THAT(rb_putr(&rb, &c), Eq(0));
+
+        // read 3 bytes
+        EXPECT_THAT((uint16_t*)rb_takew(&rb), Pointee(a));
+        EXPECT_THAT((uint16_t*)rb_takew(&rb), Pointee(b));
+        EXPECT_THAT((uint16_t*)rb_takew(&rb), Pointee(c));
 
         EXPECT_THAT(rb_count(&rb), Eq(0));
         EXPECT_THAT(rb.write, Eq(rb.read));

@@ -77,11 +77,17 @@ rb_put(struct cs_rb* rb, const void* data);
 CSTRUCTURES_PUBLIC_API void*
 rb_emplace(struct cs_rb* rb);
 
+CSTRUCTURES_PUBLIC_API int
+rb_putr(struct cs_rb* rb, const void* data);
+
+CSTRUCTURES_PUBLIC_API void*
+rb_emplacer(struct cs_rb* rb);
+
 CSTRUCTURES_PUBLIC_API void*
 rb_take(struct cs_rb* rb);
 
 CSTRUCTURES_PUBLIC_API void*
-rb_take_write(struct cs_rb* rb);
+rb_takew(struct cs_rb* rb);
 
 CSTRUCTURES_PUBLIC_API void*
 rb_insert_emplace(struct cs_rb* rb, rb_idx idx);

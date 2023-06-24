@@ -293,11 +293,12 @@ snake_ack_frame(
             vector_pop(points);
             if (vector_count(points) == 0)
             {
-                vector_deinit(rb_take_write(&data->points_lists));
+                struct cs_vector* v = rb_takew(&data->points_lists);
+                vector_deinit(v);
                 points = rb_peek_write(&data->points_lists);
                 vector_pop(points);  /* Remove duplicate point */
 
-                rb_take_write(&data->bezier_handles);
+                rb_takew(&data->bezier_handles);
             }
 
             predicted_frame--;
