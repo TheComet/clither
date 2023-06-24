@@ -499,22 +499,6 @@ server_recv(
                 case MSG_SNAKE_CREATE_ACK: {
 
                 } break;
-
-                case MSG_FOOD_CREATE: {
-
-                } break;
-
-                case MSG_FOOD_CREATE_ACK: {
-
-                } break;
-
-                case MSG_FOOD_DESTROY: {
-
-                } break;
-
-                case MSG_FOOD_DESTROY_ACK: {
-
-                } break;
             }
 
             i += payload_len + 2;

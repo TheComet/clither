@@ -102,6 +102,36 @@ rb_emplace(struct cs_rb* rb)
 }
 
 /* -------------------------------------------------------------------- */
+int
+rb_putr(struct cs_rb* rb, const void* data)
+{
+    void* value = rb_emplacer(rb);
+    if (value == NULL)
+        return -1;
+
+    memcpy(value, data, rb->value_size);
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------- */
+void*
+rb_emplacer(struct cs_rb* rb)
+{
+    void* value;
+
+    if (rb_is_full(rb))
+        if (rb_realloc(rb, rb->capacity * 2) < 0)
+            return NULL;
+
+    rb_idx read = (rb->read - 1u) & (rb->capacity - 1u);
+    rb->read = read;
+    return rb->buffer + read * rb->value_size;
+
+    return value;
+}
+
+/* -------------------------------------------------------------------- */
 void*
 rb_take(struct cs_rb* rb)
 {
@@ -118,7 +148,7 @@ rb_take(struct cs_rb* rb)
 
 /* -------------------------------------------------------------------- */
 void*
-rb_take_write(struct cs_rb* rb)
+rb_takew(struct cs_rb* rb)
 {
     rb_idx write;
     void* data;
@@ -137,7 +167,7 @@ rb_insert_emplace(struct cs_rb* rb, rb_idx idx)
 {
     rb_idx insert, src, dst;
 
-    assert(idx >= 0 && idx < rb_count(rb));
+    assert(idx >= 0 && idx <= (int)rb_count(rb));
 
     if (rb_is_full(rb))
         if (rb_realloc(rb, rb->capacity * 2) < 0)
@@ -180,7 +210,7 @@ rb_erase(struct cs_rb* rb, rb_idx idx)
 {
     rb_idx src, dst;
 
-    assert(idx >= 0 && idx < rb_count(rb));
+    assert(idx >= 0 && idx < (int)rb_count(rb));
 
     dst = (rb->read + idx) & (rb->capacity - 1u);
     src = (dst + 1u) & (rb->capacity - 1u);
