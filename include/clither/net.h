@@ -18,6 +18,7 @@
 #define MAX_ADDRSTRLEN 65
 
 #define NET_DEFAULT_PORT "5555"
+#define NET_DEFAULT_ADDRESS "ws://127.0.0.1:8080"
 
 C_BEGIN
 
