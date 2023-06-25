@@ -51,6 +51,8 @@ client_connect(
     assert(client->username == NULL);
 
     if (!*server_address)
+        server_address = NET_DEFAULT_ADDRESS;
+    if (!*server_address)
     {
         log_err("No server IP address was specified! Can't init client socket\n");
         log_err("You can use --ip <address> to specify an address to connect to\n");

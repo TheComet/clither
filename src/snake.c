@@ -130,7 +130,7 @@ snake_step_head(
     dx = qw_add(dx, snake_min_speed(param));
     dx = qw_mul(qa_cos(head->angle), dx);
     head->pos.x = qw_add(head->pos.x, dx);
-    
+
     dy = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dy = qw_rescale(dy, head->speed, 255);
     dy = qw_add(dy, snake_min_speed(param));
@@ -194,7 +194,7 @@ snake_step(
 
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
 
-    /* 
+    /*
      * This function returns the number of segments that are superfluous. The
      * data can be popped. In the client's case, the acknowledged head position
      * will be lagging behind the predicted head position. We assume that the

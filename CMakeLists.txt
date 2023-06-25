@@ -218,7 +218,7 @@ if (EMSCRIPTEN)
     set_target_properties(clither
         PROPERTIES
             SUFFIX ".html"
-            LINK_FLAGS "-sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs --bind")
+            LINK_FLAGS "-sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH -sASYNCIFY --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs --bind")
 endif ()
 
 ###############################################################################
@@ -232,7 +232,8 @@ target_link_libraries (clither
         cstructures
         $<$<PLATFORM_ID:Windows>:ws2_32>
         $<$<PLATFORM_ID:Linux>:m>
-        $<$<PLATFORM_ID:Darwin>:m>)
+        $<$<PLATFORM_ID:Darwin>:m>
+        $<$<PLATFORM_ID:Emscripten>:websocket.js>)
 
 find_package(Threads REQUIRED)
 target_link_libraries (clither PRIVATE Threads::Threads)
