@@ -130,6 +130,13 @@ static const char* attr_bindings[] = {
 
 /* ------------------------------------------------------------------------- */
 static void
+error_callback(int error_code, const char* error_msg)
+{
+    log_warn("GLFW Error %d: %s\n", error_code, error_msg);
+}
+
+/* ------------------------------------------------------------------------- */
+static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
@@ -685,6 +692,7 @@ bg_load_failed:
 static int
 gfx_gles2_global_init(void)
 {
+    glfwSetErrorCallback(error_callback);
     if (!glfwInit())
     {
         log_err("Failed to initialize GLFW\n");
@@ -698,6 +706,7 @@ static void
 gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
+    glfwSetErrorCallback(NULL);
 }
 
 /* ------------------------------------------------------------------------- */
