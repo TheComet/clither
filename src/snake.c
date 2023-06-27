@@ -178,7 +178,7 @@ snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 }
 
 /* ------------------------------------------------------------------------- */
-void
+int
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
@@ -194,19 +194,14 @@ snake_step(
 
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
 
-    /*
-     * This function returns the number of segments that are superfluous. The
-     * data can be popped. In the client's case, the acknowledged head position
-     * will be lagging behind the predicted head position. We assume that the
-     * server and client generally agree on the total length of the snake, which
-     * should be the case 99% of the time. In the worst case, the client may
-     * simulate ahead with maximum boost while the server continuously corrects
-     * the client (roll back), thinking that they are not boosting. In this
-     * hypothetical situation, we would potentially be removing curve segments
-     * that are still required for sampling. If this does turn out to be an issue
-     * then we can add -1 or -2 on this check here.
-     */
-    stale_segments = bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
+    /* This function returns the number of segments that are superfluous. */
+    return bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_remove_stale_segments(struct snake_data* data, int stale_segments)
+{
     while (stale_segments--)
     {
         vector_deinit(rb_take(&data->points_lists));
@@ -277,6 +272,10 @@ snake_ack_frame(
             acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
             authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
 
+        int before1 = rb_count(&data->points_lists);
+        struct cs_vector* pbefore = rb_peek_write(&data->points_lists);
+        int before2 = vector_count(pbefore);
+
         /*
          * Remove all points generated since the last acknowledged frame.
          * In rare cases this may be on the boundary of two bezier segments,
@@ -287,15 +286,17 @@ snake_ack_frame(
          * the same position, so when removing a bezier segment, two points
          * need to be removed.
          */
+        assert(rb_count(&data->points_lists) > 0);
         struct cs_vector* points = rb_peek_write(&data->points_lists);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
             vector_pop(points);
             if (vector_count(points) == 0)
             {
-                struct cs_vector* v = rb_takew(&data->points_lists);
-                vector_deinit(v);
+                vector_deinit(rb_takew(&data->points_lists));
+                assert(rb_count(&data->points_lists) > 0);
                 points = rb_peek_write(&data->points_lists);
+
                 vector_pop(points);  /* Remove duplicate point */
 
                 rb_takew(&data->bezier_handles);
@@ -333,7 +334,14 @@ snake_ack_frame(
 
         /* TODO: distance is a function of the snake's length */
         bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
+
+        assert(before1 == rb_count(&data->points_lists));
+        pbefore = rb_peek_write(&data->points_lists);
+        assert(before2 == vector_count(pbefore));
     }
+
+    predicted_frame = command_rb_frame_end(command_rb);
+    /* TODO: remove curve segments */
 }
 
 /* ------------------------------------------------------------------------- */

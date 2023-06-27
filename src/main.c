@@ -473,7 +473,8 @@ parse_resource_pack_failed:
 create_gfx_failed:
     gfx_iface->global_deinit();
 init_gfx_failed:
-    client_disconnect(&client);
+    if (client.state != CLIENT_DISCONNECTED)
+        client_disconnect(&client);
 client_connect_failed:
     /* Stop McDonald's WiFi if necessary */
 #if defined(CLITHER_MCD)

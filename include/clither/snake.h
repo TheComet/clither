@@ -96,13 +96,33 @@ snake_step_head(
     struct command command,
     uint8_t sim_tick_rate);
 
-void
+/*!
+ * \brief Steps the snake forward by 1 frame, using the given command.
+ * \param[in] data The snake's data structure. Points lists and curves are
+ * updated accordingly.
+ * \param[in] head The snake's head is moved forwards by calling snake_step_head().
+ * \param[in] param The matching parameters for the snake's head. The params
+ * can change every frame so a history is maintained for rollback purposes. This
+ * is currently not implemented.
+ * \param[in] command The command to step forwards with.
+ * \param[in] sim_tick_rate The simulation speed.
+ * \return Returns the number of segments that could be removed from the curve.
+ * 
+ * On the server-side this value should be passed to a proceeding call to
+ * snake_remove_stale_segments().
+ * 
+ * On the client-side, this is handled by snake_ack_frame() instead.
+ */
+int
 snake_step(
     struct snake_data* data,
     struct snake_head* head,
     const struct snake_param* param,
     struct command command,
     uint8_t sim_tick_rate);
+
+void
+snake_remove_stale_segments(struct snake_data* data, int stale_segments);
 
 void
 snake_ack_frame(
