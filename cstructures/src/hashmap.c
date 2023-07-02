@@ -180,25 +180,28 @@ hashmap_create_with_options(struct cs_hashmap** hm,
     if (*hm == NULL)
         return HM_OOM;
 
-    return hashmap_init_with_options(*hm, key_size, value_size,
-                                     table_count, hash_func);
+    return hashmap_init_with_options(
+        *hm, key_size, value_size,
+        table_count, hash_func);
 }
 
 /* ------------------------------------------------------------------------- */
 enum cs_hashmap_status
 hashmap_init(struct cs_hashmap* hm, cs_hash32 key_size, cs_hash32 value_size)
 {
-    return hashmap_init_with_options(hm, key_size, value_size,
-                                     HM_DEFAULT_TABLE_COUNT, hash32_jenkins_oaat);
+    return hashmap_init_with_options(
+        hm, key_size, value_size,
+        HM_DEFAULT_TABLE_COUNT, hash32_jenkins_oaat);
 }
 
 /* ------------------------------------------------------------------------- */
 enum cs_hashmap_status
-hashmap_init_with_options(struct cs_hashmap* hm,
-                          uint32_t key_size,
-                          uint32_t value_size,
-                          uint32_t table_count,
-                          hash32_func hash_func)
+hashmap_init_with_options(
+    struct cs_hashmap* hm,
+    uint32_t key_size,
+    uint32_t value_size,
+    uint32_t table_count,
+    hash32_func hash_func)
 {
     assert(hm);
     assert(key_size > 0);

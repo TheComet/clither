@@ -542,10 +542,16 @@ bezier_calc_equidistant_points(
                 t_step /= 2;
                 if (t_step == 0)
                 {
-                    qw diff;
+                    qw head_dist_sq;
                     struct bezier_point* bp;
                     if (t == make_qw(1) - 1)
                         goto next_segment;
+
+                    /* Error compensation */
+                    expected_total_spacing = qw_add(expected_total_spacing, spacing);
+                    actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
+                    /*spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
+                    spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
 
                     /* Insert new point and calculate tangent vector */
                     bp = vector_emplace(bezier_points);
@@ -555,17 +561,11 @@ bezier_calc_equidistant_points(
                     bp->dir.y = -qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
                     bp->dir = qwpos_normalize(bp->dir);
 
-                    /* Error compensation */
-                    expected_total_spacing = qw_add(expected_total_spacing, spacing);
-                    actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
-                    /*spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
-                    spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
+                    if (actual_total_spacing >= snake_length)
+                        return i;
 
                     x = next_x;
                     y = next_y;
-
-                    if (actual_total_spacing >= snake_length)
-                        return i;
 
                     break;
                 }
@@ -576,4 +576,15 @@ bezier_calc_equidistant_points(
     }
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int
+bezier_calc_unused_segments(
+    const struct cs_rb* bezier_handles,
+    struct qwpos head_pos,
+    qw spacing,
+    qw snake_length)
+{
+
 }

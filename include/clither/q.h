@@ -12,8 +12,9 @@ typedef int32_t q16_16;
  * for world position.
  */
 typedef int32_t qw;
-#define QW_Q  14
-#define QW_K  (1 << (QW_Q - 1))
+#define QW_Q    14
+#define QW_K    (1 << (QW_Q - 1))
+#define QW_MAX  ((1 << QW_Q) - 1)
 
 /*
  * Angles are stored in a Q4.12 fixed point representation (16-bit), which is
@@ -187,6 +188,11 @@ static inline qw qw_div(qw a, qw b)
         temp -= b / 2;    /* OR shift 1 bit i.e. temp -= (b >> 1); */
     }
     return (qw)(temp / b);
+}
+
+static inline qw qw_sq(qw q)
+{
+    return qw_sat24((int64_t)q * 2);
 }
 
 #include <math.h>

@@ -6,6 +6,12 @@
 
 C_BEGIN
 
+CSTRUCTURES_PRIVATE_API int
+backtrace_init(void);
+
+CSTRUCTURES_PRIVATE_API void
+backtrace_deinit(void);
+
 /*!
  * @brief Generates a backtrace.
  * @param[in] size The maximum number of frames to walk.
@@ -13,6 +19,9 @@ C_BEGIN
  * @note The returned array must be freed manually with FREE(returned_array).
  */
 CSTRUCTURES_PRIVATE_API char**
-get_backtrace(int* size);
+backtrace_get(int* size);
+
+CSTRUCTURES_PRIVATE_API void
+backtrace_free(char** bt);
 
 C_END

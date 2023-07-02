@@ -30,7 +30,7 @@ typedef struct report_info_t
 
 /* ------------------------------------------------------------------------- */
 int
-memory_init_thread(void)
+memory_threadlocal_init(void)
 {
     g_allocations = 0;
     d_deallocations = 0;
@@ -71,7 +71,7 @@ cstructures_malloc(uintptr_t size)
     ++g_allocations;
 
     /*
-     * Record allocation info. Call to hashmap and get_backtrace() may allocate
+     * Record allocation info. Call to hashmap and backtrace_get() may allocate
      * memory, so set flag to ignore the call to malloc() when inserting.
      */
     if (!g_ignore_hm_malloc)
@@ -89,7 +89,7 @@ cstructures_malloc(uintptr_t size)
             /* if (enabled, generate a backtrace so we know where memory leaks
             * occurred */
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
-            if (!(info.backtrace = get_backtrace(&info.backtrace_size)))
+            if (!(info.backtrace = backtrace_get(&info.backtrace_size)))
                 fprintf(stderr, "[memory] WARNING: Failed to generate backtrace\n");
             if (size == 0)
             {
@@ -139,7 +139,7 @@ cstructures_realloc(void* p, uintptr_t new_size)
 
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
             if (info->backtrace)
-                free(info->backtrace);
+                backtrace_free(info->backtrace);
             else
                 fprintf(stderr, "[memory] WARNING: free(): Allocation didn't "
                     "have a backtrace (it was NULL)\n");
@@ -154,13 +154,13 @@ cstructures_realloc(void* p, uintptr_t new_size)
 #   endif
             fprintf(stderr, "[memory] WARNING: realloc(): Reallocating something that was never malloc'd");
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
-            if ((bt = get_backtrace(&bt_size)))
+            if ((bt = backtrace_get(&bt_size)))
             {
                 fprintf(stderr, "  backtrace to where realloc() was called:\n");
                 for (i = 0; i < bt_size; ++i)
                     fprintf(stderr, "      %s\n", bt[i]);
                 fprintf(stderr, "  -----------------------------------------\n");
-                free(bt);
+                backtrace_free(bt);
             }
             else
                 fprintf(stderr, "[memory] WARNING: Failed to generate backtrace\n");
@@ -169,7 +169,7 @@ cstructures_realloc(void* p, uintptr_t new_size)
     }
 
     /*
-     * Record allocation info. Call to hashmap and get_backtrace() may allocate
+     * Record allocation info. Call to hashmap and backtrace_get() may allocate
      * memory, so set flag to ignore the call to malloc() when inserting.
      */
     if (!g_ignore_hm_malloc)
@@ -189,7 +189,7 @@ cstructures_realloc(void* p, uintptr_t new_size)
             /* if (enabled, generate a backtrace so we know where memory leaks
             * occurred */
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
-            if (!(info.backtrace = get_backtrace(&info.backtrace_size)))
+            if (!(info.backtrace = backtrace_get(&info.backtrace_size)))
                 fprintf(stderr, "[memory] WARNING: Failed to generate backtrace\n");
 #   endif
 
@@ -216,7 +216,7 @@ cstructures_free(void* p)
             g_bytes_in_use -= info->size;
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
             if (info->backtrace)
-                free(info->backtrace);
+                backtrace_free(info->backtrace);
             else
                 fprintf(stderr, "[memory] WARNING: free(): Allocation didn't "
                     "have a backtrace (it was NULL)\n");
@@ -231,13 +231,13 @@ cstructures_free(void* p)
 #   endif
             fprintf(stderr, "  WARNING: Freeing something that was never allocated\n");
 #   if defined(CSTRUCTURES_MEMORY_BACKTRACE)
-            if ((bt = get_backtrace(&bt_size)))
+            if ((bt = backtrace_get(&bt_size)))
             {
                 fprintf(stderr, "  backtrace to where free() was called:\n");
                 for (i = 0; i < bt_size; ++i)
                     fprintf(stderr, "      %s\n", bt[i]);
                 fprintf(stderr, "  -----------------------------------------\n");
-                free(bt);
+                backtrace_free(bt);
             }
             else
                 fprintf(stderr, "[memory] WARNING: Failed to generate backtrace\n");
@@ -256,7 +256,7 @@ cstructures_free(void* p)
 
 /* ------------------------------------------------------------------------- */
 uintptr_t
-memory_deinit_thread(void)
+memory_threadlocal_deinit(void)
 {
     uintptr_t leaks;
 
@@ -279,9 +279,9 @@ memory_deinit_thread(void)
             {
                 intptr_t i;
                 for (i = BACKTRACE_OMIT_COUNT; i < info->backtrace_size; ++i)
-                    fprintf(stderr, "      %s\n", info->backtrace[i]);
+                    fprintf(stderr, "    %s\n", info->backtrace[i]);
             }
-            free(info->backtrace); /* this was allocated when malloc() was called */
+            backtrace_free(info->backtrace); /* this was allocated when malloc() was called */
             fprintf(stderr, "  -----------------------------------------\n");
 #   endif
 
