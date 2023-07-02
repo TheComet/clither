@@ -70,10 +70,34 @@ bezier_squeeze_n_recent_step(
     int n,
     int sim_tick_rate);
 
+/*!
+ * \brief Samples the curve at constant intervals and stores each position
+ * into the bezier_points structure.
+ * \param[out] bezier_points The resulting points are written to this array.
+ * The array is cleared every time, so no need to do that before calling.
+ * \param[in] bezier_handles The list of bezier handles comprising the curve.
+ * \param[in] spacing The distance between each sampled point on the curve,
+ * in world space.
+ * \param[in] snake_length The required total length of the snake, in world
+ * space.
+ */
 int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
+    qw spacing,
+    qw snake_length);
+
+/*!
+ * This function tries to determine how many curve segments are unnecessary at
+ * the end of the snake. On the client-side, this is calculated using the
+ * snake's acknowledged head position, which will be located somewhere on the
+ * curve but not necessarily at the front of the curve.
+ */
+int
+bezier_calc_unused_segments(
+    const struct cs_rb* bezier_handles,
+    struct qwpos head_pos,
     qw spacing,
     qw snake_length);
 

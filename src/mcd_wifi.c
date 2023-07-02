@@ -6,6 +6,7 @@
 #include "clither/signals.h"
 #include "clither/tick.h"
 
+#include "cstructures/init.h"
 #include "cstructures/memory.h"
 #include "cstructures/vector.h"
 
@@ -29,7 +30,7 @@ run_mcd_wifi(const void* args)
     log_set_prefix("McD WiFi: ");
     log_set_colors(COL_B_MAGENTA, COL_RESET);
 
-    memory_init_thread();
+    cs_threadlocal_init();
 
     /* Client will connect to this socket */
     client_fd = net_bind("", a->mcd_port, &client_addrlen);
@@ -144,7 +145,7 @@ retry_recv:
     vector_deinit(&server_fds);
     net_close(client_fd);
 
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
 
@@ -154,7 +155,7 @@ connect_server_failed:
     vector_deinit(&server_fds);
     net_close(client_fd);
 bind_client_fd_failed:
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
     return (void*)-1;

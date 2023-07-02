@@ -166,11 +166,6 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
 static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
-    {
-        if (vector_count((struct cs_vector*)rb_peek_write(&data->points_lists)) < 6)
-            log_dbg("wtf\n");
-    }
-
     struct cs_vector* points = rb_emplace(&data->points_lists);
     bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
     vector_init(points, sizeof(struct qwpos));
@@ -195,7 +190,11 @@ snake_step(
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
 
     /* This function returns the number of segments that are superfluous. */
-    return bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
+    return bezier_calc_equidistant_points(
+        &data->bezier_points,
+        &data->bezier_handles,
+        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+        snake_length(param));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -251,8 +250,6 @@ snake_ack_frame(
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
         struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
-        log_dbg("ackd (%d): %d,%d\n", last_ackd_frame, acknowledged_head->pos.x, acknowledged_head->pos.y);
-
         last_ackd_frame++;
     }
 
@@ -271,10 +268,6 @@ snake_ack_frame(
             predicted_frame, frame_number,
             acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
             authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
-
-        int before1 = rb_count(&data->points_lists);
-        struct cs_vector* pbefore = rb_peek_write(&data->points_lists);
-        int before2 = vector_count(pbefore);
 
         /*
          * Remove all points generated since the last acknowledged frame.
@@ -333,11 +326,11 @@ snake_ack_frame(
         COMMAND_RB_END_EACH
 
         /* TODO: distance is a function of the snake's length */
-        bezier_calc_equidistant_points(&data->bezier_points, &data->bezier_handles, qw_mul(SNAKE_PART_SPACING, snake_scale(param)), snake_length(param));
-
-        assert(before1 == rb_count(&data->points_lists));
-        pbefore = rb_peek_write(&data->points_lists);
-        assert(before2 == vector_count(pbefore));
+        bezier_calc_equidistant_points(
+            &data->bezier_points,
+            &data->bezier_handles,
+            qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+            snake_length(param));
     }
 
     predicted_frame = command_rb_frame_end(command_rb);

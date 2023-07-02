@@ -390,7 +390,7 @@ server_recv(
 
                         client = hashmap_emplace(&server->client_table, &client_addr);
                         msg_queue_init(&client->pending_msgs);
-                        hashmap_init(&client->bezier_handles_ack, sizeof(struct bezier_handle), 0);
+                        //hashmap_init(&client->bezier_handles_ack, sizeof(struct bezier_handle), 0);
                         client->timeout_counter = 0;
                         client->snake_id = world_spawn_snake(world, pp.join_request.username);
                         client->last_command_msg_frame = frame_number;
@@ -481,14 +481,12 @@ server_recv(
                          */
                         int8_t diff = client_commands_queued < -10 ? -10 : client_commands_queued;
                         server_queue(client, msg_feedback(diff, frame_number));
-                        log_dbg("warp forwards: %d\n", diff);
                     }
                     else if (lower - granularity*2 > 0)
                     {
                         int8_t diff = lower - granularity*2;
                         diff = diff > 10 ? 10 : diff;
                         server_queue(client, msg_feedback(diff, frame_number));
-                        log_dbg("warp backwards: %d\n", diff);
                     }
                 } break;
 

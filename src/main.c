@@ -21,8 +21,8 @@
 #include "clither/tick.h"
 #include "clither/world.h"
 
-#include "cstructures/memory.h"
 #include "cstructures/btree.h"
+#include "cstructures/init.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -67,7 +67,7 @@ run_server_instance(const void* args)
     log_set_prefix(log_prefix);
     log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
-    memory_init_thread();
+    cs_threadlocal_init();
 
     world_init(&world);
 
@@ -97,7 +97,6 @@ run_server_instance(const void* args)
                 struct command command = command_rb_take_or_predict(&snake->command_rb, frame_number);
                 snake_param_update(&snake->param, snake->param.upgrades, snake->param.food_eaten + 1);
                 snake_step(&snake->data, &snake->head, &snake->param, command, instance->settings->sim_tick_rate);
-                log_dbg("head (%d): %d,%d\n", frame_number, snake->head.pos.x, snake->head.pos.y);
             }
         WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
@@ -118,7 +117,7 @@ run_server_instance(const void* args)
     server_deinit(&server);
     world_deinit(&world);
 
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
 
     return (void*)0;
 
@@ -146,7 +145,7 @@ run_server(const void* args)
     log_set_prefix("Server: ");
     log_set_colors(COL_B_CYAN, COL_RESET);
 
-    memory_init_thread();
+    cs_threadlocal_init();
 
     btree_init(&instances, sizeof(struct server_instance));
 
@@ -192,7 +191,7 @@ run_server(const void* args)
     server_settings_save(&settings, a->config_file);
 
     btree_deinit(&instances);
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
 
@@ -201,7 +200,7 @@ run_server(const void* args)
 start_default_instance_failed:
 load_settings_failed:
     btree_deinit(&instances);
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
     return (void*)-1;
@@ -258,7 +257,7 @@ run_client(const struct args* a)
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
 
-    memory_init_thread();
+    cs_threadlocal_init();
 
     /* If McDonald's WiFi is enabled, start that */
     client_init(&client);
@@ -486,7 +485,7 @@ client_connect_failed:
 start_mcd_failed:
 #endif
     client_deinit(&client);
-    memory_deinit_thread();
+    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
 }
@@ -495,6 +494,7 @@ start_mcd_failed:
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
+    struct args args;
     int retval;
 
     /*
@@ -502,13 +502,16 @@ int main(int argc, char* argv[])
      * returns -1 if an error occurred, 0 if we can continue running, and 1
      * if --help appeared, in which case we should exit.
      */
-    struct args args;
     switch (args_parse(&args, argc, argv))
     {
         case 0: break;
         case 1: return 0;
         default: return -1;
     }
+
+    /* Init cstructures library */
+    if (cs_init() < 0)
+        goto cstructures_init_failed;
 
     /* Install signal handlers for CTRL+C and (on windows) console close events */
     signals_install();
@@ -586,6 +589,7 @@ int main(int argc, char* argv[])
     log_file_close();
 #endif
     signals_remove();
+    cs_deinit();
 
     return retval;
 
@@ -594,5 +598,7 @@ net_init_failed:
     log_file_close();
 #endif
     signals_remove();
+    cs_deinit();
+cstructures_init_failed:
     return -1;
 }

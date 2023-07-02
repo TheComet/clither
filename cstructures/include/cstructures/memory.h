@@ -23,23 +23,24 @@ C_BEGIN
 
 /*!
  * @brief Initializes memory tracking for the current thread. Must be
- * called for every thread.
+ * called for every thread. This is called from cs_threadlocal_init().
  *
  * In release mode this does nothing. In debug mode it will initialize
  * memory reports and backtraces, if enabled.
  */
-CSTRUCTURES_PUBLIC_API int
-memory_init_thread(void);
+CSTRUCTURES_PRIVATE_API int
+memory_threadlocal_init(void);
 
 /*!
- * @brief De-initializes memory tracking for the current thread.
+ * @brief De-initializes memory tracking for the current thread. This is called
+ * from cs_threadlocal_deinit().
  *
  * In release mode this does nothing. In debug mode this will output the memory
  * report and print backtraces, if enabled.
  * @return Returns the number of memory leaks.
  */
-CSTRUCTURES_PUBLIC_API uintptr_t
-memory_deinit_thread(void);
+CSTRUCTURES_PRIVATE_API uintptr_t
+memory_threadlocal_deinit(void);
 
 /*!
  * @brief Does the same thing as a normal call to malloc(), but does some
