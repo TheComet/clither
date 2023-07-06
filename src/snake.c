@@ -181,8 +181,6 @@ snake_step(
     struct command command,
     uint8_t sim_tick_rate)
 {
-    int stale_segments;
-
     snake_step_head(head, param, command, sim_tick_rate);
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
@@ -333,7 +331,6 @@ snake_ack_frame(
             snake_length(param));
     }
 
-    predicted_frame = command_rb_frame_end(command_rb);
     /* TODO: remove curve segments */
 }
 
