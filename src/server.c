@@ -401,7 +401,7 @@ server_recv(
 
                         /*
                          * Init "Command Buffer Fullness" queue with minimum granularity.
-                         * This assumes the clienthas the most stable connection initially.
+                         * This assumes the client has the most stable connection initially.
                          */
                         for (n = 0; n != CBF_WINDOW_SIZE; ++n)
                             client->cbf_window[n] = settings->sim_tick_rate / settings->net_tick_rate;

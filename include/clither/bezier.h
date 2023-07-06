@@ -36,6 +36,12 @@ struct bezier_handle
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle);
 
+void
+bezier_calc_aabb(
+    struct qwaabb* bb,
+    const struct bezier_handle* head,
+    const struct bezier_handle* tail);
+
 /*!
  * \brief Performs a constrained least squares fit on the input data points to
  * generate a 3rd degree bezier curve that fits the data.
@@ -93,11 +99,15 @@ bezier_calc_equidistant_points(
  * the end of the snake. On the client-side, this is calculated using the
  * snake's acknowledged head position, which will be located somewhere on the
  * curve but not necessarily at the front of the curve.
+ * 
+ * Deleting segments using the predicted head position can lead to a situation
+ * where there are not enough points/curves to roll back, and the game will
+ * crash.
  */
-int
-bezier_calc_unused_segments(
+qw
+bezier_calc_predicted_spacing(
     const struct cs_rb* bezier_handles,
-    struct qwpos head_pos,
+    struct qwpos head_pos_ack,
     qw spacing,
     qw snake_length);
 

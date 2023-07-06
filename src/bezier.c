@@ -11,7 +11,7 @@
 
 /* ------------------------------------------------------------------------- */
 static q16_16
-squared_distance_to_polys(
+distance_to_segment_squared(
     q16_16 px, q16_16 py, q16_16 t,
     const q16_16 Ax[4],
     const q16_16 Ay[4])
@@ -25,7 +25,7 @@ squared_distance_to_polys(
     return dx*dx + dy*dy;  /* HACK: Not the same as q16_16_mul(), but the precision of Q16.16 isn't enough so we do this */
 }
 static q16_16
-binary_search_lsq(
+binary_search_min_dist_sq(
     const struct qwpos* p,
     const q16_16 Ax[4],
     const q16_16 Ay[4],
@@ -37,7 +37,7 @@ binary_search_lsq(
     q16_16 px = qw_to_q16_16(p->x);
     q16_16 py = qw_to_q16_16(p->y);
 
-    last_error = squared_distance_to_polys(px, py, t, Ax, Ay);
+    last_error = distance_to_segment_squared(px, py, t, Ax, Ay);
     do
     {
         q16_16 error_up, error_down;
@@ -45,12 +45,12 @@ binary_search_lsq(
         q16_16 t_down = q16_16_sub(t, t_step);
 
         if (t_up <= make_q16_16(1))
-            error_up = squared_distance_to_polys(px, py, t_up, Ax, Ay);
+            error_up = distance_to_segment_squared(px, py, t_up, Ax, Ay);
         else
             error_up = last_error;
 
         if (t_down >= 0)
-            error_down = squared_distance_to_polys(px, py, t_down, Ax, Ay);
+            error_down = distance_to_segment_squared(px, py, t_down, Ax, Ay);
         else
             error_down = last_error;
 
@@ -72,6 +72,81 @@ binary_search_lsq(
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+calc_coeff(
+    qw* Ax, qw* Ay,
+    const struct bezier_handle* head,
+    const struct bezier_handle* tail,
+    const struct qwpos off)
+{
+    /* Calculate bezier control points */
+    const struct qwpos p0 = {
+        qw_sub(head->pos.x, off.x),
+        qw_sub(head->pos.y, off.y)
+    };
+    const struct qwpos p3 = {
+        qw_sub(tail->pos.x, off.x),
+        qw_sub(tail->pos.y, off.y)
+    };
+    const struct qwpos p1 = {
+        qw_add(p0.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
+        qw_add(p0.y, qw_rescale(qa_sin(head->angle), head->len_backwards, 255))
+    };
+    const struct qwpos p2 = {
+        qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
+        qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)),
+    };
+
+    const qw _3 = make_qw(3);
+    const qw _6 = make_qw(6);
+
+    /* Calculate polynomial coefficients X dimension */
+    const qw _3x0 = qw_mul(_3, p0.x);
+    const qw _3x1 = qw_mul(_3, p1.x);
+    const qw _6x1 = qw_mul(_6, p1.x);
+    const qw _3x2 = qw_mul(_3, p2.x);
+    Ax[0] = p0.x;
+    Ax[1] = qw_sub(_3x1, _3x0);
+    Ax[2] = qw_sub(qw_add(_3x0, _3x2), _6x1);
+    Ax[3] = qw_sub(qw_sub(qw_add(_3x1, p3.x), _3x2), p0.x);
+
+    /* Calculate polynomial coefficients Y dimension */
+    const qw _3y0 = qw_mul(_3, p0.y);
+    const qw _3y1 = qw_mul(_3, p1.y);
+    const qw _6y1 = qw_mul(_6, p1.y);
+    const qw _3y2 = qw_mul(_3, p2.y);
+    Ay[0] = p0.y;
+    Ay[1] = qw_sub(_3y1, _3y0);
+    Ay[2] = qw_sub(qw_add(_3y0, _3y2), _6y1);
+    Ay[3] = qw_sub(qw_sub(qw_add(_3y1, p3.y), _3y2), p0.y);
+}
+
+/* ------------------------------------------------------------------------- */
+static struct qwpos
+bezier_xy(const qw Ax[4], const qw Ay[4], const qw t)
+{
+    /* Calculate x,y position on curve */
+    const qw t2 = qw_mul(t, t);
+    const qw t3 = qw_mul(t, t2);
+    return make_qwposqw(
+        qw_add(qw_add(qw_add(Ax[0], qw_mul(Ax[1], t)), qw_mul(Ax[2], t2)), qw_mul(Ax[3], t3)),
+        qw_add(qw_add(qw_add(Ay[0], qw_mul(Ay[1], t)), qw_mul(Ay[2], t2)), qw_mul(Ay[3], t3))
+    );
+}
+
+/* ------------------------------------------------------------------------- */
+static struct qwpos
+bezier_dxy(const qw Ax[4], const qw Ay[4], const qw t)
+{
+    /* Calculate x,y position on curve */
+    const qw t2 = qw_mul(t, t);
+    return make_qwposqw(
+        qw_add(qw_add(Ax[1], qw_mul(make_qw(2), qw_mul(Ax[2], t))), qw_mul(make_qw(3), qw_mul(Ax[3], t2))),
+        qw_add(qw_add(Ay[1], qw_mul(make_qw(2), qw_mul(Ay[2], t))), qw_mul(make_qw(3), qw_mul(Ay[3], t2)))
+    );
+}
+
+/* ------------------------------------------------------------------------- */
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
 {
@@ -81,6 +156,17 @@ bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
     bh->angle = angle;
     bh->len_forwards = 0;
     bh->len_backwards = 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+bezier_calc_aabb(
+    struct qwaabb* bb,
+    const struct bezier_handle* head,
+    const struct bezier_handle* tail)
+{
+    qw Ax[4], Ay[4];
+    calc_coeff(Ax, Ay, head, tail, head->pos);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -406,7 +492,7 @@ bezier_fit_head(
         q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
 
         const struct qwpos* p = vector_get(points, i);
-        mse_error += binary_search_lsq(p, Ax, Ay, t);
+        mse_error += binary_search_min_dist_sq(p, Ax, Ay, t);
     }
 
     return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1));
@@ -441,28 +527,25 @@ bezier_calc_equidistant_points(
 {
     int i;
 
+    const qw spacing_sq = qw_mul(spacing, spacing);
+    qw total_spacing = 0;
+
     /* 
      * Initial x,y positions
      * Calculating coefficients far away from 0,0 results in precision issues,
      * so we translate everything to 0,0 first, calculate, then translate
-     * the result back
+     * the result back.
      */
-    qw x = 0;
-    qw y = 0;
-    const qw offset_x = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos.x;
-    const qw offset_y = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos.y;
-
-    qw spacing_sq = qw_mul(spacing, spacing);
-    qw expected_total_spacing = 0;
-    qw actual_total_spacing = 0;
+    struct qwpos pos = make_qwposi(0, 0);
+    struct qwpos off = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos;
 
     /* Insert first point */
     vector_clear(bezier_points);
     {
         struct bezier_point* bp = vector_emplace(bezier_points);
         struct bezier_handle* head = rb_peek_write(bezier_handles);
-        bp->pos.x = qw_add(x, offset_x);
-        bp->pos.y = qw_add(y, offset_y);
+        bp->pos.x = qw_add(pos.x, off.x);
+        bp->pos.y = qw_add(pos.y, off.y);
         bp->dir.x = -qa_cos(head->angle);
         bp->dir.y = -qa_sin(head->angle);
     }
@@ -472,45 +555,8 @@ bezier_calc_equidistant_points(
         const struct bezier_handle* head = rb_peek(bezier_handles, i+1);
         const struct bezier_handle* tail = rb_peek(bezier_handles, i+0);
 
-        /* Calculate bezier control points */
-        const struct qwpos p0 = {
-            qw_sub(head->pos.x, offset_x),
-            qw_sub(head->pos.y, offset_y)
-        };
-        const struct qwpos p3 = {
-            qw_sub(tail->pos.x, offset_x),
-            qw_sub(tail->pos.y, offset_y)
-        };
-        const struct qwpos p1 = {
-            qw_add(p0.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
-            qw_add(p0.y, qw_rescale(qa_sin(head->angle), head->len_backwards, 255))
-        };
-        const struct qwpos p2 = {
-            qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
-            qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)),
-        };
-
-        /* Calculate polynomial coefficients X dimension */
-        const qw a0 = p0.x;
-        const qw _3 = make_qw(3);
-        const qw _3x0 = qw_mul(_3, p0.x);
-        const qw _3x1 = qw_mul(_3, p1.x);
-        const qw a1 = qw_sub(_3x1, _3x0);
-        const qw _6 = make_qw(6);
-        const qw _6x1 = qw_mul(_6, p1.x);
-        const qw _3x2 = qw_mul(_3, p2.x);
-        const qw a2 = qw_sub(qw_add(_3x0, _3x2), _6x1);
-        const qw a3 = qw_sub(qw_sub(qw_add(_3x1, p3.x), _3x2), p0.x);
-
-        /* Calculate polynomial coefficients Y dimension */
-        const qw b0 = p0.y;
-        const qw _3y0 = qw_mul(_3, p0.y);
-        const qw _3y1 = qw_mul(_3, p1.y);
-        const qw b1 = qw_sub(_3y1, _3y0);
-        const qw _6y1 = qw_mul(_6, p1.y);
-        const qw _3y2 = qw_mul(_3, p2.y);
-        const qw b2 = qw_sub(qw_add(_3y0, _3y2), _6y1);
-        const qw b3 = qw_sub(qw_sub(qw_add(_3y1, p3.y), _3y2), p0.y);
+        qw Ax[4], Ay[4];
+        calc_coeff(Ax, Ay, head, tail, off);
 
         qw t = make_qw(0);  /* Begin search at head of curve */
         qw last_t = make_qw(0);
@@ -520,14 +566,11 @@ bezier_calc_equidistant_points(
             while (1)
             {
                 /* Calculate x,y position on curve */
-                const qw t2 = qw_mul(t, t);
-                const qw t3 = qw_mul(t, t2);
-                const qw next_x = qw_add(qw_add(qw_add(a0, qw_mul(a1, t)), qw_mul(a2, t2)), qw_mul(a3, t3));
-                const qw next_y = qw_add(qw_add(qw_add(b0, qw_mul(b1, t)), qw_mul(b2, t2)), qw_mul(b3, t3));
+                const struct qwpos next = bezier_xy(Ax, Ay, t);
 
                 /* Check distance to previous calculated position */
-                const qw dx = qw_sub(x, next_x);
-                const qw dy = qw_sub(y, next_y);
+                const qw dx = qw_sub(pos.x, next.x);
+                const qw dy = qw_sub(pos.y, next.y);
                 const qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
                 if (dist_sq > spacing_sq)
                     t = qw_sub(t, t_step);
@@ -542,30 +585,24 @@ bezier_calc_equidistant_points(
                 t_step /= 2;
                 if (t_step == 0)
                 {
-                    qw head_dist_sq;
+                    const qw t2 = qw_mul(t, t);
                     struct bezier_point* bp;
                     if (t == make_qw(1) - 1)
                         goto next_segment;
 
-                    /* Error compensation */
-                    expected_total_spacing = qw_add(expected_total_spacing, spacing);
-                    actual_total_spacing = qw_add(actual_total_spacing, qw_sqrt(dist_sq));
-                    /*spacing_sq = qw_add(spacing, qw_sub(expected_total_spacing, actual_total_spacing) / 2);
-                    spacing_sq = qw_mul(spacing_sq, spacing_sq);*/
-
                     /* Insert new point and calculate tangent vector */
                     bp = vector_emplace(bezier_points);
-                    bp->pos.x = qw_add(next_x, offset_x);
-                    bp->pos.y = qw_add(next_y, offset_y);
-                    bp->dir.x = -qw_add(qw_add(a1, qw_mul(make_qw(2), qw_mul(a2, t))), qw_mul(make_qw(3), qw_mul(a3, t2)));
-                    bp->dir.y = -qw_add(qw_add(b1, qw_mul(make_qw(2), qw_mul(b2, t))), qw_mul(make_qw(3), qw_mul(b3, t2)));
+                    bp->pos.x = qw_add(next.x, off.x);
+                    bp->pos.y = qw_add(next.y, off.y);
+                    bp->dir.x = -qw_add(qw_add(Ax[1], qw_mul(make_qw(2), qw_mul(Ax[2], t))), qw_mul(make_qw(3), qw_mul(Ax[3], t2)));
+                    bp->dir.y = -qw_add(qw_add(Ay[1], qw_mul(make_qw(2), qw_mul(Ay[2], t))), qw_mul(make_qw(3), qw_mul(Ay[3], t2)));
                     bp->dir = qwpos_normalize(bp->dir);
 
-                    if (actual_total_spacing >= snake_length)
+                    total_spacing = qw_add(total_spacing, qw_sqrt(dist_sq));
+                    if (total_spacing >= snake_length)
                         return i;
 
-                    x = next_x;
-                    y = next_y;
+                    pos = next;
 
                     break;
                 }
@@ -579,10 +616,10 @@ bezier_calc_equidistant_points(
 }
 
 /* ------------------------------------------------------------------------- */
-int
-bezier_calc_unused_segments(
+qw
+bezier_calc_predicted_spacing(
     const struct cs_rb* bezier_handles,
-    struct qwpos head_pos,
+    struct qwpos head_pos_ack,
     qw spacing,
     qw snake_length)
 {
