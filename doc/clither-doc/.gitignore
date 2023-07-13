@@ -2,5 +2,7 @@
 *.log
 *.toc
 *.synctex.gz
+*.bcf
+*blx.bib
 clither-doc.pdf
 
