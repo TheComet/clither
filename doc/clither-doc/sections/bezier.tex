@@ -74,6 +74,8 @@ where the polynomial coefficiants $a_{0,x} \ldots a_{3,x}$ and $a_{0,y} \ldots a
     \end{array}\right]
 \end{align}
 
+Notice that the coefficients of the two polynomials $x(t)$ and $y(t)$ are independent of one another. The problem of fitting the curve to data becomes much easier as a result.
+
 \subsection{Polynomial Regression}
 \label{sec:polynomial-regression}
 
@@ -137,7 +139,7 @@ One issue with using equation \ref{eq:olse} directly is that as new curve segmen
         \includegraphics[width=\linewidth]{bezier_fit_zoom.pdf}
         \caption{}
     \end{subfigure}
-    \caption{}
+    \caption{Two bezier curves fitted to points using polynomial regression.\\The ends do not meet.}
     \label{fig:bezier_fit}
 \end{figure}
 
@@ -272,6 +274,68 @@ By comparing the coefficients of these equations, the control points can be calc
         \includegraphics[width=\linewidth]{constrained_bezier_fit_zoom.pdf}
         \caption{}
     \end{subfigure}
-    \caption{}
+    \caption{Two bezier curves fitted using constrained polynomial regression.\\The ends now meet.}
     \label{fig:constrained_bezier_fit}
 \end{figure}
+
+\clearpage
+\subsection{Axis-Aligned Bounding Box}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=.45\linewidth]{aabb.pdf}
+    \caption{Bounding box of a cubic bezier curve.}
+    \label{fig:bezier_aabb}
+\end{figure}
+
+In order to speed up collision checks, the axis-aligned bounding box (AABB) is calculated for each curve segment.
+
+There are $4$ coordinates in total that define the extremities of the bounding box: $(x_0,y_0) \ldots (x_3,y_3)$.
+
+$(x_0,y_0)$ and $(x_3,y_3)$ are the easiest to calculate, they are simply the start and end points of the curve:
+
+\begin{align}
+    x_0 &= x(0) & y_0 &= y(0) \\
+    x_3 &= x(1) & y_3 &= y(1)
+\end{align}
+
+As can be seen in figure \ref{fig:bezier_aabb}, the AABB formed by the start and end points doesn't always encapsulate the entire curve. By finding the roots of the derivatives:
+
+\begin{align}
+    x'(t) &= a_{1,x} + 2 a_{2,x} t + 3 a_{3,x} t^2 \\
+    y'(t) &= a_{1,y} + 2 a_{2,y} t + 3 a_{3,y} t^2
+\end{align}
+
+\begin{align}
+    {t_{0,x},t_{1,x}} &= \frac{-2 a_{2,x} \pm\sqrt{4a_{2,x}^2 - 12 a_{1,x} a_{3,x}}}{2 a_{1,x}} \\
+    {t_{0,y},t_{1,y}} &= \frac{-2 a_{2,y} \pm\sqrt{4a_{2,y}^2 - 12 a_{1,y} a_{3,y}}}{2 a_{1,y}}
+\end{align}
+
+the AABB can be updated to include these new extremities (if the roots exist and are indeed in the range $[0..1]$)
+
+\begin{align}
+    x_1 &= x(t_{0,x}) & \text{if} && 0 \le t_{0,x} \le 1 &,& y_1 &= y(t_{0,y}) & \text{if} && 0 \le t_{0,y} \le 1 \\
+    x_2 &= x(t_{1,x}) & \text{if} && 0 \le t_{1,x} \le 1 &,& y_2 &= y(t_{1,y}) & \text{if} && 0 \le t_{1,y} \le 1
+\end{align}
+
+\subsubsection{Existence of Complex Roots}
+
+The question arose whether the roots of the derivative of a cubic bezier curve are always real. That is, $4 a_{2,x}^2 - 12 a_{1,x} a_{3,x} \ge 0$? The coefficients $a_{1,x} \ldots a_{3,x}$ depend on the control points $p_{0,x} \ldots p_{3,x}$. For simplicity's sake, we will refer to these control points as $p_0 \ldots p_3$, since finding an answer for the X axis will also be true for the Y axis. Substituting the control points into the inequality yields:
+
+\begin{equation}
+    36 \left(-p_0p_2 + p_0p_3 + p_1^2 - p_1p_2 - p_1p_3 + p_2^2\right) \ge 0
+    \label{eq:sqrt-inequality}
+\end{equation}
+
+It can be shown that equation \ref{eq:sqrt-inequality} is false for all values of $p_0 \ldots p_3$ with the following constraints applied:
+
+\begin{equation}
+    \left.
+    \begin{array}{ll}
+        p_0 &= -\frac{-z_0^2 + z_0z_1 + z_0z_2 - z_1^2 + z_3}{z_1 - z_2} \\
+        p_1 &= z_0 \\
+        p_2 &= z_1 \\
+        p_3 &= z_2
+    \end{array}
+    \right\}\text{$z_1 \ne z_2$ and $0 \le z_3$}
+\end{equation}
