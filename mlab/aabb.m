@@ -33,8 +33,8 @@ bby2 = max([y1, y2, y4]);
 hold off
 plot(x, y);
 hold on
-plot([bbx1, bbx1], [bby1, bby2]);
-plot([bbx2, bbx2], [bby1, bby2]);
-plot([bbx1, bbx2], [bby1, bby1]);
-plot([bbx1, bbx2], [bby2, bby2]);
+plot([bbx1, bbx1], [bby1, bby2], 'r');
+plot([bbx2, bbx2], [bby1, bby2], 'r');
+plot([bbx1, bbx2], [bby1, bby1], 'r');
+plot([bbx1, bbx2], [bby2, bby2], 'r');
 
