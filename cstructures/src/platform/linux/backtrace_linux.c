@@ -1,9 +1,23 @@
 #include "cstructures/backtrace.h"
 #include <execinfo.h>
+#include <stdlib.h>
+
+/* ------------------------------------------------------------------------- */
+int
+backtrace_init(void)
+{
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+backtrace_deinit(void)
+{
+}
 
 /* ------------------------------------------------------------------------- */
 char**
-get_backtrace(int* size)
+backtrace_get(int* size)
 {
     void* array[CSTRUCTURES_BACKTRACE_SIZE];
     char** strings;
@@ -12,4 +26,11 @@ get_backtrace(int* size)
     strings = backtrace_symbols(array, *size);
 
     return strings;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+backtrace_free(char** bt)
+{
+    free(bt);
 }
