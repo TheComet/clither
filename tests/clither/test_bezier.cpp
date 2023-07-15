@@ -149,7 +149,7 @@ public:
 
 TEST_F(NAME, misfit)
 {
-    /* 
+    /*
      * This data was collected from an edge case where the curve would
      * horribly misfit. The bug in the end was an issue with qw_to_q16_16().
      */
@@ -208,7 +208,7 @@ TEST_F(NAME, calc_equidistant_points_on_single_curve)
     bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
     head->len_backwards = 255;
 
-    bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), 5);
+    bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), make_qw(0.4));
 
     ASSERT_THAT(vector_count(&points), Eq(5));
     EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(2)));
@@ -229,7 +229,7 @@ TEST_F(NAME, calc_equidistant_points_on_single_curve_no_space)
     bezier_handle_init(head, make_qwposi(2, 3), make_qa(M_PI / 4 * 3));
     head->len_backwards = 255;
 
-    bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), 50);
+    bezier_calc_equidistant_points(&points, &handles, make_qw(0.1), make_qw(5));
 
     ASSERT_THAT(vector_count(&points), Eq(20));
     EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(2)));
@@ -251,7 +251,7 @@ TEST_F(NAME, calc_equidistant_points_on_two_curves)
     bezier_handle* head = (bezier_handle*)rb_emplace(&handles);
     bezier_handle_init(head, make_qwposf(0, 2), 0);
 
-    bezier_calc_equidistant_points(&points, &handles, make_qw(0.4), 5);
+    bezier_calc_equidistant_points(&points, &handles, make_qw(0.4), make_qw(1));
 
     ASSERT_THAT(vector_count(&points), Eq(3));
     EXPECT_THAT(((bezier_point*)vector_get(&points, 0))->pos.x, Eq(make_qw(0)));
@@ -286,4 +286,121 @@ TEST_F(NAME, calc_equidistant_points_on_two_curves_spacing_larger_than_curve)
     EXPECT_THAT(((bezier_point*)vector_get(&points, 1))->pos.y, Eq(19661));
 
     rb_deinit(&handles);
+}
+
+TEST_F(NAME, aabb_straight_line)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.2, 0.3), 0);
+    bezier_handle_init(&tail, make_qwposf(0.8, 0.7), 0);
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw(0.2)));
+    EXPECT_THAT(bb.x2, Eq(make_qw(0.8)));
+    EXPECT_THAT(bb.y1, Eq(make_qw(0.3)));
+    EXPECT_THAT(bb.y2, Eq(make_qw(0.7)));
+}
+
+TEST_F(NAME, aabb_x_extremities_1)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
+    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    head.len_backwards = 255;
+    tail.len_forwards = 255;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw2(-1458, 1<<14)));
+    EXPECT_THAT(bb.x2, Eq(make_qw2(8004, 1<<14)));
+    EXPECT_THAT(bb.y1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.y2, Eq(make_qw(0.9)));
+}
+
+TEST_F(NAME, aabb_x_extremities_2)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
+    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    head.len_backwards = 0;
+    tail.len_forwards = 255;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw2(-4005, 1<<14)));
+    EXPECT_THAT(bb.x2, Eq(make_qw(0.2)));
+    EXPECT_THAT(bb.y1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.y2, Eq(make_qw(0.9)));
+}
+
+TEST_F(NAME, aabb_x_extremities_3)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
+    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    head.len_backwards = 255;
+    tail.len_forwards = 0;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw(0.2)));
+    EXPECT_THAT(bb.x2, Eq(make_qw2(10560, 1<<14)));
+    EXPECT_THAT(bb.y1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.y2, Eq(make_qw(0.9)));
+}
+
+TEST_F(NAME, aabb_y_extremities_1)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
+    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    head.len_backwards = 255;
+    tail.len_forwards = 255;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.x2, Eq(make_qw(0.9)));
+    EXPECT_THAT(bb.y1, Eq(make_qw2(-1457, 1<<14)));
+    EXPECT_THAT(bb.y2, Eq(make_qw2(8003, 1<<14)));
+}
+
+TEST_F(NAME, aabb_y_extremities_2)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
+    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    head.len_backwards = 0;
+    tail.len_forwards = 255;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.x2, Eq(make_qw(0.9)));
+    EXPECT_THAT(bb.y1, Eq(make_qw2(-4005, 1<<14)));
+    EXPECT_THAT(bb.y2, Eq(make_qw(0.2)));
+}
+
+TEST_F(NAME, aabb_y_extremities_3)
+{
+    bezier_handle head, tail;
+    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
+    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    head.len_backwards = 255;
+    tail.len_forwards = 0;
+
+    qwaabb bb;
+    bezier_calc_aabb(&bb, &head, &tail);
+
+    EXPECT_THAT(bb.x1, Eq(make_qw(0.1)));
+    EXPECT_THAT(bb.x2, Eq(make_qw(0.9)));
+    EXPECT_THAT(bb.y1, Eq(make_qw(0.2)));
+    EXPECT_THAT(bb.y2, Eq(make_qw2(10560, 1<<14)));
 }

@@ -192,7 +192,7 @@ static inline qw qw_div(qw a, qw b)
 
 static inline qw qw_sq(qw q)
 {
-    return qw_sat24((int64_t)q * 2);
+    return qw_mul(q, q);
 }
 
 #include <math.h>
