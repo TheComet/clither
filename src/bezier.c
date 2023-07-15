@@ -97,18 +97,15 @@ calc_coeff(
         qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255))
     );
 
-    const qw _3 = make_qw(3);
-    const qw _6 = make_qw(6);
+    const qw _3x0 = 3 * p0.x;
+    const qw _3x1 = 3 * p1.x;
+    const qw _6x1 = 6 * p1.x;
+    const qw _3x2 = 3 * p2.x;
 
-    const qw _3x0 = qw_mul(_3, p0.x);
-    const qw _3x1 = qw_mul(_3, p1.x);
-    const qw _6x1 = qw_mul(_6, p1.x);
-    const qw _3x2 = qw_mul(_3, p2.x);
-
-    const qw _3y0 = qw_mul(_3, p0.y);
-    const qw _3y1 = qw_mul(_3, p1.y);
-    const qw _6y1 = qw_mul(_6, p1.y);
-    const qw _3y2 = qw_mul(_3, p2.y);
+    const qw _3y0 = 3 * p0.y;
+    const qw _3y1 = 3 * p1.y;
+    const qw _6y1 = 6 * p1.y;
+    const qw _3y2 = 3 * p2.y;
 
     /* Calculate polynomial coefficients X dimension */
     Ax[0] = p0.x;
@@ -152,25 +149,19 @@ bezier_calc_aabb_coeff(
     struct qwaabb* bb,
     const qw Ax[4], const qw Ay[4])
 {
-    qw _2 = make_qw(2);
-    qw _3 = make_qw(3);
-    qw _4 = make_qw(3);
-
-    qw ax = qw_mul(Ax[3], _3);
-    qw bx = qw_mul(Ax[2], _2);
-    qw Dx = qw_sqrt(qw_sub(qw_sq(bx), qw_mul(qw_mul(_4, ax), Ax[1])));
-    qw tx1 = qw_div(qw_add(-bx, Dx), qw_mul(_2, ax));
-    qw tx2 = qw_div(qw_sub(-bx, Dx), qw_mul(_2, ax));
     qw x1 = Ax[0];
     qw x2 = qw_add(Ax[0], qw_add(Ax[1], qw_add(Ax[2], Ax[3])));
 
-    qw ay = qw_mul(Ay[3], _3);
-    qw by = qw_mul(Ay[2], _2);
-    qw Dy = qw_sqrt(qw_sub(qw_sq(by), qw_mul(qw_mul(_4, ay), Ay[1])));
-    qw ty1 = qw_div(qw_add(-by, Dy), qw_mul(_2, ay));
-    qw ty2 = qw_div(qw_sub(-by, Dy), qw_mul(_2, ay));
     qw y1 = Ay[0];
     qw y2 = qw_add(Ay[0], qw_add(Ay[1], qw_add(Ay[2], Ay[3])));
+
+    qw ax = 3*Ax[3];
+    qw bx = 2*Ax[2];
+    qw Dx = qw_sub(qw_sq(bx), 4 * qw_mul(ax, Ax[1]));
+
+    qw ay = 3*Ay[3];
+    qw by = 2*Ay[2];
+    qw Dy = qw_sub(qw_sq(by), 4 * qw_mul(ay, Ay[1]));
 
     if (x1 < x2)
     {
@@ -194,40 +185,52 @@ bezier_calc_aabb_coeff(
         bb->y2 = y1;
     }
 
-    if (tx1 >= make_qw(0) && tx1 <= make_qw(1))
+    if (Dx >= make_qw(0))
     {
-        qw tx1_2 = qw_mul(tx1, tx1);
-        qw tx1_3 = qw_mul(tx1_2, tx1);
-        qw x = qw_add(qw_add(qw_add(Ax[0], qw_mul(Ax[1], tx1)), qw_mul(Ax[2], tx1_2)), qw_mul(Ax[3], tx1_3));
-        if (bb->x1 > x) bb->x1 = x;
-        if (bb->x2 < x) bb->x2 = x;
+        qw D_sq = qw_sqrt(Dx);
+        qw t1 = qw_div(qw_add(-bx, D_sq), 2*ax);
+        qw t2 = qw_div(qw_sub(-bx, D_sq), 2*ax);
+        if (t1 >= make_qw(0) && t1 <= make_qw(1))
+        {
+            qw t1_2 = qw_mul(t1, t1);
+            qw t1_3 = qw_mul(t1_2, t1);
+            qw x = qw_add(qw_add(qw_add(Ax[0], qw_mul(Ax[1], t1)), qw_mul(Ax[2], t1_2)), qw_mul(Ax[3], t1_3));
+            if (bb->x1 > x) bb->x1 = x;
+            if (bb->x2 < x) bb->x2 = x;
+        }
+
+        if (t2 >= make_qw(0) && t2 <= make_qw(1))
+        {
+            qw t2_2 = qw_mul(t2, t2);
+            qw t2_3 = qw_mul(t2_2, t2);
+            qw x = qw_add(qw_add(qw_add(Ax[0], qw_mul(Ax[1], t2)), qw_mul(Ax[2], t2_2)), qw_mul(Ax[3], t2_3));
+            if (bb->x1 > x) bb->x1 = x;
+            if (bb->x2 < x) bb->x2 = x;
+        }
     }
 
-    if (tx2 >= make_qw(0) && tx2 <= make_qw(1))
+    if (Dy >= make_qw(0))
     {
-        qw tx2_2 = qw_mul(tx2, tx2);
-        qw tx2_3 = qw_mul(tx2_2, tx2);
-        qw x = qw_add(qw_add(qw_add(Ax[0], qw_mul(Ax[1], tx2)), qw_mul(Ax[2], tx2_2)), qw_mul(Ax[3], tx2_3));
-        if (bb->x1 > x) bb->x1 = x;
-        if (bb->x2 < x) bb->x2 = x;
-    }
+        qw D_sq = qw_sqrt(Dy);
+        qw t1 = qw_div(qw_add(-by, D_sq), 2*ay);
+        qw t2 = qw_div(qw_sub(-by, D_sq), 2* ay);
+        if (t1 >= make_qw(0) && t1 <= make_qw(1))
+        {
+            qw t1_2 = qw_mul(t1, t1);
+            qw t1_3 = qw_mul(t1_2, t1);
+            qw y = qw_add(qw_add(qw_add(Ay[0], qw_mul(Ay[1], t1)), qw_mul(Ay[2], t1_2)), qw_mul(Ay[3], t1_3));
+            if (bb->y1 > y) bb->y1 = y;
+            if (bb->y2 < y) bb->y2 = y;
+        }
 
-    if (ty1 >= make_qw(0) && ty1 <= make_qw(1))
-    {
-        qw ty1_2 = qw_mul(ty1, ty1);
-        qw ty1_3 = qw_mul(ty1_2, ty1);
-        qw y = qw_add(qw_add(qw_add(Ay[0], qw_mul(Ay[1], ty1)), qw_mul(Ay[2], ty1_2)), qw_mul(Ay[3], ty1_3));
-        if (bb->y1 > y) bb->y1 = y;
-        if (bb->y2 < y) bb->y2 = y;
-    }
-
-    if (ty2 >= make_qw(0) && ty2 <= make_qw(1))
-    {
-        qw ty2_2 = qw_mul(ty2, ty2);
-        qw ty2_3 = qw_mul(ty2_2, ty2);
-        qw y = qw_add(qw_add(qw_add(Ay[0], qw_mul(Ay[1], ty2)), qw_mul(Ay[2], ty2_2)), qw_mul(Ay[3], ty2_3));
-        if (bb->y1 > y) bb->y1 = y;
-        if (bb->y2 < y) bb->y2 = y;
+        if (t2 >= make_qw(0) && t2 <= make_qw(1))
+        {
+            qw t2_2 = qw_mul(t2, t2);
+            qw t2_3 = qw_mul(t2_2, t2);
+            qw y = qw_add(qw_add(qw_add(Ay[0], qw_mul(Ay[1], t2)), qw_mul(Ay[2], t2_2)), qw_mul(Ay[3], t2_3));
+            if (bb->y1 > y) bb->y1 = y;
+            if (bb->y2 < y) bb->y2 = y;
+        }
     }
 }
 void
@@ -239,6 +242,10 @@ bezier_calc_aabb(
     qw Ax[4], Ay[4];
     calc_coeff(Ax, Ay, head, tail, head->pos);
     bezier_calc_aabb_coeff(bb, Ax, Ay);
+    bb->x1 = qw_add(bb->x1, head->pos.x);
+    bb->x2 = qw_add(bb->x2, head->pos.x);
+    bb->y1 = qw_add(bb->y1, head->pos.y);
+    bb->y2 = qw_add(bb->y2, head->pos.y);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -480,27 +487,24 @@ bezier_fit_head(
      *   cx1       = -x0 + 3*x1 - 3*x2 + x3       x3 = cx1 + x0 - 3*x1 + 3*x2
      */
     {
-        q16_16 _3 = make_q16_16(3);
-        q16_16 _6 = make_q16_16(6);
-
         /* X dimension control points */
         q16_16 x0 = qx;
-        q16_16 _3x0 = q16_16_mul(_3, x0);
-        q16_16 x1 = q16_16_div(q16_16_add(q16_16_sub(mx, Cx[0]), _3x0), _3);
-        q16_16 _6x1 = q16_16_mul(_6, x1);
-        q16_16 x2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), _6x1), _3);
-        q16_16 _3x1 = q16_16_mul(_3, x1);
-        q16_16 _3x2 = q16_16_mul(_3, x2);
+        q16_16 _3x0 = 3 * x0;
+        q16_16 x1 = q16_16_add(q16_16_sub(mx, Cx[0]), _3x0) / 3;
+        q16_16 _6x1 = 6 * x1;
+        q16_16 x2 = q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), _6x1) / 3;
+        q16_16 _3x1 = 3 * x1;
+        q16_16 _3x2 = 3 * x2;
         q16_16 x3 = q16_16_add(q16_16_sub(q16_16_add(Cx[1], x0), _3x1), _3x2);
 
         /* Y dimension control points */
         q16_16 y0 = qy;
-        q16_16 _3y0 = q16_16_mul(y0, _3);
-        q16_16 y1 = q16_16_div(q16_16_add(q16_16_sub(my, Cy[0]), _3y0), _3);
-        q16_16 _6y1 = q16_16_mul(_6, y1);
-        q16_16 y2 = q16_16_div(q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), _6y1), _3);
-        q16_16 _3y1 = q16_16_mul(_3, y1);
-        q16_16 _3y2 = q16_16_mul(_3, y2);
+        q16_16 _3y0 = 3 * y0;
+        q16_16 y1 = q16_16_add(q16_16_sub(my, Cy[0]), _3y0) / 3;
+        q16_16 _6y1 = 6 * y1;
+        q16_16 y2 = q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), _6y1) / 3;
+        q16_16 _3y1 = 3 * y1;
+        q16_16 _3y2 = 3 * y2;
         q16_16 y3 = q16_16_add(q16_16_sub(q16_16_add(Cy[1], y0), _3y1), _3y2);
 
         /* Control points are stored as polar coordinates relative to head/tail */
@@ -541,15 +545,15 @@ bezier_fit_head(
          *
          * these are used for error estimation
          */
-        _3x1 = q16_16_mul(_3, x1);
-        _6x1 = q16_16_mul(_6, x1);
+        _3x1 = 3 * x1;
+        _6x1 = 6 * x1;
         Ax[0] = x0;
         Ax[1] = q16_16_sub(_3x1, _3x0);
         Ax[2] = q16_16_add(q16_16_sub(_3x0, _6x1), _3x2);
         Ax[3] = q16_16_add(q16_16_sub(q16_16_sub(_3x1, x0), _3x2), x3);
 
-        _3y1 = q16_16_mul(_3, y1);
-        _6y1 = q16_16_mul(_6, y1);
+        _3y1 = 3 * y1;
+        _6y1 = 6 * y1;
         Ay[0] = y0;
         Ay[1] = q16_16_sub(_3y1, _3y0);
         Ay[2] = q16_16_add(q16_16_sub(_3y0, _6y1), _3y2);
