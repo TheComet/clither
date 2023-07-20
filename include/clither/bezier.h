@@ -87,7 +87,7 @@ bezier_squeeze_n_recent_step(
  * \param[in] snake_length The required total length of the snake, in world
  * space.
  */
-int
+void
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
@@ -102,12 +102,14 @@ bezier_calc_equidistant_points(
  * 
  * Deleting segments using the predicted head position can lead to a situation
  * where there are not enough points/curves to roll back, and the game will
- * crash.
+ * crash. This is why a separate call needs to be made using the acknowledged
+ * head position instead.
  */
-qw
-bezier_calc_predicted_spacing(
+int
+bezier_calc_stale_segments(
     const struct cs_rb* bezier_handles,
-    struct qwpos head_pos_ack,
+    const struct cs_rb* bezier_aabbs,
+    struct qwpos head_pos,
     qw spacing,
     qw snake_length);
 

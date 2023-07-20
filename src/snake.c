@@ -6,7 +6,7 @@
 
 #include "cstructures/memory.h"
 
-#include <stdio.h>
+#include <assert.h>
 
 #define _USE_MATH_DEFINES
 #include <string.h>
@@ -199,6 +199,8 @@ snake_step(
 void
 snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
+    assert(stale_segments + 1 >= (int)rb_count(&data->points_lists));
+
     while (stale_segments--)
     {
         vector_deinit(rb_take(&data->points_lists));
