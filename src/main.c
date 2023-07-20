@@ -318,22 +318,22 @@ run_client(const struct args* a)
             int count;
             int idx, new_idx;
 
-            for (count = 0; gfx_backends[count]; ++count)
-            {}
-
+            for (count = 0; gfx_backends[count]; ++count) {}
             for (idx = 0; gfx_backends[idx]; ++idx)
                 if (gfx_iface == gfx_backends[idx])
                     break;
 
             if (input.next_gfx_backend)
-                new_idx = idx + 1;
+                new_idx = idx + 1 >= count ? 0 : idx + 1;
             else
-                new_idx = idx - 1;
-            if (new_idx >= count)
-                new_idx = 0;
-            if (new_idx < 0)
-                new_idx = count - 1;
+                new_idx = idx - 1 < 0 ? count - 1 : idx - 1;
 
+            /*
+             * On Windows it is possible to create a new backend and then
+             * destroy the previous backend, however, on linux this doesn't
+             * seem to work. GL contexts aren't properly transferred to the
+             * new instance. This is why we destroy first - then create
+             */
             gfx_iface->destroy(gfx);
             gfx_iface->global_deinit();
 
@@ -348,6 +348,7 @@ run_client(const struct args* a)
             if (gfx_iface->load_resource_pack(gfx, pack) < 0)
                 goto load_new_resource_pack_failed;
 
+            /* Clears the button press for switching graphics backends */
             input_init(&input);
             gfx_iface->poll_input(gfx, &input);
 
@@ -356,7 +357,7 @@ run_client(const struct args* a)
         load_new_resource_pack_failed : gfx_iface->destroy(gfx);
         create_new_gfx_failed         : gfx_iface->global_deinit();
         init_new_gfx_failed           :
-            /* Jesus */
+            /* Try to restore to previous backend. Shouldn't fail but who knows */
             gfx_iface = gfx_backends[idx];
             if (gfx_iface->global_init() < 0)
                 break;
