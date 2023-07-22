@@ -250,10 +250,10 @@ bezier_calc_aabb(
 
 /* ------------------------------------------------------------------------- */
 double
-bezier_fit_head(
+bezier_fit_trail(
         struct bezier_handle* head,
         struct bezier_handle* tail,
-        const struct cs_vector* points)
+        const struct cs_vector* trail)
 {
     int i, m;
     q16_16 T[2][2];
@@ -264,15 +264,15 @@ bezier_fit_head(
     q16_16 det;
     q16_16 mx, qx, my, qy;  /* f(t) coefficients */
 
-    struct qwpos* p0 = vector_front(points);  /* tail */
-    struct qwpos* pm = vector_back(points);   /* head */
+    struct qwpos* p0 = vector_front(trail);  /* tail */
+    struct qwpos* pm = vector_back(trail);   /* head */
 
     /*
      * Cubic bezier curve fitting requires at least 5 points for polynomial
      * regression. The following special cases calculate the coefficients
      * directly when there are 4 or less points.
      */
-    if (vector_count(points) <= 2)
+    if (vector_count(trail) <= 2)
     {
         head->pos = *pm;
         head->angle = tail->angle;
@@ -280,9 +280,9 @@ bezier_fit_head(
         tail->len_forwards = 0;
         return 0;
     }
-    if (vector_count(points) == 3)
+    if (vector_count(trail) == 3)
     {
-        struct qwpos* p1 = vector_get(points, 1);
+        struct qwpos* p1 = vector_get(trail, 1);
         qw head_dx = qw_sub(p1->x, pm->x);
         qw head_dy = qw_sub(p1->y, pm->y);
         qw tail_dx = qw_sub(p0->x, p1->x);
@@ -300,10 +300,10 @@ bezier_fit_head(
 
         return 0;
     }
-    if (vector_count(points) == 4)
+    if (vector_count(trail) == 4)
     {
-        struct qwpos* p1 = vector_get(points, 1);
-        struct qwpos* p2 = vector_get(points, 2);
+        struct qwpos* p1 = vector_get(trail, 1);
+        struct qwpos* p2 = vector_get(trail, 2);
         qw head_dx = qw_sub(p2->x, pm->x);
         qw head_dy = qw_sub(p2->y, pm->y);
         qw tail_dx = qw_sub(p0->x, p1->x);
@@ -375,10 +375,10 @@ bezier_fit_head(
      *                   [ 1   tn ]
      */
     memset(T, 0, sizeof(T));
-    for (i = 1; i < (int)vector_count(points) - 1; ++i)
+    for (i = 1; i < (int)vector_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(trail) - 1);
         q16_16 t2 = q16_16_mul(t, t);
 
         T[0][0] = q16_16_add(T[0][0], make_q16_16(1));
@@ -432,10 +432,10 @@ bezier_fit_head(
      */
     memset(Cx, 0, sizeof(Cx));
     memset(Cy, 0, sizeof(Cy));
-    for (i = 1; i < (int)vector_count(points) - 1; ++i)
+    for (i = 1; i < (int)vector_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(trail) - 1);
 
         /* r(t) = (t-t0)(t-tm) = (t-0)(t-1) = t(t-1) */
         q16_16 tm = make_q16_16(1);  /* tm = 1 (pass through last point) */
@@ -446,7 +446,7 @@ bezier_fit_head(
         q16_16 fy = q16_16_add(q16_16_mul(my, t), qy);
 
         /* X = (x - f) / r */
-        struct qwpos* p = vector_get(points, i);
+        struct qwpos* p = vector_get(trail, i);
         q16_16 x = q16_16_div(q16_16_sub(qw_to_q16_16(p->x), fx), r);
         q16_16 y = q16_16_div(q16_16_sub(qw_to_q16_16(p->y), fy), r);
         for (m = 0; m != 2; ++m)
@@ -562,16 +562,16 @@ bezier_fit_head(
 
     /* Error estimation */
     mse_error = 0;
-    for (i = 1; i < (int)vector_count(points) - 1; ++i)
+    for (i = 1; i < (int)vector_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, vector_count(points) - 1);
+        q16_16 t = make_q16_16_2(i, vector_count(trail) - 1);
 
-        const struct qwpos* p = vector_get(points, i);
+        const struct qwpos* p = vector_get(trail, i);
         mse_error += binary_search_min_dist_sq(p, Ax, Ay, t);
     }
 
-    return q16_16_div(mse_error, make_q16_16(vector_count(points) - 1));
+    return q16_16_div(mse_error, make_q16_16(vector_count(trail) - 1));
 }
 
 /* ------------------------------------------------------------------------- */

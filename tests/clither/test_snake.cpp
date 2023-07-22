@@ -9,7 +9,7 @@
 
 using namespace testing;
 
-static void print_points_lists(const struct cs_rb* rb)
+static void print_head_trails(const struct cs_rb* rb)
 {
     int comma = 0;
     log_raw("px = [");
@@ -73,8 +73,8 @@ TEST(NAME, roll_back_over_frame_boundary)
     mispredict_frame++;
 
     /* Make sure we have 7 bezier segments */
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7u));
-    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(7u));
+    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(vector_count(&client_pts[0]), Eq(10u));
     ASSERT_THAT(vector_count(&client_pts[1]), Eq(36u));
     ASSERT_THAT(vector_count(&client_pts[2]), Eq(33u));
@@ -84,8 +84,8 @@ TEST(NAME, roll_back_over_frame_boundary)
     ASSERT_THAT(vector_count(&client_pts[6]), Eq(29u));
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8u));
 
-    ASSERT_THAT(rb_count(&server.data.points_lists), Eq(1u));
-    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&server.data.head_trails), Eq(1u));
+    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.head_trails, 0);
     ASSERT_THAT(vector_count(&server_pts[0]), Eq(7u));
     ASSERT_THAT(rb_count(&server.data.bezier_handles), Eq(2u));
 
@@ -108,8 +108,8 @@ TEST(NAME, roll_back_over_frame_boundary)
      * will cause a roll back */
     snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, mispredict_frame, 60);
 
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7u));
-    client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(7u));
+    client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8u));
 
     struct command c_prev = c;
@@ -188,8 +188,8 @@ TEST(NAME, roll_back_with_server_packet_loss)
     mispredict_frame++;
 
     /* Make sure we have 7 bezier segments */
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7u));
-    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(7u));
+    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(vector_count(&client_pts[0]), Eq(10u));
     ASSERT_THAT(vector_count(&client_pts[1]), Eq(36u));
     ASSERT_THAT(vector_count(&client_pts[2]), Eq(33u));
@@ -199,12 +199,12 @@ TEST(NAME, roll_back_with_server_packet_loss)
     ASSERT_THAT(vector_count(&client_pts[6]), Eq(29u));
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8u));
 
-    ASSERT_THAT(rb_count(&server.data.points_lists), Eq(1u));
-    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&server.data.head_trails), Eq(1u));
+    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.head_trails, 0);
     ASSERT_THAT(vector_count(&server_pts[0]), Eq(10u));
     ASSERT_THAT(rb_count(&server.data.bezier_handles), Eq(2u));
 
-    print_points_lists(&server.data.points_lists);
+    print_head_trails(&server.data.head_trails);
 
     /* Make sure sim agrees up to mispredicted frame */
     ASSERT_THAT(
@@ -220,17 +220,17 @@ TEST(NAME, roll_back_with_server_packet_loss)
         ((qwpos*)vector_get(&client_pts[0], 6))->y,
         Ne(((qwpos*)vector_get(&server_pts[0], 6))->y));
 
-    print_points_lists(&client.data.points_lists);
+    print_head_trails(&client.data.head_trails);
 
     /* Everything is set up so that "mispredict_frame" is the last frame on which
      * the simulation will match up. Going from mispredict_frame to mispredict_frame+1
      * will cause a roll back */
     snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, mispredict_frame + 4, 60);
 
-    print_points_lists(&client.data.points_lists);
+    print_head_trails(&client.data.head_trails);
 
-    ASSERT_THAT(rb_count(&client.data.points_lists), Eq(7u));
-    client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(7u));
+    client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(8u));
 
     struct command c_mispredict = c;
@@ -297,13 +297,13 @@ TEST(NAME, roll_back_to_first_frame)
         frame_number++;
     }
 
-    ASSERT_THAT(rb_count(&client.data.points_lists), Ge(1u));
-    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Ge(1u));
+    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(vector_count(&client_pts[0]), Ge(2u));
     ASSERT_THAT(rb_count(&client.data.bezier_handles), Ge(2u));
 
-    ASSERT_THAT(rb_count(&server.data.points_lists), Ge(1u));
-    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.points_lists, 0);
+    ASSERT_THAT(rb_count(&server.data.head_trails), Ge(1u));
+    struct cs_vector* server_pts = (cs_vector*)rb_peek(&server.data.head_trails, 0);
     ASSERT_THAT(vector_count(&server_pts[0]), Ge(2u));
     ASSERT_THAT(rb_count(&server.data.bezier_handles), Ge(2u));
 

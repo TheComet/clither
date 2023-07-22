@@ -50,14 +50,14 @@ bezier_calc_aabb(
  * \param[in] tail The tail bezier handle will only have its tail->len_forwards
  * updated. The angle and position are assumed to be correct from the previous
  * bezier segment.
- * \param[in] points A list of qwpos2 points to fit the data to.
+ * \param[in] trail A list of qwpos2 points to fit the data to.
  * \return Returns the least squared error of the fit.
  */
 double
-bezier_fit_head(
+bezier_fit_trail(
         struct bezier_handle* head,
         struct bezier_handle* tail,
-        const struct cs_vector* points);
+        const struct cs_vector* trail);
 
 /*!
  * \brief Adjusts all bezier handles in a way to cause the snake to "squeeze"

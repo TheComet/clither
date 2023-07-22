@@ -181,7 +181,7 @@ TEST_F(NAME, misfit)
 
     for (int i = 0; i != array_len(points3); ++i)
         vector_push(&points, &points3[i]);
-    bezier_fit_head(&head, &tail, &points);
+    bezier_fit_trail(&head, &tail, &points);
 
     EXPECT_THAT(head.pos.x, Eq(32605));
     EXPECT_THAT(head.pos.y, Eq(29312));
