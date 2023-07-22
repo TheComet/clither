@@ -107,6 +107,21 @@ draw_circle(SDL_Renderer* renderer, SDL_Point center, int radius)
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+draw_box(SDL_Renderer* renderer, SDL_Point p1, SDL_Point p2)
+{
+    SDL_Point points[5] = {
+        { p1.x, p1.y },
+        { p2.x, p1.y },
+        { p2.x, p2.y },
+        { p1.x, p2.y },
+        { p1.x, p1.y }
+    };
+
+    SDL_RenderDrawLines(renderer, points, 5);
+}
+
+/* ------------------------------------------------------------------------- */
 static struct qwpos
 gfx_screen_to_world(struct spos pos, const struct gfx* gfx, const struct camera* camera)
 {
@@ -398,7 +413,6 @@ draw_bezier(
 static void
 draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snake* snake)
 {
-
     struct spos pos;
     int i;
 
@@ -440,6 +454,12 @@ draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snak
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
+    {
+        SDL_SetRenderDrawColor(gfx->renderer, 255, 128, 0, 255);
+        pos = gfx_world_to_screen(snake->head_ack.pos, gfx, camera);
+        draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
+    }
+
     for (i = 0; i < (int)rb_count(&snake->data.bezier_handles) - 1; ++i)
     {
         struct bezier_handle* tail = rb_peek(&snake->data.bezier_handles, i+0);
@@ -449,6 +469,26 @@ draw_snake(const struct gfx* gfx, const struct camera* camera, const struct snak
         else
             SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
         draw_bezier((const struct gfx*)gfx, camera, head, tail, 50);
+    }
+
+    SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
+    RB_FOR_EACH(&snake->data.bezier_aabbs, struct qwaabb, bb)
+        struct qwpos q1 = make_qwposqw(bb->x1, bb->y1);
+        struct qwpos q2 = make_qwposqw(bb->x2, bb->y2);
+        struct spos s1 = gfx_world_to_screen(q1, gfx, camera);
+        struct spos s2 = gfx_world_to_screen(q2, gfx, camera);
+        draw_box(gfx->renderer,
+            make_SDL_Point(s1.x, s1.y),
+            make_SDL_Point(s2.x, s2.y));
+    RB_END_EACH
+    {
+        struct qwpos q1 = make_qwposqw(snake->data.aabb.x1, snake->data.aabb.y1);
+        struct qwpos q2 = make_qwposqw(snake->data.aabb.x2, snake->data.aabb.y2);
+        struct spos s1 = gfx_world_to_screen(q1, gfx, camera);
+        struct spos s2 = gfx_world_to_screen(q2, gfx, camera);
+        draw_box(gfx->renderer,
+            make_SDL_Point(s1.x, s1.y),
+            make_SDL_Point(s2.x, s2.y));
     }
 }
 
