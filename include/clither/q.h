@@ -126,6 +126,20 @@ static inline struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
     return bb;
 }
 
+static inline struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
+{
+    if (a.x1 > b.x1) a.x1 = b.x1;
+    if (a.x2 < b.x2) a.x2 = b.x2;
+    if (a.y1 > b.y1) a.y1 = b.y1;
+    if (a.y2 < b.y2) a.y2 = b.y2;
+    return a;
+}
+
+static inline int qwaabb_qwpos(struct qwaabb bb, const struct qwpos p)
+{
+    return p.x >= bb.x1 && p.x <= bb.x2 && p.y >= bb.y1 && p.y <= bb.y2;
+}
+
 static inline qw qw_add(qw a, qw b)
 {
     return a + b;

@@ -185,7 +185,7 @@ bezier_calc_aabb_coeff(
         bb->y2 = y1;
     }
 
-    if (Dx >= make_qw(0))
+    if (Dx >= make_qw(0) && ax != make_qw(0))
     {
         qw D_sq = qw_sqrt(Dx);
         qw t1 = qw_div(qw_add(-bx, D_sq), 2*ax);
@@ -209,11 +209,11 @@ bezier_calc_aabb_coeff(
         }
     }
 
-    if (Dy >= make_qw(0))
+    if (Dy >= make_qw(0) && ay != make_qw(0))
     {
         qw D_sq = qw_sqrt(Dy);
         qw t1 = qw_div(qw_add(-by, D_sq), 2*ay);
-        qw t2 = qw_div(qw_sub(-by, D_sq), 2* ay);
+        qw t2 = qw_div(qw_sub(-by, D_sq), 2*ay);
         if (t1 >= make_qw(0) && t1 <= make_qw(1))
         {
             qw t1_2 = qw_mul(t1, t1);
@@ -594,7 +594,7 @@ bezier_squeeze_n_recent_step(
 }
 
 /* ------------------------------------------------------------------------- */
-void
+int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
@@ -677,7 +677,7 @@ bezier_calc_equidistant_points(
 
                     total_spacing = qw_add(total_spacing, qw_sqrt(dist_sq));
                     if (total_spacing >= snake_length)
-                        return;
+                        return i;
 
                     pos = next;
                     break;
@@ -687,80 +687,6 @@ bezier_calc_equidistant_points(
         }
         next_segment:;
     }
-}
 
-/* ------------------------------------------------------------------------- */
-int
-bezier_calc_stale_segments(
-    const struct cs_rb* bezier_handles,
-    const struct cs_rb* bezier_aabbs,
-    struct qwpos head_pos,
-    qw spacing,
-    qw snake_length)
-{
-    int i;
-
-    const qw spacing_sq = qw_mul(spacing, spacing);
-    qw total_spacing = 0;
-
-    /*
-     * Initial x,y positions
-     * Calculating coefficients far away from 0,0 results in precision issues,
-     * so we translate everything to 0,0 first, calculate, then translate
-     * the result back.
-     */
-    struct qwpos pos = make_qwposi(0, 0);
-    struct qwpos off = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos;
-
-    for (i = rb_count(bezier_handles) - 2; i >= 0; --i)
-    {
-        const struct bezier_handle* head = rb_peek(bezier_handles, i + 1);
-        const struct bezier_handle* tail = rb_peek(bezier_handles, i + 0);
-
-        qw t = make_qw(0);  /* Begin search at head of curve */
-        qw last_t = make_qw(0);
-
-        qw Ax[4], Ay[4];
-        calc_coeff(Ax, Ay, head, tail, off);
-
-        while (1)
-        {
-            qw t_step = make_qw2(1, 2);
-            while (1)
-            {
-                /* Calculate x,y position on curve */
-                const struct qwpos next = bezier_xy(Ax, Ay, t);
-
-                /* Check distance to previous calculated position */
-                const qw dx = qw_sub(pos.x, next.x);
-                const qw dy = qw_sub(pos.y, next.y);
-                const qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-                if (dist_sq > spacing_sq)
-                    t = qw_sub(t, t_step);
-                else
-                    t = qw_add(t, t_step);
-
-                if (t >= make_qw(1))
-                    t = make_qw(1) - 1;  /* t=1 means we'd be on the next curve segment */
-                if (t < last_t)
-                    t = last_t;
-
-                t_step /= 2;
-                if (t_step == 0)
-                {
-                    if (t == make_qw(1) - 1)
-                        goto next_segment;
-
-                    total_spacing = qw_add(total_spacing, qw_sqrt(dist_sq));
-                    if (total_spacing >= snake_length)
-                        return i;
-
-                    pos = next;
-                    break;
-                }
-            }
-            last_t = t;
-        }
-    next_segment:;
-    }
+    return 0;
 }

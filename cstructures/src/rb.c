@@ -118,8 +118,6 @@ rb_putr(struct cs_rb* rb, const void* data)
 void*
 rb_emplacer(struct cs_rb* rb)
 {
-    void* value;
-
     if (rb_is_full(rb))
         if (rb_realloc(rb, rb->capacity * 2) < 0)
             return NULL;
@@ -127,8 +125,6 @@ rb_emplacer(struct cs_rb* rb)
     rb_idx read = (rb->read - 1u) & (rb->capacity - 1u);
     rb->read = read;
     return rb->buffer + read * rb->value_size;
-
-    return value;
 }
 
 /* -------------------------------------------------------------------- */

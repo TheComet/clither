@@ -38,6 +38,12 @@ struct snake_data
      */
     struct cs_rb bezier_handles;
 
+    /* 
+     * List of axis-aligned bounding-boxes (qwaabb) for each bezier segment.
+     * This list will be 1 shorter than the list of bezier_handles.
+     */
+    struct cs_rb bezier_aabbs;
+
     /*
      * The curve is sampled N times (N = length of snake) and the results are
      * cached here. These are used for rendering.
@@ -45,6 +51,9 @@ struct snake_data
     struct cs_vector bezier_points;
 
     struct cs_rb splits;  /* struct snake_split */
+
+    /* AABB of the entire snake */
+    struct qwaabb aabb;
 };
 
 struct snake
@@ -123,6 +132,12 @@ snake_step(
 
 void
 snake_remove_stale_segments(struct snake_data* data, int stale_segments);
+
+void
+snake_remove_stale_segments_with_rollback_constraint(
+    struct snake_data* data,
+    const struct snake_head* head_ack,
+    int stale_segments);
 
 void
 snake_ack_frame(

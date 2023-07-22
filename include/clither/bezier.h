@@ -87,29 +87,10 @@ bezier_squeeze_n_recent_step(
  * \param[in] snake_length The required total length of the snake, in world
  * space.
  */
-void
+int
 bezier_calc_equidistant_points(
     struct cs_vector* bezier_points,
     const struct cs_rb* bezier_handles,
-    qw spacing,
-    qw snake_length);
-
-/*!
- * This function tries to determine how many curve segments are unnecessary at
- * the end of the snake. On the client-side, this is calculated using the
- * snake's acknowledged head position, which will be located somewhere on the
- * curve but not necessarily at the front of the curve.
- * 
- * Deleting segments using the predicted head position can lead to a situation
- * where there are not enough points/curves to roll back, and the game will
- * crash. This is why a separate call needs to be made using the acknowledged
- * head position instead.
- */
-int
-bezier_calc_stale_segments(
-    const struct cs_rb* bezier_handles,
-    const struct cs_rb* bezier_aabbs,
-    struct qwpos head_pos,
     qw spacing,
     qw snake_length);
 

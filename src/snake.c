@@ -35,13 +35,32 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
 
     rb_init(&data->points_lists, sizeof(struct cs_vector));
     rb_init(&data->bezier_handles, sizeof(struct bezier_handle));
+    rb_init(&data->bezier_aabbs, sizeof(struct qwaabb));
     vector_init(&data->bezier_points, sizeof(struct bezier_point));
 
+    /*
+     * Create the initial "points list", which is the list of points the curve
+     * is fitted to. This grows as the head moves forwards. Add the spawn pos
+     * now, as we want the curve to begin there.
+     */
     points = rb_emplace(&data->points_lists);
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &spawn_pos);
+
+    /*
+     * Create the first bezier segment, which consists of two handles. By
+     * convention all snakes start out facing to the right, but maybe this can
+     * be changed in the future.
+     */
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
+
+    /* 
+     * Create the curve's bounding box and also set the entire snake's bounding
+     * box.
+     */
+    data->aabb = *(struct qwaabb*)rb_emplace(&data->bezier_aabbs) =
+        make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -49,6 +68,7 @@ static void
 snake_data_deinit(struct snake_data* data)
 {
     vector_deinit(&data->bezier_points);
+    rb_deinit(&data->bezier_aabbs);
     rb_deinit(&data->bezier_handles);
 
     RB_FOR_EACH(&data->points_lists, struct cs_vector, points)
@@ -139,11 +159,44 @@ snake_step_head(
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+snake_recalc_aabb(struct snake_data* data)
+{
+    int i;
+
+    data->aabb = *(struct qwaabb*)rb_peek(&data->bezier_aabbs, 0);
+    for (i = 1; i < (int)rb_count(&data->bezier_aabbs); ++i)
+    {
+        data->aabb = qwaabb_union(
+            data->aabb,
+            *(struct qwaabb*)rb_peek(&data->bezier_aabbs, i));
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+aabb_from_points(struct qwaabb* bb, const struct cs_vector* points)
+{
+    int i;
+    const struct qwpos* p = vector_get(points, 0);
+    *bb = make_qwaabbqw(p->x, p->y, p->x, p->y);
+    
+    for (i = 1; i < (int)vector_count(points); ++i)
+    {
+        p = vector_get(points, i);
+        if (bb->x1 > p->x) bb->x1 = p->x;
+        if (bb->x2 < p->x) bb->x2 = p->x;
+        if (bb->y1 > p->y) bb->y1 = p->y;
+        if (bb->y2 < p->y) bb->y2 = p->y;
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 static int
 snake_update_curve_from_head(struct snake_data* data, const struct snake_head* head)
 {
-    double error_squared;
     struct cs_vector* points;
+    double error_squared;
 
     /* Append new position to the list of points */
     points = rb_peek_write(&data->points_lists);
@@ -156,6 +209,22 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
         points);
 
     /*
+     * The AABB *has* to be calculated from the points list, rather than from
+     * the bezier curve. If we calc it from the curve, then the aabb may be
+     * slightly smaller than the area spanned by the original points due to
+     * the fit error, making a weird edge case possible where the acknowledged
+     * head position can end up outside of the bounding box. If this happens,
+     * combined with large latency, it's possible a segment required for
+     * rollback is removed from the snake, leading to a crash.
+     * 
+     * In short: Use aabb_from_points() and NOT bezier_calc_aabb() here.
+     */
+    aabb_from_points(
+        rb_peek_write(&data->bezier_aabbs),
+        points);
+    snake_recalc_aabb(data);
+
+    /*
      * If the fit's error exceeds some threshold (determined empirically),
      * signal that a new segment needs to be created.
      */
@@ -166,10 +235,27 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
 static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
+    /*
+     * Create new "points list", which is the list of points the curve is fitted
+     * to. This grows as the head moves forwards. Add the current head position
+     * now, because we will want the start position of the curve to line up
+     * with the end position of the previous curve.
+     */
     struct cs_vector* points = rb_emplace(&data->points_lists);
-    bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
     vector_init(points, sizeof(struct qwpos));
     vector_push(points, &head->pos);
+
+    /*
+     * Add a new bezier handle. Since there is only one datapoint, the curve
+     * is completely defined by the current head position.
+     */
+    bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
+
+    /* Add a new bounding box, which is also defined by the current head position */
+    *(struct qwaabb*)rb_emplace(&data->bezier_aabbs) =
+        make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
+
+    /* No need to update snake's AABB because position has not changed */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -199,13 +285,43 @@ snake_step(
 void
 snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
-    assert(stale_segments + 1 >= (int)rb_count(&data->points_lists));
+    assert(stale_segments < (int)rb_count(&data->points_lists));
 
     while (stale_segments--)
     {
         vector_deinit(rb_take(&data->points_lists));
         rb_take(&data->bezier_handles);
+        rb_take(&data->bezier_aabbs);
     }
+
+    snake_recalc_aabb(data);
+}
+
+/* ------------------------------------------------------------------------- */
+void
+snake_remove_stale_segments_with_rollback_constraint(
+    struct snake_data* data,
+    const struct snake_head* head_ack,
+    int stale_segments)
+{
+    assert(stale_segments < (int)rb_count(&data->points_lists));
+
+    while (stale_segments--)
+    {
+        /* 
+         * If at any point the acknowledged head position is on a curve segment
+         * that we want to remove, abort, because this curve segment is still
+         * required for rollback.
+         */
+        if (qwaabb_qwpos(*(struct qwaabb*)rb_peek_read(&data->bezier_aabbs), head_ack->pos))
+            break;
+
+        vector_deinit(rb_take(&data->points_lists));
+        rb_take(&data->bezier_handles);
+        rb_take(&data->bezier_aabbs);
+    }
+
+    snake_recalc_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -293,6 +409,7 @@ snake_ack_frame(
                 vector_pop(points);  /* Remove duplicate point */
 
                 rb_takew(&data->bezier_handles);
+                rb_takew(&data->bezier_aabbs);
             }
 
             predicted_frame--;
