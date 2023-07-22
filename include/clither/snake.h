@@ -20,18 +20,19 @@ struct snake_split
 
 struct snake_data
 {
+    /* Username stored here */
     char* name;
 
     /*
-     * We keep a local list of points that are drawn out over time as the head
+     * We keep a local trail of points that are drawn out over time as the head
      * moves. These points are used to fit a bezier curve to the front part of
      * the snake.
      *
-     * Due to roll back requirements, this is a list of list of points. We keep
+     * Due to roll back requirements, this is a list of list of vec2's. We keep
      * a history of points from previous fits in case we have to restore to
      * a previous state. Lists are removed as the snake's head position is ACK'd.
      */
-    struct cs_rb points_lists;  /* struct cs_vector of struct qwpos */
+    struct cs_rb head_trails;  /* struct cs_vector of struct qwpos */
 
     /*
      * List of bezier handles that define the shape of the entire snake.
@@ -107,7 +108,7 @@ snake_step_head(
 
 /*!
  * \brief Steps the snake forward by 1 frame, using the given command.
- * \param[in] data The snake's data structure. Points lists and curves are
+ * \param[in] data The snake's data structure. Trails and curves are
  * updated accordingly.
  * \param[in] head The snake's head is moved forwards by calling snake_step_head().
  * \param[in] param The matching parameters for the snake's head. The params

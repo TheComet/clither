@@ -28,24 +28,24 @@ snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 static void
 snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* name)
 {
-    struct cs_vector* points;
+    struct cs_vector* trail;
 
     data->name = MALLOC(strlen(name) + 1);
     strcpy(data->name, name);
 
-    rb_init(&data->points_lists, sizeof(struct cs_vector));
+    rb_init(&data->head_trails, sizeof(struct cs_vector));
     rb_init(&data->bezier_handles, sizeof(struct bezier_handle));
     rb_init(&data->bezier_aabbs, sizeof(struct qwaabb));
     vector_init(&data->bezier_points, sizeof(struct bezier_point));
 
     /*
-     * Create the initial "points list", which is the list of points the curve
+     * Create the initial trail, which is the list of points the curve
      * is fitted to. This grows as the head moves forwards. Add the spawn pos
      * now, as we want the curve to begin there.
      */
-    points = rb_emplace(&data->points_lists);
-    vector_init(points, sizeof(struct qwpos));
-    vector_push(points, &spawn_pos);
+    trail = rb_emplace(&data->head_trails);
+    vector_init(trail, sizeof(struct qwpos));
+    vector_push(trail, &spawn_pos);
 
     /*
      * Create the first bezier segment, which consists of two handles. By
@@ -71,10 +71,10 @@ snake_data_deinit(struct snake_data* data)
     rb_deinit(&data->bezier_aabbs);
     rb_deinit(&data->bezier_handles);
 
-    RB_FOR_EACH(&data->points_lists, struct cs_vector, points)
-        vector_deinit(points);
+    RB_FOR_EACH(&data->head_trails, struct cs_vector, trail)
+        vector_deinit(trail);
     VECTOR_END_EACH
-    rb_deinit(&data->points_lists);
+    rb_deinit(&data->head_trails);
 
     FREE(data->name);
 }
@@ -175,15 +175,15 @@ snake_recalc_aabb(struct snake_data* data)
 
 /* ------------------------------------------------------------------------- */
 static void
-aabb_from_points(struct qwaabb* bb, const struct cs_vector* points)
+aabb_from_trail(struct qwaabb* bb, const struct cs_vector* trail)
 {
     int i;
-    const struct qwpos* p = vector_get(points, 0);
+    const struct qwpos* p = vector_get(trail, 0);
     *bb = make_qwaabbqw(p->x, p->y, p->x, p->y);
     
-    for (i = 1; i < (int)vector_count(points); ++i)
+    for (i = 1; i < (int)vector_count(trail); ++i)
     {
-        p = vector_get(points, i);
+        p = vector_get(trail, i);
         if (bb->x1 > p->x) bb->x1 = p->x;
         if (bb->x2 < p->x) bb->x2 = p->x;
         if (bb->y1 > p->y) bb->y1 = p->y;
@@ -195,33 +195,33 @@ aabb_from_points(struct qwaabb* bb, const struct cs_vector* points)
 static int
 snake_update_curve_from_head(struct snake_data* data, const struct snake_head* head)
 {
-    struct cs_vector* points;
+    struct cs_vector* trail;
     double error_squared;
 
-    /* Append new position to the list of points */
-    points = rb_peek_write(&data->points_lists);
-    vector_push(points, &head->pos);
+    /* Append new position to the trail */
+    trail = rb_peek_write(&data->head_trails);
+    vector_push(trail, &head->pos);
 
-    /* Fit current bezier segment to list of points */
-    error_squared = bezier_fit_head(
+    /* Fit current bezier segment to trail */
+    error_squared = bezier_fit_trail(
         rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 1),
         rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 2),
-        points);
+        trail);
 
     /*
-     * The AABB *has* to be calculated from the points list, rather than from
-     * the bezier curve. If we calc it from the curve, then the aabb may be
-     * slightly smaller than the area spanned by the original points due to
+     * The AABB *has* to be calculated from the trail, rather than from the
+     * bezier curve. If we calc it from the curve, then the aabb may be slightly
+     * smaller than the area spanned by the original points in the trail due to
      * the fit error, making a weird edge case possible where the acknowledged
      * head position can end up outside of the bounding box. If this happens,
      * combined with large latency, it's possible a segment required for
      * rollback is removed from the snake, leading to a crash.
      * 
-     * In short: Use aabb_from_points() and NOT bezier_calc_aabb() here.
+     * In short: Use aabb_from_trail() and NOT bezier_calc_aabb() here.
      */
-    aabb_from_points(
+    aabb_from_trail(
         rb_peek_write(&data->bezier_aabbs),
-        points);
+        trail);
     snake_recalc_aabb(data);
 
     /*
@@ -236,14 +236,14 @@ static void
 snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 {
     /*
-     * Create new "points list", which is the list of points the curve is fitted
+     * Create new trail, which is the list of points the curve is fitted
      * to. This grows as the head moves forwards. Add the current head position
      * now, because we will want the start position of the curve to line up
      * with the end position of the previous curve.
      */
-    struct cs_vector* points = rb_emplace(&data->points_lists);
-    vector_init(points, sizeof(struct qwpos));
-    vector_push(points, &head->pos);
+    struct cs_vector* trail = rb_emplace(&data->head_trails);
+    vector_init(trail, sizeof(struct qwpos));
+    vector_push(trail, &head->pos);
 
     /*
      * Add a new bezier handle. Since there is only one datapoint, the curve
@@ -285,11 +285,11 @@ snake_step(
 void
 snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
-    assert(stale_segments < (int)rb_count(&data->points_lists));
+    assert(stale_segments < (int)rb_count(&data->head_trails));
 
     while (stale_segments--)
     {
-        vector_deinit(rb_take(&data->points_lists));
+        vector_deinit(rb_take(&data->head_trails));
         rb_take(&data->bezier_handles);
         rb_take(&data->bezier_aabbs);
     }
@@ -304,7 +304,7 @@ snake_remove_stale_segments_with_rollback_constraint(
     const struct snake_head* head_ack,
     int stale_segments)
 {
-    assert(stale_segments < (int)rb_count(&data->points_lists));
+    assert(stale_segments < (int)rb_count(&data->head_trails));
 
     while (stale_segments--)
     {
@@ -316,7 +316,7 @@ snake_remove_stale_segments_with_rollback_constraint(
         if (qwaabb_qwpos(*(struct qwaabb*)rb_peek_read(&data->bezier_aabbs), head_ack->pos))
             break;
 
-        vector_deinit(rb_take(&data->points_lists));
+        vector_deinit(rb_take(&data->head_trails));
         rb_take(&data->bezier_handles);
         rb_take(&data->bezier_aabbs);
     }
@@ -389,24 +389,24 @@ snake_ack_frame(
          * Remove all points generated since the last acknowledged frame.
          * In rare cases this may be on the boundary of two bezier segments,
          * in which case we must also remove the segment and corresponding
-         * points list.
+         * trail.
          *
-         * Also note that the first and last points in two points lists share
-         * the same position, so when removing a bezier segment, two points
-         * need to be removed.
+         * Also note that the first and last points in two adjacent trails
+         * share the same position, so when removing a bezier segment, two
+         * points need to be removed.
          */
-        assert(rb_count(&data->points_lists) > 0);
-        struct cs_vector* points = rb_peek_write(&data->points_lists);
+        assert(rb_count(&data->head_trails) > 0);
+        struct cs_vector* trail = rb_peek_write(&data->head_trails);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
-            vector_pop(points);
-            if (vector_count(points) == 0)
+            vector_pop(trail);
+            if (vector_count(trail) == 0)
             {
-                vector_deinit(rb_takew(&data->points_lists));
-                assert(rb_count(&data->points_lists) > 0);
-                points = rb_peek_write(&data->points_lists);
+                vector_deinit(rb_takew(&data->head_trails));
+                assert(rb_count(&data->head_trails) > 0);
+                trail = rb_peek_write(&data->head_trails);
 
-                vector_pop(points);  /* Remove duplicate point */
+                vector_pop(trail);  /* Remove duplicate point */
 
                 rb_takew(&data->bezier_handles);
                 rb_takew(&data->bezier_aabbs);
