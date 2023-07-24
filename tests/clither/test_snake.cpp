@@ -449,4 +449,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(1u));
         ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsTrue());
     }
+
+    snake_deinit(&server);
+    snake_deinit(&client);
 }

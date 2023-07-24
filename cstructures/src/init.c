@@ -6,15 +6,15 @@
 CSTRUCTURES_PUBLIC_API int
 cs_init(void)
 {
-    if (cs_threadlocal_init() < 0)
-        return -1;
     if (backtrace_init() < 0)
-    {
-        cs_threadlocal_deinit();
-        return -1;
-    }
+        goto backtrace_init_failed;
+    if (cs_threadlocal_init() < 0)
+        goto threadlocal_init_failed;
 
     return 0;
+
+    threadlocal_init_failed : backtrace_deinit();
+    backtrace_init_failed   : return -1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -22,6 +22,7 @@ CSTRUCTURES_PUBLIC_API void
 cs_deinit(void)
 {
     backtrace_deinit();
+    cs_threadlocal_deinit();
 }
 
 /* ------------------------------------------------------------------------- */
