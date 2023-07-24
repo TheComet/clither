@@ -159,8 +159,12 @@ snake_step_head(
 }
 
 /* ------------------------------------------------------------------------- */
+/*!
+ * \brief Recalculates the AABB of the entire curve/snake by merging the AABBs
+ * of each segment.
+ */
 static void
-snake_recalc_aabb(struct snake_data* data)
+snake_update_aabb(struct snake_data* data)
 {
     int i;
 
@@ -174,13 +178,29 @@ snake_recalc_aabb(struct snake_data* data)
 }
 
 /* ------------------------------------------------------------------------- */
+/*!
+ * \brief Updates the front-most segment of the curve (the head).
+ */
 static void
-aabb_from_trail(struct qwaabb* bb, const struct cs_vector* trail)
+snake_update_head_trail_aabb(struct snake_data* data)
 {
     int i;
+    struct qwaabb* bb = rb_peek_write(&data->bezier_aabbs);
+    const struct cs_vector* trail = rb_peek_write(&data->head_trails);
     const struct qwpos* p = vector_get(trail, 0);
+
+    /*
+     * The AABB *has* to be calculated from the trail, rather than from the
+     * bezier curve. If we calc it from the curve, then the aabb may be slightly
+     * smaller than the area spanned by the original points in the trail due to
+     * the fit error, making a weird edge case possible where the acknowledged
+     * head position can end up outside of the bounding box. If this happens,
+     * combined with large latency, it's possible a segment required for
+     * rollback is removed from the snake, leading to a crash.
+     *
+     * In short: DON'T use bezier_calc_aabb() here.
+     */
     *bb = make_qwaabbqw(p->x, p->y, p->x, p->y);
-    
     for (i = 1; i < (int)vector_count(trail); ++i)
     {
         p = vector_get(trail, i);
@@ -207,22 +227,6 @@ snake_update_curve_from_head(struct snake_data* data, const struct snake_head* h
         rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 1),
         rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 2),
         trail);
-
-    /*
-     * The AABB *has* to be calculated from the trail, rather than from the
-     * bezier curve. If we calc it from the curve, then the aabb may be slightly
-     * smaller than the area spanned by the original points in the trail due to
-     * the fit error, making a weird edge case possible where the acknowledged
-     * head position can end up outside of the bounding box. If this happens,
-     * combined with large latency, it's possible a segment required for
-     * rollback is removed from the snake, leading to a crash.
-     * 
-     * In short: Use aabb_from_trail() and NOT bezier_calc_aabb() here.
-     */
-    aabb_from_trail(
-        rb_peek_write(&data->bezier_aabbs),
-        trail);
-    snake_recalc_aabb(data);
 
     /*
      * If the fit's error exceeds some threshold (determined empirically),
@@ -254,8 +258,6 @@ snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
     /* Add a new bounding box, which is also defined by the current head position */
     *(struct qwaabb*)rb_emplace(&data->bezier_aabbs) =
         make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
-
-    /* No need to update snake's AABB because position has not changed */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -267,7 +269,17 @@ snake_step(
     struct command command,
     uint8_t sim_tick_rate)
 {
+    int need_new_segment;
+
     snake_step_head(head, param, command, sim_tick_rate);
+
+    /* 
+     * Since AABBs are derived from the point trails and not from the curve,
+     * it's ok to call these before updating the curve.
+     */
+    snake_update_head_trail_aabb(data);
+    snake_update_aabb(data);
+
     if (snake_update_curve_from_head(data, head))
         snake_add_new_segment(data, head);
 
@@ -294,7 +306,7 @@ snake_remove_stale_segments(struct snake_data* data, int stale_segments)
         rb_take(&data->bezier_aabbs);
     }
 
-    snake_recalc_aabb(data);
+    snake_update_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -321,7 +333,7 @@ snake_remove_stale_segments_with_rollback_constraint(
         rb_take(&data->bezier_aabbs);
     }
 
-    snake_recalc_aabb(data);
+    snake_update_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -421,6 +433,7 @@ snake_ack_frame(
         handles_to_squeeze = 0;
         if (snake_update_curve_from_head(data, predicted_head))
         {
+            snake_update_head_trail_aabb(data);
             snake_add_new_segment(data, predicted_head);
             handles_to_squeeze++;
         }
@@ -430,6 +443,7 @@ snake_ack_frame(
             snake_step_head(predicted_head, param, *command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
+                snake_update_head_trail_aabb(data);
                 snake_add_new_segment(data, predicted_head);
                 handles_to_squeeze++;
             }
@@ -441,6 +455,9 @@ snake_ack_frame(
              */
             bezier_squeeze_n_recent_step(&data->bezier_handles, handles_to_squeeze, sim_tick_rate);
         COMMAND_RB_END_EACH
+
+        snake_update_head_trail_aabb(data);
+        snake_update_aabb(data);
 
         /* TODO: distance is a function of the snake's length */
         bezier_calc_equidistant_points(

@@ -187,7 +187,7 @@ TEST(NAME, roll_back_with_server_packet_loss)
     }
     mispredict_frame++;
 
-    /* Make sure we have 7 bezier segments */
+    // Make sure we have 7 bezier segments
     ASSERT_THAT(rb_count(&client.data.head_trails), Eq(7u));
     struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
     ASSERT_THAT(vector_count(&client_pts[0]), Eq(10u));
@@ -325,4 +325,128 @@ TEST(NAME, roll_back_to_first_frame)
 
     snake_deinit(&client);
     snake_deinit(&server);
+}
+
+TEST(NAME, ackd_head_is_never_outside_aabb)
+{
+    struct snake client, server;
+    snake_init(&client, make_qwposi(1, 1), "client");
+    snake_init(&server, make_qwposi(1, 1), "server");
+
+    struct snake_param param;
+    snake_param_init(&param);
+    param.base_stats.turn_speed = make_qa2(1, 16);
+    param.base_stats.min_speed = make_qw2(1, 256);
+    param.base_stats.max_speed = make_qw2(1, 128);
+    param.base_stats.boost_speed = make_qw2(1, 64);
+    param.base_stats.acceleration = 8;
+    snake_param_update(&param, {}, 1);
+
+    struct command c = command_default();
+    uint16_t frame_number = 65535 - 10;
+    for (int i = 0; i < 75; ++i, ++frame_number)
+    {
+        c.angle += 2;
+        command_rb_put(&client.command_rb, c, frame_number);
+        snake_step(&client.data, &client.head, &param, c, 60);
+    }
+
+    // Make sure we have 7 bezier segments
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(4u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(3u));
+    struct cs_vector* client_pts = (cs_vector*)rb_peek(&client.data.head_trails, 0);
+    ASSERT_THAT(vector_count(&client_pts[0]), Eq(10u));
+    ASSERT_THAT(vector_count(&client_pts[1]), Eq(36u));
+    ASSERT_THAT(vector_count(&client_pts[2]), Eq(32u));
+
+    // Reset same conditions for stepping server snake
+    c = command_default();
+    frame_number = 65535 - 10;
+
+    // ------------------------------------------------------------------------
+    // Step ack'd head up until 1 point before the end of the 1st segment
+    for (int i = 0; i < 9; ++i, ++frame_number)
+    {
+        c.angle += 2;
+        snake_step(&server.data, &server.head, &param, c, 60);
+        snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, frame_number, 60);
+
+        ASSERT_THAT(rb_count(&client.data.head_trails), Eq(3u));
+        ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(4u));
+        ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(3u));
+        // If this is ever false, it means the bounding box of the curve does not contain the acknowledged
+        // head position. The method used to calculate the AABB is therefore incorrect.
+        ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsTrue());
+    }
+    // Trying to remove the segment should fail, because the ack'd head is still within the bounding box
+    snake_remove_stale_segments_with_rollback_constraint(&client.data, &client.head_ack, 1);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(4u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(3u));
+
+    // Next step should remove the segment
+    c.angle += 2;
+    snake_step(&server.data, &server.head, &param, c, 60);
+    snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, frame_number, 60);
+    frame_number++;
+
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(4u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(3u));
+    ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsFalse());
+    snake_remove_stale_segments_with_rollback_constraint(&client.data, &client.head_ack, 1);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(2u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(2u));
+
+    // ------------------------------------------------------------------------
+    // Step ack'd head up until 1 point before the end of the 2nd segment
+    for (int i = 0; i < 34; ++i, ++frame_number)
+    {
+        c.angle += 2;
+        snake_step(&server.data, &server.head, &param, c, 60);
+        snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, frame_number, 60);
+
+        ASSERT_THAT(rb_count(&client.data.head_trails), Eq(2u));
+        ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(3u));
+        ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(2u));
+        // If this is ever false, it means the bounding box of the curve does not contain the acknowledged
+        // head position. The method used to calculate the AABB is therefore incorrect.
+        ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsTrue());
+    }
+    // Trying to remove the segment should fail, because the ack'd head is still within the bounding box
+    snake_remove_stale_segments_with_rollback_constraint(&client.data, &client.head_ack, 1);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(2u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(2u));
+
+    // Next step should remove the segment
+    c.angle += 2;
+    snake_step(&server.data, &server.head, &param, c, 60);
+    snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, frame_number, 60);
+    frame_number++;
+
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(2u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(3u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(2u));
+    ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsFalse());
+    snake_remove_stale_segments_with_rollback_constraint(&client.data, &client.head_ack, 1);
+    ASSERT_THAT(rb_count(&client.data.head_trails), Eq(1u));
+    ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(2u));
+    ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(1u));
+
+    // ------------------------------------------------------------------------
+    // Step ack'd head up until 1 point before the end of the 3nd segment
+    for (int i = 0; i < 30; ++i, ++frame_number)
+    {
+        c.angle += 2;
+        snake_step(&server.data, &server.head, &param, c, 60);
+        snake_ack_frame(&client.data, &client.head_ack, &client.head, &server.head, &param, &client.command_rb, frame_number, 60);
+
+        ASSERT_THAT(rb_count(&client.data.head_trails), Eq(1u));
+        ASSERT_THAT(rb_count(&client.data.bezier_handles), Eq(2u));
+        ASSERT_THAT(rb_count(&client.data.bezier_aabbs), Eq(1u));
+        ASSERT_THAT(qwaabb_qwpos(*(struct qwaabb*)rb_peek(&client.data.bezier_aabbs, 0), client.head_ack.pos), IsTrue());
+    }
 }
