@@ -272,15 +272,16 @@ snake_step(
     int need_new_segment;
 
     snake_step_head(head, param, command, sim_tick_rate);
+    need_new_segment = snake_update_curve_from_head(data, head);
 
-    /* 
-     * Since AABBs are derived from the point trails and not from the curve,
-     * it's ok to call these before updating the curve.
+    /*
+     * Have to call these after updating curve data, because only then is the
+     * point trail updated (and this is required for AABBs)
      */
     snake_update_head_trail_aabb(data);
     snake_update_aabb(data);
 
-    if (snake_update_curve_from_head(data, head))
+    if (need_new_segment)
         snake_add_new_segment(data, head);
 
     bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
