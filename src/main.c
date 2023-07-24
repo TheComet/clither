@@ -258,8 +258,6 @@ run_client(const struct args* a)
     log_set_prefix("Client: ");
     log_set_colors(COL_B_GREEN, COL_RESET);
 
-    cs_threadlocal_init();
-
     /* If McDonald's WiFi is enabled, start that */
     client_init(&client);
 #if defined(CLITHER_MCD)
@@ -490,7 +488,6 @@ client_connect_failed:
 start_mcd_failed:
 #endif
     client_deinit(&client);
-    cs_threadlocal_deinit();
     log_set_colors("", "");
     log_set_prefix("");
 }

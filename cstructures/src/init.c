@@ -21,8 +21,8 @@ cs_init(void)
 CSTRUCTURES_PUBLIC_API void
 cs_deinit(void)
 {
-    backtrace_deinit();
     cs_threadlocal_deinit();
+    backtrace_deinit();
 }
 
 /* ------------------------------------------------------------------------- */
