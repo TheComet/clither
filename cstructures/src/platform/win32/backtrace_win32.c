@@ -22,7 +22,8 @@ backtrace_init(void)
 void
 backtrace_deinit(void)
 {
-    SymCleanup(hProcess);
+    /* This crashes for some reason?
+    SymCleanup(hProcess);*/
 }
 
 /* ------------------------------------------------------------------------- */
