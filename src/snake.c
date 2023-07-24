@@ -416,19 +416,22 @@ snake_ack_frame(
             if (vector_count(trail) == 0)
             {
                 vector_deinit(rb_takew(&data->head_trails));
-                assert(rb_count(&data->head_trails) > 0);
-                trail = rb_peek_write(&data->head_trails);
-
-                vector_pop(trail);  /* Remove duplicate point */
-
                 rb_takew(&data->bezier_handles);
                 rb_takew(&data->bezier_aabbs);
+
+                /* Remove duplicate point */
+                assert(rb_count(&data->head_trails) > 0);
+                trail = rb_peek_write(&data->head_trails);
+                vector_pop(trail);
             }
 
             predicted_frame--;
         }
 
-        /* Restore head positions to authoritative state */
+        /* 
+         * Restore head positions to authoritative state, which counts as the
+         * first "step" forwards
+         */
         *acknowledged_head = *authoritative_head;
         *predicted_head = *authoritative_head;
         handles_to_squeeze = 0;
