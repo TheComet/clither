@@ -3,6 +3,7 @@
 
 # IDE files
 CMakeLists.txt.user
+*.kdev4
 
 # temporary files
 *.swp
