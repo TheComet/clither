@@ -55,7 +55,7 @@ snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* nam
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
     bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
 
-    /* 
+    /*
      * Create the curve's bounding box and also set the entire snake's bounding
      * box.
      */
@@ -73,7 +73,7 @@ snake_data_deinit(struct snake_data* data)
 
     RB_FOR_EACH(&data->head_trails, struct cs_vector, trail)
         vector_deinit(trail);
-    VECTOR_END_EACH
+    RB_END_EACH
     rb_deinit(&data->head_trails);
 
     FREE(data->name);
@@ -321,7 +321,7 @@ snake_remove_stale_segments_with_rollback_constraint(
 
     while (stale_segments--)
     {
-        /* 
+        /*
          * If at any point the acknowledged head position is on a curve segment
          * that we want to remove, abort, because this curve segment is still
          * required for rollback.
@@ -390,6 +390,7 @@ snake_ack_frame(
     if (snake_heads_are_equal(acknowledged_head, authoritative_head) == 0)
     {
         int handles_to_squeeze;
+        struct cs_vector* trail;
 
         log_dbg("Rollback from frame %d to %d\n"
             "  ackd head: pos=%d,%d, angle=%d, speed=%d\n"
@@ -409,7 +410,7 @@ snake_ack_frame(
          * points need to be removed.
          */
         assert(rb_count(&data->head_trails) > 0);
-        struct cs_vector* trail = rb_peek_write(&data->head_trails);
+        trail = rb_peek_write(&data->head_trails);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
             vector_pop(trail);
@@ -428,7 +429,7 @@ snake_ack_frame(
             predicted_frame--;
         }
 
-        /* 
+        /*
          * Restore head positions to authoritative state, which counts as the
          * first "step" forwards
          */
@@ -470,8 +471,6 @@ snake_ack_frame(
             qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
             snake_length(param));
     }
-
-    /* TODO: remove curve segments */
 }
 
 /* ------------------------------------------------------------------------- */
