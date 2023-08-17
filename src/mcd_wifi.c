@@ -52,52 +52,82 @@ run_mcd_wifi(const void* args)
     log_info("McDonald's WiFi hosted with %dms ping, %d%% packet loss\n", a->mcd_latency, a->mcd_loss);
     while (signals_exit_requested() == 0)
     {
-        bytes_received = net_recvfrom(client_fd, buf, MAX_UDP_PACKET_SIZE, client_addr, client_addrlen);
-        if (bytes_received < 0)
-            break;
-        if (bytes_received > 0)
+        /* Read packets from client */
+        while (1)
         {
-            if (rand() > (int64_t)a->mcd_loss * RAND_MAX / 100)
-            {
-                uint8_t* msg = MALLOC(bytes_received + 3);
-                msg[0] = ((uint16_t)bytes_received) >> 8;
-                msg[1] = ((uint16_t)bytes_received) & 0xFF;
-                msg[2] = TICK_RATE * a->mcd_latency / 1000;
-                memcpy(msg + 3, buf, bytes_received);
-                vector_push(&client_buf, &msg);
-                client_active = 1;
-
-                if (rand() > (int64_t)a->mcd_dup * RAND_MAX / 100)
-                {
-                    uint8_t* dup_msg = MALLOC(bytes_received + 3);
-                    memcpy(dup_msg, msg, bytes_received + 3);
-                    vector_push(&client_buf, &dup_msg);
-                }
-
-                if (rand() > (int64_t)a->mcd_reorder * RAND_MAX / 100)
-                    msg[2] -= (int64_t)rand() * 10 / RAND_MAX;
-            }
-        }
-
-retry_recv:
-        bytes_received = net_recv(*(int*)vector_back(&server_fds), buf, MAX_UDP_PACKET_SIZE);
-        if (bytes_received < 0)
-        {
-            if (vector_count(&server_fds) == 1)
+            bytes_received = net_recvfrom(client_fd, buf, MAX_UDP_PACKET_SIZE, client_addr, client_addrlen);
+            if (bytes_received < 0)
+                goto exit_mcd;
+            if (bytes_received == 0)
                 break;
-            net_close(*(int*)vector_pop(&server_fds));
-            goto retry_recv;
+
+            /* Lose packet randomly */
+            if (rand() < (int64_t)a->mcd_loss * RAND_MAX / 100)
+                continue;
+
+            /* Add packet to queue */
+            uint8_t* msg = MALLOC(bytes_received + 3);
+            msg[0] = ((uint16_t)bytes_received) >> 8;
+            msg[1] = ((uint16_t)bytes_received) & 0xFF;
+            msg[2] = TICK_RATE * a->mcd_latency / 1000;
+            memcpy(msg + 3, buf, bytes_received);
+            vector_push(&client_buf, &msg);
+            client_active = 1;
+
+            /* Duplicate packet randmoly */
+            if (rand() < (int64_t)a->mcd_dup * RAND_MAX / 100)
+            {
+                uint8_t* dup_msg = MALLOC(bytes_received + 3);
+                memcpy(dup_msg, msg, bytes_received + 3);
+                vector_push(&client_buf, &dup_msg);
+            }
+
+            /* Reorder packet randomly */
+            if (rand() < (int64_t)a->mcd_reorder * RAND_MAX / 100)
+                msg[2] += (int64_t)rand() * TICK_RATE / RAND_MAX;
         }
-        if (bytes_received > 0)
+
+        /* Read packets from server */
+        while (1)
         {
+        retry_recv:
+            bytes_received = net_recv(*(int*)vector_back(&server_fds), buf, MAX_UDP_PACKET_SIZE);
+            if (bytes_received < 0)
+            {
+                /* This file descriptor is invalid, close it and try with the next one */
+                if (vector_count(&server_fds) == 1)
+                    goto exit_mcd;
+                net_close(*(int*)vector_pop(&server_fds));
+                goto retry_recv;
+            }
+            if (bytes_received == 0)
+                break;
+
+            /* Lose packet randomly */
+            if (rand() < (int64_t)a->mcd_loss * RAND_MAX / 100)
+                continue;
+
             char* msg = MALLOC(bytes_received + 3);
             msg[0] = ((uint16_t)bytes_received) >> 8;
             msg[1] = ((uint16_t)bytes_received) & 0xFF;
             msg[2] = TICK_RATE * a->mcd_latency / 1000;
-            memcpy(msg+3, buf, bytes_received);
+            memcpy(msg + 3, buf, bytes_received);
             vector_push(&server_buf, &msg);
+
+            /* Duplicate packet randmoly */
+            if (rand() < (int64_t)a->mcd_dup * RAND_MAX / 100)
+            {
+                uint8_t* dup_msg = MALLOC(bytes_received + 3);
+                memcpy(dup_msg, msg, bytes_received + 3);
+                vector_push(&server_buf, &dup_msg);
+            }
+
+            /* Reorder packet randomly */
+            if (rand() < (int64_t)a->mcd_reorder * RAND_MAX / 100)
+                msg[2] += (int64_t)rand() * TICK_RATE / RAND_MAX;
         }
 
+        /* Send any pending client messages to server */
         VECTOR_FOR_EACH(&client_buf, char*, pmsg)
             char* msg = *pmsg;
             if (msg[2] == 0)
@@ -111,6 +141,7 @@ retry_recv:
                 msg[2]--;
         VECTOR_END_EACH
 
+        /* Send any pending server messages to client */
         VECTOR_FOR_EACH(&server_buf, char*, pmsg)
             char* msg = *pmsg;
             if (msg[2] == 0)
@@ -128,6 +159,7 @@ retry_recv:
         if (tick_wait(&tick) > TICK_RATE * 3)  /* 3 seconds */
             tick_skip(&tick);
     }
+exit_mcd:;
     log_info("Stopping McDonald's WiFi\n");
 
     VECTOR_FOR_EACH(&client_buf, char*, pmsg)
