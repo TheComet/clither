@@ -16,19 +16,19 @@
 
 #define CBF_WINDOW_SIZE 20
 
-struct client_table_entry
+struct server_client
 {
-    struct cs_vector pending_msgs;       /* struct msg* */
+    struct cs_vector pending_msgs;         /* struct msg* */
     struct cs_hashmap bezier_handles_ack;  /* struct bezier_handle */
     int timeout_counter;
-    int cbf_window[CBF_WINDOW_SIZE];     /* "Command Buffer Fullness" window */
+    int cbf_window[CBF_WINDOW_SIZE];       /* "Command Buffer Fullness" window */
     cs_btree_key snake_id;
     uint16_t last_command_msg_frame;
 };
 
-#define CLIENT_TABLE_FOR_EACH(table, k, v) \
-    HASHMAP_FOR_EACH(table, void, struct client_table_entry, k, v)
-#define CLIENT_TABLE_END_EACH \
+#define SERVER_CLIENT_FOR_EACH(table, k, v) \
+    HASHMAP_FOR_EACH(table, void, struct server_client, k, v)
+#define SERVER_CLIENT_END_EACH \
     HASHMAP_END_EACH
 
 #define MALICIOUS_CLIENT_FOR_EACH(table, k, v) \
@@ -38,7 +38,7 @@ struct client_table_entry
 
 /* ------------------------------------------------------------------------- */
 static void
-client_remove(struct server* server, struct world* world, void* addr, struct client_table_entry* client)
+client_remove(struct server* server, struct world* world, void* addr, struct server_client* client)
 {
     world_remove_snake(world, client->snake_id);
     msg_queue_deinit(&client->pending_msgs);
@@ -51,7 +51,7 @@ mark_client_as_malicious_and_drop(
     struct server* server,
     struct world* world,
     void* addr,
-    struct client_table_entry* client,
+    struct server_client* client,
     int timeout)
 {
     hashmap_insert(&server->malicious_clients, addr, &timeout);
@@ -79,7 +79,7 @@ server_init(
     hashmap_init(
         &server->client_table,
         (uint32_t)addrlen,
-        sizeof(struct client_table_entry));
+        sizeof(struct server_client));
     hashmap_init(
         &server->malicious_clients,
         (uint32_t)addrlen,
@@ -101,15 +101,15 @@ server_deinit(struct server* server)
     hashmap_deinit(&server->banned_clients);
     hashmap_deinit(&server->malicious_clients);
 
-    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
         msg_queue_deinit(&client->pending_msgs);
-    CLIENT_TABLE_END_EACH
+    SERVER_CLIENT_END_EACH
     hashmap_deinit(&server->client_table);
 }
 
 /* ------------------------------------------------------------------------- */
 static void
-cbf_add(struct client_table_entry* client, int value)
+cbf_add(struct server_client* client, int value)
 {
     memmove(
         &client->cbf_window[1],
@@ -120,7 +120,7 @@ cbf_add(struct client_table_entry* client, int value)
 
 /* ------------------------------------------------------------------------- */
 static int
-cbf_lower_bound(struct client_table_entry* client)
+cbf_lower_bound(struct server_client* client)
 {
     int i;
     int lower = INT32_MAX;
@@ -136,7 +136,7 @@ server_send_pending_data(struct server* server)
 {
     char buf[MAX_UDP_PACKET_SIZE];
 
-    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
         uint8_t type;
         int len = 0;
 
@@ -187,12 +187,12 @@ server_send_pending_data(struct server* server)
             net_sendto(server->udp_sock, buf, len, addr, server->client_table.key_size);
             client->timeout_counter++;
         }
-    CLIENT_TABLE_END_EACH
+    SERVER_CLIENT_END_EACH
 }
 
 /* ------------------------------------------------------------------------- */
 static void
-server_queue(struct client_table_entry* client, struct msg* msg)
+server_queue(struct server_client* client, struct msg* msg)
 {
     vector_push(&client->pending_msgs, &msg);
 }
@@ -204,13 +204,13 @@ server_queue_snake_data(
     const struct world* world,
     uint16_t frame_number)
 {
-    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
         struct snake* snake = world_get_snake(world, client->snake_id);
         server_queue(client, msg_snake_head(&snake->head, frame_number));
-    CLIENT_TABLE_END_EACH
+    SERVER_CLIENT_END_EACH
 
-    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
-        CLIENT_TABLE_FOR_EACH(&server->client_table, other_addr, other_client)
+    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
+        SERVER_CLIENT_FOR_EACH(&server->client_table, other_addr, other_client)
             struct snake* snake;
             struct snake* other_snake;
 
@@ -230,8 +230,8 @@ server_queue_snake_data(
 
             /* TODO queue bezier handles */
 
-        CLIENT_TABLE_END_EACH
-    CLIENT_TABLE_END_EACH
+        SERVER_CLIENT_END_EACH
+    SERVER_CLIENT_END_EACH
 }
 
 /* ------------------------------------------------------------------------- */
@@ -250,7 +250,7 @@ server_recv(
     log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
-    CLIENT_TABLE_FOR_EACH(&server->client_table, addr, client)
+    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
         client->timeout_counter++;
 
         if (client->timeout_counter > settings->client_timeout * settings->net_tick_rate)
@@ -260,7 +260,7 @@ server_recv(
             log_warn("Client %s timed out\n", ipstr);
             client_remove(server, world, addr, client);
         }
-    CLIENT_TABLE_END_EACH
+    SERVER_CLIENT_END_EACH
 
     /* Update malicious client timeouts */
     MALICIOUS_CLIENT_FOR_EACH(&server->malicious_clients, addr, timeout)
@@ -276,7 +276,7 @@ server_recv(
     /* We may need to read more than one UDP packet */
     while (1)
     {
-        struct client_table_entry* client;
+        struct server_client* client;
         bytes_received = net_recvfrom(server->udp_sock, buf, MAX_UDP_PACKET_SIZE,
             client_addr, server->client_table.key_size);
 
@@ -504,4 +504,82 @@ server_recv(
     }
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void*
+server_run(const void* args)
+{
+#define INSTANCE_FOR_EACH(btree, port, instance) \
+    BTREE_FOR_EACH(btree, struct server_instance, port, instance)
+#define INSTANCE_END_EACH \
+    BTREE_END_EACH
+
+    struct cs_btree instances;
+    struct server_settings settings;
+    const struct args* a = args;
+
+    /* Change log prefix and color for server log messages */
+    log_set_prefix("Server: ");
+    log_set_colors(COL_B_CYAN, COL_RESET);
+
+    cs_threadlocal_init();
+
+    btree_init(&instances, sizeof(struct server_instance));
+
+    if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
+        goto load_settings_failed;
+
+    /*
+     * Create the default server instance. This is always active, regardless of
+     * how many players are connected.
+     */
+    {
+        /*
+         * The port passed in over the command line has precedence over the port
+         * specified in the config file. Note that the port obtained from the
+         * settings structure is always initialized, regardless of whether the
+         * config file existed or not.
+         */
+        struct server_instance* instance;
+        const char* port = *a->port ? a->port : settings.port;
+        cs_btree_key key = atoi(port);
+        assert(key != 0);
+
+        instance = btree_emplace_new(&instances, key);
+        assert(instance != NULL);
+        instance->settings = &settings;
+        instance->ip = a->ip;
+        strcpy(instance->port, port);
+
+        log_dbg("Starting default server instance\n");
+        if (thread_start(&instance->thread, run_server_instance, instance) < 0)
+        {
+            log_err("Failed to start the default server instance! Can't continue\n");
+            goto start_default_instance_failed;
+        }
+    }
+
+    /* For now we don't create more instances once the server fills up */
+    INSTANCE_FOR_EACH(&instances, port, instance)
+        thread_join(instance->thread, 0);
+    INSTANCE_END_EACH
+    log_dbg("Joined all server instances\n");
+
+    server_settings_save(&settings, a->config_file);
+
+    btree_deinit(&instances);
+    cs_threadlocal_deinit();
+    log_set_colors("", "");
+    log_set_prefix("");
+
+    return (void*)0;
+
+start_default_instance_failed:
+load_settings_failed:
+    btree_deinit(&instances);
+    cs_threadlocal_deinit();
+    log_set_colors("", "");
+    log_set_prefix("");
+    return (void*)-1;
 }

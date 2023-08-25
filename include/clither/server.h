@@ -60,6 +60,13 @@ server_send_pending_data(struct server* server);
  *
  */
 int
-server_recv(struct server* server, const struct server_settings* settings, struct world* world, uint16_t frame_number);
+server_recv(
+    struct server* server,
+    const struct server_settings* settings,
+    struct world* world,
+    uint16_t frame_number);
+
+void*
+server_run(const void* args);
 
 C_END

@@ -1,10 +1,22 @@
+#include "clither/args.h"
+#include "clither/camera.h"
+#include "clither/cli_colors.h"
 #include "clither/client.h"
+#include "clither/gfx.h"
+#include "clither/input.h"
 #include "clither/log.h"
+#include "clither/mcd_wifi.h"
+#include "clither/msg.h"
 #include "clither/msg_queue.h"
 #include "clither/net.h"
+#include "clither/resource_pack.h"
+#include "clither/signals.h"
 #include "clither/snake.h"
+#include "clither/thread.h"
+#include "clither/tick.h"
 #include "clither/world.h"
 
+#include "cstructures/init.h"
 #include "cstructures/memory.h"
 
 #include <string.h>
@@ -360,3 +372,264 @@ retry_recv:
     client->timeout_counter = 0;
     return retval;
 }
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_GFX)
+void*
+client_run(const struct args* a)
+{
+#if defined(CLITHER_MCD)
+    struct thread mcd_thread;
+#endif
+    struct world world;
+    struct input input;
+    struct command command;
+    const struct gfx_interface* gfx_iface;
+    struct gfx* gfx;
+    struct resource_pack* pack;
+    struct camera camera;
+    struct client client;
+    struct tick sim_tick;
+    struct tick net_tick;
+    int tick_lag;
+
+    /* Change log prefix and color for server log messages */
+    log_set_prefix("Client: ");
+    log_set_colors(COL_B_GREEN, COL_RESET);
+
+    /* If McDonald's WiFi is enabled, start that */
+    client_init(&client);
+#if defined(CLITHER_MCD)
+    if (a->mcd_latency > 0)
+    {
+        if (thread_start(&mcd_thread, run_mcd_wifi, a) < 0)
+            goto start_mcd_failed;
+        if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
+            goto client_connect_failed;
+    }
+    else
+#endif
+    {
+        /*
+         * TODO: In the future the GUI will take care of connecting. Here we do
+         * it immediately because there is no menu.
+         */
+        if (client_connect(&client, a->ip, a->port, "username") < 0)
+            goto client_connect_failed;
+    }
+
+    /* Init all graphics and create window */
+    gfx_iface = gfx_backends[a->gfx_backend];
+    log_info("Using graphics backend: %s\n", gfx_iface->name);
+    if (gfx_iface->global_init() < 0)
+        goto init_gfx_failed;
+    gfx = gfx_iface->create(800, 600);
+    if (gfx == NULL)
+        goto create_gfx_failed;
+
+    pack = resource_pack_parse("packs/horror");
+    if (pack == NULL)
+        goto parse_resource_pack_failed;
+    if (gfx_iface->load_resource_pack(gfx, pack) < 0)
+        goto load_resource_pack_failed;
+
+    input_init(&input);
+    camera_init(&camera);
+    command = command_default();
+    world_init(&world);
+
+    log_info("Client started\n");
+
+    tick_cfg(&sim_tick, client.sim_tick_rate);
+    tick_cfg(&net_tick, client.net_tick_rate);
+    while (signals_exit_requested() == 0)
+    {
+        int net_update;
+
+        gfx_iface->poll_input(gfx, &input);
+        if (input.quit)
+            break;
+
+        /* Switch graphics backends */
+        if (input.next_gfx_backend || input.prev_gfx_backend)
+        {
+            int count;
+            int idx, new_idx;
+
+            for (count = 0; gfx_backends[count]; ++count) {}
+            for (idx = 0; gfx_backends[idx]; ++idx)
+                if (gfx_iface == gfx_backends[idx])
+                    break;
+
+            if (input.next_gfx_backend)
+                new_idx = idx + 1 >= count ? 0 : idx + 1;
+            else
+                new_idx = idx - 1 < 0 ? count - 1 : idx - 1;
+
+            /*
+             * On Windows it is possible to create a new backend and then
+             * destroy the previous backend, however, on linux this doesn't
+             * seem to work. GL contexts aren't properly transferred to the
+             * new instance. This is why we destroy first - then create
+             */
+            gfx_iface->destroy(gfx);
+            gfx_iface->global_deinit();
+
+            gfx_iface = gfx_backends[new_idx];
+            if (gfx_iface->global_init() < 0)
+                goto init_new_gfx_failed;
+
+            gfx = gfx_iface->create(640, 480);
+            if (gfx == NULL)
+                goto create_new_gfx_failed;
+
+            if (gfx_iface->load_resource_pack(gfx, pack) < 0)
+                goto load_new_resource_pack_failed;
+
+            /* Clears the button press for switching graphics backends */
+            input_init(&input);
+            gfx_iface->poll_input(gfx, &input);
+
+            goto create_new_gfx_success;
+
+        load_new_resource_pack_failed : gfx_iface->destroy(gfx);
+        create_new_gfx_failed         : gfx_iface->global_deinit();
+        init_new_gfx_failed           :
+            /* Try to restore to previous backend. Shouldn't fail but who knows */
+            gfx_iface = gfx_backends[idx];
+            if (gfx_iface->global_init() < 0)
+                break;
+            gfx = gfx_iface->create(640, 480);
+            if (gfx == NULL)
+            {
+                gfx_iface->global_deinit();
+                break;
+            }
+        } create_new_gfx_success:;
+
+        /* Receive net data */
+        net_update = tick_advance(&net_tick);
+        if (net_update && client.state != CLIENT_DISCONNECTED)
+        {
+            int action = client_recv(&client, &world);
+
+            /* Some error occurred */
+            if (action == -1)
+                break;
+
+            if (action == 1)
+            {
+                /*
+                 * We may have to match our tick rates to the server, because
+                 * the server can freely configure these values. If the client
+                 * disconnected then sim_tick_rate and net_tick_rate are reset
+                 * to their default values, so in this case we also want to
+                 * update the tick rate.
+                 */
+                tick_cfg(&sim_tick, client.sim_tick_rate);
+                tick_cfg(&net_tick, client.net_tick_rate);
+                log_dbg("Sim tick rate: %d, net tick rate: %d\n", client.sim_tick_rate, client.net_tick_rate);
+            }
+        }
+
+        /* sim_update */
+        if (client.state == CLIENT_CONNECTED)
+        {
+            struct snake* snake = world_get_snake(&world, client.snake_id);
+
+            /*
+             * Map "input" to "command". This converts the mouse and keyboard
+             * information into a structure that lets us step the snake forwards
+             * in time.
+             */
+            command = gfx_iface->input_to_command(command, &input, gfx, &camera, snake->head.pos);
+
+            /*
+             * Append the new command to the ring buffer of unconfirmed commands.
+             * This entire list is sent to the server every network update so
+             * in the event of packet loss, the server always has a complete
+             * history of what our snake has done, frame by frame. When the server
+             * acknowledges our move, we remove all commands that date back before
+             * and up to that point in time from the list again.
+             */
+            command_rb_put(&snake->command_rb, command, client.frame_number);
+
+            /* Update snake */
+            snake_param_update(&snake->param, snake->param.upgrades, snake->param.food_eaten + 1);
+            snake_remove_stale_segments_with_rollback_constraint(&snake->data, &snake->head_ack,
+                snake_step(&snake->data, &snake->head, &snake->param, command, client.sim_tick_rate));
+
+            /* Update world */
+            world_step(&world, client.frame_number, client.sim_tick_rate);
+
+            camera_update(&camera, &snake->head, &snake->param, client.sim_tick_rate);
+
+            if (net_update)
+            {
+                /* Send all unconfirmed commands (unreliable) */
+                msg_commands(&client.pending_msgs, &snake->command_rb);
+            }
+        }
+
+        if (net_update && client.state != CLIENT_DISCONNECTED)
+        {
+            if (client_send_pending_data(&client) < 0)
+                break;
+        }
+
+        gfx_iface->step_anim(gfx, client.sim_tick_rate);
+
+        /*
+         * Skip rendering if we are lagging, as this is most likely the source
+         * of the delay. If for some reason we end up 3 seconds behind where we
+         * should be, quit.
+         */
+        tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
+        if (tick_lag == 0)
+            gfx_iface->draw_world(gfx, &world, &camera);
+        else
+        {
+            log_dbg("Client is lagging! %d frames behind\n", tick_lag);
+            if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+            {
+                tick_skip(&sim_tick);
+                break;
+            }
+        }
+
+        if (client.warp > 0)
+            client.warp--;
+        if (client.warp < 0)
+            client.warp++;
+
+        client.frame_number++;
+    }
+    log_info("Stopping client\n");
+
+    world_deinit(&world);
+load_resource_pack_failed:
+    resource_pack_destroy(pack);
+parse_resource_pack_failed:
+    gfx_iface->destroy(gfx);
+create_gfx_failed:
+    gfx_iface->global_deinit();
+init_gfx_failed:
+    if (client.state != CLIENT_DISCONNECTED)
+        client_disconnect(&client);
+client_connect_failed:
+    /* Stop McDonald's WiFi if necessary */
+#if defined(CLITHER_MCD)
+    if (a->mcd_latency > 0)
+    {
+        thread_join(mcd_thread, 0);
+        log_dbg("Joined McDonald's WiFi thread\n");
+    }
+start_mcd_failed:
+#endif
+    client_deinit(&client);
+    log_set_colors("", "");
+    log_set_prefix("");
+
+    return NULL;
+}
+#endif

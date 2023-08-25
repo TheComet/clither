@@ -78,4 +78,18 @@ client_send_pending_data(struct client* client);
 int
 client_recv(struct client* client, struct world* world);
 
+/*!
+ * \brief The main loop of the client.
+ * \warning This should function assumes that cs_init_threadlocal() was called.
+ * If you want to run this function in a thread, then you have to manage all
+ * threadlocal global state at the call-sight. This function was designed this
+ * way because in all cases, after everything is initialized, the client will
+ * run in the foreground.
+ * \param[in] a Command line arguments.
+ */
+#if defined(CLITHER_GFX)
+void*
+client_run(const struct args* a);
+#endif
+
 C_END

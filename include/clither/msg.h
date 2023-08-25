@@ -2,7 +2,7 @@
 
 #include "clither/config.h"
 #include "clither/q.h"
-#include "clither/snake_head.h"
+#include "clither/snake.h"
 #include <stdint.h>
 
 C_BEGIN

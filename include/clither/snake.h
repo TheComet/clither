@@ -2,13 +2,19 @@
 
 #include "clither/config.h"
 #include "clither/command.h"
-#include "clither/snake_head.h"
 #include "clither/snake_param.h"
 
 #include "cstructures/rb.h"
 #include "cstructures/vector.h"
 
 C_BEGIN
+
+struct snake_head
+{
+    struct qwpos pos;
+    qa angle;
+    uint8_t speed;
+};
 
 struct snake_split
 {
@@ -39,7 +45,7 @@ struct snake_data
      */
     struct cs_rb bezier_handles;
 
-    /* 
+    /*
      * List of axis-aligned bounding-boxes (qwaabb) for each bezier segment.
      * This list will be 1 shorter than the list of bezier_handles.
      */
@@ -76,6 +82,15 @@ snake_deinit(struct snake* snake);
 
 void
 snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
+
+static inline int
+snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
+{
+    return a->pos.x == b->pos.x
+        && a->pos.y == b->pos.y
+        && a->angle == b->angle
+        && a->speed == b->speed;
+}
 
 /*
  * \brief Holds the snake in-place and doesn't simulate. Only
@@ -117,10 +132,10 @@ snake_step_head(
  * \param[in] command The command to step forwards with.
  * \param[in] sim_tick_rate The simulation speed.
  * \return Returns the number of segments that could be removed from the curve.
- * 
+ *
  * On the server-side this value should be passed to a proceeding call to
  * snake_remove_stale_segments().
- * 
+ *
  * On the client-side, this is handled by snake_ack_frame() instead.
  */
 int
