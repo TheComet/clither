@@ -1,5 +1,4 @@
 #include "clither/tests.h"
-#include "cstructures/init.h"
 #include "gmock/gmock.h"
 
 int
