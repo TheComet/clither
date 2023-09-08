@@ -322,10 +322,10 @@ memory_get_memory_usage(void)
 
 #else /* CSTRUCTURES_MEMORY_DEBUGGING */
 
-int memory_init(void)                   { return 0; }
-uintptr_t memory_deinit(void)           { return 0; }
-uintptr_t memory_get_num_allocs(void)   { return 0; }
-uintptr_t memory_get_memory_usage(void) { return 0; }
+int memory_threadlocal_init(void)         { return 0; }
+uintptr_t memory_threadlocal_deinit(void) { return 0; }
+uintptr_t memory_get_num_allocs(void)     { return 0; }
+uintptr_t memory_get_memory_usage(void)   { return 0; }
 
 #endif /* CSTRUCTURES_MEMORY_DEBUGGING */
 

@@ -331,6 +331,9 @@ retry_recv:
 
             case MSG_SNAKE_HEAD: {
                 struct snake* snake = world_get_snake(world, client->snake_id);
+                if (snake == NULL)
+                    break;  /* Have to wait for MSG_SNAKE_CREATE to arrive */
+
                 snake_ack_frame(
                     &snake->data,
                     &snake->head_ack,
@@ -346,7 +349,6 @@ retry_recv:
                 struct snake* snake = world_get_snake(world, pp.snake_bezier.snake_id);
                 if (snake == NULL)
                     break;  /* Have to wait for MSG_SNAKE_CREATE to arrive */
-
 
             } break;
 
