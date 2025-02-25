@@ -78,7 +78,7 @@ void command_queue_deinit(struct command_queue* cmdq)
 void command_queue_put(
     struct command_queue* cmdq, struct command command, uint16_t frame_number)
 {
-    if (command_rb_count(cmdq->rb) > 0)
+    if (rb_count(cmdq->rb) > 0)
     {
         uint16_t expected_frame = command_queue_frame_end(cmdq);
         if (expected_frame != frame_number)
@@ -99,7 +99,7 @@ command_queue_take_or_predict(struct command_queue* cmdq, uint16_t frame_number)
     if (u16_lt_wrap(frame_number, command_queue_frame_begin(cmdq)))
         return cmdq->last_command_read;
 
-    while (command_rb_count(cmdq->rb) > 0)
+    while (rb_count(cmdq->rb) > 0)
     {
         uint16_t frame = command_queue_frame_begin(cmdq);
         cmdq->last_command_read = command_rb_take(cmdq->rb);
@@ -138,6 +138,6 @@ struct command command_queue_find_or_predict(
         "command_queue_find_or_predict(): No command for frame %d, "
         "predicting...\n",
         frame_number);
-    return command_rb_count(crb->rb) == 0 ? crb->last_command_read
-                                          : *command_rb_peek_write(crb->rb);
+    return rb_count(crb->rb) == 0 ? crb->last_command_read
+                                  : *rb_peek_write(crb->rb);
 }

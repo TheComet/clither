@@ -3,6 +3,7 @@
 /* Config ------------------------------------------------------------------- */
 
 #cmakedefine CLITHER_BENCHMARKS
+#cmakedefine CLITHER_DEBUG_ASSERT
 #cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
@@ -40,11 +41,10 @@
 
 #if defined(CLITHER_DEBUG_ASSERT)
 #   undef CLITHER_DEBUG_ASSERT
-#   define CLITHER_DEBUG_ASSERT(condition, error) do {     \
-        if (!(condition)) { error; assert(condition); }   \
-    } while(0)
+#   define CLITHER_DEBUG_ASSERT(condition, error) \
+        ((void)((condition) ? error : (0)), assert(condition))
 #else
-#   define CLITHER_DEBUG_ASSERT(condition, error)
+#   define CLITHER_DEBUG_ASSERT(condition, error) ((void)0)
 #endif
 
 /* Version string ----------------------------------------------------------- */

@@ -55,9 +55,9 @@ int client_connect(
 
 void client_disconnect(struct client* client);
 
-static inline void client_queue(struct client* client, struct msg* m)
+static inline int client_queue(struct client* client, struct msg* m)
 {
-    msg_queue_put_realloc(&client->pending_msgs, m);
+    return msg_queue_push(&client->pending_msgs, m);
 }
 
 int client_send_pending_data(struct client* client);

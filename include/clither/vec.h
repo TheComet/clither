@@ -242,16 +242,7 @@
      * @param[in] end The index of the last element to reverse (exclusive).    \
      */                                                                        \
     void prefix##_reverse_range(                                               \
-        struct prefix* v, int##bits##_t start, int##bits##_t end);             \
-                                                                               \
-    static inline int##bits##_t prefix##_count(const struct prefix* v)         \
-    {                                                                          \
-        return v ? v->count : 0;                                               \
-    }                                                                          \
-    static inline int##bits##_t prefix##_capacity(const struct prefix* v)      \
-    {                                                                          \
-        return v ? v->capacity : 0;                                            \
-    }
+        struct prefix* v, int##bits##_t start, int##bits##_t end);
 
 #define VEC_DEFINE(prefix, T, bits) VEC_DEFINE_FULL(prefix, T, bits, 32, 2)
 
@@ -259,7 +250,7 @@
     static int prefix##_realloc(struct prefix** v, int##bits##_t elems)        \
     {                                                                          \
         int            header = offsetof(struct prefix, data);                 \
-        int            data = sizeof((*v)->data[0]) * elems;                   \
+        int            data = sizeof(T) * elems;                               \
         struct prefix* new_mem                                                 \
             = (struct prefix*)mem_realloc(*v, header + data);                  \
         if (new_mem == NULL)                                                   \
@@ -290,7 +281,7 @@
             *v = NULL;                                                         \
             return 0;                                                          \
         }                                                                      \
-        else if (count <= prefix##_count(*v))                                  \
+        else if (count <= vec_count(*v))                                       \
         {                                                                      \
             (*v)->count = count;                                               \
             return 0;                                                          \
@@ -314,8 +305,8 @@
         }                                                                      \
         else                                                                   \
         {                                                                      \
-            int            header = sizeof(**(v)) - sizeof((*v)->data[0]);     \
-            int            data = sizeof((*v)->data[0]) * (*v)->count;         \
+            int            header = sizeof(**(v)) - sizeof(T);                 \
+            int            data = sizeof(T) * (*v)->count;                     \
             struct prefix* new_v                                               \
                 = (struct prefix*)mem_realloc(*v, header + data);              \
             /* Doesn't matter if this fails -- vector will remain in tact */   \
@@ -351,16 +342,13 @@
         memmove(                                                               \
             (*v)->data + i + 1,                                                \
             (*v)->data + i,                                                    \
-            ((*v)->count - i - 1) * sizeof((*v)->data[0]));                    \
+            ((*v)->count - i - 1) * sizeof(T));                                \
         return &(*(v))->data[i];                                               \
     }                                                                          \
     void prefix##_erase(struct prefix* v, int##bits##_t i)                     \
     {                                                                          \
         --(v->count);                                                          \
-        memmove(                                                               \
-            v->data + i,                                                       \
-            v->data + i + 1,                                                   \
-            (v->count - i) * sizeof(v->data[0]));                              \
+        memmove(v->data + i, v->data + i + 1, (v->count - i) * sizeof(T));     \
     }                                                                          \
     int prefix##_retain(                                                       \
         struct prefix* v, int (*on_element)(T * elem, void* user), void* user) \
@@ -389,11 +377,13 @@
             prefix##_swap_values(v, start++, end);                             \
     }
 
-#define vec_data(v)    ((v) ? (v)->data : NULL)
-#define vec_begin(v)   ((v) ? (v)->data : NULL)
-#define vec_end(v)     ((v) ? (v)->data + (v)->count : NULL)
-#define vec_begin_r(v) ((v) ? (v)->data + (v)->count - 1 : NULL)
-#define vec_end_r(v)   ((v) ? (v)->data - 1 : NULL)
+#define vec_data(v)     ((v) ? (v)->data : NULL)
+#define vec_begin(v)    ((v) ? (v)->data : NULL)
+#define vec_count(v)    ((v) ? (v)->count : 0)
+#define vec_capacity(v) ((v) ? (v)->capacity : 0)
+#define vec_end(v)      ((v) ? (v)->data + (v)->count : NULL)
+#define vec_begin_r(v)  ((v) ? (v)->data + (v)->count - 1 : NULL)
+#define vec_end_r(v)    ((v) ? (v)->data - 1 : NULL)
 
 /*!
  * @brief Returns the first element of the vector.

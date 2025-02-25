@@ -1,14 +1,10 @@
 #pragma once
 
-#include "clither/config.h"
 #include "clither/q.h"
 #include "clither/snake.h"
+#include "clither/vec.h"
 #include <stdint.h>
 
-struct cs_hashmap;
-struct cs_rb;
-struct cs_vector;
-struct command_rb;
 struct food_cluster;
 struct snake;
 
@@ -46,6 +42,8 @@ struct __attribute__((packed)) msg
     enum msg_type type;
     uint8_t       payload[1];
 };
+
+VEC_DECLARE(msg_vec, struct msg*, 16)
 
 union parsed_payload
 {
@@ -136,15 +134,15 @@ struct msg* msg_join_deny_server_full(const char* error);
 
 struct msg* msg_leave(void);
 
-void msg_commands(struct cs_vector* msgs, const struct command_rb* rb);
+void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq);
 
 int msg_commands_unpack_into(
-    struct command_rb* rb,
-    const uint8_t*     payload,
-    uint8_t            payload_len,
-    uint16_t           frame_number,
-    uint16_t*          first_frame,
-    uint16_t*          last_frame);
+    struct command_queue* cmdq,
+    const uint8_t*        payload,
+    uint8_t               payload_len,
+    uint16_t              frame_number,
+    uint16_t*             first_frame,
+    uint16_t*             last_frame);
 
 struct msg* msg_feedback(int8_t diff, uint16_t frame_number);
 
@@ -152,13 +150,12 @@ struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 
 void msg_snake_bezier(
-    struct cs_vector*        msgs,
-    uint16_t                 snake_id,
-    const struct cs_rb*      bezier_handles,
-    const struct cs_hashmap* bezier_handles_ackd);
+    struct msg_vec**               msgs,
+    uint16_t                       snake_id,
+    const struct bezier_handle_rb* bezier_handles);
 
 struct msg* msg_snake_bezier_ack(
-    struct cs_rb* bezier_handles, const union parsed_payload* pp);
+    struct bezier_handle_rb* bezier_handles, const union parsed_payload* pp);
 
 struct msg*
 msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number);

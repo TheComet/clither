@@ -395,24 +395,24 @@ struct msg* msg_leave(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
+void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
 {
-    int             i, bit, byte, send_count, send_idx;
-    struct command* c;
-    struct msg*     m;
-    uint16_t        first_frame_number;
+    int                   i, bit, byte, send_count, send_idx;
+    const struct command* c;
+    struct msg*           m;
+    uint16_t              first_frame_number;
 
-    assert(command_rb_count(rb) > 0);
-    first_frame_number = command_rb_frame_begin(rb);
+    assert(command_queue_count(cmdq) > 0);
+    first_frame_number = command_queue_frame_begin(cmdq);
 
     /*
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
-    for (send_idx = 0; send_idx < (int)command_rb_count(rb);
+    for (send_idx = 0; send_idx < command_queue_count(cmdq);
          send_idx += 100, first_frame_number += 100)
     {
-        send_count = command_rb_count(rb) - send_idx;
+        send_count = command_queue_count(cmdq) - send_idx;
         if (send_count > 100)
             send_count = 100;
 
@@ -440,7 +440,7 @@ void msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
         m->payload[2] = (uint8_t)(send_count - 1);
 
         /* First command structure */
-        c = command_rb_peek(rb, 0);
+        c = command_queue_peek(cmdq, 0);
         m->payload[3] = c->angle;
         m->payload[4] = c->speed;
         m->payload[5] = c->action; /* 3 bits */
@@ -487,8 +487,8 @@ void msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
 
         for (i = 1; i < send_count; i++)
         {
-            struct command* prev = command_rb_peek(rb, i - 1);
-            struct command* next = command_rb_peek(rb, i);
+            const struct command* prev = command_queue_peek(cmdq, i - 1);
+            const struct command* next = command_queue_peek(cmdq, i);
 
             if (next->action == prev->action)
                 CLEAR_NEXT_BIT(); /* Indicate nothing has changed */
@@ -508,11 +508,11 @@ void msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
 
         for (i = 1; i < send_count; ++i)
         {
-            uint8_t         da, dv;
-            struct command* prev = command_rb_peek(rb, i - 1);
-            struct command* next = command_rb_peek(rb, i);
-            int             da_i32 = next->angle - prev->angle + 3;
-            int             dv_i32 = next->speed - prev->speed + 15;
+            uint8_t               da, dv;
+            const struct command* prev = command_queue_peek(cmdq, i - 1);
+            const struct command* next = command_queue_peek(cmdq, i);
+            int                   da_i32 = next->angle - prev->angle + 3;
+            int                   dv_i32 = next->speed - prev->speed + 15;
             if (da_i32 > 128)
                 da_i32 -= 256;
             if (da_i32 < -128)
@@ -544,18 +544,18 @@ void msg_commands(struct cs_vector* msgs, const struct command_rb* rb)
         /* Adjust the actual payload length */
         assert(byte <= m->payload_len);
         m->payload_len = byte;
-        vector_push(msgs, &m);
+        msg_vec_push(msgs, m);
     }
 }
 
 /* ------------------------------------------------------------------------- */
 int msg_commands_unpack_into(
-    struct command_rb* rb,
-    const uint8_t*     payload,
-    uint8_t            payload_len,
-    uint16_t           frame_number,
-    uint16_t*          first_frame,
-    uint16_t*          last_frame)
+    struct command_queue* cmdq,
+    const uint8_t*        payload,
+    uint8_t               payload_len,
+    uint16_t              frame_number,
+    uint16_t*             first_frame,
+    uint16_t*             last_frame)
 {
     int            i, bit, byte, mouse_data_offset;
     uint8_t        command_count;
@@ -578,7 +578,7 @@ int msg_commands_unpack_into(
     command.speed = payload[4];
     command.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        command_rb_put(rb, command, first_frame_number);
+        command_queue_put(cmdq, command, first_frame_number);
     log_net(
         "  angle=%x, speed=%x, action=%x\n",
         command.angle,
@@ -661,7 +661,7 @@ int msg_commands_unpack_into(
         command.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            command_rb_put(rb, command, first_frame_number + i + 1);
+            command_queue_put(cmdq, command, first_frame_number + i + 1);
         log_net(
             "  angle=%x, speed=%x, action=%x\n",
             command.angle,
@@ -726,22 +726,10 @@ struct msg* msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 }
 
 /* ------------------------------------------------------------------------- */
-static int bezier_handles_pending(
-    const struct cs_rb*      bezier_handles,
-    const struct cs_hashmap* bezier_handles_ackd)
-{
-    int count = 0;
-    RB_FOR_EACH(bezier_handles, struct bezier_handle, handle)
-    if (!hashmap_exists(bezier_handles_ackd, handle))
-        count++;
-    RB_END_EACH
-    return count;
-}
 void msg_snake_bezier(
-    struct cs_vector*        msgs,
-    uint16_t                 snake_id,
-    const struct cs_rb*      bezier_handles,
-    const struct cs_hashmap* bezier_handles_ackd)
+    struct msg_vec**               msgs,
+    uint16_t                       snake_id,
+    const struct bezier_handle_rb* bezier_handles)
 {
     struct msg* m;
     uint16_t    handle_idx_start, handle_idx_end;
@@ -754,10 +742,10 @@ void msg_snake_bezier(
     m = NULL;
     byte = 0;
     handle_idx_start = 0;
-    for (i = 0; i != (int)rb_count(bezier_handles); ++i)
+    for (i = 0; i != rb_count(bezier_handles); ++i)
     {
         const struct bezier_handle* handle = rb_peek(bezier_handles, i);
-        if (hashmap_find(bezier_handles_ackd, handle))
+        if (handle->ackd)
             continue;
 
         if (m == NULL || byte + handle_size >= m->payload_len)
@@ -770,7 +758,7 @@ void msg_snake_bezier(
                 m->payload[4] = (handle_idx_end >> 8) & 0xFF;
                 m->payload[5] = (handle_idx_end >> 0) & 0xFF;
                 m->payload_len = byte;
-                vector_push(msgs, &m);
+                msg_vec_push(msgs, m);
             }
 
             byte = 0;
@@ -803,25 +791,27 @@ void msg_snake_bezier(
         m->payload[4] = (handle_idx_end >> 8) & 0xFF;
         m->payload[5] = (handle_idx_end >> 0) & 0xFF;
         m->payload_len = byte;
-        vector_push(msgs, &m);
+        msg_vec_push(msgs, m);
     }
 }
 
 /* ------------------------------------------------------------------------- */
 static struct bezier_handle* find_bezier_handle_in_rb(
-    const struct bezier_handle* handle, const struct cs_rb* rb)
+    const struct bezier_handle* handle, struct bezier_handle_rb* rb)
 {
-    RB_FOR_EACH(rb, struct bezier_handle, existing_handle)
-    if (bezier_handles_equal_pos(handle, existing_handle))
-        return existing_handle;
-    RB_END_EACH
+    struct bezier_handle* existing_handle;
+    int                   i;
+    rb_for_each(rb, i, existing_handle)
+    {
+        if (bezier_handles_equal_pos(handle, existing_handle))
+            return existing_handle;
+    }
     return NULL;
 }
 struct msg* msg_snake_bezier_ack(
-    struct cs_rb* bezier_handles, const union parsed_payload* pp)
+    struct bezier_handle_rb* bezier_handles, const union parsed_payload* pp)
 {
     int            i;
-    int            byte = 0;
     const uint8_t* buf = pp->snake_bezier.handles_buf;
     for (i = pp->snake_bezier.handle_idx_start;
          i != pp->snake_bezier.handle_idx_end;
@@ -906,4 +896,6 @@ msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number)
 
         m->payload[byte] = (m->payload[byte] & ~mask1) | x1;
     }
+
+    return m;
 }

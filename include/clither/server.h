@@ -8,7 +8,7 @@ struct world;
 
 HM_DECLARE(client_hm, struct net_addr, struct server_client*, 16)
 HM_DECLARE(malicious_clients_hm, struct net_addr, int, 16)
-HM_DECLARE(banned_clients_hm, struct net_addr, void, 16)
+HM_DECLARE(banned_clients_hm, struct net_addr, char, 16)
 
 struct server
 {
@@ -65,5 +65,3 @@ int server_recv(
     uint16_t                      frame_number);
 
 void* server_run(const void* args);
-
-C_END

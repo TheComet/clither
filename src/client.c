@@ -167,6 +167,7 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
 
     ctx->len += msg->payload_len + 2;
+    return VEC_RETAIN;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -182,7 +183,6 @@ int client_send_pending_data(struct client* client)
 
     if (ctx.len > 0)
     {
-
         /*
          * The client was initialized with a list of possible sockets. This is
          * because we can't know without first communicating with the server
@@ -192,11 +192,10 @@ int client_send_pending_data(struct client* client)
          */
     retry_send:
         log_net("Sending UDP packet, size=%d\n", ctx.len);
-        CLITHER_DEBUG_ASSERT(
-            sockfd_vec_count(client->udp_sockfds) > 0, (void)0);
+        CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0, (void)0);
         if (net_send(*vec_last(client->udp_sockfds), ctx.buf, ctx.len) < 0)
         {
-            if (sockfd_vec_count(client->udp_sockfds) == 1)
+            if (vec_count(client->udp_sockfds) == 1)
                 return -1;
             net_close(*sockfd_vec_pop(client->udp_sockfds));
             log_info("Attempting to use next socket\n");
@@ -217,23 +216,22 @@ int client_send_pending_data(struct client* client)
 /* ------------------------------------------------------------------------- */
 int client_recv(struct client* client, struct world* world)
 {
-    uint8_t buf[MAX_UDP_PACKET_SIZE];
+    uint8_t buf[NET_MAX_UDP_PACKET_SIZE];
     int     i;
     int     bytes_received;
     int     retval = 0;
 
-    assert(vector_count(&client->udp_sockfds) > 0);
+    CLITHER_DEBUG_ASSERT(sockfd_vec_count(&client->udp_sockfds) > 0, (void)0);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
 retry_recv:
-    bytes_received = net_recv(
-        *(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
+    bytes_received = net_recv(*vec_last(client->udp_sockfds), buf, sizeof(buf));
     if (bytes_received < 0)
     {
-        if (vector_count(&client->udp_sockfds) == 1)
+        if (vec_count(client->udp_sockfds) == 1)
             return -1;
-        net_close(*(int*)vector_pop(&client->udp_sockfds));
+        net_close(*sockfd_vec_pop(client->udp_sockfds));
         log_info("Attempting to use next socket\n");
         goto retry_recv;
     }
@@ -278,7 +276,7 @@ retry_recv:
                     break;
 
                 /* Stop sending join request messages */
-                msg_queue_remove_type(&client->pending_msgs, MSG_JOIN_REQUEST);
+                msg_queue_remove_type(client->pending_msgs, MSG_JOIN_REQUEST);
 
                 /*
                  * Regardless of whether we succeed or fail, the client is
@@ -332,7 +330,7 @@ retry_recv:
                     world,
                     client->snake_id,
                     pp.join_accept.spawn,
-                    client->username);
+                    str_cstr(client->username));
 
                 log_net(
                     "MSG_JOIN_ACCEPT:\n"
@@ -385,7 +383,7 @@ retry_recv:
                     &snake->head,
                     &pp.snake_head.head,
                     &snake->param,
-                    &snake->command_rb,
+                    &snake->cmdq,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
             }

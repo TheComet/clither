@@ -137,6 +137,7 @@ void bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
     bh->angle = angle;
     bh->len_forwards = 0;
     bh->len_backwards = 0;
+    bh->ackd = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -280,7 +281,7 @@ double bezier_fit_trail(
      * regression. The following special cases calculate the coefficients
      * directly when there are 4 or less points.
      */
-    if (qwpos_vec_count(trail) <= 2)
+    if (vec_count(trail) <= 2)
     {
         head->pos = *pm;
         head->angle = tail->angle;
@@ -288,7 +289,7 @@ double bezier_fit_trail(
         tail->len_forwards = 0;
         return 0;
     }
-    if (qwpos_vec_count(trail) == 3)
+    if (vec_count(trail) == 3)
     {
         const struct qwpos* p1 = vec_get(trail, 1);
         qw                  head_dx = qw_sub(p1->x, pm->x);
@@ -311,7 +312,7 @@ double bezier_fit_trail(
 
         return 0;
     }
-    if (qwpos_vec_count(trail) == 4)
+    if (vec_count(trail) == 4)
     {
         const struct qwpos* p1 = vec_get(trail, 1);
         const struct qwpos* p2 = vec_get(trail, 2);
@@ -389,10 +390,10 @@ double bezier_fit_trail(
      *                   [ 1   tn ]
      */
     memset(T, 0, sizeof(T));
-    for (i = 1; i < (int)qwpos_vec_count(trail) - 1; ++i)
+    for (i = 1; i < vec_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, qwpos_vec_count(trail) - 1);
+        q16_16 t = make_q16_16_2(i, vec_count(trail) - 1);
         q16_16 t2 = q16_16_mul(t, t);
 
         T[0][0] = q16_16_add(T[0][0], make_q16_16(1));
@@ -447,10 +448,10 @@ double bezier_fit_trail(
      */
     memset(Cx, 0, sizeof(Cx));
     memset(Cy, 0, sizeof(Cy));
-    for (i = 1; i < (int)qwpos_vec_count(trail) - 1; ++i)
+    for (i = 1; i < vec_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, qwpos_vec_count(trail) - 1);
+        q16_16 t = make_q16_16_2(i, vec_count(trail) - 1);
 
         /* r(t) = (t-t0)(t-tm) = (t-0)(t-1) = t(t-1) */
         q16_16 tm = make_q16_16(1); /* tm = 1 (pass through last point) */
@@ -590,16 +591,16 @@ double bezier_fit_trail(
 
     /* Error estimation */
     mse_error = 0;
-    for (i = 1; i < (int)qwpos_vec_count(trail) - 1; ++i)
+    for (i = 1; i < vec_count(trail) - 1; ++i)
     {
         /* t = [0..1] */
-        q16_16 t = make_q16_16_2(i, qwpos_vec_count(trail) - 1);
+        q16_16 t = make_q16_16_2(i, vec_count(trail) - 1);
 
         const struct qwpos* p = vec_get(trail, i);
         mse_error += binary_search_min_dist_sq(p, Ax, Ay, t);
     }
 
-    return q16_16_div(mse_error, make_q16_16(qwpos_vec_count(trail) - 1));
+    return q16_16_div(mse_error, make_q16_16(vec_count(trail) - 1));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -616,7 +617,7 @@ void bezier_squeeze_n_recent_step(
 
 /* ------------------------------------------------------------------------- */
 int bezier_calc_equidistant_points(
-    struct bezier_point_vec*       bezier_points,
+    struct bezier_point_vec**      bezier_points,
     const struct bezier_handle_rb* bezier_handles,
     qw                             spacing,
     qw                             snake_length)
@@ -633,14 +634,13 @@ int bezier_calc_equidistant_points(
      * the result back.
      */
     struct qwpos pos = make_qwposi(0, 0);
-    struct qwpos off
-        = ((struct bezier_handle*)rb_peek_write(bezier_handles))->pos;
+    struct qwpos off = rb_peek_write(bezier_handles)->pos;
 
     /* Insert first point */
-    vector_clear(bezier_points);
+    bezier_point_vec_clear(*bezier_points);
     {
-        struct bezier_point*  bp = vector_emplace(bezier_points);
-        struct bezier_handle* head = rb_peek_write(bezier_handles);
+        struct bezier_point* bp = bezier_point_vec_emplace(bezier_points);
+        const struct bezier_handle* head = rb_peek_write(bezier_handles);
         bp->pos.x = qw_add(pos.x, off.x);
         bp->pos.y = qw_add(pos.y, off.y);
         bp->dir.x = -qa_cos(head->angle);
@@ -690,7 +690,7 @@ int bezier_calc_equidistant_points(
                         goto next_segment;
 
                     /* Insert new point and calculate tangent vector */
-                    bp = vector_emplace(bezier_points);
+                    bp = bezier_point_vec_emplace(bezier_points);
                     bp->pos.x = qw_add(next.x, off.x);
                     bp->pos.y = qw_add(next.y, off.y);
                     bp->dir.x = -qw_add(

@@ -11,16 +11,15 @@ enum mode
 #if defined(CLITHER_BENCHMARKS)
     MODE_BENCHMARKS,
 #endif
-#if defined(CLITHER_SERVER)
-    MODE_HEADLESS,
-#endif
 #if defined(CLITHER_GFX)
     MODE_CLIENT,
 #endif
 #if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
     MODE_CLIENT_AND_SERVER,
 #endif
-    MODE_COUNT
+#if defined(CLITHER_SERVER)
+    MODE_HEADLESS
+#endif
 };
 
 struct args
@@ -33,7 +32,7 @@ struct args
     const char* port;
 #if defined(CLITHER_MCD)
     const char* mcd_port;
-    int mcd_latency, mcd_loss, mcd_dup, mcd_reorder;
+    int         mcd_latency, mcd_loss, mcd_dup, mcd_reorder;
 #endif
 #if defined(CLITHER_GFX)
     int gfx_backend;
@@ -48,5 +47,4 @@ struct args
  * \param[in] argv Array of pointers to argument strings.
  * \return
  */
-int
-args_parse(struct args* a, int argc, char* argv[]);
+int args_parse(struct args* a, int argc, char* argv[]);

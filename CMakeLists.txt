@@ -25,6 +25,7 @@ cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend
 cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
+option (CLITHER_MEMORY_DEBUGGING "Enable tracking malloc/realloc/free calls to detect memory leaks" ON)
 option (CLITHER_SERVER "Build the server component. Requires threads." ON)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 
@@ -138,8 +139,6 @@ add_executable (clither
     "src/strlist.c"
     "src/world.c"
 
-    "src/main.c"
-
     $<$<BOOL:${CLITHER_SERVER}>:
         src/server.c
         src/server_settings.c>
@@ -223,7 +222,9 @@ add_executable (clither
         benchmarks/clither/bench_hashmap.cpp
         benchmarks/clither/bench_std_unordered_map.cpp
         benchmarks/clither/bench_std_vector.cpp
-        benchmarks/clither/bench_vec.cpp>)
+        benchmarks/clither/bench_vec.cpp>
+
+        "src/main.c")
 target_include_directories (clither
     PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

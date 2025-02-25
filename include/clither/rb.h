@@ -30,31 +30,6 @@
         T             data[1];                                                 \
     };                                                                         \
                                                                                \
-    /* NOTE:                                                                   \
-     * For the following 4 functions it is very important that each member     \
-     * is only accessed once. */                                               \
-    static inline int##bits##_t prefix##_count(const struct prefix* rb)        \
-    {                                                                          \
-        return rb ? (rb->write - rb->read) & (rb->capacity - 1) : 0;           \
-    }                                                                          \
-                                                                               \
-    static inline int##bits##_t prefix##_space(const struct prefix* rb)        \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        return (rb->read - rb->write - 1) & (rb->capacity - 1);                \
-    }                                                                          \
-    static inline int prefix##_is_full(const struct prefix* rb)                \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        return ((rb->write + 1) & (rb->capacity - 1)) == rb->read;             \
-    }                                                                          \
-                                                                               \
-    static inline int prefix##_is_empty(const struct prefix* rb)               \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        return rb->read == rb->write;                                          \
-    }                                                                          \
-                                                                               \
     /*!                                                                        \
      * @brief This must be called before operating on any ring buffer.         \
      * Initializes the structure to a defined state.                           \
@@ -96,20 +71,19 @@
      */                                                                        \
     static inline int prefix##_put(struct prefix* rb, T elem)                  \
     {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        {                                                                      \
-            int##bits##_t write = rb->write;                                   \
-            if (prefix##_is_full(rb))                                          \
-                return -1;                                                     \
-            rb->write = (write + 1) & ((int##bits##_t)rb->capacity - 1);       \
-            rb->data[write] = elem;                                            \
-            return 0;                                                          \
-        }                                                                      \
+        int##bits##_t write;                                                   \
+        CLITHER_DEBUG_ASSERT(rb, 0);                                           \
+        write = rb->write;                                                     \
+        if (rb_is_full(rb))                                                    \
+            return -1;                                                         \
+        rb->write = (write + 1) & ((int##bits##_t)rb->capacity - 1);           \
+        rb->data[write] = elem;                                                \
+        return 0;                                                              \
     }                                                                          \
     static inline int prefix##_put_realloc(struct prefix** rb, T elem)         \
     {                                                                          \
         int##bits##_t write;                                                   \
-        if (*rb == NULL || prefix##_is_full(*rb))                              \
+        if (*rb == NULL || rb_is_full(*rb))                                    \
             if (prefix##_resize(rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY)  \
                 != 0)                                                          \
             {                                                                  \
@@ -137,7 +111,7 @@
     {                                                                          \
         int##bits##_t write = rb->write;                                       \
         T*            value = &rb->data[write];                                \
-        if (prefix##_is_full(rb))                                              \
+        if (rb_is_full(rb))                                                    \
             return NULL;                                                       \
         rb->write = (write + 1) & ((int##bits##_t)rb->capacity - 1);           \
         return value;                                                          \
@@ -146,7 +120,7 @@
     {                                                                          \
         int##bits##_t write;                                                   \
         T*            value;                                                   \
-        if (*rb == NULL || prefix##_is_full(*rb))                              \
+        if (*rb == NULL || rb_is_full(*rb))                                    \
             if (prefix##_resize(rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY)  \
                 != 0)                                                          \
             {                                                                  \
@@ -163,47 +137,41 @@
      * returns it.                                                             \
      * @warning The ring buffer must contain at least 1 element.               \
      * Use @see rb_is_empty() first if you need to.                            \
-     * @warning The returned pointer could be invalidated if the buffer is     \
-     * resized.                                                                \
      * @param[in] rb Pointer to a ring buffer of type RB(T,B)*                 \
      */                                                                        \
     static inline T prefix##_take(struct prefix* rb)                           \
     {                                                                          \
-        CLITHER_DEBUG_ASSERT(                                                  \
-            !prefix##_is_empty(rb), log_err("rb is empty\n"));                 \
-        {                                                                      \
-            int##bits##_t read = rb->read;                                     \
-            T             data = rb->data[read];                               \
-            rb->read = (read + 1) & ((int##bits##_t)rb->capacity - 1);         \
-            return data;                                                       \
-        }                                                                      \
+        int##bits##_t read;                                                    \
+        T             data;                                                    \
+        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb), log_err("rb is empty\n"));      \
+        read = rb->read;                                                       \
+        data = rb->data[read];                                                 \
+        rb->read = (read + 1) & ((int##bits##_t)rb->capacity - 1);             \
+        return data;                                                           \
+    }                                                                          \
+                                                                               \
+    /*!                                                                        \
+     * @brief Removes an element from the writing-end of the ring buffer and   \
+     * returns it.                                                             \
+     * @warning The ring buffer must contain at least 1 element.               \
+     * Use @see rb_is_empty() first if you need to.                            \
+     * @param[in] rb Pointer to a ring buffer of type RB(T,B)*                 \
+     */                                                                        \
+    static inline T prefix##_takew(struct prefix* rb)                          \
+    {                                                                          \
+        int##bits##_t write;                                                   \
+        T             data;                                                    \
+        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb), log_err("rb is empty\n"));      \
+        write = (rb->write - 1) & ((int##bits##_t)rb->capacity - 1);           \
+        data = rb->data[write];                                                \
+        rb->write = write;                                                     \
+        return data;                                                           \
     }                                                                          \
                                                                                \
     static inline void prefix##_clear(struct prefix* rb)                       \
     {                                                                          \
         CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
         rb->read = rb->write;                                                  \
-    }                                                                          \
-                                                                               \
-    static inline T* prefix##_peek_read(struct prefix* rb)                     \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        return &rb->data[rb->read];                                            \
-    }                                                                          \
-                                                                               \
-    static inline T* prefix##_peek_write(struct prefix* rb)                    \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        return &rb->data[(rb->write - 1) & ((int##bits##_t)rb->capacity - 1)]; \
-    }                                                                          \
-                                                                               \
-    static inline T* prefix##_peek(struct prefix* rb, int##bits##_t idx)       \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
-        {                                                                      \
-            int##bits##_t offset = (rb->read + idx) & (rb->capacity - 1);      \
-            return &rb->data[offset];                                          \
-        }                                                                      \
     }
 
 #define IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
@@ -247,6 +215,34 @@
         return 0;                                                              \
     }
 
+#define rb_count(rb)                                                           \
+    ((rb) ? ((rb)->write - (rb)->read) & ((rb)->capacity - 1) : 0)
+
+#define rb_space(rb)                                                           \
+    ((rb) ? ((rb)->read - (rb)->write - 1) & ((rb)->capacity - 1) : 0)
+
+#define rb_is_full(rb)                                                         \
+    ((rb) ? (((rb)->write + 1) & ((rb)->capacity - 1)) == (rb)->read : 1)
+
+#define rb_is_empty(rb) ((rb) ? (rb)->read == (rb)->write : 1)
+
+#define rb_peek(rb, idx)                                                       \
+    (CLITHER_DEBUG_ASSERT(                                                     \
+         (rb) && (rb)->read != (rb)->write && (idx) >= 0                       \
+             && (idx) < ((rb)->read - (rb)->write - 1) & ((rb)->capacity - 1), \
+         log_err("idx: %d\n", idx)),                                           \
+     &(rb)->data[((rb)->read + (idx)) & ((rb)->capacity - 1)])
+
+#define rb_peek_read(rb)                                                       \
+    (CLITHER_DEBUG_ASSERT(                                                     \
+         (rb) && (rb)->read != (rb)->write, log_err("rb is empty\n")),         \
+     &(rb)->data[(rb)->read])
+
+#define rb_peek_write(rb)                                                      \
+    (CLITHER_DEBUG_ASSERT(                                                     \
+         (rb) && (rb)->read != (rb)->write, log_err("rb is empty\n")),         \
+     &(rb)->data[((rb)->write - 1) & ((rb)->capacity - 1)])
+
 /*!
  * @brief Iterates over the elements in a ring buffer.
  *
@@ -257,5 +253,6 @@
  *   }
  */
 #define rb_for_each(rb, i, elem)                                               \
-    for (i = (rb)->read; i != (rb)->write && ((elem = &(rb)->data[i]) || 1);   \
+    for (i = (rb) ? (rb)->read : 0;                                            \
+         i != ((rb) ? (rb)->write : 0) && ((elem = &(rb)->data[i]) || 1);      \
          i = (i + 1) & ((rb)->capacity - 1))

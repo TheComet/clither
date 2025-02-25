@@ -38,8 +38,7 @@ struct command_queue
  * \brief Returns the default or fallback command. The snake is initialized with
  * this command by default, until the client changes it.
  */
-struct command
-command_default(void);
+struct command command_default(void);
 
 /*!
  * \brief Constructs a new command given the previous command and parameters.
@@ -55,18 +54,15 @@ command_default(void);
  * and 1 maps to the maximum (non-boost) speed. \param[in] action The current
  * action to perform.
  */
-struct command
-command_make(
+struct command command_make(
     struct command      prev,
     float               radians,
     float               normalized_speed,
     enum command_action action);
 
-void
-command_queue_init(struct command_queue* cmdq);
+void command_queue_init(struct command_queue* cmdq);
 
-void
-command_queue_deinit(struct command_queue* cmdq);
+void command_queue_deinit(struct command_queue* cmdq);
 
 /*!
  * \brief Inserts a new command into the ring buffer.
@@ -79,8 +75,7 @@ command_queue_deinit(struct command_queue* cmdq);
  * one after the previously inserted command. If the ring buffer is empty then
  * inserting always works.
  */
-void
-command_queue_put(
+void command_queue_put(
     struct command_queue* cmdq, struct command command, uint16_t frame_number);
 
 /*!
@@ -90,8 +85,7 @@ command_queue_put(
  * the last command taking from the buffer is returned instead (duplication of
  * last command).
  */
-struct command
-command_queue_take_or_predict(
+struct command command_queue_take_or_predict(
     struct command_queue* cmdq, uint16_t frame_number);
 
 /*!
@@ -100,26 +94,25 @@ command_queue_take_or_predict(
  * (duplication of last command). This function does not modify the buffer,
  * unlike command_queue_take_or_predict().
  */
-struct command
-command_queue_find_or_predict(
+struct command command_queue_find_or_predict(
     const struct command_queue* cmdq, uint16_t frame_number);
 
 /*! \brief Returns the number of commands in the buffer */
-#define command_queue_count(cmdq) command_rb_count((cmdq)->rb)
+#define command_queue_count(cmdq) rb_count((cmdq)->rb)
 /*! \brief Returns the frame_number of the oldest command in the buffer */
 #define command_queue_frame_begin(cmdq) ((cmdq)->first_frame)
 /*! \brief Returns frame_number+1 of the newest command in the buffer */
 #define command_queue_frame_end(cmdq)                                          \
-    (uint16_t)((cmdq)->first_frame + command_rb_count((cmdq)->rb))
+    (uint16_t)((cmdq)->first_frame + rb_count((cmdq)->rb))
 /*! \brief Return a command at an index. Range is 0 to command_queue_count()-1
  */
-#define command_queue_peek(cmdq, idx) (command_rb_peek((cmdq)->rb, idx))
+#define command_queue_peek(cmdq, idx) (rb_peek((cmdq)->rb, idx))
 /*! \brief Clear all commands */
 #define command_queue_clear(cmdq) command_rb_clear((cmdq)->rb)
 
-#define command_queue_for_each(cmdq, frame_var, command_var)                   \
-    for (command_var##_i = (rb)->read, frame_var = (cmdq)->first_frame - 1;    \
-         command_var##_i != (rb)->write                                        \
-         && ((elem = &(rb)->data[command_var##_i]) || 1);                      \
-         (command_var##_i = (command_var##_i + 1) & ((rb)->capacity - 1)),     \
-        frame_var++)
+#define command_queue_for_each(cmdq, i, frame_var, command_var)                \
+    for (i = (cmdq)->rb ? (cmdq)->rb->read : 0,                                \
+        frame_var = (cmdq)->first_frame - 1;                                   \
+         i != ((cmdq)->rb ? (cmdq)->rb->write : 0)                             \
+         && ((command_var = &(cmdq)->rb->data[i]) || 1);                       \
+         (i = (i + 1) & ((cmdq)->rb->capacity - 1)), frame_var++)
