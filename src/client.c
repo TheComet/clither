@@ -1,30 +1,14 @@
-#include "clither/args.h"
-#include "clither/camera.h"
-#include "clither/cli_colors.h"
 #include "clither/client.h"
-#include "clither/gfx.h"
-#include "clither/input.h"
 #include "clither/log.h"
-#include "clither/mcd_wifi.h"
+#include "clither/mem.h"
 #include "clither/msg.h"
 #include "clither/msg_queue.h"
 #include "clither/net.h"
-#include "clither/resource_pack.h"
-#include "clither/signals.h"
 #include "clither/snake.h"
-#include "clither/thread.h"
-#include "clither/tick.h"
 #include "clither/world.h"
 
-#include "cstructures/init.h"
-#include "cstructures/memory.h"
-
-#include <string.h>
-#include <assert.h>
-
 /* ------------------------------------------------------------------------- */
-void
-client_init(struct client* client)
+void client_init(struct client* client)
 {
     client->username = NULL;
     client->sim_tick_rate = 60;
@@ -36,51 +20,57 @@ client_init(struct client* client)
     client->state = CLIENT_DISCONNECTED;
 
     msg_queue_init(&client->pending_msgs);
-    vector_init(&client->udp_sockfds, sizeof(int));
+    sockfd_vec_init(&client->udp_sockfds);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-client_deinit(struct client* client)
+void client_deinit(struct client* client)
 {
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
-    vector_deinit(&client->udp_sockfds);
-    msg_queue_deinit(&client->pending_msgs);
+    sockfd_vec_deinit(client->udp_sockfds);
+    msg_queue_deinit(client->pending_msgs);
 }
 
 /* ------------------------------------------------------------------------- */
-int
-client_connect(
+int client_connect(
     struct client* client,
-    const char* server_address,
-    const char* port,
-    const char* username)
+    const char*    server_address,
+    const char*    port,
+    const char*    username)
 {
-    assert(client->state == CLIENT_DISCONNECTED);
-    assert(vector_count(&client->udp_sockfds) == 0);
-    assert(client->username == NULL);
+    CLITHER_DEBUG_ASSERT(
+        client->state == CLIENT_DISCONNECTED,
+        log_err("state: %d\n", client->state));
+    CLITHER_DEBUG_ASSERT(
+        sockfd_vec_count(client->udp_sockfds) == 0,
+        log_err("count: %d\n", sockfd_vec_count(client->udp_sockfds)));
+    CLITHER_DEBUG_ASSERT(
+        str_len(client->username) == 0,
+        log_err("username: %s\n", str_cstr(client->username)));
 
     if (!*server_address)
         server_address = NET_DEFAULT_ADDRESS;
     if (!*server_address)
     {
-        log_err("No server IP address was specified! Can't init client socket\n");
-        log_err("You can use --ip <address> to specify an address to connect to\n");
+        log_err(
+            "No server IP address was specified! Can't init client socket\n");
+        log_err(
+            "You can use --ip <address> to specify an address to connect to\n");
         return -1;
     }
 
     if (!*port)
         port = NET_DEFAULT_PORT;
 
+    if (str_set_cstr(&client->username, username) != 0)
+        return -1;
     if (net_connect(&client->udp_sockfds, server_address, port) < 0)
         return -1;
 
-    client->username = MALLOC(strlen(username) + 1);
-    strcpy(client->username, username);
-
-    client_queue(client, msg_join_request(0x0000, client->frame_number, username));
+    client_queue(
+        client, msg_join_request(0x0000, client->frame_number, username));
 
     client->state = CLIENT_JOINING;
 
@@ -88,85 +78,110 @@ client_connect(
 }
 
 /* ------------------------------------------------------------------------- */
-void
-client_disconnect(struct client* client)
+void client_disconnect(struct client* client)
 {
-    assert(client->state != CLIENT_DISCONNECTED);
-    assert(vector_count(&client->udp_sockfds) != 0);
-    assert(client->username != NULL);
+    int* sockfd;
 
-    FREE(client->username);
+    CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED, (void)0);
+    CLITHER_DEBUG_ASSERT(sockfd_vec_count(client->udp_sockfds) != 0, (void)0);
+    CLITHER_DEBUG_ASSERT(str_len(client->username) != 0, (void)0);
+
+    str_deinit(client->username);
     client->username = NULL;
 
-    VECTOR_FOR_EACH(&client->udp_sockfds, int, sockfd)
+    vec_for_each(client->udp_sockfds, sockfd)
+    {
         net_close(*sockfd);
-    VECTOR_END_EACH
-    vector_clear(&client->udp_sockfds);
+    }
 
     client->state = CLIENT_DISCONNECTED;
-
-    msg_queue_clear(&client->pending_msgs);
+    sockfd_vec_clear(client->udp_sockfds);
+    msg_queue_clear(client->pending_msgs);
 }
 
 /* ------------------------------------------------------------------------- */
-int
-client_send_pending_data(struct client* client)
+struct append_msgs_ctx
 {
-    uint8_t type;
-    uint8_t buf[MAX_UDP_PACKET_SIZE];
-    int len = 0;
+    uint16_t frame_number;
+    int      len;
+    uint8_t  buf[NET_MAX_UDP_PACKET_SIZE];
+};
+static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
+{
+    uint8_t                 type;
+    struct append_msgs_ctx* ctx = user;
+    struct msg*             msg = *pmsg;
 
-    /* Append unreliable messages first */
-    MSG_FOR_EACH(&client->pending_msgs, msg)
-        if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
-            continue;
-        if (msg_is_reliable(msg))
-            continue;
+    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+        return VEC_RETAIN;
+    if (msg_is_reliable(msg))
+        return VEC_RETAIN;
 
-        log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+    log_net(
+        "Packing msg type=%d, len=%d, resend=%d\n",
+        msg->type,
+        msg->payload_len,
+        msg->resend_rate);
 
-        type = (uint8_t)msg->type;
-        memcpy(buf + len + 0, &type, 1);
-        memcpy(buf + len + 1, &msg->payload_len, 1);
-        memcpy(buf + len + 2, msg->payload, msg->payload_len);
+    type = (uint8_t)msg->type;
+    memcpy(ctx->buf + ctx->len + 0, &type, 1);
+    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
+    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
 
-        len += msg->payload_len + 2;
-        msg_free(msg);
-        MSG_ERASE_IN_FOR_LOOP(&client->pending_msgs, msg);
-    MSG_END_EACH
+    ctx->len += msg->payload_len + 2;
+    msg_free(msg);
+    return VEC_ERASE;
+}
+static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
+{
+    uint8_t                 type;
+    struct append_msgs_ctx* ctx = user;
+    struct msg*             msg = *pmsg;
 
-    /* Append reliable messages */
-    MSG_FOR_EACH(&client->pending_msgs, msg)
-        if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
-            continue;
-        if (msg_is_unreliable(msg))
-            continue;
+    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+        return VEC_RETAIN;
+    if (msg_is_unreliable(msg))
+        return VEC_RETAIN;
 
-        if (--msg->resend_rate_counter > 0)
-            continue;
-        msg->resend_rate_counter = msg->resend_rate;
+    if (--msg->resend_rate_counter > 0)
+        return VEC_RETAIN;
+    msg->resend_rate_counter = msg->resend_rate;
 
-        /*
-         * Some messages in the reliable queue contain the frame number they were
-         * sent on as part of the message payload. These numbers need to be updated
-         * to the most recent frame number every time they are resent so the server
-         * is able to differentiate them.
-         */
-        msg_update_frame_number(msg, client->frame_number);
+    /*
+     * Some messages in the reliable queue contain the frame number they were
+     * sent on as part of the message payload. These numbers need to be updated
+     * to the most recent frame number every time they are resent so the server
+     * is able to differentiate them.
+     */
+    msg_update_frame_number(msg, ctx->frame_number);
 
-        log_net("Packing msg type=%d, len=%d, resend=%d\n", msg->type, msg->payload_len, msg->resend_rate);
+    log_net(
+        "Packing msg type=%d, len=%d, resend=%d\n",
+        msg->type,
+        msg->payload_len,
+        msg->resend_rate);
 
-        type = (uint8_t)msg->type;
-        memcpy(buf + len + 0, &type, 1);
-        memcpy(buf + len + 1, &msg->payload_len, 1);
-        memcpy(buf + len + 2, msg->payload, msg->payload_len);
+    type = (uint8_t)msg->type;
+    memcpy(ctx->buf + ctx->len + 0, &type, 1);
+    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
+    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
 
-        len += msg->payload_len + 2;
-    MSG_END_EACH
+    ctx->len += msg->payload_len + 2;
+}
 
-    if (len > 0)
+/* ------------------------------------------------------------------------- */
+int client_send_pending_data(struct client* client)
+{
+    struct append_msgs_ctx ctx;
+    ctx.frame_number = client->frame_number;
+    ctx.len = 0;
+
+    /* Append unreliable messages first before appending reliable */
+    msg_queue_retain(client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
+    msg_queue_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
+
+    if (ctx.len > 0)
     {
-        assert(vector_count(&client->udp_sockfds) > 0);
 
         /*
          * The client was initialized with a list of possible sockets. This is
@@ -175,13 +190,15 @@ client_send_pending_data(struct client* client)
          * and there are more sockets, simply close the one that failed and try
          * the next one.
          */
-retry_send:
-        log_net("Sending UDP packet, size=%d\n", len);
-        if (net_send(*(int*)vector_back(&client->udp_sockfds), buf, len) < 0)
+    retry_send:
+        log_net("Sending UDP packet, size=%d\n", ctx.len);
+        CLITHER_DEBUG_ASSERT(
+            sockfd_vec_count(client->udp_sockfds) > 0, (void)0);
+        if (net_send(*vec_last(client->udp_sockfds), ctx.buf, ctx.len) < 0)
         {
-            if (vector_count(&client->udp_sockfds) == 1)
+            if (sockfd_vec_count(client->udp_sockfds) == 1)
                 return -1;
-            net_close(*(int*)vector_pop(&client->udp_sockfds));
+            net_close(*sockfd_vec_pop(client->udp_sockfds));
             log_info("Attempting to use next socket\n");
             goto retry_send;
         }
@@ -198,20 +215,20 @@ retry_send:
 }
 
 /* ------------------------------------------------------------------------- */
-int
-client_recv(struct client* client, struct world* world)
+int client_recv(struct client* client, struct world* world)
 {
     uint8_t buf[MAX_UDP_PACKET_SIZE];
-    int i;
-    int bytes_received;
-    int retval = 0;
+    int     i;
+    int     bytes_received;
+    int     retval = 0;
 
     assert(vector_count(&client->udp_sockfds) > 0);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
 retry_recv:
-    bytes_received = net_recv(*(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
+    bytes_received = net_recv(
+        *(int*)vector_back(&client->udp_sockfds), buf, MAX_UDP_PACKET_SIZE);
     if (bytes_received < 0)
     {
         if (vector_count(&client->udp_sockfds) == 1)
@@ -225,13 +242,14 @@ retry_recv:
     /* Packet can contain multiple message objects. Unpack */
     for (i = 0; i < bytes_received - 1;)
     {
-        const uint8_t* payload;
+        const uint8_t*       payload;
         union parsed_payload pp;
-        enum msg_type type = buf[i+0];
-        uint8_t payload_len = buf[i+1];
-        if (i+2 + payload_len > bytes_received)
+        enum msg_type        type = buf[i + 0];
+        uint8_t              payload_len = buf[i + 1];
+        if (i + 2 + payload_len > bytes_received)
         {
-            log_warn("Invalid payload length \"%d\" received from server\n",
+            log_warn(
+                "Invalid payload length \"%d\" received from server\n",
                 (int)payload_len);
             log_warn("Dropping rest of packet\n");
             break;
@@ -240,15 +258,18 @@ retry_recv:
         log_net("Unpacking msg type=%d, len=%d\n", type, payload_len);
 
         /* Process message */
-        payload = &buf[i+2];
+        payload = &buf[i + 2];
         switch (msg_parse_payload(&pp, type, payload, payload_len))
         {
             default: {
-                log_warn("Received unknown message type \"%d\" from server. Malicious?\n", type);
-            } break;
+                log_warn(
+                    "Received unknown message type \"%d\" from server. "
+                    "Malicious?\n",
+                    type);
+            }
+            break;
 
-            case MSG_JOIN_REQUEST:
-                break;
+            case MSG_JOIN_REQUEST: break;
 
             case MSG_JOIN_ACCEPT: {
                 uint16_t rtt;
@@ -278,68 +299,83 @@ retry_recv:
                  * on which the join request was sent.
                  */
                 rtt = client->frame_number - pp.join_accept.client_frame;
-                if (rtt > client->net_tick_rate * 5)  /* 5 seconds */
+                if (rtt > client->net_tick_rate * 5) /* 5 seconds */
                 {
-                    log_err("Server sent back a client frame number that is unlikely or impossible (ours: %d, theirs: %d).\n",
-                        client->frame_number, pp.join_accept.client_frame);
-                    log_err("This may be a bug, or the server is possibly malicious.\n");
+                    log_err(
+                        "Server sent back a client frame number that is "
+                        "unlikely or impossible (ours: %d, theirs: %d).\n",
+                        client->frame_number,
+                        pp.join_accept.client_frame);
+                    log_err(
+                        "This may be a bug, or the server is possibly "
+                        "malicious.\n");
                     client_disconnect(client);
                     return 1;
                 }
 
                 /*
-                 * We will be simulating half rtt in the future, relative to the server,
-                 * however, the server is now also half rtt further into the future
-                 * relative to the frame it sent back. Therefore, we are a full rtt
-                 * into the future now.
+                 * We will be simulating half rtt in the future, relative to the
+                 * server, however, the server is now also half rtt further into
+                 * the future relative to the frame it sent back. Therefore, we
+                 * are a full rtt into the future now.
                  */
-                client->frame_number =
-                        pp.join_accept.server_frame + rtt +
-                        5 * client->sim_tick_rate / client->net_tick_rate;
+                client->frame_number
+                    = pp.join_accept.server_frame + rtt
+                      + 5 * client->sim_tick_rate / client->net_tick_rate;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
                 client->net_tick_rate = pp.join_accept.net_tick_rate;
 
                 client->snake_id = pp.join_accept.snake_id;
-                world_create_snake(world, client->snake_id, pp.join_accept.spawn, client->username);
+                world_create_snake(
+                    world,
+                    client->snake_id,
+                    pp.join_accept.spawn,
+                    client->username);
 
                 log_net(
                     "MSG_JOIN_ACCEPT:\n"
                     "  server frame=%d, client frame=%d, rtt=%d\n"
                     "  spawn=%d, %d\n",
-                    pp.join_accept.server_frame, client->frame_number, rtt,
-                    pp.join_accept.spawn.x, pp.join_accept.spawn.y);
+                    pp.join_accept.server_frame,
+                    client->frame_number,
+                    rtt,
+                    pp.join_accept.spawn.x,
+                    pp.join_accept.spawn.y);
                 client->state = CLIENT_CONNECTED;
-            } break;
+            }
+            break;
 
             case MSG_JOIN_DENY_BAD_PROTOCOL:
             case MSG_JOIN_DENY_BAD_USERNAME:
             case MSG_JOIN_DENY_SERVER_FULL: {
                 log_err("Failed to join server: %s\n", pp.join_deny.error);
                 client_disconnect(client);
-                return 1;  /* Return immediately, as we don't want to process any more messages */
-            } break;
+                return 1; /* Return immediately, as we don't want to process any
+                             more messages */
+            }
+            break;
 
             case MSG_LEAVE:
-            case MSG_COMMANDS:
-                break;
+            case MSG_COMMANDS: break;
 
             case MSG_FEEDBACK: {
                 if (client->warp == 0)
                     client->warp = pp.feedback.diff * 10;
-            } break;
+            }
+            break;
 
             case MSG_SNAKE_CREATE: {
                 struct snake* snake = world_create_snake(
                     world,
                     pp.snake_metadata.snake_id,
-                    make_qwposi(0, 0),  /* Dummy location, not used */
+                    make_qwposi(0, 0), /* Dummy location, not used */
                     pp.snake_metadata.username);
-            } break;
+            }
+            break;
 
-            case MSG_SNAKE_CREATE_ACK:
-                break;
+            case MSG_SNAKE_CREATE_ACK: break;
 
             case MSG_SNAKE_HEAD: {
                 struct snake* snake = world_get_snake(world, client->snake_id);
@@ -352,18 +388,18 @@ retry_recv:
                     &snake->command_rb,
                     pp.snake_head.frame_number,
                     client->sim_tick_rate);
-            } break;
+            }
+            break;
 
             case MSG_SNAKE_BEZIER: {
-                struct snake* snake = world_get_snake(world, pp.snake_bezier.snake_id);
+                struct snake* snake
+                    = world_get_snake(world, pp.snake_bezier.snake_id);
                 if (snake == NULL)
-                    break;  /* Have to wait for MSG_SNAKE_CREATE to arrive */
+                    break; /* Have to wait for MSG_SNAKE_CREATE to arrive */
+            }
+            break;
 
-
-            } break;
-
-            case MSG_SNAKE_BEZIER_ACK:
-                break;
+            case MSG_SNAKE_BEZIER_ACK: break;
         }
 
         i += payload_len + 2;
@@ -375,23 +411,22 @@ retry_recv:
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_GFX)
-void*
-client_run(const struct args* a)
+void* client_run(const struct args* a)
 {
 #if defined(CLITHER_MCD)
     struct thread mcd_thread;
 #endif
-    struct world world;
-    struct input input;
-    struct command command;
+    struct world                world;
+    struct input                input;
+    struct command              command;
     const struct gfx_interface* gfx_iface;
-    struct gfx* gfx;
-    struct resource_pack* pack;
-    struct camera camera;
-    struct client client;
-    struct tick sim_tick;
-    struct tick net_tick;
-    int tick_lag;
+    struct gfx*                 gfx;
+    struct resource_pack*       pack;
+    struct camera               camera;
+    struct client               client;
+    struct tick                 sim_tick;
+    struct tick                 net_tick;
+    int                         tick_lag;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Client: ");
@@ -456,7 +491,9 @@ client_run(const struct args* a)
             int count;
             int idx, new_idx;
 
-            for (count = 0; gfx_backends[count]; ++count) {}
+            for (count = 0; gfx_backends[count]; ++count)
+            {
+            }
             for (idx = 0; gfx_backends[idx]; ++idx)
                 if (gfx_iface == gfx_backends[idx])
                     break;
@@ -492,10 +529,13 @@ client_run(const struct args* a)
 
             goto create_new_gfx_success;
 
-        load_new_resource_pack_failed : gfx_iface->destroy(gfx);
-        create_new_gfx_failed         : gfx_iface->global_deinit();
-        init_new_gfx_failed           :
-            /* Try to restore to previous backend. Shouldn't fail but who knows */
+        load_new_resource_pack_failed:
+            gfx_iface->destroy(gfx);
+        create_new_gfx_failed:
+            gfx_iface->global_deinit();
+        init_new_gfx_failed:
+            /* Try to restore to previous backend. Shouldn't fail but who knows
+             */
             gfx_iface = gfx_backends[idx];
             if (gfx_iface->global_init() < 0)
                 break;
@@ -505,7 +545,8 @@ client_run(const struct args* a)
                 gfx_iface->global_deinit();
                 break;
             }
-        } create_new_gfx_success:;
+        }
+    create_new_gfx_success:;
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
@@ -528,7 +569,10 @@ client_run(const struct args* a)
                  */
                 tick_cfg(&sim_tick, client.sim_tick_rate);
                 tick_cfg(&net_tick, client.net_tick_rate);
-                log_dbg("Sim tick rate: %d, net tick rate: %d\n", client.sim_tick_rate, client.net_tick_rate);
+                log_dbg(
+                    "Sim tick rate: %d, net tick rate: %d\n",
+                    client.sim_tick_rate,
+                    client.net_tick_rate);
             }
         }
 
@@ -542,27 +586,40 @@ client_run(const struct args* a)
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            command = gfx_iface->input_to_command(command, &input, gfx, &camera, snake->head.pos);
+            command = gfx_iface->input_to_command(
+                command, &input, gfx, &camera, snake->head.pos);
 
             /*
-             * Append the new command to the ring buffer of unconfirmed commands.
-             * This entire list is sent to the server every network update so
-             * in the event of packet loss, the server always has a complete
-             * history of what our snake has done, frame by frame. When the server
-             * acknowledges our move, we remove all commands that date back before
-             * and up to that point in time from the list again.
+             * Append the new command to the ring buffer of unconfirmed
+             * commands. This entire list is sent to the server every network
+             * update so in the event of packet loss, the server always has a
+             * complete history of what our snake has done, frame by frame. When
+             * the server acknowledges our move, we remove all commands that
+             * date back before and up to that point in time from the list
+             * again.
              */
             command_rb_put(&snake->command_rb, command, client.frame_number);
 
             /* Update snake */
-            snake_param_update(&snake->param, snake->param.upgrades, snake->param.food_eaten + 1);
-            snake_remove_stale_segments_with_rollback_constraint(&snake->data, &snake->head_ack,
-                snake_step(&snake->data, &snake->head, &snake->param, command, client.sim_tick_rate));
+            snake_param_update(
+                &snake->param,
+                snake->param.upgrades,
+                snake->param.food_eaten + 1);
+            snake_remove_stale_segments_with_rollback_constraint(
+                &snake->data,
+                &snake->head_ack,
+                snake_step(
+                    &snake->data,
+                    &snake->head,
+                    &snake->param,
+                    command,
+                    client.sim_tick_rate));
 
             /* Update world */
             world_step(&world, client.frame_number, client.sim_tick_rate);
 
-            camera_update(&camera, &snake->head, &snake->param, client.sim_tick_rate);
+            camera_update(
+                &camera, &snake->head, &snake->param, client.sim_tick_rate);
 
             if (net_update)
             {
@@ -584,13 +641,14 @@ client_run(const struct args* a)
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
          */
-        tick_lag = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
+        tick_lag
+            = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
             gfx_iface->draw_world(gfx, &world, &camera);
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
-            if (tick_lag > client.sim_tick_rate * 3)  /* 3 seconds */
+            if (tick_lag > client.sim_tick_rate * 3) /* 3 seconds */
             {
                 tick_skip(&sim_tick);
                 break;

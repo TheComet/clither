@@ -1,11 +1,7 @@
 #pragma once
 
-#include "clither/config.h"
-#include "cstructures/vector.h"
+#include "clither/msg_queue.h"
 
-C_BEGIN
-
-struct cs_btree;
 struct command;
 struct msg;
 struct world;
@@ -25,27 +21,25 @@ enum client_state
 
 struct client
 {
-    char* username;
-    struct cs_vector pending_msgs;  /* struct msg* */
-    struct cs_vector udp_sockfds;   /* int */
-    int timeout_counter;
-    uint16_t frame_number;          /* Counts upwards at sim_tick_rate */
-    uint16_t snake_id;
-    int16_t warp;
-    uint8_t sim_tick_rate;
-    uint8_t net_tick_rate;
-    enum client_state state;
+    struct str*        username;
+    struct msg_queue*  pending_msgs;
+    struct sockfd_vec* udp_sockfds;
+    int                timeout_counter;
+    uint16_t           frame_number; /* Counts upwards at sim_tick_rate */
+    uint16_t           snake_id;
+    int16_t            warp;
+    uint8_t            sim_tick_rate;
+    uint8_t            net_tick_rate;
+    enum client_state  state;
 };
 
 /*!
  * \brief Initializes a client structure. The client will be unconnected
  * by default. Use client_connect() to connect to a server.
  */
-void
-client_init(struct client* client);
+void client_init(struct client* client);
 
-void
-client_deinit(struct client* client);
+void client_deinit(struct client* client);
 
 /*!
  * \brief Initializes a client structure and resolves the host address.
@@ -53,30 +47,27 @@ client_deinit(struct client* client);
  * \param[in] port The port of the server to connect to.
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
-int
-client_connect(
+int client_connect(
     struct client* client,
-    const char* server_address,
-    const char* port,
-    const char* username);
+    const char*    server_address,
+    const char*    port,
+    const char*    username);
 
-void
-client_disconnect(struct client* client);
+void client_disconnect(struct client* client);
 
-static inline void
-client_queue(struct client* client, struct msg* m)
-    { vector_push(&client->pending_msgs, &m); }
+static inline void client_queue(struct client* client, struct msg* m)
+{
+    msg_queue_put_realloc(&client->pending_msgs, m);
+}
 
-int
-client_send_pending_data(struct client* client);
+int client_send_pending_data(struct client* client);
 
 /*!
  * \brief
  * \return Returns -1 if an error occurs. Returns 1 if the client's state
  * changed. Returns 0 otherwise.
  */
-int
-client_recv(struct client* client, struct world* world);
+int client_recv(struct client* client, struct world* world);
 
 /*!
  * \brief The main loop of the client.
@@ -88,8 +79,5 @@ client_recv(struct client* client, struct world* world);
  * \param[in] a Command line arguments.
  */
 #if defined(CLITHER_GFX)
-void*
-client_run(const struct args* a);
+void* client_run(const struct args* a);
 #endif
-
-C_END

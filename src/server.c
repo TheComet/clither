@@ -67,7 +67,7 @@ server_init(
 {
     int addrlen;
 
-    server->udp_sock = net_bind(bind_address, port, &addrlen);
+    server->udp_sock = net_bind(bind_address, port);
     if (server->udp_sock < 0)
         return -1;
 
@@ -256,7 +256,7 @@ server_recv(
         if (client->timeout_counter > settings->client_timeout * settings->net_tick_rate)
         {
             char ipstr[MAX_ADDRSTRLEN];
-            net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
+            net_addr_to_str(ipstr, sizeof(ipstr), addr);
             log_warn("Client %s timed out\n", ipstr);
             client_remove(server, world, addr, client);
         }

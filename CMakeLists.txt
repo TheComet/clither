@@ -14,7 +14,10 @@ project ("clither"
 ###############################################################################
 
 include (CMakeDependentOption)
+
+cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" ON "CLITHER_MEMORY_DEBUGGING" OFF)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
+option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application.")
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
@@ -55,6 +58,16 @@ else ()
     set (CLITHER_POPCOUNT OFF)
 endif ()
 
+check_c_source_compiles ("int main(void) { _Static_assert(1, \"\"); return 0; }" GCC_STATIC_ASSERT)
+check_c_source_compiles ("int main(void) { _STATIC_ASSERT(1); return 0; }" MSVC_STATIC_ASSERT)
+if (MSVC_STATIC_ASSERT)
+    set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
+elseif (GCC_STATIC_ASSERT)
+    set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
+else ()
+    set (CLITHER_STATIC_ASSERT "")
+endif ()
+
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################
@@ -66,32 +79,42 @@ add_executable (clither
     "${PROJECT_BINARY_DIR}/include/clither/config.h"
 
     "include/clither/args.h"
+    "include/clither/backtrace.h"
     "include/clither/benchmarks.h"
     "include/clither/bezier.h"
     "include/clither/camera.h"
+    "include/clither/cli_colors.h"
     "include/clither/client.h"
     "include/clither/command.h"
     "include/clither/food_cluster.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
+    "include/clither/hash.h"
+    "include/clither/hm.h"
     "include/clither/input.h"
     "include/clither/log.h"
     "include/clither/mcd_wifi.h"
+    "include/clither/mfile.h"
     "include/clither/msg.h"
     "include/clither/msg_queue.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
     "include/clither/popcount.h"
     "include/clither/q.h"
+    "include/clither/quadtree.h"
+    "include/clither/rb.h"
     "include/clither/resource_pack.h"
     "include/clither/server.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
     "include/clither/snake_param.h"
+    "include/clither/str.h"
+    "include/clither/strlist.h"
+    "include/clither/system.h"
+    "include/clither/tests.h"
     "include/clither/thread.h"
     "include/clither/tick.h"
-    "include/clither/tests.h"
     "include/clither/utf8.h"
     "include/clither/world.h"
     "include/clither/wrap.h"
@@ -102,16 +125,20 @@ add_executable (clither
     "src/client.c"
     "src/command.c"
     "src/food_cluster.c"
-    "src/gfx.c"
+    "src/hash.c"
     "src/input.c"
     "src/log.c"
-    "src/main.c"
     "src/msg.c"
     "src/msg_queue.c"
+    "src/quadtree.c"
     "src/resource_pack.c"
     "src/snake.c"
     "src/snake_param.c"
+    "src/str.c"
+    "src/strlist.c"
     "src/world.c"
+
+    "src/main.c"
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/server.c
@@ -120,27 +147,35 @@ add_executable (clither
     $<$<BOOL:${CLITHER_MCD}>:
         src/mcd_wifi.c>
 
+    $<$<BOOL:${CLITHER_GFX}>:
+        src/gfx.c>
     $<$<BOOL:${CLITHER_GFX_SDL}>:
         src/sdl/gfx_sdl.c>
-
     $<$<BOOL:${CLITHER_GFX_GLES2}>:
         src/gles2/gfx_gles2.c
         src/gles2/glad/src/gles2.c>
-
     $<$<BOOL:${CLITHER_GFX_VULKAN}>:
         src/vulkan/gfx_vulkan.c>
 
+    $<$<BOOL:${CLITHER_MEMORY_DEBUGGING}>:
+        src/mem.c>
+
     $<$<PLATFORM_ID:Windows>:
+        $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_win32.c>
         src/fs_win32.c
+        src/mfile_win32.c
         src/mutex_win32.c
         src/net_win32.c
         src/signals_win32.c
+        src/system_win32.c
         src/thread_win32.c
         src/tick_win32.c
         src/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
+        $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_linux.c>
         src/fs_posix.c
+        src/mfile_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
@@ -149,6 +184,7 @@ add_executable (clither
         src/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
         src/fs_posix.c
+        src/mfile_posix.c
         src/mutex_pthread.c
         src/net_posix.c
         src/signals_posix.c
@@ -167,26 +203,27 @@ add_executable (clither
         tests/clither/test_args.cpp
         tests/clither/test_bezier.cpp
         tests/clither/test_command.cpp
+        tests/clither/test_hm.cpp
+        tests/clither/test_hm_full.cpp
+        tests/clither/test_mem.cpp
         tests/clither/test_msg.cpp
         tests/clither/test_protocol.cpp
         tests/clither/test_q.cpp
         tests/clither/test_quadtree.cpp
+        tests/clither/test_rb.cpp
         tests/clither/test_snake.cpp
         tests/clither/test_tick.cpp
+        tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
         tests/cstructures/test_btree_as_set.cpp
-        tests/cstructures/test_btree.cpp
-        tests/cstructures/test_hashmap.cpp
-        tests/cstructures/test_memory.cpp
-        tests/cstructures/test_rb.cpp
-        tests/cstructures/test_vector.cpp>
+        tests/cstructures/test_btree.cpp>
 
     $<$<BOOL:${CLITHER_BENCHMARKS}>:
         benchmarks/benchmarks.cpp
-        benchmarks/cstructures/bench_hashmap.cpp
-        benchmarks/cstructures/bench_std_unordered_map.cpp
-        benchmarks/cstructures/bench_std_vector.cpp
-        benchmarks/cstructures/bench_vector.cpp>)
+        benchmarks/clither/bench_hashmap.cpp
+        benchmarks/clither/bench_std_unordered_map.cpp
+        benchmarks/clither/bench_std_vector.cpp
+        benchmarks/clither/bench_vec.cpp>)
 target_include_directories (clither
     PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

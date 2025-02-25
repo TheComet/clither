@@ -45,26 +45,7 @@ add_library (cstructures ${CSTRUCTURES_LIB_TYPE}
     "${PROJECT_BINARY_DIR}/include/cstructures/config.h"
 
     "src/btree.c"
-    "src/hash.c"
-    "src/hashmap.c"
-    "src/init.c"
-    "src/memory.c"
-    "src/rb.c"
-    "src/string.c"
-    "src/vector.c"
-
-    "include/cstructures/backtrace.h"
-    "include/cstructures/btree.h"
-    "include/cstructures/hash.h"
-    "include/cstructures/hashmap.h"
-    "include/cstructures/init.h"
-    "include/cstructures/memory.h"
-    "include/cstructures/rb.h"
-    "include/cstructures/string.h"
-    "include/cstructures/vector.h"
-
-    $<$<PLATFORM_ID:Linux>:src/platform/linux/backtrace_linux.c>
-    $<$<PLATFORM_ID:Windows>:src/platform/win32/backtrace_win32.c>)
+    "include/cstructures/btree.h")
 target_include_directories (cstructures
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

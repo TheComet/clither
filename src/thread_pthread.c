@@ -1,57 +1,46 @@
-#include "clither/thread.h"
-#include "clither/log.h"
-
 #define _GNU_SOURCE
+#include "clither/log.h"
+#include "clither/thread.h"
 #include <pthread.h>
+#include <signal.h>
 #include <string.h>
 #include <time.h>
-#include <signal.h>
 
 /* ------------------------------------------------------------------------- */
-int
-thread_start(struct thread* t, void* (*func)(const void*), const void* args)
+struct thread* thread_start(void* (*func)(void*), void* args)
 {
-    int rc;
+    int            rc;
     pthread_attr_t attr;
+    pthread_t      t;
+
     pthread_attr_init(&attr);
-    if ((rc = pthread_create((pthread_t*)&t->handle, &attr, (void*(*)(void*))func, (void*)args)) != 0)
+    rc = pthread_create(&t, &attr, (void* (*)(void*))func, (void*)args);
+    pthread_attr_destroy(&attr);
+    if (rc != 0)
     {
-        pthread_attr_destroy(&attr);
         log_err("Failed to create thread: %s\n", strerror(rc));
-        return -1;
+        return NULL;
     }
 
-    pthread_attr_destroy(&attr);
-    return 0;
+    return (struct thread*)t;
 }
 
 /* ------------------------------------------------------------------------- */
-int
-thread_join(struct thread t, int timeout_ms)
+void* thread_join(struct thread* t)
 {
     void* ret;
-    struct timespec ts;
-    struct timespec off;
+    int   rc;
 
-    clock_gettime(CLOCK_REALTIME, &ts);
-    off.tv_sec = timeout_ms / 1000;
-    off.tv_nsec = (timeout_ms - ts.tv_sec * 1000) * 1e6;
-    ts.tv_nsec += off.tv_nsec;
-    while (ts.tv_nsec >= 1e9)
-    {
-        ts.tv_sec += 1;
-        ts.tv_nsec -= 1e9;
-    }
-    ts.tv_sec += off.tv_sec;
+    rc = pthread_join((pthread_t)t, &ret);
+    if (rc == 0)
+        return ret;
 
-    if (pthread_timedjoin_np((pthread_t)t.handle, &ret, &ts) == 0)
-        return 0;
-    return -1;
+    log_err("Failed to join thread: %s\n", strerror(rc));
+    return (void*)-1;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-thread_kill(struct thread t)
+void thread_kill(struct thread* t)
 {
-    pthread_kill((pthread_t)t.handle, SIGKILL);
+    pthread_kill((pthread_t)t, SIGKILL);
 }

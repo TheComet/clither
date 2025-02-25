@@ -1,13 +1,8 @@
 #pragma once
 
-#include "clither/config.h"
+#include "clither/bezier.h"
 #include "clither/command.h"
 #include "clither/snake_param.h"
-
-#include "cstructures/rb.h"
-#include "cstructures/vector.h"
-
-C_BEGIN
 
 struct snake_head
 {
@@ -24,6 +19,9 @@ struct snake_split
     unsigned ack : 1;           /* Server acknowledged this split. Predicted splits can be removed during resimulation */
 };
 
+RB_DECLARE(qwaabb_rb, struct qwaabb, 16)
+RB_DECLARE(snake_splits_rb, struct snake_split, 16)
+
 struct snake_data
 {
     /* Username stored here */
@@ -38,26 +36,24 @@ struct snake_data
      * a history of points from previous fits in case we have to restore to
      * a previous state. Lists are removed as the snake's head position is ACK'd.
      */
-    struct cs_rb head_trails;  /* struct cs_vector of struct qwpos */
+    struct qwpos_vec* head_trails;
 
-    /*
-     * List of bezier handles that define the shape of the entire snake.
-     */
-    struct cs_rb bezier_handles;
+    /* List of bezier handles that define the shape of the entire snake. */
+    struct bezier_handle_rb* bezier_handles;
 
     /*
      * List of axis-aligned bounding-boxes (qwaabb) for each bezier segment.
      * This list will be 1 shorter than the list of bezier_handles.
      */
-    struct cs_rb bezier_aabbs;
+    struct qwaabb_rb* bezier_aabbs;
 
     /*
      * The curve is sampled N times (N = length of snake) and the results are
      * cached here. These are used for rendering.
      */
-    struct cs_vector bezier_points;
+    struct bezier_points_vec* bezier_points;
 
-    struct cs_rb splits;  /* struct snake_split */
+    struct snake_splits_rb* splits;
 
     /* AABB of the entire snake */
     struct qwaabb aabb;
@@ -162,8 +158,7 @@ snake_ack_frame(
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
     const struct snake_param* param,
-    struct command_rb* command_rb,
+    struct command_queue* cmdq,
     uint16_t frame_number,
     uint8_t sim_tick_rate);
 
-C_END

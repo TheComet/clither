@@ -1,15 +1,12 @@
 #pragma once
 
-#define CSTRUCTURES_BACKTRACE_SIZE 64
+#include "clither/config.h"
 
-#include "cstructures/config.h"
-
-C_BEGIN
-
-CSTRUCTURES_PRIVATE_API int
+#if defined(CLITHER_BACKTRACE)
+ODBUTIL_PRIVATE_API int
 backtrace_init(void);
 
-CSTRUCTURES_PRIVATE_API void
+ODBUTIL_PRIVATE_API void
 backtrace_deinit(void);
 
 /*!
@@ -18,10 +15,14 @@ backtrace_deinit(void);
  * @return Returns an array of char* arrays.
  * @note The returned array must be freed manually with FREE(returned_array).
  */
-CSTRUCTURES_PRIVATE_API char**
+ODBUTIL_PRIVATE_API char**
 backtrace_get(int* size);
 
-CSTRUCTURES_PRIVATE_API void
+ODBUTIL_PRIVATE_API void
 backtrace_free(char** bt);
-
-C_END
+#else
+#define backtrace_init() (0)
+#define backtrace_deinit()
+#define backtrace_get(x) (NULL)
+#define backtrace_free(x)
+#endif

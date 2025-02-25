@@ -1,10 +1,7 @@
 #pragma once
 
-#include "clither/config.h"
 #include "clither/q.h"
 #include <stdint.h>
-
-C_BEGIN
 
 struct snake_upgrades
 {
@@ -74,4 +71,3 @@ snake_param_update(struct snake_param* param, struct snake_upgrades upgrades, ui
 
 #define snake_acceleration(param) ((param)->cached_stats.acceleration)
 
-C_END

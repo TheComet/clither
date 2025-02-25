@@ -1,14 +1,12 @@
 #include "clither/command.h"
 #include "clither/log.h"
 #include "clither/wrap.h"
-
 #include <string.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 /* ------------------------------------------------------------------------- */
-struct command
-command_default(void)
+struct command command_default(void)
 {
     struct command command;
     command.angle = 128;
@@ -18,15 +16,15 @@ command_default(void)
 }
 
 /* ------------------------------------------------------------------------- */
-struct command
-command_make(
-    struct command prev,
-    float radians,
-    float normalized_speed,
+struct command command_make(
+    struct command      prev,
+    float               radians,
+    float               normalized_speed,
     enum command_action action)
 {
-    /* Yes, this 256 is not a mistake -- makes sure that not both of -3.141 and 3.141 are included */
-    float a = radians / (2 * M_PI) + 0.5;
+    /* Yes, this 256 is not a mistake -- makes sure that not both of -3.141
+     * and 3.141 are included */
+    float   a = radians / (2 * M_PI) + 0.5;
     uint8_t new_angle = (uint8_t)(a * 256);
     uint8_t new_speed = (uint8_t)(normalized_speed * 255);
 
@@ -49,7 +47,8 @@ command_make(
     else
         prev.angle = new_angle;
 
-    /* (int) cast is necessary because msvc does not correctly deal with bitfields */
+    /* (int) cast is necessary because msvc does not correctly deal with
+     * bitfields */
     if (new_speed - (int)prev.speed > 15)
         prev.speed += 15;
     else if (new_speed - (int)prev.speed < -15)
@@ -62,81 +61,83 @@ command_make(
 }
 
 /* ------------------------------------------------------------------------- */
-void
-command_rb_init(struct command_rb* crb)
+void command_queue_init(struct command_queue* cmdq)
 {
-    rb_init(&crb->rb, sizeof(struct command));
-    crb->last_command_read = command_default();
-    crb->first_frame = 0;
+    command_rb_init(&cmdq->rb);
+    cmdq->last_command_read = command_default();
+    cmdq->first_frame = 0;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-command_rb_deinit(struct command_rb* rb)
+void command_queue_deinit(struct command_queue* cmdq)
 {
-    rb_deinit(&rb->rb);
+    command_rb_deinit(cmdq->rb);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-command_rb_put(
-    struct command_rb* crb,
-    struct command command,
-    uint16_t frame_number)
+void command_queue_put(
+    struct command_queue* cmdq, struct command command, uint16_t frame_number)
 {
-    if (rb_count(&crb->rb) > 0)
+    if (command_rb_count(cmdq->rb) > 0)
     {
-        uint16_t expected_frame = command_rb_frame_end(crb);
+        uint16_t expected_frame = command_queue_frame_end(cmdq);
         if (expected_frame != frame_number)
             return;
     }
     else
     {
-        crb->first_frame = frame_number;
+        cmdq->first_frame = frame_number;
     }
 
-    rb_put(&crb->rb, &command);
+    command_rb_put(cmdq->rb, command);
 }
 
 /* ------------------------------------------------------------------------- */
 struct command
-command_rb_take_or_predict(struct command_rb* crb, uint16_t frame_number)
+command_queue_take_or_predict(struct command_queue* cmdq, uint16_t frame_number)
 {
-    if (u16_lt_wrap(frame_number, command_rb_frame_begin(crb)))
-        return crb->last_command_read;
+    if (u16_lt_wrap(frame_number, command_queue_frame_begin(cmdq)))
+        return cmdq->last_command_read;
 
-    while (rb_count(&crb->rb) > 0)
+    while (command_rb_count(cmdq->rb) > 0)
     {
-        uint16_t frame = command_rb_frame_begin(crb);
-        crb->last_command_read = *(struct command*)rb_take(&crb->rb);
-        crb->first_frame++;
+        uint16_t frame = command_queue_frame_begin(cmdq);
+        cmdq->last_command_read = command_rb_take(cmdq->rb);
+        cmdq->first_frame++;
         if (frame == frame_number)
-            return crb->last_command_read;
+            return cmdq->last_command_read;
     }
 
-    log_dbg("command_rb_take_or_predict(): No command for frame %d, predicting...\n", frame_number);
-    return crb->last_command_read;
+    log_dbg(
+        "command_queue_take_or_predict(): No command for frame %d, "
+        "predicting...\n",
+        frame_number);
+    return cmdq->last_command_read;
 }
 
 /* ------------------------------------------------------------------------- */
-struct command
-command_rb_find_or_predict(const struct command_rb* crb, uint16_t frame_number)
+struct command command_queue_find_or_predict(
+    const struct command_queue* crb, uint16_t frame_number)
 {
-    uint16_t frame;
+    uint16_t              frame;
+    int                   i;
+    const struct command* command;
 
-    if (u16_lt_wrap(frame_number, command_rb_frame_begin(crb)))
+    if (u16_lt_wrap(frame_number, command_queue_frame_begin(crb)))
         return crb->last_command_read;
 
-    frame = command_rb_frame_begin(crb);
-    RB_FOR_EACH(&crb->rb, struct command, command)
+    frame = command_queue_frame_begin(crb);
+    rb_for_each(crb->rb, i, command)
+    {
         if (frame == frame_number)
             return *command;
         frame++;
-    RB_END_EACH
+    }
 
-
-    log_dbg("command_rb_find_or_predict(): No command for frame %d, predicting...\n", frame_number);
-    return rb_count(&crb->rb) == 0 ?
-        crb->last_command_read :
-        *(struct command*)rb_peek_write(&crb->rb);
+    log_dbg(
+        "command_queue_find_or_predict(): No command for frame %d, "
+        "predicting...\n",
+        frame_number);
+    return command_rb_count(crb->rb) == 0 ? crb->last_command_read
+                                          : *command_rb_peek_write(crb->rb);
 }

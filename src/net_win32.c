@@ -125,6 +125,7 @@ net_bind(
         {
             log_warn("bind() failed for UDP %s:%s: %d\n", ipstr, port, WSAGetLastError());
             closesocket(sockfd);
+            continue;
         }
 
         *addrlen = (int)p->ai_addrlen;
@@ -187,6 +188,7 @@ net_connect(struct cs_vector* sockfds, const char* server_address, const char* p
         {
             log_warn("connect() failed for UDP %s:%s: %s\n", ipstr, port, strerror(errno));
             closesocket(sockfd);
+            continue;
         }
         
         vector_push(sockfds, &sockfd);

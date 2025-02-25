@@ -1,7 +1,7 @@
 #include "cstructures/btree.h"
-#include "cstructures/memory.h"
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
 static enum cs_btree_status
@@ -17,7 +17,7 @@ btree_realloc(struct cs_btree* btree, cs_btree_size new_capacity)
      */
     if (!btree->data)
     {
-        btree->data = MALLOC(new_capacity * BTREE_KV_SIZE(btree));
+        btree->data = malloc(new_capacity * BTREE_KV_SIZE(btree));
         if (!btree->data)
             return BTREE_OOM;
         btree->capacity = new_capacity;
@@ -30,7 +30,7 @@ btree_realloc(struct cs_btree* btree, cs_btree_size new_capacity)
      */
     if (new_capacity >= btree->capacity)
     {
-        void* new_data = REALLOC(btree->data, new_capacity * BTREE_KV_SIZE(btree));
+        void* new_data = realloc(btree->data, new_capacity * BTREE_KV_SIZE(btree));
         if (!new_data)
             return BTREE_OOM;
         btree->data = new_data;
@@ -73,7 +73,7 @@ btree_realloc(struct cs_btree* btree, cs_btree_size new_capacity)
      */
     if (new_capacity < btree->capacity)
     {
-        void* new_data = REALLOC(btree->data, new_capacity * BTREE_KV_SIZE(btree));
+        void* new_data = realloc(btree->data, new_capacity * BTREE_KV_SIZE(btree));
         if (new_data)
             btree->data = new_data;
         else
@@ -95,7 +95,7 @@ btree_realloc(struct cs_btree* btree, cs_btree_size new_capacity)
 enum cs_btree_status
 btree_create(struct cs_btree** btree, cs_btree_size value_size)
 {
-    *btree = MALLOC(sizeof **btree);
+    *btree = malloc(sizeof **btree);
     if (*btree == NULL)
         return BTREE_OOM;
     btree_init(*btree, value_size);
@@ -127,7 +127,7 @@ btree_free(struct cs_btree* btree)
 {
     assert(btree);
     btree_deinit(btree);
-    FREE(btree);
+    free(btree);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -545,7 +545,8 @@ btree_compact(struct cs_btree* btree)
 
     if (btree_count(btree) == 0)
     {
-        XFREE(btree->data);
+        if (btree->data)
+            free(btree->data);
         btree->data = NULL;
         btree->capacity = 0;
     }

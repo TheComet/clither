@@ -3,8 +3,6 @@
 #include "clither/config.h"
 #include <stdint.h>
 
-C_BEGIN
-
 struct tick
 {
     uint64_t interval;
@@ -52,5 +50,3 @@ tick_wait_warp(struct tick* t, int warp, int tps);
 
 void
 tick_skip(struct tick* t);
-
-C_END

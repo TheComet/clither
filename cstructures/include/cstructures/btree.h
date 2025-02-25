@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cstructures/config.h"
-#include "cstructures/hash.h"
+#include <stdint.h>
 
 C_BEGIN
 

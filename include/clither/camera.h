@@ -3,8 +3,6 @@
 #include "clither/config.h"
 #include "clither/q.h"
 
-C_BEGIN
-
 struct snake_head;
 struct snake_param;
 
@@ -23,5 +21,3 @@ camera_update(
     const struct snake_head* head,
     const struct snake_param* param,
     int sim_tick_rate);
-
-C_END

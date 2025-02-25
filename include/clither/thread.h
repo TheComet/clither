@@ -1,15 +1,11 @@
 #pragma once
 
-struct thread
-{
-    void* handle;
-};
+struct thread;
 
-int
-thread_start(struct thread* t, void* (*func)(const void*), const void* args);
+/*! Calls func in a new thread. Returns NULL on failure. */
+struct thread* thread_start(void* (*func)(void*), void* args);
 
-int
-thread_join(struct thread t, int timeout_ms);
+/*! Returns the return value of the thread, or (void*)-1 on failure. */
+void* thread_join(struct thread* t);
 
-void
-thread_kill(struct thread t);
+void thread_kill(struct thread* t);

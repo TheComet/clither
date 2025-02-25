@@ -345,19 +345,19 @@ snake_ack_frame(
     struct snake_head* predicted_head,
     const struct snake_head* authoritative_head,
     const struct snake_param* param,
-    struct command_rb* command_rb,
+    struct command_queue* cmdq,
     uint16_t frame_number,
     uint8_t sim_tick_rate)
 {
     uint16_t last_ackd_frame, predicted_frame;
 
-    if (command_rb_count(command_rb) == 0)
+    if (command_queue_count(cmdq) == 0)
     {
         log_warn("snake_ack_frame(): Command buffer of snake \"%s\" is empty. Can't step.\n", data->name);
         return;
     }
-    last_ackd_frame = command_rb_frame_begin(command_rb);
-    predicted_frame = command_rb_frame_end(command_rb);
+    last_ackd_frame = command_queue_frame_begin(cmdq);
+    predicted_frame = command_queue_frame_end(cmdq);
 
     /* last_ackd_frame <= frame_number <= predicted_frame */
     if (u16_lt_wrap(frame_number, last_ackd_frame) || u16_gt_wrap(frame_number, predicted_frame))
@@ -377,7 +377,7 @@ snake_ack_frame(
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
-        struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
+        struct command command = command_rb_take_or_predict(cmdq, last_ackd_frame);
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
         last_ackd_frame++;
     }

@@ -1,13 +1,8 @@
 #pragma once
 
-#include "clither/config.h"
 #include "clither/q.h"
-#include <stdint.h>
-
-C_BEGIN
-
-struct cs_vector;
-struct cs_rb;
+#include "clither/rb.h"
+#include "clither/vec.h"
 
 struct bezier_point
 {
@@ -33,6 +28,10 @@ struct bezier_handle
     uint8_t len_backwards, len_forwards;
 };
 
+VEC_DECLARE(qwpos_vec, struct qwpos, 16)
+VEC_DECLARE(bezier_point_vec, struct bezier_point, 16)
+RB_DECLARE(bezier_handle_rb, struct bezier_handle, 16)
+
 void
 bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle);
 
@@ -55,9 +54,9 @@ bezier_calc_aabb(
  */
 double
 bezier_fit_trail(
-        struct bezier_handle* head,
-        struct bezier_handle* tail,
-        const struct cs_vector* trail);
+    struct bezier_handle* head,
+    struct bezier_handle* tail,
+    const struct qwpos_vec* trail);
 
 /*!
  * \brief Adjusts all bezier handles in a way to cause the snake to "squeeze"
@@ -67,12 +66,12 @@ bezier_fit_trail(
  */
 void
 bezier_squeeze_step(
-    struct cs_rb* bezier_handles,
+    struct bezier_handle_rb* bezier_handles,
     int sim_tick_rate);
 
 void
 bezier_squeeze_n_recent_step(
-    struct cs_rb* bezier_handles,
+    struct bezier_handle_rb* bezier_handles,
     int n,
     int sim_tick_rate);
 
@@ -89,8 +88,8 @@ bezier_squeeze_n_recent_step(
  */
 int
 bezier_calc_equidistant_points(
-    struct cs_vector* bezier_points,
-    const struct cs_rb* bezier_handles,
+    struct bezier_point_vec* bezier_points,
+    const struct bezier_handle_rb* bezier_handles,
     qw spacing,
     qw snake_length);
 
@@ -112,5 +111,3 @@ bezier_handles_equal_pos(const struct bezier_handle* a, const struct bezier_hand
         a->pos.x == b->pos.x &&
         a->pos.y == b->pos.y;
 }
-
-C_END

@@ -1,11 +1,8 @@
 #pragma once
 
-#include "clither/config.h"
 #include "clither/q.h"
-#include "cstructures/rb.h"
+#include "clither/rb.h"
 #include <stdint.h>
-
-C_BEGIN
 
 enum command_action
 {
@@ -23,16 +20,18 @@ enum command_action
  */
 struct command
 {
-    uint8_t angle;
-    uint8_t speed;
+    uint8_t  angle;
+    uint8_t  speed;
     unsigned action : 3;
 };
 
-struct command_rb
+RB_DECLARE(command_rb, struct command, 16)
+
+struct command_queue
 {
-    struct cs_rb rb;
-    struct command last_command_read;
-    uint16_t first_frame;
+    struct command_rb* rb;
+    struct command     last_command_read;
+    uint16_t           first_frame;
 };
 
 /*!
@@ -44,30 +43,30 @@ command_default(void);
 
 /*!
  * \brief Constructs a new command given the previous command and parameters.
- * 
+ *
  * Commands are constructed in a way to limit the number of bits necessary to
- * encode deltas. We do this by limiting the speed at which the "angle" and "speed"
- * properties can be updated from frame to frame. This function takes care of
- * the details.
- * 
+ * encode deltas. We do this by limiting the speed at which the "angle" and
+ * "speed" properties can be updated from frame to frame. This function takes
+ * care of the details.
+ *
  * \param[in] prev The command from the previous frame
  * \param[in] radians The angle, in world space, to steer the snake towards
- * \param[in] speed A value between [0..1]. Here, 0 maps to the minimum speed and
- * 1 maps to the maximum (non-boost) speed.
- * \param[in] action The current action to perform.
+ * \param[in] speed A value between [0..1]. Here, 0 maps to the minimum speed
+ * and 1 maps to the maximum (non-boost) speed. \param[in] action The current
+ * action to perform.
  */
 struct command
 command_make(
-    struct command prev,
-    float radians,
-    float normalized_speed,
+    struct command      prev,
+    float               radians,
+    float               normalized_speed,
     enum command_action action);
 
 void
-command_rb_init(struct command_rb* crb);
+command_queue_init(struct command_queue* cmdq);
 
 void
-command_rb_deinit(struct command_rb* crb);
+command_queue_deinit(struct command_queue* cmdq);
 
 /*!
  * \brief Inserts a new command into the ring buffer.
@@ -81,10 +80,8 @@ command_rb_deinit(struct command_rb* crb);
  * inserting always works.
  */
 void
-command_rb_put(
-    struct command_rb* crb,
-    struct command command,
-    uint16_t frame_number);
+command_queue_put(
+    struct command_queue* cmdq, struct command command, uint16_t frame_number);
 
 /*!
  * \brief Takes the command with the requested frame_number from the ring buffer
@@ -94,38 +91,35 @@ command_rb_put(
  * last command).
  */
 struct command
-command_rb_take_or_predict(
-    struct command_rb* crb,
-    uint16_t frame_number);
+command_queue_take_or_predict(
+    struct command_queue* cmdq, uint16_t frame_number);
 
 /*!
  * \brief Finds the command with the requested frame_number and returns it. If
  * no such command exists, then the last command inserted is returned instead
  * (duplication of last command). This function does not modify the buffer,
- * unlike command_rb_take_or_predict().
+ * unlike command_queue_take_or_predict().
  */
 struct command
-command_rb_find_or_predict(
-    const struct command_rb* crb,
-    uint16_t frame_number);
+command_queue_find_or_predict(
+    const struct command_queue* cmdq, uint16_t frame_number);
 
 /*! \brief Returns the number of commands in the buffer */
-#define command_rb_count(crb) rb_count(&(crb)->rb)
+#define command_queue_count(cmdq) command_rb_count((cmdq)->rb)
 /*! \brief Returns the frame_number of the oldest command in the buffer */
-#define command_rb_frame_begin(crb) ((crb)->first_frame)
+#define command_queue_frame_begin(cmdq) ((cmdq)->first_frame)
 /*! \brief Returns frame_number+1 of the newest command in the buffer */
-#define command_rb_frame_end(crb) (uint16_t)((crb)->first_frame + rb_count(&(crb)->rb))
-/*! \brief Return a command at an index. Range is 0 to command_rb_count()-1 */
-#define command_rb_peek(crb, idx) ((struct command*)rb_peek(&(crb)->rb, idx))
+#define command_queue_frame_end(cmdq)                                          \
+    (uint16_t)((cmdq)->first_frame + command_rb_count((cmdq)->rb))
+/*! \brief Return a command at an index. Range is 0 to command_queue_count()-1
+ */
+#define command_queue_peek(cmdq, idx) (command_rb_peek((cmdq)->rb, idx))
 /*! \brief Clear all commands */
-#define command_rb_clear(crb) rb_clear(&(crb)->rb)
+#define command_queue_clear(cmdq) command_rb_clear((cmdq)->rb)
 
-#define COMMAND_RB_FOR_EACH(crb, frame_var, command_var) { \
-    uint16_t frame_var = (crb)->first_frame - 1;             \
-    RB_FOR_EACH(&(crb)->rb, struct command, command_var)   \
-        frame_var++; {
-
-#define COMMAND_RB_END_EACH \
-    }} RB_END_EACH
-
-C_END
+#define command_queue_for_each(cmdq, frame_var, command_var)                   \
+    for (command_var##_i = (rb)->read, frame_var = (cmdq)->first_frame - 1;    \
+         command_var##_i != (rb)->write                                        \
+         && ((elem = &(rb)->data[command_var##_i]) || 1);                      \
+         (command_var##_i = (command_var##_i + 1) & ((rb)->capacity - 1)),     \
+        frame_var++)

@@ -1,42 +1,17 @@
+#include "clither/mem.h"
 #include "clither/msg_queue.h"
-#include "cstructures/vector.h"
+#include "clither/vec.h"
+
+VEC_DEFINE(msg_queue, struct msg*, 16)
 
 /* ------------------------------------------------------------------------- */
-void
-msg_queue_init(struct cs_vector* q)
+static int retain_type(struct msg** msg, void* user)
 {
-    vector_init(q, sizeof(struct msg*));
+    return (*msg)->type == (enum msg_type)(intptr_t)user;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-msg_queue_deinit(struct cs_vector* q)
+void msg_queue_remove_type(struct msg_queue* q, enum msg_type type)
 {
-    MSG_FOR_EACH(q, m)
-        msg_free(m);
-    MSG_END_EACH
-    vector_deinit(q);
-}
-
-/* ------------------------------------------------------------------------- */
-void
-msg_queue_clear(struct cs_vector* q)
-{
-    MSG_FOR_EACH(q, m)
-        msg_free(m);
-    MSG_END_EACH
-    vector_clear_compact(q);
-}
-
-/* ------------------------------------------------------------------------- */
-void
-msg_queue_remove_type(struct cs_vector* q, enum msg_type type)
-{
-    MSG_FOR_EACH(q, msg)
-        if (msg->type == type)
-        {
-            msg_free(msg);
-            MSG_ERASE_IN_FOR_LOOP(q, msg);
-        }
-    MSG_END_EACH
+    msg_queue_retain(q, retain_type, (void*)(intptr_t)type);
 }

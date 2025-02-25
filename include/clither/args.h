@@ -1,10 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
-
 #include <stdint.h>
-
-C_BEGIN
 
 enum mode
 {
@@ -21,8 +18,9 @@ enum mode
     MODE_CLIENT,
 #endif
 #if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
-    MODE_CLIENT_AND_SERVER
+    MODE_CLIENT_AND_SERVER,
 #endif
+    MODE_COUNT
 };
 
 struct args
@@ -52,5 +50,3 @@ struct args
  */
 int
 args_parse(struct args* a, int argc, char* argv[]);
-
-C_END

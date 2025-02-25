@@ -1,18 +1,25 @@
 #pragma once
 
 #include "clither/config.h"
-#include "cstructures/hashmap.h"
-
-C_BEGIN
+#include "clither/hm.h"
 
 struct server_settings;
 struct world;
 
+HM_DECLARE(client_hm, struct net_addr, struct server_client*, 16)
+HM_DECLARE(malicious_clients_hm, struct net_addr, int, 16)
+HM_DECLARE(banned_clients_hm, struct net_addr, void, 16)
+
 struct server
 {
-    struct cs_hashmap client_table;       /* struct (key size depends on protocol) -> struct client_table_entry (see net.c) */
-    struct cs_hashmap malicious_clients;  /* struct sockaddr (key size depends on protocol) */
-    struct cs_hashmap banned_clients;     /* struct sockaddr (key size depends on protocol) */
+    /* struct (key size depends on protocol) -> struct client_table_entry */
+    /* (see net.c) */
+    struct client_hm* client_table;
+    /* struct sockaddr (key size depends on protocol) */
+    struct malicious_clients_hm* malicious_clients;
+    /* struct sockaddr (key size depends on protocol) */
+    struct banned_clients_hm* banned_clients;
+
     int udp_sock;
 };
 
@@ -28,11 +35,8 @@ struct server
  * from. Note that if you pass in
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
-int
-server_init(
-    struct server* server,
-    const char* bind_address,
-    const char* port);
+int server_init(
+    struct server* server, const char* bind_address, const char* port);
 
 /*!
  * \brief Closes all sockets and frees all data. Saves the settings structure
@@ -41,32 +45,25 @@ server_init(
  * \param[in] config_filename The name of the config.ini file to save settings
  * to.
  */
-void
-server_deinit(struct server* server);
+void server_deinit(struct server* server);
 
-void
-server_queue_snake_data(
-    struct server* server,
-    const struct world* world,
-    uint16_t frame_number);
+void server_queue_snake_data(
+    struct server* server, const struct world* world, uint16_t frame_number);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
-void
-server_send_pending_data(struct server* server);
+void server_send_pending_data(struct server* server);
 
 /*!
  *
  */
-int
-server_recv(
-    struct server* server,
+int server_recv(
+    struct server*                server,
     const struct server_settings* settings,
-    struct world* world,
-    uint16_t frame_number);
+    struct world*                 world,
+    uint16_t                      frame_number);
 
-void*
-server_run(const void* args);
+void* server_run(const void* args);
 
 C_END
