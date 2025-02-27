@@ -36,28 +36,31 @@ static int set_nonblocking(int sockfd)
 }
 
 /* ------------------------------------------------------------------------- */
-void net_addr_to_str(char* str, int bufsize, const struct net_addr* addr)
+static void ai_addr_to_str(struct net_addr_str* str, const struct sockaddr* a)
 {
-    const struct sockaddr* a = (const struct sockaddr*)addr->sockaddr_storage;
-    int                    i = sizeof(struct sockaddr_in6);
     switch (a->sa_family)
     {
         case AF_INET:
             inet_ntop(
                 a->sa_family,
                 &((const struct sockaddr_in*)a)->sin_addr,
-                str,
-                bufsize);
+                str->cstr,
+                sizeof(str->cstr));
             break;
         case AF_INET6:
             inet_ntop(
                 a->sa_family,
                 &((const struct sockaddr_in6*)a)->sin6_addr,
-                str,
-                bufsize);
+                str->cstr,
+                sizeof(str->cstr));
             break;
-        default: strcpy(str, "(unknown)");
+        default: strcpy(str->cstr, "(unknown)");
     }
+}
+void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr)
+{
+    const struct sockaddr* a = (const struct sockaddr*)addr->sockaddr_storage;
+    ai_addr_to_str(str, a);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -98,12 +101,12 @@ void net_log_host_ips(void)
 /* ------------------------------------------------------------------------- */
 int net_bind(const char* bind_address, const char* port)
 {
-    struct addrinfo  hints;
-    struct addrinfo* candidates;
-    struct addrinfo* p;
-    char             ipstr[INET6_ADDRSTRLEN];
-    int              ret;
-    int              sockfd;
+    struct addrinfo     hints;
+    struct addrinfo*    candidates;
+    struct addrinfo*    p;
+    struct net_addr_str ipstr;
+    int                 ret;
+    int                 sockfd;
 
     /*
      * Set up hints structure. If an IP address was specified in the command
@@ -128,9 +131,8 @@ int net_bind(const char* bind_address, const char* port)
 
     for (p = candidates; p != NULL; p = p->ai_next)
     {
-        net_addr_to_str(ipstr, sizeof ipstr, p->ai_addr);
-
-        log_dbg("Attempting to bind UDP %s:%s\n", ipstr, port);
+        ai_addr_to_str(&ipstr, p->ai_addr);
+        log_dbg("Attempting to bind UDP %s:%s\n", ipstr.cstr, port);
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             continue;
@@ -146,7 +148,7 @@ int net_bind(const char* bind_address, const char* port)
         {
             log_warn(
                 "bind() failed for UDP %s:%s: %s\n",
-                ipstr,
+                ipstr.cstr,
                 port,
                 strerror(errno));
             close(sockfd);
@@ -161,7 +163,7 @@ int net_bind(const char* bind_address, const char* port)
         return -1;
     }
 
-    log_dbg("Bound UDP socket to %s:%s\n", ipstr, port);
+    log_dbg("Bound UDP socket to %s:%s\n", ipstr.cstr, port);
     return sockfd;
 }
 
@@ -169,16 +171,14 @@ int net_bind(const char* bind_address, const char* port)
 int net_connect(
     struct sockfd_vec** sockfds, const char* server_address, const char* port)
 {
-    struct addrinfo  hints;
-    struct addrinfo* candidates;
-    struct addrinfo* p;
-    char             ipstr[INET6_ADDRSTRLEN];
-    int              ret;
-    int              sockfd;
+    struct addrinfo     hints;
+    struct addrinfo*    candidates;
+    struct addrinfo*    p;
+    struct net_addr_str ipstr;
+    int                 ret;
+    int                 sockfd;
 
-    CLITHER_DEBUG_ASSERT(
-        sockfd_vec_count(*sockfds) == 0,
-        log_err("count: %d\n", sockfd_vec_count(*sockfds)));
+    CLITHER_DEBUG_ASSERT(vec_count(*sockfds) == 0);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;    /* IPv4 or IPv6 */
@@ -191,9 +191,10 @@ int net_connect(
     }
     for (p = candidates; p != NULL; p = p->ai_next)
     {
-        net_addr_to_str(ipstr, sizeof ipstr, p->ai_addr);
+        ai_addr_to_str(&ipstr, p->ai_addr);
 
-        log_dbg("Attempting to connect UDP socket %s:%s...\n", ipstr, port);
+        log_dbg(
+            "Attempting to connect UDP socket %s:%s...\n", ipstr.cstr, port);
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             continue;
@@ -214,19 +215,19 @@ int net_connect(
         {
             log_warn(
                 "connect() failed for UDP %s:%s: %s\n",
-                ipstr,
+                ipstr.cstr,
                 port,
                 strerror(errno));
             close(sockfd);
             continue;
         }
 
-        log_dbg("Connected UDP socket to %s:%s\n", ipstr, port);
+        log_dbg("Connected UDP socket to %s:%s\n", ipstr.cstr, port);
         sockfd_vec_push(sockfds, sockfd);
     }
     freeaddrinfo(candidates);
 
-    if (sockfd_vec_count(*sockfds) == 0)
+    if (vec_count(*sockfds) == 0)
     {
         log_err("Failed to connect any UDP socket\n");
         return -1;
@@ -244,9 +245,11 @@ void net_close(int sockfd)
 
 /* ------------------------------------------------------------------------- */
 int net_sendto(
-    int sockfd, const void* buf, int len, const void* addr, int addrlen)
+    int sockfd, const void* buf, int len, const struct net_addr* addr)
 {
-    return sendto(sockfd, buf, len, 0, addr, addrlen);
+    const struct sockaddr* sockaddr =
+        (const struct sockaddr*)addr->sockaddr_storage;
+    return sendto(sockfd, buf, len, 0, sockaddr, addr->len);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -256,18 +259,18 @@ int net_send(int sockfd, const void* buf, int len)
 }
 
 /* ------------------------------------------------------------------------- */
-int net_recvfrom(int sockfd, void* buf, int capacity, void* addr, int addrlen)
+int net_recvfrom(int sockfd, void* buf, int capacity, struct net_addr* addr)
 {
-    struct sockaddr_storage addr_received;
-    socklen_t               addrlen_received = sizeof(addr_received);
+    socklen_t addrlen_received = sizeof(addr->sockaddr_storage);
 
     int bytes_received = recvfrom(
         sockfd,
         buf,
         capacity,
         0,
-        (struct sockaddr*)&addr_received,
+        (struct sockaddr*)&addr->sockaddr_storage,
         &addrlen_received);
+    addr->len = (int)addrlen_received;
 
     if (bytes_received < 0)
     {
@@ -277,22 +280,6 @@ int net_recvfrom(int sockfd, void* buf, int capacity, void* addr, int addrlen)
         return -1;
     }
 
-    if ((int)addrlen_received != addrlen)
-    {
-        char ipstr[INET6_ADDRSTRLEN];
-        net_addr_to_str(ipstr, INET6_ADDRSTRLEN, &addr_received);
-        log_err(
-            "Received data from an address that has a different length than "
-            "expected!\n");
-        log_err(
-            "Expected: %d, received: %d, address: %s\n",
-            addrlen,
-            addrlen_received,
-            ipstr);
-        return 0;
-    }
-
-    memcpy(addr, &addr_received, addrlen);
     return bytes_received;
 }
 

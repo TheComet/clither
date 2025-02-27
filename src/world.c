@@ -1,6 +1,7 @@
 #include "clither/log.h"
 #include "clither/q.h"
 #include "clither/snake.h"
+#include "clither/str.h"
 #include "clither/world.h"
 #include <stddef.h>
 

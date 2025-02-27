@@ -1,11 +1,27 @@
 #include "clither/client.h"
 #include "clither/log.h"
-#include "clither/mem.h"
 #include "clither/msg.h"
-#include "clither/msg_queue.h"
+#include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/snake.h"
+#include "clither/str.h"
 #include "clither/world.h"
+#include <string.h> /* memcpy */
+
+#if defined(CLITHER_GFX)
+#    include "clither/args.h"
+#    include "clither/camera.h"
+#    include "clither/cli_colors.h"
+#    include "clither/gfx.h"
+#    include "clither/input.h"
+#    include "clither/resource_pack.h"
+#    include "clither/signals.h"
+#    include "clither/tick.h"
+#    if defined(CLITHER_MCD)
+#        include "clither/mcd_wifi.h"
+#        include "clither/thread.h"
+#    endif
+#endif
 
 /* ------------------------------------------------------------------------- */
 void client_init(struct client* client)
@@ -19,7 +35,7 @@ void client_init(struct client* client)
     client->warp = 0;
     client->state = CLIENT_DISCONNECTED;
 
-    msg_queue_init(&client->pending_msgs);
+    msg_vec_init(&client->pending_msgs);
     sockfd_vec_init(&client->udp_sockfds);
 }
 
@@ -29,8 +45,9 @@ void client_deinit(struct client* client)
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
+    str_deinit(client->username);
     sockfd_vec_deinit(client->udp_sockfds);
-    msg_queue_deinit(client->pending_msgs);
+    msg_vec_deinit(client->pending_msgs);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -40,15 +57,9 @@ int client_connect(
     const char*    port,
     const char*    username)
 {
-    CLITHER_DEBUG_ASSERT(
-        client->state == CLIENT_DISCONNECTED,
-        log_err("state: %d\n", client->state));
-    CLITHER_DEBUG_ASSERT(
-        sockfd_vec_count(client->udp_sockfds) == 0,
-        log_err("count: %d\n", sockfd_vec_count(client->udp_sockfds)));
-    CLITHER_DEBUG_ASSERT(
-        str_len(client->username) == 0,
-        log_err("username: %s\n", str_cstr(client->username)));
+    CLITHER_DEBUG_ASSERT(client->state == CLIENT_DISCONNECTED);
+    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) == 0);
+    CLITHER_DEBUG_ASSERT(str_len(client->username) == 0);
 
     if (!*server_address)
         server_address = NET_DEFAULT_ADDRESS;
@@ -80,23 +91,31 @@ int client_connect(
 /* ------------------------------------------------------------------------- */
 void client_disconnect(struct client* client)
 {
-    int* sockfd;
+    int*         sockfd;
+    struct msg** msg;
 
-    CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED, (void)0);
-    CLITHER_DEBUG_ASSERT(sockfd_vec_count(client->udp_sockfds) != 0, (void)0);
-    CLITHER_DEBUG_ASSERT(str_len(client->username) != 0, (void)0);
+    CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED);
+    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) != 0);
+    CLITHER_DEBUG_ASSERT(str_len(client->username) != 0);
 
     str_deinit(client->username);
     client->username = NULL;
 
-    vec_for_each(client->udp_sockfds, sockfd)
-    {
+    vec_for_each (client->udp_sockfds, sockfd)
         net_close(*sockfd);
-    }
+
+    vec_for_each (client->pending_msgs, msg)
+        msg_free(*msg);
 
     client->state = CLIENT_DISCONNECTED;
     sockfd_vec_clear(client->udp_sockfds);
-    msg_queue_clear(client->pending_msgs);
+    msg_vec_clear(client->pending_msgs);
+}
+
+/* ------------------------------------------------------------------------- */
+int client_queue(struct client* client, struct msg* m)
+{
+    return msg_vec_push(&client->pending_msgs, m);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -174,12 +193,12 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
 int client_send_pending_data(struct client* client)
 {
     struct append_msgs_ctx ctx;
-    ctx.frame_number = client->frame_number;
-    ctx.len = 0;
 
     /* Append unreliable messages first before appending reliable */
-    msg_queue_retain(client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
-    msg_queue_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
+    ctx.len = 0;
+    ctx.frame_number = client->frame_number;
+    msg_vec_retain(client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
+    msg_vec_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
 
     if (ctx.len > 0)
     {
@@ -192,7 +211,7 @@ int client_send_pending_data(struct client* client)
          */
     retry_send:
         log_net("Sending UDP packet, size=%d\n", ctx.len);
-        CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0, (void)0);
+        CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
         if (net_send(*vec_last(client->udp_sockfds), ctx.buf, ctx.len) < 0)
         {
             if (vec_count(client->udp_sockfds) == 1)
@@ -221,7 +240,7 @@ int client_recv(struct client* client, struct world* world)
     int     bytes_received;
     int     retval = 0;
 
-    CLITHER_DEBUG_ASSERT(sockfd_vec_count(&client->udp_sockfds) > 0, (void)0);
+    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
@@ -276,7 +295,7 @@ retry_recv:
                     break;
 
                 /* Stop sending join request messages */
-                msg_queue_remove_type(client->pending_msgs, MSG_JOIN_REQUEST);
+                msg_vec_remove_type(client->pending_msgs, MSG_JOIN_REQUEST);
 
                 /*
                  * Regardless of whether we succeed or fail, the client is
@@ -317,9 +336,9 @@ retry_recv:
                  * the future relative to the frame it sent back. Therefore, we
                  * are a full rtt into the future now.
                  */
-                client->frame_number
-                    = pp.join_accept.server_frame + rtt
-                      + 5 * client->sim_tick_rate / client->net_tick_rate;
+                client->frame_number =
+                    pp.join_accept.server_frame + rtt +
+                    5 * client->sim_tick_rate / client->net_tick_rate;
 
                 /* Server may also be running on a different tick rate */
                 client->sim_tick_rate = pp.join_accept.sim_tick_rate;
@@ -390,8 +409,8 @@ retry_recv:
             break;
 
             case MSG_SNAKE_BEZIER: {
-                struct snake* snake
-                    = world_get_snake(world, pp.snake_bezier.snake_id);
+                struct snake* snake =
+                    world_get_snake(world, pp.snake_bezier.snake_id);
                 if (snake == NULL)
                     break; /* Have to wait for MSG_SNAKE_CREATE to arrive */
             }
@@ -411,12 +430,12 @@ retry_recv:
 #if defined(CLITHER_GFX)
 void* client_run(const struct args* a)
 {
-#if defined(CLITHER_MCD)
-    struct thread mcd_thread;
-#endif
+#    if defined(CLITHER_MCD)
+    struct thread* mcd_thread;
+#    endif
     struct world                world;
     struct input                input;
-    struct command              command;
+    struct cmd                  cmd;
     const struct gfx_interface* gfx_iface;
     struct gfx*                 gfx;
     struct resource_pack*       pack;
@@ -432,16 +451,17 @@ void* client_run(const struct args* a)
 
     /* If McDonald's WiFi is enabled, start that */
     client_init(&client);
-#if defined(CLITHER_MCD)
+#    if defined(CLITHER_MCD)
     if (a->mcd_latency > 0)
     {
-        if (thread_start(&mcd_thread, run_mcd_wifi, a) < 0)
+        mcd_thread = thread_start(run_mcd_wifi, a);
+        if (mcd_thread == NULL)
             goto start_mcd_failed;
         if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
             goto client_connect_failed;
     }
     else
-#endif
+#    endif
     {
         /*
          * TODO: In the future the GUI will take care of connecting. Here we do
@@ -468,7 +488,7 @@ void* client_run(const struct args* a)
 
     input_init(&input);
     camera_init(&camera);
-    command = command_default();
+    cmd = cmd_default();
     world_init(&world);
 
     log_info("Client started\n");
@@ -584,8 +604,8 @@ void* client_run(const struct args* a)
              * information into a structure that lets us step the snake forwards
              * in time.
              */
-            command = gfx_iface->input_to_command(
-                command, &input, gfx, &camera, snake->head.pos);
+            cmd = gfx_iface->input_to_cmd(
+                cmd, &input, gfx, &camera, snake->head.pos);
 
             /*
              * Append the new command to the ring buffer of unconfirmed
@@ -596,7 +616,7 @@ void* client_run(const struct args* a)
              * date back before and up to that point in time from the list
              * again.
              */
-            command_rb_put(&snake->command_rb, command, client.frame_number);
+            cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
 
             /* Update snake */
             snake_param_update(
@@ -610,7 +630,7 @@ void* client_run(const struct args* a)
                     &snake->data,
                     &snake->head,
                     &snake->param,
-                    command,
+                    cmd,
                     client.sim_tick_rate));
 
             /* Update world */
@@ -622,7 +642,7 @@ void* client_run(const struct args* a)
             if (net_update)
             {
                 /* Send all unconfirmed commands (unreliable) */
-                msg_commands(&client.pending_msgs, &snake->command_rb);
+                msg_commands(&client.pending_msgs, &snake->cmdq);
             }
         }
 
@@ -639,8 +659,8 @@ void* client_run(const struct args* a)
          * of the delay. If for some reason we end up 3 seconds behind where we
          * should be, quit.
          */
-        tick_lag
-            = tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
+        tick_lag =
+            tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         if (tick_lag == 0)
             gfx_iface->draw_world(gfx, &world, &camera);
         else
@@ -674,14 +694,14 @@ init_gfx_failed:
         client_disconnect(&client);
 client_connect_failed:
     /* Stop McDonald's WiFi if necessary */
-#if defined(CLITHER_MCD)
+#    if defined(CLITHER_MCD)
     if (a->mcd_latency > 0)
     {
-        thread_join(mcd_thread, 0);
+        thread_join(mcd_thread);
         log_dbg("Joined McDonald's WiFi thread\n");
     }
 start_mcd_failed:
-#endif
+#    endif
     client_deinit(&client);
     log_set_colors("", "");
     log_set_prefix("");

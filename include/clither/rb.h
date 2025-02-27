@@ -17,9 +17,11 @@
  */
 #pragma once
 
-#include "clither/log.h"
-#include <stddef.h>
-#include <stdint.h>
+#include "clither/config.h"
+#include "clither/log.h" /* log_oom */
+#include "clither/mem.h" /* mem_alloc, mem_realloc, mem_free */
+#include <stddef.h>      /* offsetof */
+#include <string.h>      /* memmove */
 
 #define RB_DECLARE(prefix, T, bits) RB_DECLARE_FULL(prefix, T, bits, 16)
 
@@ -72,7 +74,7 @@
     static inline int prefix##_put(struct prefix* rb, T elem)                  \
     {                                                                          \
         int##bits##_t write;                                                   \
-        CLITHER_DEBUG_ASSERT(rb, 0);                                           \
+        CLITHER_DEBUG_ASSERT(rb);                                              \
         write = rb->write;                                                     \
         if (rb_is_full(rb))                                                    \
             return -1;                                                         \
@@ -84,8 +86,8 @@
     {                                                                          \
         int##bits##_t write;                                                   \
         if (*rb == NULL || rb_is_full(*rb))                                    \
-            if (prefix##_resize(rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY)  \
-                != 0)                                                          \
+            if (prefix##_resize(                                               \
+                    rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY) != 0)        \
             {                                                                  \
                 return -1;                                                     \
             }                                                                  \
@@ -121,8 +123,8 @@
         int##bits##_t write;                                                   \
         T*            value;                                                   \
         if (*rb == NULL || rb_is_full(*rb))                                    \
-            if (prefix##_resize(rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY)  \
-                != 0)                                                          \
+            if (prefix##_resize(                                               \
+                    rb, *rb ? (*rb)->capacity * 2 : MIN_CAPACITY) != 0)        \
             {                                                                  \
                 return NULL;                                                   \
             }                                                                  \
@@ -143,7 +145,7 @@
     {                                                                          \
         int##bits##_t read;                                                    \
         T             data;                                                    \
-        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb), log_err("rb is empty\n"));      \
+        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb));                                \
         read = rb->read;                                                       \
         data = rb->data[read];                                                 \
         rb->read = (read + 1) & ((int##bits##_t)rb->capacity - 1);             \
@@ -161,7 +163,7 @@
     {                                                                          \
         int##bits##_t write;                                                   \
         T             data;                                                    \
-        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb), log_err("rb is empty\n"));      \
+        CLITHER_DEBUG_ASSERT(!rb_is_empty(rb));                                \
         write = (rb->write - 1) & ((int##bits##_t)rb->capacity - 1);           \
         data = rb->data[write];                                                \
         rb->write = write;                                                     \
@@ -170,7 +172,7 @@
                                                                                \
     static inline void prefix##_clear(struct prefix* rb)                       \
     {                                                                          \
-        CLITHER_DEBUG_ASSERT(rb, (void)0);                                     \
+        CLITHER_DEBUG_ASSERT(rb);                                              \
         rb->read = rb->write;                                                  \
     }
 
@@ -184,11 +186,10 @@
     int prefix##_resize(struct prefix** rb, int##bits##_t elems)               \
     {                                                                          \
         struct prefix* new_rb;                                                 \
-        mem_size       header = offsetof(struct prefix, data);                 \
-        mem_size       data = sizeof((*rb)->data[0]) * elems;                  \
+        int            header = offsetof(struct prefix, data);                 \
+        int            data = sizeof(T) * elems;                               \
                                                                                \
-        CLITHER_DEBUG_ASSERT(                                                  \
-            IS_POWER_OF_2(elems), log_err("elems: %d\n", elems));              \
+        CLITHER_DEBUG_ASSERT(IS_POWER_OF_2(elems));                            \
         new_rb = (struct prefix*)mem_realloc(*rb, header + data);              \
         if (new_rb == NULL)                                                    \
             return log_oom(header + data, "rb_resize()");                      \
@@ -207,7 +208,7 @@
             memmove(                                                           \
                 (*rb)->data + (*rb)->capacity,                                 \
                 (*rb)->data,                                                   \
-                (*rb)->write * sizeof((*rb)->data[0]));                        \
+                (*rb)->write * sizeof(T));                                     \
             (*rb)->write += (*rb)->capacity;                                   \
         }                                                                      \
                                                                                \
@@ -228,19 +229,16 @@
 
 #define rb_peek(rb, idx)                                                       \
     (CLITHER_DEBUG_ASSERT(                                                     \
-         (rb) && (rb)->read != (rb)->write && (idx) >= 0                       \
-             && (idx) < ((rb)->read - (rb)->write - 1) & ((rb)->capacity - 1), \
-         log_err("idx: %d\n", idx)),                                           \
+         (rb) && (rb)->read != (rb)->write && (idx) >= 0 &&                    \
+         (idx) < (((rb)->write - (rb)->read) & ((rb)->capacity - 1))),         \
      &(rb)->data[((rb)->read + (idx)) & ((rb)->capacity - 1)])
 
 #define rb_peek_read(rb)                                                       \
-    (CLITHER_DEBUG_ASSERT(                                                     \
-         (rb) && (rb)->read != (rb)->write, log_err("rb is empty\n")),         \
+    (CLITHER_DEBUG_ASSERT((rb) && (rb)->read != (rb)->write),                  \
      &(rb)->data[(rb)->read])
 
 #define rb_peek_write(rb)                                                      \
-    (CLITHER_DEBUG_ASSERT(                                                     \
-         (rb) && (rb)->read != (rb)->write, log_err("rb is empty\n")),         \
+    (CLITHER_DEBUG_ASSERT((rb) && (rb)->read != (rb)->write),                  \
      &(rb)->data[((rb)->write - 1) & ((rb)->capacity - 1)])
 
 /*!

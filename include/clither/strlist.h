@@ -1,6 +1,8 @@
 #pragma once
 
-#include "clither/str.h"
+#include "clither/strspan.h"
+#include "clither/strview.h"
+#include <stddef.h> /* NULL */
 
 #define STRLIST_TABLE_PTR(l) ((struct strspan*)((l)->data + (l)->capacity) - 1)
 
@@ -13,56 +15,44 @@ struct strlist
     char data[1];
 };
 
-static inline void
-strlist_init(struct strlist** l)
+static inline void strlist_init(struct strlist** l)
 {
     *l = NULL;
 }
 
-void
-strlist_deinit(struct strlist* l);
+void strlist_deinit(struct strlist* l);
 
 #if defined(ODBUTIL_MEM_DEBUGGING)
-ODBUTIL_PUBLIC_API void
-mem_acquire_strlist(struct strlist* l);
-ODBUTIL_PUBLIC_API void
-mem_release_strlist(struct strlist* l);
+void mem_own_strlist(struct strlist* l);
+void mem_unown_strlist(struct strlist* l);
 #else
-#define mem_acquire_strlist(l)
-#define mem_release_strlist(l)
+#    define mem_own_strlist(l)
+#    define mem_unown_strlist(l)
 #endif
 
-int
-strlist_add(struct strlist** l, struct strview str);
+int strlist_add(struct strlist** l, struct strview str);
+int strlist_add_cstr(struct strlist** l, const char* cstr);
+int strlist_insert(struct strlist** l, int insert, const char* cstr);
+void strlist_erase(struct strlist* l, int idx);
 
-int
-strlist_insert(struct strlist** l, int insert, struct strview in);
-
-void
-strlist_erase(struct strlist* l, int idx);
-
-static inline struct strspan
-strlist_span(const struct strlist* l, int i)
+static inline struct strspan strlist_span(const struct strlist* l, int i)
 {
     return STRLIST_TABLE_PTR(l)[-i];
 }
 
-static inline struct strview
-strlist_view(const struct strlist* l, int i)
+static inline struct strview strlist_view(const struct strlist* l, int i)
 {
     struct strspan span = strlist_span(l, i);
     return strview(l->data, span.off, span.len);
 }
 
-static inline const char*
-strlist_cstr(const struct strlist* l, int i)
+static inline const char* strlist_cstr(const struct strlist* l, int i)
 {
     struct strspan span = strlist_span(l, i);
     return l->data + span.off;
 }
 
-static inline int
-strlist_count(const struct strlist* l)
+static inline int strlist_count(const struct strlist* l)
 {
     return l ? l->count : 0;
 }
@@ -83,14 +73,8 @@ strlist_count(const struct strlist* l)
  * line 2121 in stl_algo.h
  * https://gcc.gnu.org/onlinedocs/libstdc++/libstdc++-html-USERS-4.3/a02014.html
  */
-int
-strlist_lower_bound(const struct strlist* l, struct strview str);
+int strlist_lower_bound(const struct strlist* l, struct strview str);
 
-#define strlist_enumerate(l, i, var)                                           \
-    for (i = 0; (l) && i != (l)->count && ((var = strlist_view((l), i)), 1);   \
+#define strlist_for_each(l, i, var)                                            \
+    for (i = 0; (l) && i != (l)->count && ((var = strlist_cstr((l), i)), 1);   \
          ++i)
-
-#define strlist_for_each(l, var)                                               \
-    for (int var##_i = 0; (l) && var##_i != (l)->count                         \
-                          && ((var = strlist_cstr((l), var##_i)), 1);          \
-         ++var##_i)

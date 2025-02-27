@@ -246,6 +246,13 @@ void log_net(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
+int log_oom(int bytes, const char* func_name)
+{
+    log_err("Failed to allocate %d bytes in %s\n", bytes, func_name);
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
 static const char* emph_style(void)
 {
     return COL_B_WHITE;
@@ -316,7 +323,7 @@ void log_excerpt(const char* source, struct strspan loc)
     int            indent, max_indent;
     int            gutter_indent;
     int            line;
-    struct strview block;
+    struct strspan block;
 
     /* Calculate line column as well as beginning of block. The goal is to make
      * "block" point to the first character in the line that contains the
@@ -395,8 +402,8 @@ void log_excerpt(const char* source, struct strspan loc)
 
             if (source[block.off + i++] == '\n')
             {
-                if (i >= loc.off - block.off
-                    && i <= loc.off - block.off + loc.len)
+                if (i >= loc.off - block.off &&
+                    i <= loc.off - block.off + loc.len)
                     fprintf(stderr, "%s", reset_style());
                 break;
             }

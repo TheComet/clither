@@ -10,8 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-int
-mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
+int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
 {
     struct stat stbuf;
     int         fd;
@@ -21,7 +20,7 @@ mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     {
         if (log_error)
             log_err(
-                "Failed to open() file {quote:%s}: %s\n",
+                "Failed to open() file \"%s\": %s\n",
                 filepath,
                 strerror(errno));
         goto open_failed;
@@ -31,7 +30,7 @@ mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     {
         if (log_error)
             log_err(
-                "Failed to fstat() file {quote:%s}: %s\n",
+                "Failed to fstat() file \"%s\": %s\n",
                 filepath,
                 strerror(errno));
         goto fstat_failed;
@@ -41,7 +40,7 @@ mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     {
         if (log_error)
             log_err(
-                "Cannot map file {quote:%s}: File is not a regular file\n",
+                "Cannot map file \"%s\": File is not a regular file\n",
                 filepath);
         goto fstat_failed;
     }
@@ -60,7 +59,7 @@ mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     {
         if (log_error)
             log_err(
-                "Failed to mmap() file {quote:%s}: %s\n",
+                "Failed to mmap() file \"%s\": %s\n",
                 filepath,
                 strerror(errno));
         goto mmap_failed;
@@ -81,8 +80,7 @@ open_failed:
     return -1;
 }
 
-int
-mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
+int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
 {
     int fd = open(
         filepath,
@@ -110,8 +108,8 @@ mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
         goto mmap_failed;
     }
 
-    mf->address
-        = mmap(NULL, (size_t)size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    mf->address =
+        mmap(NULL, (size_t)size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (mf->address == MAP_FAILED)
     {
         log_err(
@@ -134,8 +132,7 @@ open_failed:
     return -1;
 }
 
-int
-mfile_map_mem(struct mfile* mf, int size)
+int mfile_map_mem(struct mfile* mf, int size)
 {
     mf->address = mmap(
         NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -151,8 +148,7 @@ mfile_map_mem(struct mfile* mf, int size)
     return 0;
 }
 
-void
-mfile_unmap(struct mfile* mf)
+void mfile_unmap(struct mfile* mf)
 {
     mem_track_deallocation(mf->address);
     munmap(mf->address, (size_t)mf->size);

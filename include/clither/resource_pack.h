@@ -6,12 +6,11 @@ struct str;
 
 struct resource_sprite
 {
-    struct str* texture0;
-    struct str* texture1;
-    int   tile_x, tile_y;
-    int   num_frames;
-    int   fps;
-    float scale;
+    struct strlist* textures;
+    int             tile_x, tile_y;
+    int             num_frames;
+    int             fps;
+    float           scale;
 };
 
 /*!
@@ -32,9 +31,6 @@ struct resource_snake_part
     struct resource_sprite* split;
     struct resource_sprite* armor;
 };
-
-VEC_DECLARE(resource_sprite_vec, struct resource_sprite, 16)
-VEC_DECLARE(resource_snake_part_vec, struct resource_snake_part, 16)
 
 struct resource_pack
 {
@@ -60,14 +56,14 @@ struct resource_pack
          * layers of textures with different grid spacings. The details of how
          * they're pieced together is all part of the background shader */
         struct resource_sprite_vec* background;
-        /*! List of head parts. List is NULL terminated */
-        struct resource_snake_part_vec* head;
-        /*! List of body parts. List is NULL terminated */
-        struct resource_snake_part_vec* body;
-        /*! List of tail parts. List is NULL terminated */
-        struct resource_snake_part_vec* tail;
+        /*! List of head parts. */
+        struct resource_snake_part_vec* heads;
+        /*! List of body parts. */
+        struct resource_snake_part_vec* bodies;
+        /*! List of tail parts. */
+        struct resource_snake_part_vec* tails;
     } sprites;
 };
 
 struct resource_pack* resource_pack_parse(const char* pack_path);
-void resource_pack_destroy(struct resource_pack* pack);
+void                  resource_pack_destroy(struct resource_pack* pack);

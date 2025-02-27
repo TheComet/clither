@@ -36,23 +36,8 @@ print_help(const char* prog_name)
      * Examples section
      */
     fprintf(stderr, SECTION "Usage:\n" RESET "  %s [" ARG2 "options" RESET "]\n\n", prog_name);
-    fprintf(stderr,
-        SECTION "Examples:\n" RESET
-        TEXT "  Start a dedicated server (headless mode):\n" RESET
-        "    %s " ARG1 "--server\n" RESET
-        "    %s " ARG1 "--server --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "    # change bind address\n" RESET
-        "\n",
-        prog_name, prog_name
-    );
+    fprintf(stderr, SECTION "Examples:\n" RESET);
 #if defined(CLITHER_GFX)
-    fprintf(stderr,
-        TEXT "  Host a server, then start the client  and join the server. The server will\n"
-        "  stop when the client stops, since it is a child process.\n" RESET
-        "    %s" ARG1 " --host\n" RESET
-        "    %s" ARG1 " --host --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind port\n" RESET
-        "\n",
-        prog_name, prog_name
-    );
     fprintf(stderr,
         TEXT "  Join a server\n" RESET
         "    %s" ARG1 " --ip" RESET " 192.168.1.2\n"
@@ -60,7 +45,22 @@ print_help(const char* prog_name)
         "\n",
         prog_name, prog_name
     );
+    fprintf(stderr,
+        TEXT "  Create a server and join it as a client. The server will stop when the\n"
+        "  client stops, since it is a child process.\n" RESET
+        "    %s" ARG1 " --host\n" RESET
+        "    %s" ARG1 " --host --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind port\n" RESET
+        "\n",
+        prog_name, prog_name
+    );
 #endif
+    fprintf(stderr,
+        TEXT "  Start a dedicated server (headless mode):\n" RESET
+        "    %s " ARG1 "--server\n" RESET
+        "    %s " ARG1 "--server --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "    # change bind address\n" RESET
+        "\n",
+        prog_name, prog_name
+    );
 
     /*
      * Available options section

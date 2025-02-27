@@ -22,28 +22,285 @@ struct report_info
 #endif
 };
 
-HM_DECLARE_HASH(report, hash32, uintptr_t, struct report_info, 32)
-HM_DEFINE_HASH(
-    report, hash32, uintptr_t, struct report_info, 32, hash32_aligned_ptr)
+HM_DECLARE_HASH(report_hm, hash32, uintptr_t, struct report_info, 32)
+static int report_hm_kvs_alloc(
+    struct report_hm_kvs* kvs, struct report_hm_kvs* old_kvs, int32_t capacity)
+{
+    (void)old_kvs;
+    if ((kvs->keys = (uintptr_t*)mem_alloc(sizeof(uintptr_t) * capacity)) ==
+        ((void*)0))
+        return -1;
+    if ((kvs->values = (struct report_info*)mem_alloc(
+             sizeof(struct report_info) * capacity)) == ((void*)0))
+    {
+        mem_free(kvs->keys);
+        return -1;
+    }
+    return 0;
+}
+static void report_hm_kvs_free(struct report_hm_kvs* kvs)
+{
+    mem_free(kvs->values);
+    mem_free(kvs->keys);
+}
+static void report_hm_kvs_free_old(struct report_hm_kvs* kvs)
+{
+    report_hm_kvs_free(kvs);
+}
+static uintptr_t
+report_hm_kvs_get_key(const struct report_hm_kvs* kvs, int32_t slot)
+{
+    return kvs->keys[slot];
+}
+static void
+report_hm_kvs_set_key(struct report_hm_kvs* kvs, int32_t slot, uintptr_t key)
+{
+    kvs->keys[slot] = key;
+}
+static int report_hm_kvs_keys_equal(uintptr_t k1, uintptr_t k2)
+{
+    return k1 == k2;
+}
+static struct report_info*
+report_hm_kvs_get_value(const struct report_hm_kvs* kvs, int32_t slot)
+{
+    return &kvs->values[slot];
+}
+static void report_hm_kvs_set_value(
+    struct report_hm_kvs* kvs, int32_t slot, const struct report_info* value)
+{
+    kvs->values[slot] = *value;
+}
+void report_hm_deinit(struct report_hm* hm)
+{
+    hash32 (*hash)(uintptr_t) = hash32_aligned_ptr;
+    int (*storage_alloc)(
+        struct report_hm_kvs*, struct report_hm_kvs*, int32_t) =
+        report_hm_kvs_alloc;
+    void (*storage_free_old)(struct report_hm_kvs*) = report_hm_kvs_free_old;
+    void (*storage_free)(struct report_hm_kvs*) = report_hm_kvs_free;
+    uintptr_t (*get_key)(const struct report_hm_kvs*, int32_t) =
+        report_hm_kvs_get_key;
+    void (*set_key)(struct report_hm_kvs*, int32_t, uintptr_t) =
+        report_hm_kvs_set_key;
+    int (*keys_equal)(uintptr_t, uintptr_t) = report_hm_kvs_keys_equal;
+    struct report_info* (*get_value)(const struct report_hm_kvs*, int32_t) =
+        report_hm_kvs_get_value;
+    void (*set_value)(
+        struct report_hm_kvs*, int32_t, const struct report_info*) =
+        report_hm_kvs_set_value;
+    (void)hash;
+    (void)storage_alloc;
+    (void)storage_free_old;
+    (void)storage_free;
+    (void)get_key;
+    (void)set_key;
+    (void)keys_equal;
+    (void)get_value;
+    (void)set_value;
+    if (hm != ((void*)0))
+    {
+        report_hm_kvs_free(&hm->kvs);
+        mem_free(hm);
+    }
+}
+static int32_t
+report_hm_find_slot(const struct report_hm* hm, uintptr_t key, hash32 h);
+static int report_hm_grow(struct report_hm** hm)
+{
+    struct report_hm* new_hm;
+    int32_t           i, header, data;
+    int32_t           old_cap = *hm ? (*hm)->capacity : 0;
+    int32_t           new_cap = old_cap ? old_cap * 2 : 128;
+    ((void)sizeof(((new_cap & (new_cap - 1)) == 0) ? 1 : 0), __extension__({
+         if ((new_cap & (new_cap - 1)) == 0)
+             ;
+         else
+             __assert_fail(
+                 "(new_cap & (new_cap - 1)) == 0",
+                 "/home/thecomet/documents/programming/cpp/clither/src/mem.c",
+                 27,
+                 __extension__ __PRETTY_FUNCTION__);
+     }));
+    header = __builtin_offsetof(struct report_hm, hashes);
+    data = sizeof((*hm)->hashes[0]) * new_cap;
+    new_hm = (struct report_hm*)mem_alloc(header + data);
+    if (new_hm == ((void*)0))
+        goto alloc_hm_failed;
+    if (report_hm_kvs_alloc(&new_hm->kvs, &(*hm)->kvs, new_cap) != 0)
+        goto alloc_storage_failed;
+    memset(new_hm->hashes, 0, sizeof(hash32) * new_cap);
+    new_hm->count = 0;
+    new_hm->capacity = new_cap;
+    for (i = 0; i != old_cap; ++i)
+    {
+        int32_t slot;
+        hash32  h;
+        if ((*hm)->hashes[i] == 0 || (*hm)->hashes[i] == 1)
+            continue;
+        h = hash32_aligned_ptr(report_hm_kvs_get_key(&(*hm)->kvs, i));
+        if (h == 0 || h == 1)
+            h = 2;
+        slot = report_hm_find_slot(
+            new_hm, report_hm_kvs_get_key(&(*hm)->kvs, i), h);
+        ((void)sizeof((slot >= 0) ? 1 : 0), __extension__({
+             if (slot >= 0)
+                 ;
+             else
+                 __assert_fail(
+                     "slot >= 0",
+                     "/home/thecomet/documents/programming/cpp/clither/src/"
+                     "mem.c",
+                     27,
+                     __extension__ __PRETTY_FUNCTION__);
+         }));
+        new_hm->hashes[slot] = h;
+        report_hm_kvs_set_key(
+            &new_hm->kvs, slot, report_hm_kvs_get_key(&(*hm)->kvs, i));
+        report_hm_kvs_set_value(
+            &new_hm->kvs, slot, report_hm_kvs_get_value(&(*hm)->kvs, i));
+        new_hm->count++;
+    }
+    if (*hm != ((void*)0))
+    {
+        report_hm_kvs_free_old(&(*hm)->kvs);
+        mem_free(*hm);
+    }
+    *hm = new_hm;
+    return 0;
+alloc_storage_failed:
+    mem_free(new_hm);
+alloc_hm_failed:
+    return log_oom(header + data, "hm_grow()");
+}
+static int32_t
+report_hm_find_slot(const struct report_hm* hm, uintptr_t key, hash32 h)
+{
+    int32_t slot, i, last_rip;
+    ((void)sizeof((hm && hm->capacity > 0) ? 1 : 0), __extension__({
+         if (hm && hm->capacity > 0)
+             ;
+         else
+             __assert_fail(
+                 "hm && hm->capacity > 0",
+                 "/home/thecomet/documents/programming/cpp/clither/src/mem.c",
+                 27,
+                 __extension__ __PRETTY_FUNCTION__);
+     }));
+    ((void)sizeof((h > 1) ? 1 : 0), __extension__({
+         if (h > 1)
+             ;
+         else
+             __assert_fail(
+                 "h > 1",
+                 "/home/thecomet/documents/programming/cpp/clither/src/mem.c",
+                 27,
+                 __extension__ __PRETTY_FUNCTION__);
+     }));
+    i = 0;
+    last_rip = -1;
+    slot = (int32_t)(h & (hash32)(hm->capacity - 1));
+    while (hm->hashes[slot] != 0)
+    {
+        if (hm->hashes[slot] == h)
+            if (report_hm_kvs_keys_equal(
+                    report_hm_kvs_get_key(&hm->kvs, slot), key))
+                return -(1 + slot);
+        if (hm->hashes[slot] == 1)
+            last_rip = slot;
+        i++;
+        slot = (int32_t)((slot + i) & (hm->capacity - 1));
+    }
+    if (last_rip != -1)
+        slot = last_rip;
+    return slot;
+}
+struct report_info* report_hm_emplace_new(struct report_hm** hm, uintptr_t key)
+{
+    hash32  h;
+    int32_t slot;
+    if (!*hm || (*hm)->count * 100 >= 70 * (*hm)->capacity)
+        if (report_hm_grow(hm) != 0)
+            return ((void*)0);
+    h = hash32_aligned_ptr(key);
+    if (h == 0 || h == 1)
+        h = 2;
+    slot = report_hm_find_slot(*hm, key, h);
+    if (slot < 0)
+        return ((void*)0);
+    (*hm)->count++;
+    (*hm)->hashes[slot] = h;
+    report_hm_kvs_set_key(&(*hm)->kvs, slot, key);
+    return report_hm_kvs_get_value(&(*hm)->kvs, slot);
+}
+enum hm_status report_hm_emplace_or_get(
+    struct report_hm** hm, uintptr_t key, struct report_info** value)
+{
+    hash32  h;
+    int32_t slot;
+    if (!*hm || (*hm)->count * 100 >= 70 * (*hm)->capacity)
+        if (report_hm_grow(hm) != 0)
+            return HM_OOM;
+    h = hash32_aligned_ptr(key);
+    if (h == 0 || h == 1)
+        h = 2;
+    slot = report_hm_find_slot(*hm, key, h);
+    if (slot < 0)
+    {
+        *value = report_hm_kvs_get_value(&(*hm)->kvs, -1 - slot);
+        return HM_EXISTS;
+    }
+    (*hm)->count++;
+    (*hm)->hashes[slot] = h;
+    report_hm_kvs_set_key(&(*hm)->kvs, slot, key);
+    *value = report_hm_kvs_get_value(&(*hm)->kvs, slot);
+    return HM_NEW;
+}
+struct report_info* report_hm_find(const struct report_hm* hm, uintptr_t key)
+{
+    hash32  h;
+    int32_t slot;
+    if (hm == ((void*)0))
+        return ((void*)0);
+    h = hash32_aligned_ptr(key);
+    if (h == 0 || h == 1)
+        h = 2;
+    slot = report_hm_find_slot(hm, key, h);
+    if (slot >= 0)
+        return ((void*)0);
+    return report_hm_kvs_get_value(&hm->kvs, -1 - slot);
+}
+struct report_info* report_hm_erase(struct report_hm* hm, uintptr_t key)
+{
+    hash32  h;
+    int32_t slot;
+    h = hash32_aligned_ptr(key);
+    if (h == 0 || h == 1)
+        h = 2;
+    slot = report_hm_find_slot(hm, key, h);
+    if (slot >= 0)
+        return ((void*)0);
+    hm->count--;
+    hm->hashes[-1 - slot] = 1;
+    return report_hm_kvs_get_value(&hm->kvs, -1 - slot);
+}
 
 struct state
 {
-    struct report* report;
-    int            allocations;
-    int            deallocations;
-    unsigned       ignore_malloc : 1;
+    struct report_hm* report;
+    int               allocations;
+    int               deallocations;
+    unsigned          ignore_malloc : 1;
 };
 
 static CLITHER_THREADLOCAL struct state state;
 
-int mem_init_threadlocal(void)
+void mem_init_threadlocal(void)
 {
     state.allocations = 0;
     state.deallocations = 0;
 
-    report_init(&state.report);
-
-    return 0;
+    report_hm_init(&state.report);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -71,7 +328,7 @@ static void print_backtrace(void)
     backtrace_free(bt);
 }
 #else
-#define print_backtrace()
+#    define print_backtrace()
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -93,7 +350,7 @@ static void track_allocation(uintptr_t addr, int size)
 
     /* insert info into hashmap */
     state.ignore_malloc = 1;
-    info = report_emplace_new(&state.report, addr);
+    info = report_hm_emplace_new(&state.report, addr);
     state.ignore_malloc = 0;
     if (info == NULL)
     {
@@ -135,7 +392,7 @@ static void track_deallocation(uintptr_t addr, const char* free_type)
         return;
 
     /* find matching allocation and remove from hashmap */
-    info = report_erase(state.report, addr);
+    info = report_hm_erase(state.report, addr);
     if (info)
     {
 #if defined(CLITHER_BACKTRACE)
@@ -167,7 +424,7 @@ static void acquire(uintptr_t addr, int size)
 
     /* insert info into hashmap */
     state.ignore_malloc = 1;
-    info = report_emplace_new(&state.report, addr);
+    info = report_hm_emplace_new(&state.report, addr);
     state.ignore_malloc = 0;
     if (info == NULL)
     {
@@ -202,7 +459,7 @@ static int release(uintptr_t addr)
     state.deallocations++;
 
     /* find matching allocation and remove from hashmap */
-    info = report_erase(state.report, addr);
+    info = report_hm_erase(state.report, addr);
     if (info)
     {
 #if defined(CLITHER_BACKTRACE)
@@ -306,14 +563,15 @@ static void log_hex_ascii(const void* data, int len)
     }
 }
 
-int mem_deinit(void)
+int mem_deinit_threadlocal(void)
 {
     uintptr_t leaks;
 
     /* report details on any g_allocations that were not de-allocated */
     uintptr_t           addr;
     struct report_info* info;
-    hm_for_each(state.report, addr, info)
+    int32_t             slot;
+    hm_for_each (state.report, slot, addr, info)
     {
         fprintf(
             stderr,
@@ -343,21 +601,23 @@ int mem_deinit(void)
     }
 
     state.ignore_malloc = 1;
-    report_deinit(state.report);
+    report_hm_deinit(state.report);
     state.ignore_malloc = 0;
 
     /* overall report */
-    leaks
-        = (state.allocations > state.deallocations
-               ? state.allocations - state.deallocations
-               : state.deallocations - state.allocations);
+    leaks =
+        (state.allocations > state.deallocations
+             ? state.allocations - state.deallocations
+             : state.deallocations - state.allocations);
     if (leaks)
     {
         fprintf(stderr, "Memory report:\n");
         fprintf(stderr, "  allocations   : %" PRIu32 "\n", state.allocations);
         fprintf(stderr, "  deallocations : %" PRIu32 "\n", state.deallocations);
         fprintf(
-            stderr, FGB_RED "  memory leaks  : %" PRIu64 COL_RESET "\n", leaks);
+            stderr,
+            COL_B_RED "  memory leaks  : %" PRIu64 COL_RESET "\n",
+            leaks);
     }
 
     return (int)leaks;

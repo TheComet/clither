@@ -2,11 +2,11 @@
 
 #include "clither/q.h"
 #include "clither/snake.h"
-#include "clither/vec.h"
 #include <stdint.h>
 
 struct food_cluster;
 struct snake;
+struct msg_vec;
 
 enum __attribute__((packed)) msg_type
 {
@@ -42,8 +42,6 @@ struct __attribute__((packed)) msg
     enum msg_type type;
     uint8_t       payload[1];
 };
-
-VEC_DECLARE(msg_vec, struct msg*, 16)
 
 union parsed_payload
 {
@@ -134,10 +132,10 @@ struct msg* msg_join_deny_server_full(const char* error);
 
 struct msg* msg_leave(void);
 
-void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq);
+void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq);
 
 int msg_commands_unpack_into(
-    struct command_queue* cmdq,
+    struct cmd_queue* cmdq,
     const uint8_t*        payload,
     uint8_t               payload_len,
     uint16_t              frame_number,

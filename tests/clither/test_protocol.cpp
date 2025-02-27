@@ -1,7 +1,10 @@
 #include "gmock/gmock.h"
+
+extern "C" {
 #include "clither/client.h"
 #include "clither/net.h"
 #include "clither/server.h"
+}
 
 #define NAME protocol
 

@@ -16,7 +16,9 @@ project ("clither"
 include (CMakeDependentOption)
 
 cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" ON "CLITHER_MEMORY_DEBUGGING" OFF)
-option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" ON)
+set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
+cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_MEMORY_DEBUGGING" OFF)
+option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application.")
@@ -86,7 +88,9 @@ add_executable (clither
     "include/clither/camera.h"
     "include/clither/cli_colors.h"
     "include/clither/client.h"
-    "include/clither/command.h"
+    "include/clither/cmd.h"
+    "include/clither/cmd_queue.h"
+    "include/clither/cmd_rb.h"
     "include/clither/food_cluster.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
@@ -97,20 +101,29 @@ add_executable (clither
     "include/clither/mcd_wifi.h"
     "include/clither/mfile.h"
     "include/clither/msg.h"
-    "include/clither/msg_queue.h"
+    "include/clither/msg_vec.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
     "include/clither/popcount.h"
     "include/clither/q.h"
     "include/clither/quadtree.h"
+    "include/clither/qwaabb_rb.h"
+    "include/clither/qwpos_vec.h"
+    "include/clither/qwpos_vec_rb.h"
     "include/clither/rb.h"
     "include/clither/resource_pack.h"
+    "include/clither/resource_snake_part_vec.h"
+    "include/clither/resource_sprite_vec.h"
     "include/clither/server.h"
+    "include/clither/server_instance.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
     "include/clither/snake_param.h"
+    "include/clither/snake_split_rb.h"
     "include/clither/str.h"
+    "include/clither/strspan.h"
+    "include/clither/strview.h"
     "include/clither/strlist.h"
     "include/clither/system.h"
     "include/clither/tests.h"
@@ -122,25 +135,37 @@ add_executable (clither
 
     "src/args.c"
     "src/bezier.c"
+    "src/bezier_handle_rb.c"
+    "src/bezier_point_vec.c"
     "src/camera.c"
     "src/client.c"
-    "src/command.c"
+    "src/cmd.c"
+    "src/cmd_queue.c"
+    "src/cmd_rb.c"
     "src/food_cluster.c"
     "src/hash.c"
     "src/input.c"
     "src/log.c"
     "src/msg.c"
-    "src/msg_queue.c"
+    "src/msg_vec.c"
     "src/quadtree.c"
+    "src/qwaabb_rb.c"
+    "src/qwpos_vec.c"
+    "src/qwpos_vec_rb.c"
     "src/resource_pack.c"
+    "src/resource_snake_part_vec.c"
+    "src/resource_sprite_vec.c"
     "src/snake.c"
     "src/snake_param.c"
+    "src/snake_split_rb.c"
     "src/str.c"
+    "src/strview.c"
     "src/strlist.c"
     "src/world.c"
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/server.c
+        src/server_instance.c
         src/server_settings.c>
 
     $<$<BOOL:${CLITHER_MCD}>:
@@ -173,7 +198,7 @@ add_executable (clither
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_linux.c>
-        src/fs_posix.c
+        src/fs_linux.c
         src/mfile_posix.c
         src/mutex_pthread.c
         src/net_posix.c
@@ -182,7 +207,7 @@ add_executable (clither
         src/tick_posix.c
         src/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
-        src/fs_posix.c
+        src/fs_linux.c
         src/mfile_posix.c
         src/mutex_pthread.c
         src/net_posix.c
@@ -191,7 +216,7 @@ add_executable (clither
         src/tick_posix.c
         src/utf8_posix.c>
     $<$<PLATFORM_ID:Emscripten>:
-        src/fs_posix.c
+        src/fs_linux.c
         src/net_em.c
         src/signals_em.c
         src/tick_em.c
@@ -200,8 +225,10 @@ add_executable (clither
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
         tests/clither/test_args.cpp
-        tests/clither/test_bezier.cpp
-        tests/clither/test_command.cpp
+        tests/clither/test_bezier_aabb.cpp
+        tests/clither/test_bezier_fit.cpp
+        tests/clither/test_bezier_point.cpp
+        tests/clither/test_cmd.cpp
         tests/clither/test_hm.cpp
         tests/clither/test_hm_full.cpp
         tests/clither/test_mem.cpp

@@ -1,5 +1,8 @@
 #include "gmock/gmock.h"
+
+extern "C" {
 #include "clither/wrap.h"
+}
 
 #define NAME wrap
 

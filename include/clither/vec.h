@@ -9,10 +9,11 @@
  */
 #pragma once
 
-#include <assert.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <string.h>
+#include "clither/config.h"
+#include "clither/log.h" /* log_oom */
+#include "clither/mem.h" /* mem_alloc, mem_realloc, mem_free */
+#include <stddef.h>      /* offsetof */
+#include <string.h>      /* memmove */
 
 #define VEC_RETAIN 0
 #define VEC_ERASE  1
@@ -42,26 +43,13 @@
     void prefix##_deinit(struct prefix* v);                                    \
                                                                                \
     /*!                                                                        \
-     * @brief Allocates memory to fit exactly "num" amount of elements.        \
-     * Any existing elements are cleared.                                      \
-     * Use this function if you know ahead of time how many elements will be   \
-     * pushed back to save on unnecessary reallocations.                       \
-     * @param[in] v Pointer to a vector of type VEC(T,B)*                      \
-     * @param[in] num Number of elements to reserve memory for.                \
-     * @return Returns 0 on success, negative on error.                        \
+     * @brief Grows or shrinks the vector's capacity to the specified size.    \
+     * Excess elements are discarded if the new capacity is smaller. The       \
+     * vector's "count" is clamped to the new capacity, meaning, if the new    \
+     * capacity is smaller, then the count is reduced, but if the new capacity \
+     * is larger, then the count remains the same.                             \
      */                                                                        \
-    int prefix##_reserve(struct prefix** v, int##bits##_t count);              \
-                                                                               \
-    /*!                                                                        \
-     * @brief Reallocates the underlying memory to fit exactly "num" amount of \
-     * elements. Existing elements are preserved. If you specify a value       \
-     * smaller than the number of elements currently in the vector, then       \
-     * superfluous elements are removed.                                       \
-     * @param[in] v Pointer to a vector of type VEC(T,B)*                      \
-     * @param[in] num Number of elements to reserve memory for.                \
-     * @return Returns 0 on success, negative on error.                        \
-     */                                                                        \
-    int prefix##_resize(struct prefix** v, int##bits##_t count);               \
+    int prefix##_realloc(struct prefix** v, int##bits##_t new_capacity);       \
                                                                                \
     /*!                                                                        \
      * @brief Resets the vector's size to 0.                                   \
@@ -187,7 +175,7 @@
      */                                                                        \
     static inline T* prefix##_pop(struct prefix* v)                            \
     {                                                                          \
-        CLITHER_DEBUG_ASSERT(v->count > 0, (void)0);                           \
+        CLITHER_DEBUG_ASSERT(v->count > 0);                                    \
         return &v->data[--(v->count)];                                         \
     }                                                                          \
                                                                                \
@@ -247,15 +235,35 @@
 #define VEC_DEFINE(prefix, T, bits) VEC_DEFINE_FULL(prefix, T, bits, 32, 2)
 
 #define VEC_DEFINE_FULL(prefix, T, bits, MIN_CAPACITY, EXPAND_FACTOR)          \
-    static int prefix##_realloc(struct prefix** v, int##bits##_t elems)        \
+    int prefix##_realloc(struct prefix** v, int##bits##_t elems)               \
     {                                                                          \
-        int            header = offsetof(struct prefix, data);                 \
-        int            data = sizeof(T) * elems;                               \
-        struct prefix* new_mem                                                 \
-            = (struct prefix*)mem_realloc(*v, header + data);                  \
-        if (new_mem == NULL)                                                   \
+        int            header, data;                                           \
+        struct prefix* new_v;                                                  \
+                                                                               \
+        if (elems == 0)                                                        \
+        {                                                                      \
+            if (*v)                                                            \
+            {                                                                  \
+                mem_free(*v);                                                  \
+                *v = NULL;                                                     \
+            }                                                                  \
+            return 0;                                                          \
+        }                                                                      \
+                                                                               \
+        header = offsetof(struct prefix, data);                                \
+        data = sizeof(T) * elems;                                              \
+        new_v = (struct prefix*)mem_realloc(*v, header + data);                \
+        if (new_v == NULL)                                                     \
             return log_oom(header + data, "vec_realloc()");                    \
-        *v = new_mem;                                                          \
+                                                                               \
+        if (*v == NULL)                                                        \
+            new_v->count = 0;                                                  \
+        if (new_v->count > elems)                                              \
+            new_v->count = elems;                                              \
+                                                                               \
+        new_v->capacity = elems;                                               \
+                                                                               \
+        *v = new_v;                                                            \
         return 0;                                                              \
     }                                                                          \
     void prefix##_deinit(struct prefix* v)                                     \
@@ -263,57 +271,11 @@
         if (v)                                                                 \
             mem_free(v);                                                       \
     }                                                                          \
-    int prefix##_reserve(struct prefix** v, int##bits##_t elems)               \
-    {                                                                          \
-        CLITHER_DEBUG_ASSERT((elems) > 0, log_err("elems: %d\n", elems));      \
-        if (prefix##_realloc(v, elems) != 0)                                   \
-            return -1;                                                         \
-        (*v)->count = 0;                                                       \
-        (*v)->capacity = elems;                                                \
-        return 0;                                                              \
-    }                                                                          \
-    int prefix##_resize(struct prefix** v, int##bits##_t count)                \
-    {                                                                          \
-        if (count == 0)                                                        \
-        {                                                                      \
-            if (*v)                                                            \
-                mem_free(*v);                                                  \
-            *v = NULL;                                                         \
-            return 0;                                                          \
-        }                                                                      \
-        else if (count <= vec_count(*v))                                       \
-        {                                                                      \
-            (*v)->count = count;                                               \
-            return 0;                                                          \
-        }                                                                      \
-        else if (prefix##_reserve((v), count) == 0)                            \
-        {                                                                      \
-            (*v)->count = count;                                               \
-            return 0;                                                          \
-        }                                                                      \
-        return -1;                                                             \
-    }                                                                          \
     void prefix##_compact(struct prefix** v)                                   \
     {                                                                          \
-        if (*v == NULL)                                                        \
-            return;                                                            \
-                                                                               \
-        if ((*v)->count == 0)                                                  \
-        {                                                                      \
-            mem_free(*(v));                                                    \
-            *(v) = NULL;                                                       \
-        }                                                                      \
-        else                                                                   \
-        {                                                                      \
-            int            header = sizeof(**(v)) - sizeof(T);                 \
-            int            data = sizeof(T) * (*v)->count;                     \
-            struct prefix* new_v                                               \
-                = (struct prefix*)mem_realloc(*v, header + data);              \
-            /* Doesn't matter if this fails -- vector will remain in tact */   \
-            if (new_v != NULL)                                                 \
-                *v = new_v;                                                    \
-            (*v)->capacity = (*v)->count;                                      \
-        }                                                                      \
+        /* Doesn't matter if this fails -- vector will be in a consistent      \
+         * state */                                                            \
+        (void)prefix##_realloc(v, vec_count(*v));                              \
     }                                                                          \
     T* prefix##_emplace(struct prefix** v)                                     \
     {                                                                          \
@@ -332,9 +294,7 @@
     }                                                                          \
     T* prefix##_insert_emplace(struct prefix** v, int##bits##_t i)             \
     {                                                                          \
-        CLITHER_DEBUG_ASSERT(                                                  \
-            i >= 0 && i <= (*v ? (*v)->count : 0),                             \
-            log_err("i: %d, count: %d\n", i, (*v)->count));                    \
+        CLITHER_DEBUG_ASSERT(i >= 0 && i <= (*v ? (*v)->count : 0));           \
                                                                                \
         if (prefix##_emplace(v) == NULL)                                       \
             return NULL;                                                       \
@@ -371,8 +331,7 @@
         struct prefix* v, int##bits##_t start, int##bits##_t end)              \
     {                                                                          \
         CLITHER_DEBUG_ASSERT(                                                  \
-            start >= 0 && start < end && end <= prefix##_count(v),             \
-            log_err("start: %d, end: %d, count: %d\n", start, end, v->count)); \
+            start >= 0 && start < end && end <= vec_count(v));                 \
         while (start < --end)                                                  \
             prefix##_swap_values(v, start++, end);                             \
     }
@@ -449,17 +408,17 @@
     for (i = 0; (v) && i != (v)->count && ((var = &(v)->data[i]), 1); ++i)
 
 #if defined(CLITHER_MEM_DEBUGGING)
-#define mem_own_vec(prefix, v)                                                 \
-    do                                                                         \
-    {                                                                          \
-        if (v)                                                                 \
-            mem_own(                                                           \
-                (v),                                                           \
-                offsetof(struct prefix, data)                                  \
-                    + sizeof((v)->data[0]) * (v)->capacity);                   \
-    } while (0)
-#define mem_unown_vec(v) mem_unown(v)
+#    define mem_own_vec(prefix, v)                                             \
+        do                                                                     \
+        {                                                                      \
+            if (v)                                                             \
+                mem_own(                                                       \
+                    (v),                                                       \
+                    offsetof(struct prefix, data) +                            \
+                        sizeof((v)->data[0]) * (v)->capacity);                 \
+        } while (0)
+#    define mem_unown_vec(v) mem_unown(v)
 #else
-#define mem_own_vec(v)
-#define mem_unown_vec(v)
+#    define mem_own_vec(v)
+#    define mem_unown_vec(v)
 #endif

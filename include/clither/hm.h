@@ -1,9 +1,9 @@
 #pragma once
 
 #include "clither/hash.h"
-#include "clither/mem.h"
-#include <assert.h>
-#include <stddef.h>
+#include "clither/log.h" /* log_oom */
+#include "clither/mem.h" /* mem_alloc, mem_free */
+#include <stddef.h>      /* offsetof */
 
 #define HM_SLOT_UNUSED 0 /* SLOT_UNUSED must be 0 for memset() to work */
 #define HM_SLOT_RIP    1
@@ -70,7 +70,7 @@ enum hm_status
         *emplaced = value;                                                     \
         return 0;                                                              \
     }                                                                          \
-    static inline int prefix##_insert_always(                                  \
+    static inline int prefix##_insert_update(                                  \
         struct prefix** hm, K key, V value)                                    \
     {                                                                          \
         V* ins_value;                                                          \
@@ -81,14 +81,6 @@ enum hm_status
             case HM_NEW: *ins_value = value; break;                            \
         }                                                                      \
         return 0;                                                              \
-    }                                                                          \
-    static inline int prefix##_count(const struct prefix* hm)                  \
-    {                                                                          \
-        return hm ? hm->count : 0;                                             \
-    }                                                                          \
-    static inline int prefix##_capacity(const struct prefix* hm)               \
-    {                                                                          \
-        return hm ? hm->capacity : 0;                                          \
     }
 
 #define HM_DEFINE(prefix, K, V, bits)                                          \
@@ -130,11 +122,10 @@ enum hm_status
     {                                                                          \
         return kvs->keys[slot];                                                \
     }                                                                          \
-    static int prefix##_kvs_set_key(                                           \
+    static void prefix##_kvs_set_key(                                          \
         struct prefix##_kvs* kvs, int##bits##_t slot, K key)                   \
     {                                                                          \
         kvs->keys[slot] = key;                                                 \
-        return 0;                                                              \
     }                                                                          \
     static int prefix##_kvs_keys_equal(K k1, K k2)                             \
     {                                                                          \
@@ -146,7 +137,7 @@ enum hm_status
         return &kvs->values[slot];                                             \
     }                                                                          \
     static void prefix##_kvs_set_value(                                        \
-        struct prefix##_kvs* kvs, int##bits##_t slot, V* value)                \
+        struct prefix##_kvs* kvs, int##bits##_t slot, const V* value)          \
     {                                                                          \
         kvs->values[slot] = *value;                                            \
     }                                                                          \
@@ -192,19 +183,20 @@ enum hm_status
          * the various key-value storage functions. */                         \
         hash32 (*hash)(K) = hash_func;                                         \
         int (*storage_alloc)(                                                  \
-            struct prefix##_kvs*, struct prefix##_kvs*, int##bits##_t)         \
-            = storage_alloc_func;                                              \
-        void (*storage_free_old)(struct prefix##_kvs*)                         \
-            = storage_free_old_func;                                           \
+            struct prefix##_kvs*, struct prefix##_kvs*, int##bits##_t) =       \
+            storage_alloc_func;                                                \
+        void (*storage_free_old)(struct prefix##_kvs*) =                       \
+            storage_free_old_func;                                             \
         void (*storage_free)(struct prefix##_kvs*) = storage_free_func;        \
         K(*get_key)                                                            \
         (const struct prefix##_kvs*, int##bits##_t) = get_key_func;            \
-        int (*set_key)(struct prefix##_kvs*, int##bits##_t, K) = set_key_func; \
+        void (*set_key)(struct prefix##_kvs*, int##bits##_t, K) =              \
+            set_key_func;                                                      \
         int (*keys_equal)(K, K) = keys_equal_func;                             \
-        V* (*get_value)(const struct prefix##_kvs*, int##bits##_t)             \
-            = get_value_func;                                                  \
-        void (*set_value)(struct prefix##_kvs*, int##bits##_t, V*)             \
-            = set_value_func;                                                  \
+        V* (*get_value)(const struct prefix##_kvs*, int##bits##_t) =           \
+            get_value_func;                                                    \
+        void (*set_value)(struct prefix##_kvs*, int##bits##_t, const V*) =     \
+            set_value_func;                                                    \
         (void)hash;                                                            \
         (void)storage_alloc;                                                   \
         (void)storage_free_old;                                                \
@@ -231,9 +223,7 @@ enum hm_status
         int##bits##_t  old_cap = *hm ? (*hm)->capacity : 0;                    \
         int##bits##_t  new_cap = old_cap ? old_cap * 2 : MIN_CAPACITY;         \
         /* Must be power of 2 */                                               \
-        CLITHER_DEBUG_ASSERT(                                                  \
-            (new_cap & (new_cap - 1)) == 0,                                    \
-            log_err("new_cap: %d\n", new_cap));                                \
+        CLITHER_DEBUG_ASSERT((new_cap & (new_cap - 1)) == 0);                  \
                                                                                \
         header = offsetof(struct prefix, hashes);                              \
         data = sizeof((*hm)->hashes[0]) * new_cap;                             \
@@ -253,8 +243,8 @@ enum hm_status
         {                                                                      \
             int##bits##_t slot;                                                \
             H             h;                                                   \
-            if ((*hm)->hashes[i] == HM_SLOT_UNUSED                             \
-                || (*hm)->hashes[i] == HM_SLOT_RIP)                            \
+            if ((*hm)->hashes[i] == HM_SLOT_UNUSED ||                          \
+                (*hm)->hashes[i] == HM_SLOT_RIP)                               \
                 continue;                                                      \
                                                                                \
             /* We use two reserved values for hashes. The hash function could  \
@@ -262,15 +252,11 @@ enum hm_status
             h = hash_func(get_key_func(&(*hm)->kvs, i));                       \
             if (h == HM_SLOT_UNUSED || h == HM_SLOT_RIP)                       \
                 h = 2;                                                         \
-            slot                                                               \
-                = prefix##_find_slot(new_hm, get_key_func(&(*hm)->kvs, i), h); \
-            CLITHER_DEBUG_ASSERT(slot >= 0, log_err("slot: %d\n", slot));      \
+            slot =                                                             \
+                prefix##_find_slot(new_hm, get_key_func(&(*hm)->kvs, i), h);   \
+            CLITHER_DEBUG_ASSERT(slot >= 0);                                   \
             new_hm->hashes[slot] = h;                                          \
-            if (set_key_func(&new_hm->kvs, slot, get_key_func(&(*hm)->kvs, i)) \
-                != 0)                                                          \
-            {                                                                  \
-                return -1;                                                     \
-            }                                                                  \
+            set_key_func(&new_hm->kvs, slot, get_key_func(&(*hm)->kvs, i));    \
             set_value_func(                                                    \
                 &new_hm->kvs, slot, get_value_func(&(*hm)->kvs, i));           \
             new_hm->count++;                                                   \
@@ -299,9 +285,8 @@ enum hm_status
         const struct prefix* hm, K key, H h)                                   \
     {                                                                          \
         int##bits##_t slot, i, last_rip;                                       \
-        CLITHER_DEBUG_ASSERT(                                                  \
-            hm && hm->capacity > 0, log_err("capacity: %d\n", hm->capacity));  \
-        CLITHER_DEBUG_ASSERT(h > 1, log_err("h: %d\n", h));                    \
+        CLITHER_DEBUG_ASSERT(hm && hm->capacity > 0);                          \
+        CLITHER_DEBUG_ASSERT(h > 1);                                           \
                                                                                \
         i = 0;                                                                 \
         last_rip = -1;                                                         \
@@ -358,8 +343,7 @@ enum hm_status
                                                                                \
         (*hm)->count++;                                                        \
         (*hm)->hashes[slot] = h;                                               \
-        if (set_key_func(&(*hm)->kvs, slot, key) != 0)                         \
-            return NULL;                                                       \
+        set_key_func(&(*hm)->kvs, slot, key);                                  \
         return get_value_func(&(*hm)->kvs, slot);                              \
     }                                                                          \
     enum hm_status prefix##_emplace_or_get(                                    \
@@ -389,8 +373,7 @@ enum hm_status
                                                                                \
         (*hm)->count++;                                                        \
         (*hm)->hashes[slot] = h;                                               \
-        if (set_key_func(&(*hm)->kvs, slot, key) != 0)                         \
-            return HM_OOM;                                                     \
+        set_key_func(&(*hm)->kvs, slot, key);                                  \
         *value = get_value_func(&(*hm)->kvs, slot);                            \
         return HM_NEW;                                                         \
     }                                                                          \
@@ -433,30 +416,35 @@ enum hm_status
         return get_value_func(&hm->kvs, -1 - slot);                            \
     }
 
-static inline intptr_t
-hm_next_valid_slot(const hash32* hashes, intptr_t slot, intptr_t capacity)
+#define hm_count(hm)    ((hm) ? (hm)->count : 0)
+#define hm_capacity(hm) ((hm) ? (hm)->capacity : 0)
+
+static inline int
+hm_next_valid_slot(const hash32* hashes, int slot, intptr_t capacity)
 {
     do
     {
         slot++;
-    } while (
-        slot < capacity
-        && (hashes[slot] == HM_SLOT_UNUSED || hashes[slot] == HM_SLOT_RIP));
+    } while (slot < capacity &&
+             (hashes[slot] == HM_SLOT_UNUSED || hashes[slot] == HM_SLOT_RIP));
     return slot;
 }
 
-#define hm_for_each(hm, key, value)                                            \
-    for (intptr_t key##_i                                                      \
-         = hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);    \
-         (hm) && key##_i != (hm)->capacity                                     \
-         && ((key = (hm)->kvs.keys[key##_i]) || 1)                             \
-         && ((value = &(hm)->kvs.values[key##_i]) || 1);                       \
-         key##_i = hm_next_valid_slot((hm)->hashes, key##_i, (hm)->capacity))
+#define hm_for_each(hm, slot_idx, key, value)                                  \
+    for (slot_idx =                                                            \
+             hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);  \
+         (hm) && slot_idx != (hm)->capacity &&                                 \
+         ((key = (hm)->kvs.keys[slot_idx]) || 1) &&                            \
+         ((value = &(hm)->kvs.values[slot_idx]) || 1);                         \
+         slot_idx =                                                            \
+             hm_next_valid_slot((hm)->hashes, slot_idx, (hm)->capacity))
 
-#define hm_for_each_full(hm, key, value, get_key_func, get_value_func)         \
-    for (intptr_t key##_i                                                      \
-         = hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);    \
-         (hm) && key##_i != (hm)->capacity                                     \
-         && ((key = get_key_func(&(hm)->kvs, key##_i)), 1)                     \
-         && ((value = get_value_func(&(hm)->kvs, key##_i)), 1);                \
-         key##_i = hm_next_valid_slot((hm)->hashes, key##_i, (hm)->capacity))
+#define hm_for_each_full(                                                      \
+    hm, slot_idx, key, value, get_key_func, get_value_func)                    \
+    for (slot_idx =                                                            \
+             hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);  \
+         (hm) && slot_idx != (hm)->capacity &&                                 \
+         ((key = get_key_func(&(hm)->kvs, slot_idx)), 1) &&                    \
+         ((value = get_value_func(&(hm)->kvs, slot_idx)), 1);                  \
+         slot_idx =                                                            \
+             hm_next_valid_slot((hm)->hashes, slot_idx, (hm)->capacity))

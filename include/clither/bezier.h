@@ -1,14 +1,18 @@
 #pragma once
 
-#include "clither/hm.h"
 #include "clither/q.h"
-#include "clither/rb.h"
-#include "clither/vec.h"
 
+struct qwpos_vec;
+struct bezier_handle_rb;
+struct bezier_point_vec;
+
+/*! Represents a point on a bezier curve. These are generated with the function
+ * bezier_calc_equidistant_points() and are used for rendering the snake. */
 struct bezier_point
 {
-    struct qwpos pos;
-    struct qwpos dir;
+    struct qwpos pos; /* Position in world space */
+    struct qwpos dir; /* Direction vector (normalized). Used for rotating the
+                         sprite correctly */
 };
 
 /*!
@@ -29,11 +33,6 @@ struct bezier_handle
     uint8_t      len_backwards, len_forwards;
     unsigned     ackd : 1;
 };
-
-VEC_DECLARE(qwpos_vec, struct qwpos, 16)
-RB_DECLARE(qwpos_vec_rb, struct qwpos_vec*, 8)
-VEC_DECLARE(bezier_point_vec, struct bezier_point, 16)
-RB_DECLARE(bezier_handle_rb, struct bezier_handle, 16)
 
 void bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle);
 
@@ -89,9 +88,9 @@ int bezier_calc_equidistant_points(
 static inline int bezier_handles_equal(
     const struct bezier_handle* a, const struct bezier_handle* b)
 {
-    return a->pos.x == b->pos.x && a->pos.y == b->pos.y && a->angle == b->angle
-           && a->len_backwards == b->len_backwards
-           && a->len_forwards == b->len_forwards;
+    return a->pos.x == b->pos.x && a->pos.y == b->pos.y &&
+           a->angle == b->angle && a->len_backwards == b->len_backwards &&
+           a->len_forwards == b->len_forwards;
 }
 
 static inline int bezier_handles_equal_pos(

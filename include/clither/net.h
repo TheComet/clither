@@ -27,6 +27,17 @@ struct net_addr
     char sockaddr_storage[NET_MAX_ADDRLEN];
 };
 
+struct net_udp_packet
+{
+    int     len;
+    uint8_t data[NET_MAX_UDP_PACKET_SIZE];
+};
+
+struct net_addr_str
+{
+    char cstr[NET_MAX_ADDRSTRLEN];
+};
+
 /*!
  * \brief Initialize global data for networking. Call this before any other
  * net function.
@@ -47,9 +58,10 @@ void net_log_host_ips(void);
 
 /*
  * \brief Converts an address into a readable string (either IPv4 or IPv6
- * address). \note The output string is guaranteed to be null-terminated.
+ * address).
+ * \note The output string is guaranteed to be null-terminated.
  */
-void net_addr_to_str(char* str, int bufsize, const struct net_addr* addr);
+void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr);
 
 /*!
  * \brief Creates a non-blocking socket and binds it to the specified address.
@@ -72,8 +84,11 @@ int net_bind(const char* bind_address, const char* port);
  * packets by using the first socket that responds successfully and closing the
  * rest.
  * \note This function is designed to work with client_init() and net_send().
- * \param[out] sockfds Pointer to an initialized vector with sizeof(int). All
- * potential socket file descriptors are pushed into this vector.
+ * All sockets are "connected" to the server address, meaning, you can use
+ * net_send() instead of net_sendto(). This means the server address doesn't
+ * have to be stored in the client structure.
+ * \param[out] sockfds Pointer to an initialized vector. All potential socket
+ * file descriptors are pushed into this vector.
  * \param[in] server_address The server address to connect to.
  * \param[in] port The port of the server to connect to.
  * \return Returns 0 on success and -1 if an error occurred.

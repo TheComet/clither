@@ -1,12 +1,10 @@
 #include <gmock/gmock.h>
 
 extern "C" {
-#include "odb-util/hash.h"
-#include "odb-util/hm.h"
-#include "odb-util/mem.h"
+#include "clither/hm.h"
 }
 
-#define NAME         odbutil_hm_full
+#define NAME         hm_full
 #define MIN_CAPACITY 64
 
 using namespace ::testing;
@@ -30,8 +28,8 @@ struct hm_test_kvs
     float* values;
 };
 
-static hash32
-test_hash(const char* key)
+namespace {
+static hash32 test_hash(const char* key)
 {
     switch (hash_mode)
     {
@@ -43,61 +41,53 @@ test_hash(const char* key)
     }
     return hash32_jenkins_oaat(key, 4);
 }
-static int
-test_storage_alloc(
-    struct hm_test_kvs* kvs, struct hm_test_kvs* old_kvs, int16_t capacity)
+static int test_storage_alloc(
+    struct hm_test_kvs* kvs, struct hm_test_kvs* old_kvs, int32_t capacity)
 {
+    (void)old_kvs;
     kvs->keys = (char*)mem_alloc(sizeof(char) * capacity * 16);
     kvs->values = (float*)mem_alloc(sizeof(*kvs->values) * capacity);
     return 0;
 }
-static void
-test_storage_free_old(struct hm_test_kvs* kvs)
+static void test_storage_free_old(struct hm_test_kvs* kvs)
 {
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
-static void
-test_storage_free(struct hm_test_kvs* kvs)
+static void test_storage_free(struct hm_test_kvs* kvs)
 {
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
-static const char*
-test_get_key(const struct hm_test_kvs* kvs, int16_t slot)
+static const char* test_get_key(const struct hm_test_kvs* kvs, int32_t slot)
 {
     return &kvs->keys[slot * 16];
 }
-static int
-test_set_key(struct hm_test_kvs* kvs, int16_t slot, const char* key)
+static void test_set_key(struct hm_test_kvs* kvs, int32_t slot, const char* key)
 {
     memcpy(&kvs->keys[slot * 16], key, 16);
-    return 0;
 }
-static int
-test_keys_equal(const char* k1, const char* k2)
+static int test_keys_equal(const char* k1, const char* k2)
 {
     return memcmp(k1, k2, 16) == 0;
 }
-static float*
-test_get_value(const struct hm_test_kvs* kvs, int16_t slot)
+static float* test_get_value(const struct hm_test_kvs* kvs, int32_t slot)
 {
     return &kvs->values[slot];
 }
 static void
-test_set_value(struct hm_test_kvs* kvs, int16_t slot, float* value)
+test_set_value(struct hm_test_kvs* kvs, int32_t slot, const float* value)
 {
     kvs->values[slot] = *value;
 }
 
-HM_DECLARE_API_FULL(
-    static, hm_test, hash32, const char*, float, 16, struct hm_test_kvs)
-HM_DEFINE_API_FULL(
+HM_DECLARE_FULL(hm_test, hash32, const char*, float, 32, struct hm_test_kvs)
+HM_DEFINE_FULL(
     hm_test,
     hash32,
     const char*,
     float,
-    16,
+    32,
     test_hash,
     test_storage_alloc,
     test_storage_free_old,
@@ -109,21 +99,17 @@ HM_DEFINE_API_FULL(
     test_set_value,
     MIN_CAPACITY,
     70);
+} // namespace
 
 struct NAME : Test
 {
-    virtual void
-    SetUp()
+    virtual void SetUp()
     {
         hash_mode = NORMAL;
         hm_test_init(&hm);
     }
 
-    virtual void
-    TearDown()
-    {
-        hm_test_deinit(hm);
-    }
+    virtual void TearDown() { hm_test_deinit(hm); }
 
     struct hm_test* hm;
 };
@@ -131,8 +117,8 @@ struct NAME : Test
 TEST_F(NAME, null_hm_is_set)
 {
     EXPECT_THAT(hm, IsNull());
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
-    EXPECT_THAT(hm_test_capacity(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hm_capacity(hm), Eq(0));
 }
 
 TEST_F(NAME, deinit_null_hm_works)
@@ -142,25 +128,25 @@ TEST_F(NAME, deinit_null_hm_works)
 
 TEST_F(NAME, insert_increases_slots_used)
 {
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
-    EXPECT_THAT(hm_test_capacity(hm), Eq(MIN_CAPACITY));
+    EXPECT_THAT(hm_count(hm), Eq(1));
+    EXPECT_THAT(hm_capacity(hm), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, erase_decreases_slots_used)
 {
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
-    EXPECT_THAT(hm_test_capacity(hm), Eq(MIN_CAPACITY));
+    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hm_capacity(hm), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, insert_same_key_twice_only_works_once)
 {
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 7.6f), Eq(-1));
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
+    EXPECT_THAT(hm_count(hm), Eq(1));
 }
 
 TEST_F(NAME, insert_or_get_returns_inserted_value)
@@ -173,7 +159,7 @@ TEST_F(NAME, insert_or_get_returns_inserted_value)
     EXPECT_THAT(hm_test_emplace_or_get(&hm, KEY1, &p), HM_EXISTS);
     EXPECT_THAT(f, Eq(0.0f));
     EXPECT_THAT(p, Pointee(5.6f));
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
+    EXPECT_THAT(hm_count(hm), Eq(1));
 }
 
 TEST_F(NAME, erasing_same_key_twice_only_works_once)
@@ -181,17 +167,17 @@ TEST_F(NAME, erasing_same_key_twice_only_works_once)
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
     EXPECT_THAT(hm_test_erase(hm, KEY1), IsNull());
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_ba)
 {
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_count(hm), Eq(2));
+    EXPECT_THAT(hm_count(hm), Eq(2));
     EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_ab)
@@ -199,10 +185,10 @@ TEST_F(NAME, hash_collision_insert_ab_erase_ab)
     hash_mode = SHITTY;
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_count(hm), Eq(2));
+    EXPECT_THAT(hm_count(hm), Eq(2));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
     EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_find_ab)
@@ -225,8 +211,6 @@ TEST_F(NAME, hash_collision_insert_ab_erase_a_find_b)
 
 TEST_F(NAME, hash_collision_insert_ab_erase_b_find_a)
 {
-    float a = 5.6f;
-    float b = 3.4f;
     hash_mode = SHITTY;
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
@@ -239,15 +223,15 @@ TEST_F(NAME, hash_collision_insert_at_tombstone)
     hash_mode = SHITTY;
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_count(hm), Eq(2));
+    EXPECT_THAT(hm_count(hm), Eq(2));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
+    EXPECT_THAT(hm_count(hm), Eq(1));
     EXPECT_THAT(
         hm_test_insert_new(&hm, KEY1, 5.6f),
         Eq(0)); // should insert at tombstone location
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
     EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hm_test_count(hm), Eq(0));
+    EXPECT_THAT(hm_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_at_tombstone_with_existing_key)
@@ -255,11 +239,11 @@ TEST_F(NAME, hash_collision_insert_at_tombstone_with_existing_key)
     hash_mode = SHITTY;
     EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_count(hm), Eq(2));
+    EXPECT_THAT(hm_count(hm), Eq(2));
     EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
+    EXPECT_THAT(hm_count(hm), Eq(1));
     EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 5.6f), Eq(-1));
-    EXPECT_THAT(hm_test_count(hm), Eq(1));
+    EXPECT_THAT(hm_count(hm), Eq(1));
 }
 
 TEST_F(NAME, remove_probing_sequence_scenario_1)
@@ -328,7 +312,8 @@ TEST_F(NAME, foreach_empty)
     uintptr_t key;
     float*    value;
     int       counter = 0;
-    hm_for_each(hm, key, value)
+    int       slot;
+    hm_for_each (hm, slot, key, value)
     {
         counter++;
     }
@@ -385,12 +370,14 @@ TEST_F(NAME, foreach)
 
     const char* k;
     float*      value;
-    hm_for_each_full(hm, k, value, test_get_key, test_get_value)
+    int         slot;
+    hm_for_each_full (hm, slot, k, value, test_get_key, test_get_value)
     {
+        (void)k;
         expected_values[*value] += 1;
     }
 
-    EXPECT_THAT(hm_test_count(hm), Eq(14));
+    EXPECT_THAT(hm_count(hm), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));
     for (const auto& [k, v] : expected_values)
         EXPECT_THAT(v, Eq(1)) << k;

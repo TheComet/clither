@@ -1,54 +1,245 @@
-#include "clither/bezier.h"
+#include "clither/args.h"
+#include "clither/cli_colors.h"
 #include "clither/log.h"
-#include "clither/msg_queue.h"
+#include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/server.h"
+#include "clither/server_instance.h"
 #include "clither/server_settings.h"
 #include "clither/snake.h"
+#include "clither/thread.h"
 #include "clither/world.h"
+#include "clither/wrap.h"
+#include <stdlib.h> /* atoi */
 #include <string.h> /* memcpy */
 
 #define CBF_WINDOW_SIZE 20
 
 struct server_client
 {
-    struct cs_vector  pending_msgs;       /* struct msg* */
-    struct cs_hashmap bezier_handles_ack; /* struct bezier_handle */
-    int               timeout_counter;
+    struct msg_vec* pending_msgs;
+    int             timeout_counter;
     int cbf_window[CBF_WINDOW_SIZE]; /* "Command Buffer Fullness" window */
     cs_btree_key snake_id;
     uint16_t     last_command_msg_frame;
 };
 
-#define SERVER_CLIENT_FOR_EACH(table, k, v)                                    \
-    HASHMAP_FOR_EACH(table, void, struct server_client, k, v)
-#define SERVER_CLIENT_END_EACH HASHMAP_END_EACH
+struct server_client_hm_kvs
+{
+    struct net_addr*      keys;
+    struct server_client* values;
+};
+static int server_client_hm_kvs_alloc(
+    struct server_client_hm_kvs* kvs,
+    struct server_client_hm_kvs* old_kvs,
+    int16_t                      capacity)
+{
+    (void)old_kvs;
+    kvs->keys = mem_alloc(sizeof(struct net_addr) * capacity);
+    if (kvs->keys == NULL)
+        return -1;
 
-#define MALICIOUS_CLIENT_FOR_EACH(table, k, v)                                 \
-    HASHMAP_FOR_EACH(table, void, int, k, v)
-#define MALICIOUS_CLIENT_END_EACH HASHMAP_END_EACH
+    kvs->values = mem_alloc(sizeof(struct server_client) * capacity);
+    if (kvs->values == NULL)
+    {
+        mem_free(kvs->keys);
+        return -1;
+    }
+
+    return 0;
+}
+static void server_client_hm_kvs_free(struct server_client_hm_kvs* kvs)
+{
+    mem_free(kvs->values);
+    mem_free(kvs->keys);
+}
+static void server_client_hm_kvs_free_old(struct server_client_hm_kvs* kvs)
+{
+    server_client_hm_kvs_free(kvs);
+}
+static hash32 server_client_hm_kvs_hash(const struct net_addr* key)
+{
+    return hash32_jenkins_oaat(key->sockaddr_storage, key->len);
+}
+static const struct net_addr* server_client_hm_kvs_get_key(
+    const struct server_client_hm_kvs* kvs, int16_t slot)
+{
+    return &kvs->keys[slot];
+}
+static void server_client_hm_kvs_set_key(
+    struct server_client_hm_kvs* kvs, int16_t slot, const struct net_addr* key)
+{
+    kvs->keys[slot].len = key->len;
+    memcpy(kvs->keys[slot].sockaddr_storage, key->sockaddr_storage, key->len);
+}
+static int server_client_hm_kvs_keys_equal(
+    const struct net_addr* k1, const struct net_addr* k2)
+{
+    return k1->len == k2->len && memcmp(k1, k2, k1->len) == 0;
+}
+static struct server_client* server_client_hm_kvs_get_value(
+    const struct server_client_hm_kvs* kvs, int16_t slot)
+{
+    return &kvs->values[slot];
+}
+static void server_client_hm_kvs_set_value(
+    struct server_client_hm_kvs* kvs,
+    int16_t                      slot,
+    const struct server_client*  value)
+{
+    kvs->values[slot] = *value;
+}
+
+HM_DECLARE_FULL(
+    server_client_hm,
+    hash32,
+    const struct net_addr*,
+    struct server_client,
+    16,
+    struct server_client_hm_kvs)
+HM_DEFINE_FULL(
+    server_client_hm,
+    hash32,
+    const struct net_addr*,
+    struct server_client,
+    16,
+    server_client_hm_kvs_hash,
+    server_client_hm_kvs_alloc,
+    server_client_hm_kvs_free_old,
+    server_client_hm_kvs_free,
+    server_client_hm_kvs_get_key,
+    server_client_hm_kvs_set_key,
+    server_client_hm_kvs_keys_equal,
+    server_client_hm_kvs_get_value,
+    server_client_hm_kvs_set_value,
+    16,
+    70)
+#define server_client_hm_for_each(server_clients, slot, addr, client)          \
+    hm_for_each_full (                                                         \
+        server_clients,                                                        \
+        slot,                                                                  \
+        addr,                                                                  \
+        client,                                                                \
+        server_client_hm_kvs_get_key,                                          \
+        server_client_hm_kvs_get_value)
+
+struct net_addr_hm_kvs
+{
+    struct net_addr* keys;
+    int*             values;
+};
+static int net_addr_hm_kvs_alloc(
+    struct net_addr_hm_kvs* kvs,
+    struct net_addr_hm_kvs* old_kvs,
+    int16_t                 capacity)
+{
+    (void)old_kvs;
+    kvs->keys = mem_alloc(sizeof(struct net_addr) * capacity);
+    if (kvs->keys == NULL)
+        return -1;
+
+    kvs->values = mem_alloc(sizeof(struct server_client) * capacity);
+    if (kvs->values == NULL)
+    {
+        mem_free(kvs->keys);
+        return -1;
+    }
+
+    return 0;
+}
+static void net_addr_hm_kvs_free(struct net_addr_hm_kvs* kvs)
+{
+    mem_free(kvs->values);
+    mem_free(kvs->keys);
+}
+static void net_addr_hm_kvs_free_old(struct net_addr_hm_kvs* kvs)
+{
+    net_addr_hm_kvs_free(kvs);
+}
+static hash32 net_addr_hm_kvs_hash(const struct net_addr* key)
+{
+    return hash32_jenkins_oaat(key->sockaddr_storage, key->len);
+}
+static const struct net_addr*
+net_addr_hm_kvs_get_key(const struct net_addr_hm_kvs* kvs, int16_t slot)
+{
+    return &kvs->keys[slot];
+}
+static void net_addr_hm_kvs_set_key(
+    struct net_addr_hm_kvs* kvs, int16_t slot, const struct net_addr* key)
+{
+    kvs->keys[slot].len = key->len;
+    memcpy(kvs->keys[slot].sockaddr_storage, key->sockaddr_storage, key->len);
+}
+static int
+net_addr_hm_kvs_keys_equal(const struct net_addr* k1, const struct net_addr* k2)
+{
+    return k1->len == k2->len && memcmp(k1, k2, k1->len) == 0;
+}
+static int*
+net_addr_hm_kvs_get_value(const struct net_addr_hm_kvs* kvs, int16_t slot)
+{
+    return &kvs->values[slot];
+}
+static void net_addr_hm_kvs_set_value(
+    struct net_addr_hm_kvs* kvs, int16_t slot, const int* value)
+{
+    kvs->values[slot] = *value;
+}
+HM_DECLARE_FULL(
+    net_addr_hm,
+    hash32,
+    const struct net_addr*,
+    int,
+    16,
+    struct net_addr_hm_kvs)
+HM_DEFINE_FULL(
+    net_addr_hm,
+    hash32,
+    const struct net_addr*,
+    int,
+    16,
+    net_addr_hm_kvs_hash,
+    net_addr_hm_kvs_alloc,
+    net_addr_hm_kvs_free_old,
+    net_addr_hm_kvs_free,
+    net_addr_hm_kvs_get_key,
+    net_addr_hm_kvs_set_key,
+    net_addr_hm_kvs_keys_equal,
+    net_addr_hm_kvs_get_value,
+    net_addr_hm_kvs_set_value,
+    128,
+    70)
+#define net_addr_hm_for_each(server_clients, slot, addr, client)               \
+    hm_for_each_full (                                                         \
+        server_clients,                                                        \
+        slot,                                                                  \
+        addr,                                                                  \
+        client,                                                                \
+        net_addr_hm_kvs_get_key,                                               \
+        net_addr_hm_kvs_get_value)
 
 /* ------------------------------------------------------------------------- */
 static void client_remove(
-    struct server*        server,
-    struct world*         world,
-    void*                 addr,
-    struct server_client* client)
+    struct server*              server,
+    struct world*               world,
+    const struct net_addr*      addr,
+    const struct server_client* client)
 {
     world_remove_snake(world, client->snake_id);
-    msg_queue_deinit(&client->pending_msgs);
-    hashmap_erase(&server->client_table, addr);
+    msg_vec_deinit(client->pending_msgs);
+    server_client_hm_erase(server->clients, addr);
 }
 
 /* ------------------------------------------------------------------------- */
 static void mark_client_as_malicious_and_drop(
-    struct server*        server,
-    struct world*         world,
-    void*                 addr,
-    struct server_client* client,
-    int                   timeout)
+    struct server*              server,
+    struct world*               world,
+    const struct net_addr*      addr,
+    const struct server_client* client,
+    int                         timeout)
 {
-    hashmap_insert(&server->malicious_clients, addr, &timeout);
+    net_addr_hm_insert_update(&server->malicious_clients, addr, timeout);
     client_remove(server, world, addr, client);
 }
 
@@ -56,8 +247,6 @@ static void mark_client_as_malicious_and_drop(
 int server_init(
     struct server* server, const char* bind_address, const char* port)
 {
-    int addrlen;
-
     server->udp_sock = net_bind(bind_address, port);
     if (server->udp_sock < 0)
         return -1;
@@ -67,10 +256,9 @@ int server_init(
      * the client structure associated with that packet. Depending on whether
      * we are using IPv4 or IPv6 the size of the key will be different.
      */
-    hashmap_init(
-        &server->client_table, (uint32_t)addrlen, sizeof(struct server_client));
-    hashmap_init(&server->malicious_clients, (uint32_t)addrlen, sizeof(int));
-    hashmap_init(&server->banned_clients, (uint32_t)addrlen, 0);
+    server_client_hm_init(&server->clients);
+    net_addr_hm_init(&server->malicious_clients);
+    net_addr_hm_init(&server->banned_clients);
 
     return 0;
 }
@@ -78,15 +266,21 @@ int server_init(
 /* ------------------------------------------------------------------------- */
 void server_deinit(struct server* server)
 {
+    const struct net_addr* addr;
+    struct server_client*  client;
+    int                    slot;
+
     net_close(server->udp_sock);
 
-    hashmap_deinit(&server->banned_clients);
-    hashmap_deinit(&server->malicious_clients);
+    net_addr_hm_deinit(server->banned_clients);
+    net_addr_hm_deinit(server->malicious_clients);
 
-    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
-    msg_queue_deinit(&client->pending_msgs);
-    SERVER_CLIENT_END_EACH
-    hashmap_deinit(&server->client_table);
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        (void)addr;
+        msg_vec_deinit(client->pending_msgs);
+    }
+    server_client_hm_deinit(server->clients);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -111,20 +305,21 @@ static int cbf_lower_bound(struct server_client* client)
 }
 
 /* ------------------------------------------------------------------------- */
-void server_send_pending_data(struct server* server)
+struct append_msgs_ctx
 {
-    char buf[MAX_UDP_PACKET_SIZE];
+    int  len;
+    char buf[NET_MAX_UDP_PACKET_SIZE];
+};
+static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
+{
+    uint8_t                 type;
+    struct append_msgs_ctx* ctx = user;
+    struct msg*             msg = *pmsg;
 
-    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
-    uint8_t type;
-    int     len = 0;
-
-    /* Append unreliable messages first */
-    MSG_FOR_EACH(&client->pending_msgs, msg)
-    if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
-        continue;
+    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+        return VEC_RETAIN;
     if (msg->resend_rate != 0) /* message is reliable */
-        continue;
+        return VEC_RETAIN;
 
     log_net(
         "Packing msg type=%d, len=%d, resend=%d\n",
@@ -133,24 +328,26 @@ void server_send_pending_data(struct server* server)
         msg->resend_rate);
 
     type = (uint8_t)msg->type;
-    memcpy(buf + len + 0, &type, 1);
-    memcpy(buf + len + 1, &msg->payload_len, 1);
-    memcpy(buf + len + 2, msg->payload, msg->payload_len);
+    memcpy(ctx->buf + ctx->len + 0, &type, 1);
+    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
+    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
 
-    len += msg->payload_len + 2;
+    ctx->len += msg->payload_len + 2;
     msg_free(msg);
-    MSG_ERASE_IN_FOR_LOOP(&client->pending_msgs, msg);
-    MSG_END_EACH
-
-    /* Append reliable messages */
-    MSG_FOR_EACH(&client->pending_msgs, msg)
-    if (len + msg->payload_len + 2 > MAX_UDP_PACKET_SIZE)
-        continue;
+    return VEC_ERASE;
+}
+static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
+{
+    uint8_t                 type;
+    struct append_msgs_ctx* ctx = user;
+    struct msg*             msg = *pmsg;
+    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+        return VEC_RETAIN;
     if (msg->resend_rate == 0) /* message is unreliable */
-        continue;
+        return VEC_RETAIN;
 
     if (--msg->resend_rate_counter > 0)
-        continue;
+        return VEC_RETAIN;
     msg->resend_rate_counter = msg->resend_rate;
 
     log_net(
@@ -160,63 +357,90 @@ void server_send_pending_data(struct server* server)
         msg->resend_rate);
 
     type = (uint8_t)msg->type;
-    memcpy(buf + len + 0, &type, 1);
-    memcpy(buf + len + 1, &msg->payload_len, 1);
-    memcpy(buf + len + 2, msg->payload, msg->payload_len);
+    memcpy(ctx->buf + ctx->len + 0, &type, 1);
+    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
+    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
 
-    len += msg->payload_len + 2;
-    MSG_END_EACH
-
-    if (len > 0)
-    {
-        /* NOTE: The hashmap's key size contains the length of the stored
-         * address */
-        log_net("Sending UDP packet, size=%d\n", len);
-        net_sendto(
-            server->udp_sock, buf, len, addr, server->client_table.key_size);
-        client->timeout_counter++;
-    }
-    SERVER_CLIENT_END_EACH
+    ctx->len += msg->payload_len + 2;
+    return VEC_RETAIN;
 }
 
 /* ------------------------------------------------------------------------- */
-static void server_queue(struct server_client* client, struct msg* msg)
+void server_send_pending_data(struct server* server)
 {
-    vector_push(&client->pending_msgs, &msg);
+    int                    slot;
+    const struct net_addr* addr;
+    struct server_client*  client;
+    struct append_msgs_ctx ctx;
+
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        /* Append unreliable messages first */
+        ctx.len = 0;
+        msg_vec_retain(
+            client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
+        msg_vec_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
+
+        if (ctx.len == 0)
+            continue;
+
+        /* NOTE: The hashmap's key size contains the length of the stored
+         * address */
+        log_net("Sending UDP packet, size=%d\n", ctx.len);
+        net_sendto(server->udp_sock, ctx.buf, ctx.len, addr);
+        client->timeout_counter++;
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static int server_queue(struct server_client* client, struct msg* msg)
+{
+    return msg_vec_push(&client->pending_msgs, msg);
 }
 
 /* ------------------------------------------------------------------------- */
 void server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number)
 {
-    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
-    struct snake* snake = world_get_snake(world, client->snake_id);
-    server_queue(client, msg_snake_head(&snake->head, frame_number));
-    SERVER_CLIENT_END_EACH
+    int                    slot;
+    int                    other_slot;
+    const struct net_addr* addr;
+    const struct net_addr* other_addr;
+    struct server_client*  client;
+    struct server_client*  other_client;
 
-    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
-    SERVER_CLIENT_FOR_EACH(&server->client_table, other_addr, other_client)
-    struct snake* snake;
-    struct snake* other_snake;
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        struct snake* snake = world_get_snake(world, client->snake_id);
+        server_queue(client, msg_snake_head(&snake->head, frame_number));
+    }
 
-    /* OK to compare pointers here -- they're from the same hashmap */
-    if (addr == other_addr)
-        continue;
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        server_client_hm_for_each (
+            server->clients, other_slot, other_addr, other_client)
+        {
+            struct snake* snake;
+            struct snake* other_snake;
+            qw            dx, dy, dist_sq;
 
-    snake = world_get_snake(world, client->snake_id);
-    other_snake = world_get_snake(world, other_client->snake_id);
+            /* OK to compare pointers here -- they're from the same hashmap */
+            if (addr == other_addr)
+                continue;
 
-    /* TODO better distance check using bezier AABBs */
-    qw dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
-    qw dy = qw_sub(snake->head.pos.y, other_snake->head.pos.y);
-    qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-    if (dist_sq > make_qw(1 * 1))
-        continue;
+            snake = world_get_snake(world, client->snake_id);
+            other_snake = world_get_snake(world, other_client->snake_id);
 
-    /* TODO queue bezier handles */
+            /* TODO better distance check using bezier AABBs */
+            dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
+            dy = qw_sub(snake->head.pos.y, other_snake->head.pos.y);
+            dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+            if (dist_sq > make_qw(1 * 1))
+                continue;
 
-    SERVER_CLIENT_END_EACH
-    SERVER_CLIENT_END_EACH
+            /* TODO queue bezier handles */
+        }
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -226,48 +450,51 @@ int server_recv(
     struct world*                 world,
     uint16_t                      frame_number)
 {
-    uint8_t buf[MAX_UDP_PACKET_SIZE];
-    uint8_t client_addr[MAX_ADDRLEN];
-    int     bytes_received;
-    int     i;
+    uint8_t                buf[NET_MAX_UDP_PACKET_SIZE];
+    const struct net_addr* server_addr;
+    struct net_addr        client_addr;
+    struct server_client*  client;
+    int                    slot;
+    int*                   timeout;
 
     log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
-    SERVER_CLIENT_FOR_EACH(&server->client_table, addr, client)
-    client->timeout_counter++;
-
-    if (client->timeout_counter
-        > settings->client_timeout * settings->net_tick_rate)
+    server_client_hm_for_each (server->clients, slot, server_addr, client)
     {
-        char ipstr[MAX_ADDRSTRLEN];
-        net_addr_to_str(ipstr, sizeof(ipstr), addr);
-        log_warn("Client %s timed out\n", ipstr);
-        client_remove(server, world, addr, client);
+        client->timeout_counter++;
+
+        if (client->timeout_counter >
+            settings->client_timeout * settings->net_tick_rate)
+        {
+            struct net_addr_str ipstr;
+            net_addr_to_str(&ipstr, server_addr);
+            log_warn("Client %s timed out\n", ipstr.cstr);
+            client_remove(server, world, server_addr, client);
+        }
     }
-    SERVER_CLIENT_END_EACH
 
     /* Update malicious client timeouts */
-    MALICIOUS_CLIENT_FOR_EACH(&server->malicious_clients, addr, timeout)
-    if (--(*timeout) <= 0)
+    net_addr_hm_for_each (server->malicious_clients, slot, server_addr, timeout)
     {
-        char ipstr[MAX_ADDRSTRLEN];
-        net_addr_to_str(ipstr, MAX_ADDRSTRLEN, addr);
-        log_info("Client %s removed from malicious list\n", ipstr);
-        hashmap_erase(&server->malicious_clients, addr);
+        struct net_addr_str ipstr;
+
+        if (--(*timeout) > 0)
+            continue;
+
+        net_addr_to_str(&ipstr, server_addr);
+        log_info("Client %s removed from malicious list\n", ipstr.cstr);
+        net_addr_hm_erase(server->malicious_clients, server_addr);
     }
-    MALICIOUS_CLIENT_END_EACH
 
     /* We may need to read more than one UDP packet */
     while (1)
     {
         struct server_client* client;
-        bytes_received = net_recvfrom(
-            server->udp_sock,
-            buf,
-            MAX_UDP_PACKET_SIZE,
-            client_addr,
-            server->client_table.key_size);
+        int                   i, bytes_received;
+
+        bytes_received =
+            net_recvfrom(server->udp_sock, buf, sizeof(buf), &client_addr);
 
         /* Nothing received or error */
         if (bytes_received <= 0)
@@ -277,7 +504,7 @@ int server_recv(
         /*
          * If we received a packet from a banned client, ignore packet
          */
-        if (hashmap_find(&server->banned_clients, client_addr) != 0)
+        if (net_addr_hm_find(server->banned_clients, &client_addr))
             continue;
 
         /*
@@ -285,12 +512,12 @@ int server_recv(
          * increase their timeout
          */
         {
-            int* timeout
-                = hashmap_find(&server->malicious_clients, client_addr);
+            int* timeout =
+                net_addr_hm_find(server->malicious_clients, &client_addr);
             if (timeout != NULL)
             {
-                *timeout
-                    += settings->malicious_timeout * settings->net_tick_rate;
+                *timeout +=
+                    settings->malicious_timeout * settings->net_tick_rate;
                 continue;
             }
         }
@@ -299,7 +526,7 @@ int server_recv(
          * If we received a packet from a registered client, reset their timeout
          * counter
          */
-        client = hashmap_find(&server->client_table, client_addr);
+        client = server_client_hm_find(server->clients, &client_addr);
         if (client != NULL)
             client->timeout_counter = 0;
 
@@ -317,17 +544,17 @@ int server_recv(
             uint8_t              payload_len = buf[i + 1];
             if (i + 2 + payload_len > bytes_received)
             {
-                char ipstr[MAX_ADDRSTRLEN];
-                net_addr_to_str(ipstr, MAX_ADDRSTRLEN, client_addr);
+                struct net_addr_str ipstr;
+                net_addr_to_str(&ipstr, &client_addr);
                 log_warn(
                     "Invalid payload length \"%d\" received from client %s\n",
                     (int)payload_len,
-                    ipstr);
+                    ipstr.cstr);
                 log_warn("Dropping rest of packet\n");
                 mark_client_as_malicious_and_drop(
                     server,
                     world,
-                    client_addr,
+                    &client_addr,
                     client,
                     settings->malicious_timeout);
                 break;
@@ -341,11 +568,11 @@ int server_recv(
              */
             if (client == NULL && type != MSG_JOIN_REQUEST)
             {
-                char ipstr[MAX_ADDRSTRLEN];
-                net_addr_to_str(ipstr, MAX_ADDRSTRLEN, client_addr);
+                struct net_addr_str ipstr;
+                net_addr_to_str(&ipstr, &client_addr);
                 log_warn(
                     "Received packet from unknown client %s, ignoring\n",
-                    ipstr);
+                    ipstr.cstr);
                 break;
             }
 
@@ -363,36 +590,25 @@ int server_recv(
                     mark_client_as_malicious_and_drop(
                         server,
                         world,
-                        client_addr,
+                        &client_addr,
                         client,
                         settings->malicious_timeout);
                 }
                 break;
 
                 case MSG_JOIN_REQUEST: {
-                    if (hashmap_count(&server->client_table)
-                        > (uint32_t)settings->max_players)
+                    if (hm_count(server->clients) > settings->max_players)
                     {
                         char response[2] = {MSG_JOIN_DENY_SERVER_FULL, 0};
-                        net_sendto(
-                            server->udp_sock,
-                            response,
-                            2,
-                            client_addr,
-                            server->client_table.key_size);
+                        net_sendto(server->udp_sock, response, 2, &client_addr);
                         break;
                     }
 
-                    if (pp.join_request.username_len
-                        > settings->max_username_len)
+                    if (pp.join_request.username_len >
+                        settings->max_username_len)
                     {
                         char response[2] = {MSG_JOIN_DENY_BAD_USERNAME, 0};
-                        net_sendto(
-                            server->udp_sock,
-                            response,
-                            2,
-                            client_addr,
-                            server->client_table.key_size);
+                        net_sendto(server->udp_sock, response, 2, &client_addr);
                         break;
                     }
 
@@ -408,14 +624,16 @@ int server_recv(
                             "MSG_JOIN_REQUEST \"%s\"\n",
                             pp.join_request.username);
 
-                        client = hashmap_emplace(
-                            &server->client_table, &client_addr);
-                        msg_queue_init(&client->pending_msgs);
-                        // hashmap_init(&client->bezier_handles_ack,
-                        // sizeof(struct bezier_handle), 0);
+                        client = server_client_hm_emplace_new(
+                            &server->clients, &client_addr);
+                        CLITHER_DEBUG_ASSERT(client != NULL);
+
+                        msg_vec_init(&client->pending_msgs);
+                        /* hashmap_init(&client->bezier_handles_ack,*/
+                        /* sizeof(struct bezier_handle), 0);*/
                         client->timeout_counter = 0;
-                        client->snake_id = world_spawn_snake(
-                            world, pp.join_request.username);
+                        client->snake_id =
+                            world_spawn_snake(world, pp.join_request.username);
                         client->last_command_msg_frame = frame_number;
 
                         /* Hold the snake in place until we receive the first
@@ -429,14 +647,14 @@ int server_recv(
                          * stable connection initially.
                          */
                         for (n = 0; n != CBF_WINDOW_SIZE; ++n)
-                            client->cbf_window[n] = settings->sim_tick_rate
-                                                    / settings->net_tick_rate;
+                            client->cbf_window[n] = settings->sim_tick_rate /
+                                                    settings->net_tick_rate;
                     }
 
                     /* (Re-)send join accept response */
                     {
-                        struct snake* snake
-                            = world_get_snake(world, client->snake_id);
+                        struct snake* snake =
+                            world_get_snake(world, client->snake_id);
                         struct msg* response = msg_join_accept(
                             settings->sim_tick_rate,
                             settings->net_tick_rate,
@@ -444,7 +662,7 @@ int server_recv(
                             frame_number,
                             client->snake_id,
                             &snake->head.pos);
-                        vector_push(&client->pending_msgs, &response);
+                        msg_vec_push(&client->pending_msgs, response);
                     }
                 }
                 break;
@@ -461,10 +679,10 @@ int server_recv(
                 case MSG_COMMANDS: {
                     uint16_t      first_frame, last_frame;
                     int           lower;
-                    struct snake* snake
-                        = world_get_snake(world, client->snake_id);
-                    int granularity
-                        = settings->sim_tick_rate / settings->net_tick_rate;
+                    struct snake* snake =
+                        world_get_snake(world, client->snake_id);
+                    int granularity =
+                        settings->sim_tick_rate / settings->net_tick_rate;
 
                     /*
                      * Measure how many frames are in the client's command
@@ -478,18 +696,17 @@ int server_recv(
                      * will be instructed to shrink the buffer.
                      */
                     int client_commands_queued = u16_sub_wrap(
-                        command_rb_frame_end(&snake->command_rb), frame_number);
+                        cmd_queue_frame_end(&snake->cmdq), frame_number);
 
                     /* Returns the first and last frame numbers that were
                      * unpacked from the message */
                     if (msg_commands_unpack_into(
-                            &snake->command_rb,
+                            &snake->cmdq,
                             payload,
                             payload_len,
                             frame_number,
                             &first_frame,
-                            &last_frame)
-                        < 0)
+                            &last_frame) < 0)
                         break; /* something is wrong with the message */
 
                     /*
@@ -554,7 +771,6 @@ void* server_run(const void* args)
 #define INSTANCE_FOR_EACH(btree, port, instance)                               \
     BTREE_FOR_EACH(btree, struct server_instance, port, instance)
 #define INSTANCE_END_EACH BTREE_END_EACH
-
     struct cs_btree        instances;
     struct server_settings settings;
     const struct args*     a = args;
@@ -563,7 +779,7 @@ void* server_run(const void* args)
     log_set_prefix("Server: ");
     log_set_colors(COL_B_CYAN, COL_RESET);
 
-    cs_threadlocal_init();
+    mem_init_threadlocal();
 
     btree_init(&instances, sizeof(struct server_instance));
 
@@ -593,7 +809,8 @@ void* server_run(const void* args)
         strcpy(instance->port, port);
 
         log_dbg("Starting default server instance\n");
-        if (thread_start(&instance->thread, run_server_instance, instance) < 0)
+        instance->thread = thread_start(server_instance_run, instance);
+        if (instance->thread == NULL)
         {
             log_err(
                 "Failed to start the default server instance! Can't "
@@ -604,14 +821,14 @@ void* server_run(const void* args)
 
     /* For now we don't create more instances once the server fills up */
     INSTANCE_FOR_EACH(&instances, port, instance)
-    thread_join(instance->thread, 0);
+    thread_join(instance->thread);
     INSTANCE_END_EACH
     log_dbg("Joined all server instances\n");
 
     server_settings_save(&settings, a->config_file);
 
     btree_deinit(&instances);
-    cs_threadlocal_deinit();
+    mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");
 
@@ -620,7 +837,7 @@ void* server_run(const void* args)
 start_default_instance_failed:
 load_settings_failed:
     btree_deinit(&instances);
-    cs_threadlocal_deinit();
+    mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");
     return (void*)-1;

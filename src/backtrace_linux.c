@@ -1,36 +1,32 @@
-#include "cstructures/backtrace.h"
+#include "clither/backtrace.h"
 #include <execinfo.h>
 #include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
-int
-backtrace_init(void)
+int backtrace_init(void)
 {
     return 0;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-backtrace_deinit(void)
+void backtrace_deinit(void)
 {
 }
 
 /* ------------------------------------------------------------------------- */
-char**
-backtrace_get(int* size)
+char** backtrace_get(int* size)
 {
-    void* array[CSTRUCTURES_BACKTRACE_SIZE];
+    void*  array[CLITHER_BACKTRACE_SIZE];
     char** strings;
 
-    *size = backtrace(array, CSTRUCTURES_BACKTRACE_SIZE);
+    *size = backtrace(array, CLITHER_BACKTRACE_SIZE);
     strings = backtrace_symbols(array, *size);
 
     return strings;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-backtrace_free(char** bt)
+void backtrace_free(char** bt)
 {
     free(bt);
 }

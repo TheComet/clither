@@ -2,6 +2,7 @@
 #include "clither/mfile.h"
 #include "clither/net.h"
 #include "clither/server_settings.h"
+#include "clither/strview.h"
 #include "clither/utf8.h"
 #include <ctype.h>
 #include <errno.h>
@@ -47,6 +48,7 @@ parser_init(struct parser* p, const struct mfile* mf, const char* filename)
 }
 
 /* ------------------------------------------------------------------------- */
+CLITHER_PRINTF_FORMAT(2, 3)
 static int parser_error(struct parser* p, const char* fmt, ...)
 {
     va_list        ap;
@@ -91,9 +93,8 @@ static enum token scan_next_token(struct parser* p)
         if (isdigit(p->source[p->head]) || p->source[p->head] == '-')
         {
             char is_float = 0;
-            while (
-                p->head != p->end
-                && (isdigit(p->source[p->head]) || p->source[p->head] == '.'))
+            while (p->head != p->end &&
+                   (isdigit(p->source[p->head]) || p->source[p->head] == '.'))
             {
                 if (p->source[p->head] == '.')
                     is_float = 1;
@@ -113,10 +114,12 @@ static enum token scan_next_token(struct parser* p)
         /* Key */
         if (isalpha(p->source[p->head]))
         {
-            while (p->head != p->end && isalpha(p->source[p->head]))
+            while (p->head != p->end &&
+                   (isalpha(p->source[p->head]) || p->source[p->head] == '_'))
+            {
                 p->head++;
-            p->value.string.off = p->tail;
-            p->value.string.len = p->head - p->value.string.off;
+            }
+            p->value.string = strview(p->source, p->tail, p->head - p->tail);
             return TOK_KEY;
         }
 
@@ -249,14 +252,16 @@ parse_server_key_values(struct parser* p, struct server_settings* server)
 
             case TOK_KEY: {
                 key = p->value.string;
+                /* clang-format off */
+                if (0) {}
 #define HANDLE_KEY(kname)                                                      \
-    if (strview_eq_cstr(key, #kname))                                          \
-    {                                                                          \
-        if (scan_next_token(p) != '=')                                         \
-            return parser_error(p, "Expected '=' after key\n");                \
-        if (parse_server_##kname(p, server) != 0)                              \
-            return -1;                                                         \
-    }
+                else if (strview_eq_cstr(key, #kname))                         \
+                {                                                              \
+                    if (scan_next_token(p) != '=')                             \
+                        return parser_error(p, "Expected '=' after key\n");    \
+                    if (parse_server_##kname(p, server) != 0)                  \
+                        return -1;                                             \
+                }
                 HANDLE_KEY(max_players)
                 HANDLE_KEY(max_username_len)
                 HANDLE_KEY(sim_tick_rate)
@@ -265,8 +270,12 @@ parse_server_key_values(struct parser* p, struct server_settings* server)
                 HANDLE_KEY(malicious_timeout)
                 HANDLE_KEY(port)
 #undef HANDLE_KEY
-                else return parser_error(
-                    p, "Unknown key '%.*s'\n", key.len, key.off);
+                else
+                {
+                    return parser_error(
+                        p, "Unknown key '%.*s'\n", key.len, key.data + key.off);
+                }
+                /* clang-format on */
                 break;
             }
 
@@ -285,7 +294,7 @@ static int parse_ini(struct parser* p, struct server_settings* server)
         return parser_error(
             p,
             "Expected a section name within the brackets. Example: [server]\n");
-    if (strview_eq_cstr(p->value.string, "server") == 0)
+    if (!strview_eq_cstr(p->value.string, "server"))
         return parser_error(
             p,
             "Unknown section '%.*s'. Expected [server]\n",

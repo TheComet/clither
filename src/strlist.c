@@ -17,16 +17,14 @@
  * Strings grow upwards, refs grow downwards
  *
  */
-static int
-grow(struct strlist** l, int str_len)
+static int grow(struct strlist** l, int str_len)
 {
     int count = *l ? (*l)->count : 0;
     int old_table_size = sizeof(struct strspan) * count;
     int new_table_size = sizeof(struct strspan) * (count + 1);
 
-    while ((*l ? (*l)->capacity : 0) < new_table_size
-                                           + (*l ? (*l)->str_used : 0) + str_len
-                                           + EXTRA_PADDING)
+    while ((*l ? (*l)->capacity : 0) <
+           new_table_size + (*l ? (*l)->str_used : 0) + str_len + EXTRA_PADDING)
     {
         int   cap = *l ? (*l)->capacity : 0;
         int   grow_size = cap ? cap : 128;
@@ -52,33 +50,28 @@ grow(struct strlist** l, int str_len)
     return 0;
 }
 
-void
-strlist_deinit(struct strlist* l)
+void strlist_deinit(struct strlist* l)
 {
     if (l)
         mem_free(l);
 }
 
 #if defined(ODBUTIL_MEM_DEBUGGING)
-void
-mem_acquire_strlist(struct strlist* l)
+void mem_acquire_strlist(struct strlist* l)
 {
     if (l == NULL)
         return;
     mem_acquire(l, offsetof(struct strlist, data) + l->capacity);
 }
-void
-mem_release_strlist(struct strlist* l)
+void mem_release_strlist(struct strlist* l)
 {
     mem_release(l);
 }
 #endif
 
-int
-strlist_add(struct strlist** l, struct strview str)
+int strlist_add(struct strlist** l, struct strview str)
 {
     struct strspan* ref;
-
     if (grow(l, str.len) < 0)
         return -1;
 
@@ -87,6 +80,7 @@ strlist_add(struct strlist** l, struct strview str)
     ref->len = str.len;
 
     memcpy((*l)->data + ref->off, str.data + str.off, str.len);
+    (*l)->data[ref->off + str.len] = '\0';
 
     (*l)->str_used += str.len + EXTRA_PADDING;
     (*l)->count++;
@@ -94,12 +88,17 @@ strlist_add(struct strlist** l, struct strview str)
     return 0;
 }
 
-int
-strlist_insert(struct strlist** l, int insert, struct strview in)
+int strlist_add_cstr(struct strlist** l, const char* cstr)
+{
+    return strlist_add(l, strview(cstr, 0, strlen(cstr)));
+}
+
+int strlist_insert(struct strlist** l, int insert, const char* cstr)
 {
     struct strspan* slotspan;
+    struct strview  str = strview(cstr, 0, strlen(cstr));
 
-    if (grow(l, in.len) < 0)
+    if (grow(l, str.len) < 0)
         return -1;
 
     slotspan = &STRLIST_TABLE_PTR(*l)[-insert];
@@ -110,7 +109,7 @@ strlist_insert(struct strlist** l, int insert, struct strview in)
 
         /* Move strings to make space for str.len+padding */
         memmove(
-            (*l)->data + slotspan->off + in.len + EXTRA_PADDING,
+            (*l)->data + slotspan->off + str.len + EXTRA_PADDING,
             (*l)->data + slotspan->off,
             (*l)->str_used - slotspan->off);
 
@@ -122,24 +121,23 @@ strlist_insert(struct strlist** l, int insert, struct strview in)
 
         /* Calculate new offsets */
         for (span = slotspan - 1, i = (*l)->count - insert; i; i--, span--)
-            span->off += in.len + EXTRA_PADDING;
+            span->off += str.len + EXTRA_PADDING;
     }
     else
     {
         slotspan->off = (*l)->str_used;
     }
 
-    memcpy((*l)->data + slotspan->off, in.data + in.off, in.len);
-    slotspan->len = in.len;
+    memcpy((*l)->data + slotspan->off, str.data + str.off, str.len);
+    slotspan->len = str.len;
 
-    (*l)->str_used += in.len + EXTRA_PADDING;
+    (*l)->str_used += str.len + EXTRA_PADDING;
     (*l)->count++;
 
     return 0;
 }
 
-void
-strlist_erase(struct strlist* l, int idx)
+void strlist_erase(struct strlist* l, int idx)
 {
     struct strspan* span = &STRLIST_TABLE_PTR(l)[-idx];
     int             str_gap = span->len + EXTRA_PADDING;
@@ -168,8 +166,7 @@ strlist_erase(struct strlist* l, int idx)
     l->count--;
 }
 
-static int
-lexicographically_less(struct strview s1, struct strview s2)
+static int lexicographically_less(struct strview s1, struct strview s2)
 {
     int cmp = memcmp(
         s1.data + s1.off, s2.data + s2.off, s1.len < s2.len ? s1.len : s2.len);
@@ -178,8 +175,7 @@ lexicographically_less(struct strview s1, struct strview s2)
     return cmp < 0;
 }
 
-int
-strlist_lower_bound(const struct strlist* l, struct strview str)
+int strlist_lower_bound(const struct strlist* l, struct strview str)
 {
     int half, middle, found, len;
 
@@ -203,8 +199,7 @@ strlist_lower_bound(const struct strlist* l, struct strview str)
     return found;
 }
 
-int
-strlist_upper_bound(const struct strlist* l, struct strview str)
+int strlist_upper_bound(const struct strlist* l, struct strview str)
 {
     int half, middle, found, len;
 

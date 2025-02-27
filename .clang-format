@@ -16,7 +16,7 @@ AlwaysBreakBeforeMultilineStrings: true
 AccessModifierOffset: -4
 BinPackParameters: false
 BinPackArguments: false
-BreakBeforeBinaryOperators: All
+BreakBeforeBinaryOperators: None
 BreakBeforeTernaryOperators: true
 BreakBeforeBraces: Custom
 BraceWrapping:
@@ -36,6 +36,18 @@ BreakConstructorInitializers: BeforeComma
 BreakStringLiterals: true
 ColumnLimit: 80
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ForEachMacros: [
+    command_queue_for_each,
+    hm_for_each,
+    hm_for_each_full,
+    net_addr_hm_for_each,
+    rb_for_each,
+    server_client_hm_for_each,
+    strlist_for_each,
+    vec_for_each,
+    vec_for_each_r,
+    vec_enumerate
+]
 IncludeBlocks: Regroup
 IncludeCategories:
   - Regex:           '^clither/'
@@ -48,6 +60,7 @@ IncludeCategories:
     SortPriority:    0
 IndentWidth: 4
 IndentCaseLabels: true
+IndentPPDirectives: AfterHash
 InsertNewlineAtEOF: true
 PointerAlignment: Left
 SpaceBeforeParens: ControlStatements

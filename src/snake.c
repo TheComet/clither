@@ -1,7 +1,13 @@
 #include "clither/bezier.h"
+#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_point_vec.h"
 #include "clither/log.h"
 #include "clither/q.h"
+#include "clither/qwaabb_rb.h"
+#include "clither/qwpos_vec.h"
+#include "clither/qwpos_vec_rb.h"
 #include "clither/snake.h"
+#include "clither/str.h"
 #include "clither/wrap.h"
 
 #define _USE_MATH_DEFINES
@@ -71,8 +77,8 @@ static int snake_data_init(
     aabb = qwaabb_rb_emplace_realloc(&data->bezier_aabbs);
     if (aabb == NULL)
         goto emplace_aabb_failed;
-    data->aabb = *aabb
-        = make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
+    data->aabb = *aabb =
+        make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
 
     return 0;
 
@@ -109,7 +115,7 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 {
     if (snake_data_init(&snake->data, spawn_pos, name) != 0)
         return -1;
-    command_queue_init(&snake->cmdq);
+    cmd_queue_init(&snake->cmdq);
     snake_param_init(&snake->param);
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
@@ -122,14 +128,14 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 void snake_deinit(struct snake* snake)
 {
     snake_data_deinit(&snake->data);
-    command_queue_deinit(&snake->cmdq);
+    cmd_queue_deinit(&snake->cmdq);
 }
 
 /* ------------------------------------------------------------------------- */
 void snake_step_head(
     struct snake_head*        head,
     const struct snake_param* param,
-    struct command            command,
+    struct cmd                command,
     uint8_t                   sim_tick_rate)
 {
     qw      dx, dy;
@@ -160,12 +166,12 @@ void snake_step_head(
         head->angle = target_angle;
 
     /* Integrate speed over time */
-    target_speed
-        = command.action == COMMAND_ACTION_BOOST
-              ? 255
-              : qw_sub(snake_max_speed(param), snake_min_speed(param))
-                    * command.speed
-                    / qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    target_speed =
+        command.action == CMD_ACTION_BOOST
+            ? 255
+            : qw_sub(snake_max_speed(param), snake_min_speed(param)) *
+                  command.speed /
+                  qw_sub(snake_boost_speed(param), snake_min_speed(param));
     if (head->speed - target_speed > snake_acceleration(param))
         head->speed -= snake_acceleration(param);
     else if (head->speed - target_speed < -snake_acceleration(param))
@@ -289,8 +295,8 @@ snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
 
     /* Add a new bounding box, which is also defined by the current head
      * position */
-    *qwaabb_rb_emplace_realloc(&data->bezier_aabbs)
-        = make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
+    *qwaabb_rb_emplace_realloc(&data->bezier_aabbs) =
+        make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -298,7 +304,7 @@ int snake_step(
     struct snake_data*        data,
     struct snake_head*        head,
     const struct snake_param* param,
-    struct command            command,
+    struct cmd                command,
     uint8_t                   sim_tick_rate)
 {
     int need_new_segment;
@@ -329,9 +335,7 @@ int snake_step(
 /* ------------------------------------------------------------------------- */
 void snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
-    CLITHER_DEBUG_ASSERT(
-        stale_segments < rb_count(data->head_trails),
-        log_err("stale_segments: %d\n", stale_segments));
+    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
 
     while (stale_segments--)
     {
@@ -376,13 +380,13 @@ void snake_ack_frame(
     struct snake_head*        predicted_head,
     const struct snake_head*  authoritative_head,
     const struct snake_param* param,
-    struct command_queue*     cmdq,
+    struct cmd_queue*         cmdq,
     uint16_t                  frame_number,
     uint8_t                   sim_tick_rate)
 {
     uint16_t last_ackd_frame, predicted_frame;
 
-    if (command_queue_count(cmdq) == 0)
+    if (cmd_queue_count(cmdq) == 0)
     {
         log_warn(
             "snake_ack_frame(): Command buffer of snake \"%s\" is empty. Can't "
@@ -390,12 +394,12 @@ void snake_ack_frame(
             str_cstr(data->name));
         return;
     }
-    last_ackd_frame = command_queue_frame_begin(cmdq);
-    predicted_frame = command_queue_frame_end(cmdq);
+    last_ackd_frame = cmd_queue_frame_begin(cmdq);
+    predicted_frame = cmd_queue_frame_end(cmdq);
 
     /* last_ackd_frame <= frame_number <= predicted_frame */
-    if (u16_lt_wrap(frame_number, last_ackd_frame)
-        || u16_gt_wrap(frame_number, predicted_frame))
+    if (u16_lt_wrap(frame_number, last_ackd_frame) ||
+        u16_gt_wrap(frame_number, predicted_frame))
     {
         log_warn(
             "snake_ack_frame(): Frame number is outside of the command buffer "
@@ -417,8 +421,7 @@ void snake_ack_frame(
     {
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd
          * head */
-        struct command command
-            = command_queue_take_or_predict(cmdq, last_ackd_frame);
+        struct cmd command = cmd_queue_take_or_predict(cmdq, last_ackd_frame);
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
         last_ackd_frame++;
     }
@@ -434,7 +437,7 @@ void snake_ack_frame(
         struct qwpos_vec* trail;
         uint16_t          frame;
         int               i;
-        struct command*   command;
+        struct cmd*       command;
 
         log_dbg(
             "Rollback from frame %d to %d\n"
@@ -495,7 +498,7 @@ void snake_ack_frame(
         }
 
         /* Simulate head forwards again */
-        command_queue_for_each(cmdq, i, frame, command)
+        cmd_queue_for_each(cmdq, i, frame, command)
         {
             snake_step_head(predicted_head, param, *command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
@@ -529,8 +532,8 @@ void snake_ack_frame(
 /* ------------------------------------------------------------------------- */
 char snake_is_held(struct snake* snake, uint16_t frame_number)
 {
-    if (command_queue_count(&snake->cmdq) > 0
-        && command_queue_frame_begin(&snake->cmdq) == frame_number)
+    if (cmd_queue_count(&snake->cmdq) > 0 &&
+        cmd_queue_frame_begin(&snake->cmdq) == frame_number)
     {
         snake->hold = 0;
     }

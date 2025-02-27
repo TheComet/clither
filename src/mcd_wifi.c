@@ -77,8 +77,9 @@ void* run_mcd_wifi(const void* args)
     /* We connect as a proxy to the server */
     sockfd_vec_init(&ctx.server_fds);
     if (net_connect(
-            &ctx.server_fds, "localhost", *a->port ? a->port : NET_DEFAULT_PORT)
-        < 0)
+            &ctx.server_fds,
+            "localhost",
+            *a->port ? a->port : NET_DEFAULT_PORT) < 0)
         goto connect_server_failed;
 
     msg_buf_init(&client_buf);
@@ -97,8 +98,8 @@ void* run_mcd_wifi(const void* args)
         /* Read packets from client */
         while (1)
         {
-            bytes_received = net_recvfrom(
-                ctx.client_fd, buf, sizeof(buf), &ctx.client_addr);
+            bytes_received =
+                net_recvfrom(ctx.client_fd, buf, sizeof(buf), &ctx.client_addr);
             if (bytes_received < 0)
                 goto exit_mcd;
             if (bytes_received == 0)
@@ -134,13 +135,13 @@ void* run_mcd_wifi(const void* args)
         while (1)
         {
         retry_recv:
-            bytes_received
-                = net_recv(*vec_last(ctx.server_fds), buf, sizeof(buf));
+            bytes_received =
+                net_recv(*vec_last(ctx.server_fds), buf, sizeof(buf));
             if (bytes_received < 0)
             {
                 /* This file descriptor is invalid, close it and try with the
                  * next one */
-                if (sockfd_vec_count(ctx.server_fds) == 1)
+                if (vec_count(ctx.server_fds) == 1)
                     goto exit_mcd;
                 net_close(*sockfd_vec_pop(ctx.server_fds));
                 goto retry_recv;
@@ -181,18 +182,18 @@ void* run_mcd_wifi(const void* args)
 exit_mcd:;
     log_info("Stopping McDonald's WiFi\n");
 
-    vec_for_each(client_buf, pmsg)
+    vec_for_each (client_buf, pmsg)
     {
         mem_free(*pmsg);
     }
-    vec_for_each(server_buf, pmsg)
+    vec_for_each (server_buf, pmsg)
     {
         mem_free(*pmsg);
     }
     msg_buf_deinit(server_buf);
     msg_buf_deinit(client_buf);
 
-    vec_for_each(ctx.server_fds, pfd)
+    vec_for_each (ctx.server_fds, pfd)
     {
         net_close(*pfd);
     }

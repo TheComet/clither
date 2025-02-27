@@ -1,9 +1,11 @@
 #pragma once
 
-#include "clither/msg_queue.h"
+#include "clither/config.h"
+#include <stdint.h>
 
-struct command;
+#if defined(CLITHER_GFX)
 struct msg;
+struct msg_vec;
 struct world;
 
 /*
@@ -22,7 +24,7 @@ enum client_state
 struct client
 {
     struct str*        username;
-    struct msg_queue*  pending_msgs;
+    struct msg_vec*    pending_msgs;
     struct sockfd_vec* udp_sockfds;
     int                timeout_counter;
     uint16_t           frame_number; /* Counts upwards at sim_tick_rate */
@@ -55,10 +57,7 @@ int client_connect(
 
 void client_disconnect(struct client* client);
 
-static inline int client_queue(struct client* client, struct msg* m)
-{
-    return msg_queue_push(&client->pending_msgs, m);
-}
+int client_queue(struct client* client, struct msg* m);
 
 int client_send_pending_data(struct client* client);
 
@@ -78,6 +77,6 @@ int client_recv(struct client* client, struct world* world);
  * run in the foreground.
  * \param[in] a Command line arguments.
  */
-#if defined(CLITHER_GFX)
+struct args;
 void* client_run(const struct args* a);
 #endif

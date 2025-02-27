@@ -21,7 +21,9 @@
 #endif
 
 #if defined(CLITHER_MEMORY_DEBUGGING)
+#   define CLITHER_BACKTRACE_SIZE ${CLITHER_BACKTRACE_SIZE}
 #   cmakedefine CLITHER_BACKTRACE
+#   cmakedefine CLITHER_HEX_DUMP
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
@@ -40,11 +42,11 @@
 #endif
 
 #if defined(CLITHER_DEBUG_ASSERT)
-#   undef CLITHER_DEBUG_ASSERT
-#   define CLITHER_DEBUG_ASSERT(condition, error) \
-        ((void)((condition) ? error : (0)), assert(condition))
+#    undef CLITHER_DEBUG_ASSERT
+#    define CLITHER_DEBUG_ASSERT assert
+#    include <assert.h>
 #else
-#   define CLITHER_DEBUG_ASSERT(condition, error) ((void)0)
+#    define CLITHER_DEBUG_ASSERT(condition) ((void)0)
 #endif
 
 /* Version string ----------------------------------------------------------- */

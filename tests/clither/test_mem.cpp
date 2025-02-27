@@ -1,8 +1,8 @@
+#include "gmock/gmock.h"
+
 extern "C" {
 #include "clither/mem.h"
 }
-
-#include "gmock/gmock.h"
 
 #define NAME memory
 

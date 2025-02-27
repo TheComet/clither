@@ -1,10 +1,11 @@
 #include "clither/bezier.h"
-#include "clither/command.h"
+#include "clither/bezier_handle_rb.h"
+#include "clither/cmd.h"
 #include "clither/food_cluster.h"
 #include "clither/log.h"
 #include "clither/mem.h"
 #include "clither/msg.h"
-#include "clither/popcount.h"
+#include "clither/msg_vec.h"
 #include "clither/snake.h"
 #include "clither/wrap.h"
 #include <assert.h>
@@ -94,8 +95,8 @@ int msg_parse_payload(
                 return -1;
             }
 
-            pp->join_request.protocol_version
-                = (payload[0] << 8) | (payload[1] << 0);
+            pp->join_request.protocol_version =
+                (payload[0] << 8) | (payload[1] << 0);
             pp->join_request.frame = (payload[2] << 8) | (payload[3] << 0);
             pp->join_request.username_len = payload[4];
             pp->join_request.username = (const char*)&payload[5];
@@ -127,19 +128,23 @@ int msg_parse_payload(
 
             pp->join_accept.sim_tick_rate = payload[0];
             pp->join_accept.net_tick_rate = payload[1];
-            pp->join_accept.client_frame
-                = (payload[2] << 8) | (payload[3] << 0);
-            pp->join_accept.server_frame
-                = (payload[4] << 8) | (payload[5] << 0);
+            pp->join_accept.client_frame =
+                (payload[2] << 8) | (payload[3] << 0);
+            pp->join_accept.server_frame =
+                (payload[4] << 8) | (payload[5] << 0);
             pp->join_accept.snake_id = (payload[6] << 8) | (payload[7] << 0);
-            pp->join_accept.spawn.x
-                = (payload[8] & 0x80 ? 0xFF << 24 : 0)
-                  | /* Don't forget to sign extend 24-bit to 32-bit */
-                  (payload[8] << 16) | (payload[9] << 8) | (payload[10] << 0);
-            pp->join_accept.spawn.y
-                = (payload[11] & 0x80 ? 0xFF << 24 : 0)
-                  | /* Don't forget to sign extend 24-bit to 32-bit */
-                  (payload[11] << 16) | (payload[12] << 8) | (payload[13] << 0);
+            pp->join_accept.spawn.x =
+                (payload[8] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[8] << 16) |
+                (payload[9] << 8) | (payload[10] << 0);
+            pp->join_accept.spawn.y =
+                (payload[11] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[11] << 16) |
+                (payload[12] << 8) | (payload[13] << 0);
         }
         break;
 
@@ -221,14 +226,18 @@ int msg_parse_payload(
             }
 
             pp->snake_head.frame_number = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_head.head.pos.x
-                = (payload[2] & 0x80 ? 0xFF << 24 : 0)
-                  | /* Don't forget to sign extend 24-bit to 32-bit */
-                  (payload[2] << 16) | (payload[3] << 8) | (payload[4] << 0);
-            pp->snake_head.head.pos.y
-                = (payload[5] & 0x80 ? 0xFF << 24 : 0)
-                  | /* Don't forget to sign extend 24-bit to 32-bit */
-                  (payload[5] << 16) | (payload[6] << 8) | (payload[7] << 0);
+            pp->snake_head.head.pos.x =
+                (payload[2] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[2] << 16) |
+                (payload[3] << 8) | (payload[4] << 0);
+            pp->snake_head.head.pos.y =
+                (payload[5] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[5] << 16) |
+                (payload[6] << 8) | (payload[7] << 0);
             pp->snake_head.head.angle = (payload[8] << 8) | (payload[9] << 0);
             pp->snake_head.head.speed = payload[10];
         }
@@ -248,13 +257,13 @@ int msg_parse_payload(
             }
 
             pp->snake_bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_bezier.handle_idx_start
-                = (payload[2] << 8) | (payload[3] << 0);
-            pp->snake_bezier.handle_idx_end
-                = (payload[4] << 8) | (payload[5] << 0);
+            pp->snake_bezier.handle_idx_start =
+                (payload[2] << 8) | (payload[3] << 0);
+            pp->snake_bezier.handle_idx_end =
+                (payload[4] << 8) | (payload[5] << 0);
 
-            if (pp->snake_bezier.handle_idx_end
-                <= pp->snake_bezier.handle_idx_start)
+            if (pp->snake_bezier.handle_idx_end <=
+                pp->snake_bezier.handle_idx_start)
             {
                 log_warn(
                     "MSG_SNAKE_BEZIER: Invalid start and end indices: "
@@ -264,11 +273,10 @@ int msg_parse_payload(
                 return -2;
             }
 
-            if (6
-                    + (pp->snake_bezier.handle_idx_end
-                       - pp->snake_bezier.handle_idx_start)
-                          * handle_size
-                != payload_len)
+            if (6 + (pp->snake_bezier.handle_idx_end -
+                     pp->snake_bezier.handle_idx_start) *
+                        handle_size !=
+                payload_len)
             {
                 log_warn(
                     "MSG_SNAKE_BEZIER: Handle indices point outside of payload "
@@ -300,8 +308,8 @@ struct msg* msg_join_request(
     struct msg* m = msg_alloc(
         MSG_JOIN_REQUEST,
         1,
-        sizeof(protocol_version) + sizeof(frame_number) + sizeof(name_len)
-            + name_len + 1 /* we need to include the null terminator */
+        sizeof(protocol_version) + sizeof(frame_number) + sizeof(name_len) +
+            name_len + 1 /* we need to include the null terminator */
     );
     m->payload[0] = protocol_version >> 8;
     m->payload[1] = protocol_version & 0xFF;
@@ -325,9 +333,9 @@ struct msg* msg_join_accept(
     struct msg* m = msg_alloc(
         MSG_JOIN_ACCEPT,
         0,
-        sizeof(sim_tick_rate) + sizeof(net_tick_rate) + sizeof(client_frame)
-            + sizeof(server_frame) + sizeof(snake_id)
-            + 6 /* qwpos is 2x q10.14 (24 bits) = 48 bits */
+        sizeof(sim_tick_rate) + sizeof(net_tick_rate) + sizeof(client_frame) +
+            sizeof(server_frame) + sizeof(snake_id) +
+            6 /* qwpos is 2x q10.14 (24 bits) = 48 bits */
     );
 
     m->payload[0] = sim_tick_rate;
@@ -395,24 +403,24 @@ struct msg* msg_leave(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
+void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
 {
-    int                   i, bit, byte, send_count, send_idx;
-    const struct command* c;
-    struct msg*           m;
-    uint16_t              first_frame_number;
+    int               i, bit, byte, send_count, send_idx;
+    const struct cmd* c;
+    struct msg*       m;
+    uint16_t          first_frame_number;
 
-    assert(command_queue_count(cmdq) > 0);
-    first_frame_number = command_queue_frame_begin(cmdq);
+    assert(cmd_queue_count(cmdq) > 0);
+    first_frame_number = cmd_queue_frame_begin(cmdq);
 
     /*
      * The largest message payload we limit ourselves to is 255 bytes.
      * It doesn't really make sense to send more than a full second of inputs.
      */
-    for (send_idx = 0; send_idx < command_queue_count(cmdq);
+    for (send_idx = 0; send_idx < cmd_queue_count(cmdq);
          send_idx += 100, first_frame_number += 100)
     {
-        send_count = command_queue_count(cmdq) - send_idx;
+        send_count = cmd_queue_count(cmdq) - send_idx;
         if (send_count > 100)
             send_count = 100;
 
@@ -432,15 +440,15 @@ void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
             MSG_COMMANDS,
             0,
             sizeof(first_frame_number) + /* frame number */
-                3
-                + (12 * send_count + 8) / 8); /* upper bound for all commands */
+                3 +
+                (12 * send_count + 8) / 8); /* upper bound for all commands */
 
         m->payload[0] = first_frame_number >> 8;
         m->payload[1] = first_frame_number & 0xFF;
         m->payload[2] = (uint8_t)(send_count - 1);
 
         /* First command structure */
-        c = command_queue_peek(cmdq, 0);
+        c = cmd_queue_peek(cmdq, 0);
         m->payload[3] = c->angle;
         m->payload[4] = c->speed;
         m->payload[5] = c->action; /* 3 bits */
@@ -487,8 +495,8 @@ void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
 
         for (i = 1; i < send_count; i++)
         {
-            const struct command* prev = command_queue_peek(cmdq, i - 1);
-            const struct command* next = command_queue_peek(cmdq, i);
+            const struct cmd* prev = cmd_queue_peek(cmdq, i - 1);
+            const struct cmd* next = cmd_queue_peek(cmdq, i);
 
             if (next->action == prev->action)
                 CLEAR_NEXT_BIT(); /* Indicate nothing has changed */
@@ -508,11 +516,11 @@ void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
 
         for (i = 1; i < send_count; ++i)
         {
-            uint8_t               da, dv;
-            const struct command* prev = command_queue_peek(cmdq, i - 1);
-            const struct command* next = command_queue_peek(cmdq, i);
-            int                   da_i32 = next->angle - prev->angle + 3;
-            int                   dv_i32 = next->speed - prev->speed + 15;
+            uint8_t           da, dv;
+            const struct cmd* prev = cmd_queue_peek(cmdq, i - 1);
+            const struct cmd* next = cmd_queue_peek(cmdq, i);
+            int               da_i32 = next->angle - prev->angle + 3;
+            int               dv_i32 = next->speed - prev->speed + 15;
             if (da_i32 > 128)
                 da_i32 -= 256;
             if (da_i32 < -128)
@@ -550,17 +558,17 @@ void msg_commands(struct msg_vec** msgs, const struct command_queue* cmdq)
 
 /* ------------------------------------------------------------------------- */
 int msg_commands_unpack_into(
-    struct command_queue* cmdq,
-    const uint8_t*        payload,
-    uint8_t               payload_len,
-    uint16_t              frame_number,
-    uint16_t*             first_frame,
-    uint16_t*             last_frame)
+    struct cmd_queue* cmdq,
+    const uint8_t*    payload,
+    uint8_t           payload_len,
+    uint16_t          frame_number,
+    uint16_t*         first_frame,
+    uint16_t*         last_frame)
 {
-    int            i, bit, byte, mouse_data_offset;
-    uint8_t        command_count;
-    uint16_t       first_frame_number;
-    struct command command;
+    int        i, bit, byte, mouse_data_offset;
+    uint8_t    command_count;
+    uint16_t   first_frame_number;
+    struct cmd command;
 
     first_frame_number = (payload[0] << 8) | (payload[1] & 0xFF);
     command_count = payload[2];
@@ -578,7 +586,7 @@ int msg_commands_unpack_into(
     command.speed = payload[4];
     command.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        command_queue_put(cmdq, command, first_frame_number);
+        cmd_queue_put(cmdq, command, first_frame_number);
     log_net(
         "  angle=%x, speed=%x, action=%x\n",
         command.angle,
@@ -661,7 +669,7 @@ int msg_commands_unpack_into(
         command.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            command_queue_put(cmdq, command, first_frame_number + i + 1);
+            cmd_queue_put(cmdq, command, first_frame_number + i + 1);
         log_net(
             "  angle=%x, speed=%x, action=%x\n",
             command.angle,
@@ -675,8 +683,8 @@ int msg_commands_unpack_into(
 /* ------------------------------------------------------------------------- */
 struct msg* msg_feedback(int8_t diff, uint16_t frame_number)
 {
-    struct msg* m
-        = msg_alloc(MSG_FEEDBACK, 0, sizeof(diff) + sizeof(frame_number));
+    struct msg* m =
+        msg_alloc(MSG_FEEDBACK, 0, sizeof(diff) + sizeof(frame_number));
 
     m->payload[0] = (frame_number >> 8);
     m->payload[1] = (frame_number & 0xFF);
@@ -801,7 +809,7 @@ static struct bezier_handle* find_bezier_handle_in_rb(
 {
     struct bezier_handle* existing_handle;
     int                   i;
-    rb_for_each(rb, i, existing_handle)
+    rb_for_each (rb, i, existing_handle)
     {
         if (bezier_handles_equal_pos(handle, existing_handle))
             return existing_handle;
@@ -819,12 +827,18 @@ struct msg* msg_snake_bezier_ack(
     {
         struct bezier_handle* existing_handle;
         struct bezier_handle  handle;
-        handle.pos.x = (buf[0] & 0x80 ? 0xFF << 24 : 0)
-                       | /* Don't forget to sign extend 24-bit to 32-bit */
-                       (buf[0] << 16) | (buf[1] << 8) | (buf[2] << 0);
-        handle.pos.y = (buf[3] & 0x80 ? 0xFF << 24 : 0)
-                       | /* Don't forget to sign extend 24-bit to 32-bit */
-                       (buf[3] << 16) | (buf[4] << 8) | (buf[5] << 0);
+        handle.pos.x =
+            (buf[0] & 0x80
+                 ? 0xFF << 24
+                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+            (buf[0] << 16) |
+            (buf[1] << 8) | (buf[2] << 0);
+        handle.pos.y =
+            (buf[3] & 0x80
+                 ? 0xFF << 24
+                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+            (buf[3] << 16) |
+            (buf[4] << 8) | (buf[5] << 0);
         handle.angle = u8_to_qa(buf[6]);
         handle.len_backwards = buf[7];
         handle.len_forwards = buf[8];
@@ -851,7 +865,7 @@ struct msg*
 msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number)
 {
 #if FOOD_CLUSTER_SIZE != 0x8000 || FOOD_CLUSTER_QUANT != 0x7F00
-#error "You violated my assumptions!"
+#    error "You violated my assumptions!"
 #endif
     int i;
     int byte;

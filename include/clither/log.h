@@ -1,8 +1,8 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/str.h"
-#include <stdarg.h>
+#include "clither/strspan.h"
+#include <stdarg.h> /* va_list */
 
 void log_set_prefix(const char* prefix);
 void log_set_colors(const char* set, const char* clear);
@@ -39,7 +39,7 @@ CLITHER_PRINTF_FORMAT(1, 2) void log_net(const char* fmt, ...);
 
 /* Memory logging functions ------------------------------------------------- */
 
-CLITHER_PRINTF_FORMAT(2, 3) int log_oom(int size, const char* fmt, ...);
+int log_oom(int bytes, const char* func_name);
 
 /* Parser/File logging functions -------------------------------------------- */
 

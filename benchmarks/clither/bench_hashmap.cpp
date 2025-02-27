@@ -1,10 +1,5 @@
 #include "benchmark/benchmark.h"
-#include "cstructures/hashmap.h"
-#include "cstructures/hashmap.h"
-#include <iostream>
 #include <random>
-#include <unordered_map>
-#include <string.h>
 #include <vector>
 
 using namespace benchmark;
@@ -38,16 +33,17 @@ static void BM_HashmapCreation(State& state)
 }
 BENCHMARK(BM_HashmapCreation)
     //->RangeMultiplier(2)->Ranges({{1<<0, 1<<16}, {1<<0, 1<<16}})
-    ->RangeMultiplier(64)->Ranges({{1<<4, 1<<8}, {1<<4, 1<<8}})
-    ;
+    ->RangeMultiplier(64)
+    ->Ranges({{1 << 4, 1 << 8}, {1 << 4, 1 << 8}});
 
 static void BM_HashmapInsert(State& state)
 {
-    int insertions = state.range(0);
-    int keySize = state.range(1);
-    int valueSize = state.range(2);
+    int                            insertions = state.range(0);
+    int                            keySize = state.range(1);
+    int                            valueSize = state.range(2);
     std::vector<std::vector<char>> keys(insertions, std::vector<char>(keySize));
-    std::vector<std::vector<char>> values(insertions, std::vector<char>(valueSize));
+    std::vector<std::vector<char>> values(
+        insertions, std::vector<char>(valueSize));
     for (auto& key : keys)
         fillRandom(key.data(), keySize);
     for (auto& value : values)
@@ -65,4 +61,6 @@ static void BM_HashmapInsert(State& state)
     }
 }
 
-BENCHMARK(BM_HashmapInsert)->RangeMultiplier(2)->Ranges({{1<<0, 1<<16}, {1<<0, 1<<10}, {1<<0, 1<<16}});
+BENCHMARK(BM_HashmapInsert)
+    ->RangeMultiplier(2)
+    ->Ranges({{1 << 0, 1 << 16}, {1 << 0, 1 << 10}, {1 << 0, 1 << 16}});

@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* ------------------------------------------------------------------------- */
-struct thread* thread_start(void* (*func)(void*), void* args)
+struct thread* thread_start(void* (*func)(const void*), const void* args)
 {
     int            rc;
     pthread_attr_t attr;

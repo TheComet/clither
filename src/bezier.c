@@ -1,8 +1,10 @@
 #include "clither/bezier.h"
+#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_point_vec.h"
+#include "clither/qwpos_vec.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
-#include <stdio.h>
 #include <string.h>
 
 /* ------------------------------------------------------------------------- */

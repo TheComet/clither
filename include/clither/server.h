@@ -3,22 +3,22 @@
 #include "clither/config.h"
 #include "clither/hm.h"
 
+struct net_addr;
 struct server_settings;
+struct server_client;
 struct world;
-
-HM_DECLARE(client_hm, struct net_addr, struct server_client*, 16)
-HM_DECLARE(malicious_clients_hm, struct net_addr, int, 16)
-HM_DECLARE(banned_clients_hm, struct net_addr, char, 16)
+struct server_client_hm;
+struct net_addr_hm;
 
 struct server
 {
     /* struct (key size depends on protocol) -> struct client_table_entry */
     /* (see net.c) */
-    struct client_hm* client_table;
+    struct server_client_hm* clients;
     /* struct sockaddr (key size depends on protocol) */
-    struct malicious_clients_hm* malicious_clients;
+    struct net_addr_hm* malicious_clients;
     /* struct sockaddr (key size depends on protocol) */
-    struct banned_clients_hm* banned_clients;
+    struct net_addr_hm* banned_clients;
 
     int udp_sock;
 };
@@ -39,8 +39,7 @@ int server_init(
     struct server* server, const char* bind_address, const char* port);
 
 /*!
- * \brief Closes all sockets and frees all data. Saves the settings structure
- * back to the config.ini file.
+ * \brief Closes all sockets and frees all data.
  * \param[in] server The server to free.
  * \param[in] config_filename The name of the config.ini file to save settings
  * to.

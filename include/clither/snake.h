@@ -1,7 +1,7 @@
 #pragma once
 
 #include "clither/bezier.h"
-#include "clither/command.h"
+#include "clither/cmd_queue.h"
 #include "clither/snake_param.h"
 
 struct snake_head
@@ -21,9 +21,6 @@ struct snake_split
     unsigned ack : 1; /* Server acknowledged this split. Predicted splits can be
                          removed during resimulation */
 };
-
-RB_DECLARE(qwaabb_rb, struct qwaabb, 16)
-RB_DECLARE(snake_splits_rb, struct snake_split, 16)
 
 struct snake_data
 {
@@ -65,11 +62,11 @@ struct snake_data
 
 struct snake
 {
-    struct command_queue cmdq;
-    struct snake_param   param;
-    struct snake_data    data;
-    struct snake_head    head;
-    struct snake_head    head_ack;
+    struct cmd_queue   cmdq;
+    struct snake_param param;
+    struct snake_data  data;
+    struct snake_head  head;
+    struct snake_head  head_ack;
 
     unsigned hold : 1;
 };
@@ -83,8 +80,8 @@ void snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
 static inline int
 snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
 {
-    return a->pos.x == b->pos.x && a->pos.y == b->pos.y && a->angle == b->angle
-           && a->speed == b->speed;
+    return a->pos.x == b->pos.x && a->pos.y == b->pos.y &&
+           a->angle == b->angle && a->speed == b->speed;
 }
 
 /*
@@ -109,7 +106,7 @@ char snake_is_split(const struct snake_data* data);
 void snake_step_head(
     struct snake_head*        head,
     const struct snake_param* param,
-    struct command            command,
+    struct cmd                command,
     uint8_t                   sim_tick_rate);
 
 /*!
@@ -132,7 +129,7 @@ int snake_step(
     struct snake_data*        data,
     struct snake_head*        head,
     const struct snake_param* param,
-    struct command            command,
+    struct cmd                command,
     uint8_t                   sim_tick_rate);
 
 void snake_remove_stale_segments(struct snake_data* data, int stale_segments);
@@ -148,6 +145,6 @@ void snake_ack_frame(
     struct snake_head*        predicted_head,
     const struct snake_head*  authoritative_head,
     const struct snake_param* param,
-    struct command_queue*     cmdq,
+    struct cmd_queue*         cmdq,
     uint16_t                  frame_number,
     uint8_t                   sim_tick_rate);

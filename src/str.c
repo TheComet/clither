@@ -2,69 +2,76 @@
 #include "clither/log.h"
 #include "clither/mem.h"
 #include "clither/str.h"
-#include "clither/vec.h"
 
-VEC_DECLARE(_str, char, 16)
-VEC_DEFINE(_str, char, 16)
+VEC_DEFINE(str_impl, char, 16)
 
 void str_init(struct str** str)
 {
-    _str_init((struct _str**)str);
+    str_impl_init((struct str_impl**)str);
 }
 
 void str_deinit(struct str* str)
 {
-    _str_deinit((struct _str*)str);
+    str_impl_deinit((struct str_impl*)str);
 }
 
-float strview_to_float(struct strview str)
+int str_set_cstr(struct str** str, const char* cstr)
 {
-    int   begin = str.off;
-    int   end = str.off + str.len;
-    int   sign = 1.0f;
-    float val = 0.0f;
-    float scale = 1.0;
+    struct str_impl* impl;
+    int              len = strlen(cstr);
 
-    if (begin > 0 && str.data[begin] == '-')
-    {
-        begin++;
-        sign = -1.0f;
-    }
+    if (vec_capacity((struct str_impl*)*str) < len + 1)
+        if (str_impl_realloc((struct str_impl**)str, len + 1) != 0)
+            return -1;
 
-    for (; begin != end; begin++)
-    {
-        if (str.data[begin] == '.')
+    impl = (struct str_impl*)*str;
+    memcpy(impl->data, cstr, len);
+    impl->data[len] = '\0';
+    impl->count = len + 1;
+
+    return 0;
+}
+
+int str_join_path(struct str** str, struct strview path)
+{
+    struct str_impl* impl;
+    int              len = str_len(*str);
+
+    if (vec_capacity((struct str_impl*)*str) < len + 1 + path.len + 1)
+        if (str_impl_realloc((struct str_impl**)str, len + 1 + path.len + 1) !=
+            0)
         {
-            begin++;
-            break;
+            return -1;
         }
-        val = val * 10.0 + (str.data[begin] - '0');
-    }
 
-    for (; begin != end; begin++)
+    impl = (struct str_impl*)*str;
+    if (impl->data[len] != '/')
     {
-        scale = scale / 10;
-        val = val + (str.data[begin] - '0') * scale;
+        impl->data[len] = '/';
+        len++;
     }
 
-    return sign * val;
+    memcpy(impl->data + len, path.data + path.off, path.len);
+    len += path.len;
+
+    impl->data[len] = '\0';
+    impl->count = len + 1;
+
+    return 0;
 }
 
-int strview_to_integer(struct strview str)
+int str_join_path_cstr(struct str** str, const char* path)
 {
-    int begin = str.off;
-    int end = str.off + str.len;
-    int result = 0;
-    int sign = 1;
+    return str_join_path(str, strview(path, 0, strlen(path)));
+}
 
-    if (begin > 0 && str.data[begin] == '-')
-    {
-        begin++;
-        sign = -1;
-    }
+int cstr_ends_with(const char* cstr, const char* suffix)
+{
+    int cstr_len = strlen(cstr);
+    int suffix_len = strlen(suffix);
 
-    for (; begin != end; begin++)
-        result = result * 10 + (str.data[begin] - '0');
+    if (cstr_len < suffix_len)
+        return 0;
 
-    return sign * result;
+    return strcmp(cstr + cstr_len - suffix_len, suffix) == 0;
 }
