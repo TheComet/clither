@@ -38,8 +38,8 @@ struct __attribute__((packed)) msg
 {
     uint8_t       resend_rate;
     uint8_t       resend_rate_counter;
-    uint8_t       payload_len;
     enum msg_type type;
+    uint8_t       payload_len;
     uint8_t       payload[1];
 };
 
@@ -136,11 +136,11 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq);
 
 int msg_commands_unpack_into(
     struct cmd_queue* cmdq,
-    const uint8_t*        payload,
-    uint8_t               payload_len,
-    uint16_t              frame_number,
-    uint16_t*             first_frame,
-    uint16_t*             last_frame);
+    const uint8_t*    payload,
+    uint8_t           payload_len,
+    uint16_t          frame_number,
+    uint16_t*         first_frame,
+    uint16_t*         last_frame);
 
 struct msg* msg_feedback(int8_t diff, uint16_t frame_number);
 

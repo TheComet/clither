@@ -12,13 +12,9 @@ struct net_addr_hm;
 
 struct server
 {
-    /* struct (key size depends on protocol) -> struct client_table_entry */
-    /* (see net.c) */
     struct server_client_hm* clients;
-    /* struct sockaddr (key size depends on protocol) */
-    struct net_addr_hm* malicious_clients;
-    /* struct sockaddr (key size depends on protocol) */
-    struct net_addr_hm* banned_clients;
+    struct net_addr_hm*      malicious_clients;
+    struct net_addr_hm*      banned_clients;
 
     int udp_sock;
 };
@@ -52,7 +48,7 @@ void server_queue_snake_data(
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
-void server_send_pending_data(struct server* server);
+int server_send_pending_data(struct server* server);
 
 /*!
  *

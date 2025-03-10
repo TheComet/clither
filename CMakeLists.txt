@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.24)
+cmake_minimum_required (VERSION 3.22)
 
 if (NOT DEFINED CMAKE_BUILD_TYPE)
     set (CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel" FORCE)
@@ -21,7 +21,7 @@ cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the u
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application.")
+option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application." ON)
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
@@ -104,6 +104,7 @@ add_executable (clither
     "include/clither/msg_vec.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
+    "include/clither/net_addr_hm.h"
     "include/clither/popcount.h"
     "include/clither/q.h"
     "include/clither/quadtree.h"
@@ -115,6 +116,8 @@ add_executable (clither
     "include/clither/resource_snake_part_vec.h"
     "include/clither/resource_sprite_vec.h"
     "include/clither/server.h"
+    "include/clither/server_client.h"
+    "include/clither/server_client_hm.h"
     "include/clither/server_instance.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
@@ -138,7 +141,6 @@ add_executable (clither
     "src/bezier_handle_rb.c"
     "src/bezier_point_vec.c"
     "src/camera.c"
-    "src/client.c"
     "src/cmd.c"
     "src/cmd_queue.c"
     "src/cmd_rb.c"
@@ -148,6 +150,7 @@ add_executable (clither
     "src/log.c"
     "src/msg.c"
     "src/msg_vec.c"
+    "src/net_addr_hm.c"
     "src/quadtree.c"
     "src/qwaabb_rb.c"
     "src/qwpos_vec.c"
@@ -165,6 +168,7 @@ add_executable (clither
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/server.c
+        src/server_client_hm.c
         src/server_instance.c
         src/server_settings.c>
 
@@ -172,6 +176,7 @@ add_executable (clither
         src/mcd_wifi.c>
 
     $<$<BOOL:${CLITHER_GFX}>:
+        src/client.c
         src/gfx.c>
     $<$<BOOL:${CLITHER_GFX_SDL}>:
         src/sdl/gfx_sdl.c>
@@ -233,7 +238,6 @@ add_executable (clither
         tests/clither/test_hm_full.cpp
         tests/clither/test_mem.cpp
         tests/clither/test_msg.cpp
-        tests/clither/test_protocol.cpp
         tests/clither/test_q.cpp
         tests/clither/test_quadtree.cpp
         tests/clither/test_rb.cpp
@@ -242,7 +246,9 @@ add_executable (clither
         tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
         tests/cstructures/test_btree_as_set.cpp
-        tests/cstructures/test_btree.cpp>
+        tests/cstructures/test_btree.cpp
+        $<$<BOOL:${CLITHER_GFX}>:
+            tests/clither/test_protocol_join.cpp>>
 
     $<$<BOOL:${CLITHER_BENCHMARKS}>:
         benchmarks/benchmarks.cpp

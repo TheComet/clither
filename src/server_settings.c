@@ -131,7 +131,7 @@ static enum token scan_next_token(struct parser* p)
 }
 
 /* ------------------------------------------------------------------------- */
-static void set_defaults(struct server_settings* s)
+void server_settings_set_defaults(struct server_settings* s)
 {
     s->max_players = 600;
     s->max_username_len = 32;
@@ -313,7 +313,7 @@ int server_settings_load_or_set_defaults(
     struct mfile  mf;
     struct parser p;
 
-    set_defaults(server);
+    server_settings_set_defaults(server);
 
     if (!*filepath)
         return 0;

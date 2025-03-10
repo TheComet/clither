@@ -3,7 +3,10 @@
 #include "clither/log.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
+#include "clither/net_addr_hm.h"
 #include "clither/server.h"
+#include "clither/server_client.h"
+#include "clither/server_client_hm.h"
 #include "clither/server_instance.h"
 #include "clither/server_settings.h"
 #include "clither/snake.h"
@@ -12,212 +15,6 @@
 #include "clither/wrap.h"
 #include <stdlib.h> /* atoi */
 #include <string.h> /* memcpy */
-
-#define CBF_WINDOW_SIZE 20
-
-struct server_client
-{
-    struct msg_vec* pending_msgs;
-    int             timeout_counter;
-    int cbf_window[CBF_WINDOW_SIZE]; /* "Command Buffer Fullness" window */
-    cs_btree_key snake_id;
-    uint16_t     last_command_msg_frame;
-};
-
-struct server_client_hm_kvs
-{
-    struct net_addr*      keys;
-    struct server_client* values;
-};
-static int server_client_hm_kvs_alloc(
-    struct server_client_hm_kvs* kvs,
-    struct server_client_hm_kvs* old_kvs,
-    int16_t                      capacity)
-{
-    (void)old_kvs;
-    kvs->keys = mem_alloc(sizeof(struct net_addr) * capacity);
-    if (kvs->keys == NULL)
-        return -1;
-
-    kvs->values = mem_alloc(sizeof(struct server_client) * capacity);
-    if (kvs->values == NULL)
-    {
-        mem_free(kvs->keys);
-        return -1;
-    }
-
-    return 0;
-}
-static void server_client_hm_kvs_free(struct server_client_hm_kvs* kvs)
-{
-    mem_free(kvs->values);
-    mem_free(kvs->keys);
-}
-static void server_client_hm_kvs_free_old(struct server_client_hm_kvs* kvs)
-{
-    server_client_hm_kvs_free(kvs);
-}
-static hash32 server_client_hm_kvs_hash(const struct net_addr* key)
-{
-    return hash32_jenkins_oaat(key->sockaddr_storage, key->len);
-}
-static const struct net_addr* server_client_hm_kvs_get_key(
-    const struct server_client_hm_kvs* kvs, int16_t slot)
-{
-    return &kvs->keys[slot];
-}
-static void server_client_hm_kvs_set_key(
-    struct server_client_hm_kvs* kvs, int16_t slot, const struct net_addr* key)
-{
-    kvs->keys[slot].len = key->len;
-    memcpy(kvs->keys[slot].sockaddr_storage, key->sockaddr_storage, key->len);
-}
-static int server_client_hm_kvs_keys_equal(
-    const struct net_addr* k1, const struct net_addr* k2)
-{
-    return k1->len == k2->len && memcmp(k1, k2, k1->len) == 0;
-}
-static struct server_client* server_client_hm_kvs_get_value(
-    const struct server_client_hm_kvs* kvs, int16_t slot)
-{
-    return &kvs->values[slot];
-}
-static void server_client_hm_kvs_set_value(
-    struct server_client_hm_kvs* kvs,
-    int16_t                      slot,
-    const struct server_client*  value)
-{
-    kvs->values[slot] = *value;
-}
-
-HM_DECLARE_FULL(
-    server_client_hm,
-    hash32,
-    const struct net_addr*,
-    struct server_client,
-    16,
-    struct server_client_hm_kvs)
-HM_DEFINE_FULL(
-    server_client_hm,
-    hash32,
-    const struct net_addr*,
-    struct server_client,
-    16,
-    server_client_hm_kvs_hash,
-    server_client_hm_kvs_alloc,
-    server_client_hm_kvs_free_old,
-    server_client_hm_kvs_free,
-    server_client_hm_kvs_get_key,
-    server_client_hm_kvs_set_key,
-    server_client_hm_kvs_keys_equal,
-    server_client_hm_kvs_get_value,
-    server_client_hm_kvs_set_value,
-    16,
-    70)
-#define server_client_hm_for_each(server_clients, slot, addr, client)          \
-    hm_for_each_full (                                                         \
-        server_clients,                                                        \
-        slot,                                                                  \
-        addr,                                                                  \
-        client,                                                                \
-        server_client_hm_kvs_get_key,                                          \
-        server_client_hm_kvs_get_value)
-
-struct net_addr_hm_kvs
-{
-    struct net_addr* keys;
-    int*             values;
-};
-static int net_addr_hm_kvs_alloc(
-    struct net_addr_hm_kvs* kvs,
-    struct net_addr_hm_kvs* old_kvs,
-    int16_t                 capacity)
-{
-    (void)old_kvs;
-    kvs->keys = mem_alloc(sizeof(struct net_addr) * capacity);
-    if (kvs->keys == NULL)
-        return -1;
-
-    kvs->values = mem_alloc(sizeof(struct server_client) * capacity);
-    if (kvs->values == NULL)
-    {
-        mem_free(kvs->keys);
-        return -1;
-    }
-
-    return 0;
-}
-static void net_addr_hm_kvs_free(struct net_addr_hm_kvs* kvs)
-{
-    mem_free(kvs->values);
-    mem_free(kvs->keys);
-}
-static void net_addr_hm_kvs_free_old(struct net_addr_hm_kvs* kvs)
-{
-    net_addr_hm_kvs_free(kvs);
-}
-static hash32 net_addr_hm_kvs_hash(const struct net_addr* key)
-{
-    return hash32_jenkins_oaat(key->sockaddr_storage, key->len);
-}
-static const struct net_addr*
-net_addr_hm_kvs_get_key(const struct net_addr_hm_kvs* kvs, int16_t slot)
-{
-    return &kvs->keys[slot];
-}
-static void net_addr_hm_kvs_set_key(
-    struct net_addr_hm_kvs* kvs, int16_t slot, const struct net_addr* key)
-{
-    kvs->keys[slot].len = key->len;
-    memcpy(kvs->keys[slot].sockaddr_storage, key->sockaddr_storage, key->len);
-}
-static int
-net_addr_hm_kvs_keys_equal(const struct net_addr* k1, const struct net_addr* k2)
-{
-    return k1->len == k2->len && memcmp(k1, k2, k1->len) == 0;
-}
-static int*
-net_addr_hm_kvs_get_value(const struct net_addr_hm_kvs* kvs, int16_t slot)
-{
-    return &kvs->values[slot];
-}
-static void net_addr_hm_kvs_set_value(
-    struct net_addr_hm_kvs* kvs, int16_t slot, const int* value)
-{
-    kvs->values[slot] = *value;
-}
-HM_DECLARE_FULL(
-    net_addr_hm,
-    hash32,
-    const struct net_addr*,
-    int,
-    16,
-    struct net_addr_hm_kvs)
-HM_DEFINE_FULL(
-    net_addr_hm,
-    hash32,
-    const struct net_addr*,
-    int,
-    16,
-    net_addr_hm_kvs_hash,
-    net_addr_hm_kvs_alloc,
-    net_addr_hm_kvs_free_old,
-    net_addr_hm_kvs_free,
-    net_addr_hm_kvs_get_key,
-    net_addr_hm_kvs_set_key,
-    net_addr_hm_kvs_keys_equal,
-    net_addr_hm_kvs_get_value,
-    net_addr_hm_kvs_set_value,
-    128,
-    70)
-#define net_addr_hm_for_each(server_clients, slot, addr, client)               \
-    hm_for_each_full (                                                         \
-        server_clients,                                                        \
-        slot,                                                                  \
-        addr,                                                                  \
-        client,                                                                \
-        net_addr_hm_kvs_get_key,                                               \
-        net_addr_hm_kvs_get_value)
 
 /* ------------------------------------------------------------------------- */
 static void client_remove(
@@ -234,9 +31,9 @@ static void client_remove(
 /* ------------------------------------------------------------------------- */
 static void mark_client_as_malicious_and_drop(
     struct server*              server,
-    struct world*               world,
     const struct net_addr*      addr,
     const struct server_client* client,
+    struct world*               world,
     int                         timeout)
 {
     net_addr_hm_insert_update(&server->malicious_clients, addr, timeout);
@@ -251,11 +48,6 @@ int server_init(
     if (server->udp_sock < 0)
         return -1;
 
-    /*
-     * Whenever we receive a UDP packet, we look up the source address to get
-     * the client structure associated with that packet. Depending on whether
-     * we are using IPv4 or IPv6 the size of the key will be different.
-     */
     server_client_hm_init(&server->clients);
     net_addr_hm_init(&server->malicious_clients);
     net_addr_hm_init(&server->banned_clients);
@@ -277,7 +69,11 @@ void server_deinit(struct server* server)
 
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
+        struct msg** pmsg;
         (void)addr;
+
+        vec_for_each (client->pending_msgs, pmsg)
+            msg_free(*pmsg);
         msg_vec_deinit(client->pending_msgs);
     }
     server_client_hm_deinit(server->clients);
@@ -318,7 +114,7 @@ static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
 
     if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
         return VEC_RETAIN;
-    if (msg->resend_rate != 0) /* message is reliable */
+    if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
     log_net(
@@ -343,7 +139,7 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     struct msg*             msg = *pmsg;
     if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
         return VEC_RETAIN;
-    if (msg->resend_rate == 0) /* message is unreliable */
+    if (msg_is_unreliable(msg))
         return VEC_RETAIN;
 
     if (--msg->resend_rate_counter > 0)
@@ -366,7 +162,7 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
 }
 
 /* ------------------------------------------------------------------------- */
-void server_send_pending_data(struct server* server)
+int server_send_pending_data(struct server* server)
 {
     int                    slot;
     const struct net_addr* addr;
@@ -390,6 +186,8 @@ void server_send_pending_data(struct server* server)
         net_sendto(server->udp_sock, ctx.buf, ctx.len, addr);
         client->timeout_counter++;
     }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -444,13 +242,280 @@ void server_queue_snake_data(
 }
 
 /* ------------------------------------------------------------------------- */
+static int process_message(
+    struct server*                server,
+    const struct server_settings* settings,
+    struct server_client*         client,
+    const struct net_addr*        client_addr,
+    struct world*                 world,
+    enum msg_type                 msg_type,
+    const uint8_t*                msg_data,
+    uint8_t                       msg_len,
+    uint16_t                      frame_number)
+{
+    /*
+     * NOTE: Beyond this point, "client" won't be NULL *unless* the
+     * message is MSG_JOIN_REQUEST. This makes the switch/case handling
+     * a little easier for all other cases
+     */
+
+    union parsed_payload pp;
+    switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
+    {
+        default: {
+            mark_client_as_malicious_and_drop(
+                server,
+                client_addr,
+                client,
+                world,
+                settings->malicious_timeout);
+            break;
+        }
+
+        case MSG_JOIN_REQUEST: {
+            if (hm_count(server->clients) > settings->max_players)
+            {
+                char response[2] = {MSG_JOIN_DENY_SERVER_FULL, 0};
+                net_sendto(server->udp_sock, response, 2, client_addr);
+                break;
+            }
+
+            if (pp.join_request.username_len > settings->max_username_len)
+            {
+                char response[2] = {MSG_JOIN_DENY_BAD_USERNAME, 0};
+                net_sendto(server->udp_sock, response, 2, client_addr);
+                break;
+            }
+
+            /* Create new client. This code is not refactored into a
+             * separate function because this is the only location where
+             * clients are created. Clients are destroyed by the
+             * function remove_client() */
+            if (client == NULL)
+            {
+                struct snake* snake;
+                int           cbf_idx;
+                log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
+
+                client =
+                    server_client_hm_emplace_new(&server->clients, client_addr);
+                CLITHER_DEBUG_ASSERT(client != NULL);
+
+                msg_vec_init(&client->pending_msgs);
+                /* hashmap_init(&client->bezier_handles_ack,*/
+                /* sizeof(struct bezier_handle), 0);*/
+                client->timeout_counter = 0;
+                client->snake_id =
+                    world_spawn_snake(world, pp.join_request.username);
+                client->last_command_msg_frame = frame_number;
+
+                /* Hold the snake in place until we receive the first
+                 * command */
+                snake = world_get_snake(world, client->snake_id);
+                snake_set_hold(snake);
+
+                /*
+                 * Init "Command Buffer Fullness" queue with minimum
+                 * granularity. This assumes the client has the most
+                 * stable connection initially.
+                 */
+                for (cbf_idx = 0; cbf_idx != CBF_WINDOW_SIZE; ++cbf_idx)
+                    client->cbf_window[cbf_idx] =
+                        settings->sim_tick_rate / settings->net_tick_rate;
+            }
+
+            /* (Re-)send join accept response */
+            {
+                struct snake* snake = world_get_snake(world, client->snake_id);
+                struct msg*   response = msg_join_accept(
+                    settings->sim_tick_rate,
+                    settings->net_tick_rate,
+                    pp.join_request.frame,
+                    frame_number,
+                    client->snake_id,
+                    &snake->head.pos);
+                msg_vec_push(&client->pending_msgs, response);
+            }
+            break;
+        }
+
+        case MSG_JOIN_ACCEPT:
+        case MSG_JOIN_DENY_BAD_PROTOCOL:
+        case MSG_JOIN_DENY_BAD_USERNAME:
+        case MSG_JOIN_DENY_SERVER_FULL: break;
+
+        case MSG_LEAVE: {
+            break;
+        }
+
+        case MSG_COMMANDS: {
+            uint16_t      first_frame, last_frame;
+            int           lower;
+            struct snake* snake = world_get_snake(world, client->snake_id);
+            int granularity = settings->sim_tick_rate / settings->net_tick_rate;
+
+            /*
+             * Measure how many frames are in the client's command
+             * buffer.
+             *
+             * A negative value indicates the client is lagging behind,
+             * and the server will have to make a prediction, which will
+             * lead to the client having to re-simulate. A positive
+             * value indicates there are commands in the buffer.
+             * Depending on how stable the connection is, the client
+             * will be instructed to shrink the buffer.
+             */
+            int client_commands_queued =
+                u16_sub_wrap(cmd_queue_frame_end(&snake->cmdq), frame_number);
+
+            /* Returns the first and last frame numbers that were
+             * unpacked from the message */
+            if (msg_commands_unpack_into(
+                    &snake->cmdq,
+                    msg_data,
+                    msg_len,
+                    frame_number,
+                    &first_frame,
+                    &last_frame) < 0)
+                break; /* something is wrong with the message */
+
+            /*
+             * This handles packets being reordered by dropping any
+             * commands older than the last command received
+             */
+            if (u16_le_wrap(last_frame, client->last_command_msg_frame))
+                break;
+            client->last_command_msg_frame = last_frame;
+
+            /*
+             * Compare the very last frame received with the current
+             * frame number. By tracking the lower and upper boundaries
+             * of this difference over time, it can give a good estimate
+             * of how "healthy" the client's connection is and whether
+             * the command buffer size needs to be increased or
+             * decreased.
+             */
+            cbf_add(client, client_commands_queued);
+            lower = cbf_lower_bound(client);
+            if (client_commands_queued < 0)
+            {
+                /*
+                 * Means we do NOT have the command of the current frame
+                 *  -> server is going to make a prediction
+                 *  -> will probably lead to a client-side roll back
+                 * The client needs to warp forwards in time.
+                 */
+                int8_t diff =
+                    client_commands_queued < -10 ? -10 : client_commands_queued;
+                server_queue(client, msg_feedback(diff, frame_number));
+            }
+            else if (lower - granularity * 2 > 0)
+            {
+                int8_t diff = lower - granularity * 2;
+                diff = diff > 10 ? 10 : diff;
+                server_queue(client, msg_feedback(diff, frame_number));
+            }
+            break;
+        }
+
+        case MSG_SNAKE_CREATE: {
+            break;
+        }
+
+        case MSG_SNAKE_CREATE_ACK: {
+            break;
+        }
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static int unpack_packet(
+    struct server*                server,
+    const struct server_settings* settings,
+    struct server_client*         client,
+    const struct net_addr*        client_addr,
+    struct world*                 world,
+    const uint8_t*                udp_buf,
+    int                           udp_len,
+    uint16_t                      frame_number)
+{
+    /*
+     * Packet can contain multiple message objects.
+     * buf[0] == message type
+     * buf[1] == message payload length
+     * buf[2] == beginning of message payload
+     */
+    int i;
+    for (i = 0; i < udp_len - 1;)
+    {
+        enum msg_type  type = udp_buf[i + 0];
+        const uint8_t  msg_len = udp_buf[i + 1];
+        const uint8_t* msg = &udp_buf[i + 2];
+
+        log_net("Unpacking msg type=%d, len=%d\n", type, msg_len);
+
+        if (i + 2 + msg_len > udp_len)
+        {
+            struct net_addr_str ipstr;
+            net_addr_to_str(&ipstr, client_addr);
+            log_warn(
+                "Invalid payload length \"%d\" received from client %s\n",
+                (int)msg_len,
+                ipstr.cstr);
+            log_warn("Dropping rest of packet\n");
+            mark_client_as_malicious_and_drop(
+                server,
+                client_addr,
+                client,
+                world,
+                settings->malicious_timeout);
+            break;
+        }
+
+        /*
+         * Disallow receiving packets from clients that are not registered
+         * with the exception of the "join game request" message.
+         */
+        if (client == NULL && type != MSG_JOIN_REQUEST)
+        {
+            struct net_addr_str ipstr;
+            net_addr_to_str(&ipstr, client_addr);
+            log_warn(
+                "Received packet from unknown client %s, ignoring\n",
+                ipstr.cstr);
+            break;
+        }
+
+        if (process_message(
+                server,
+                settings,
+                client,
+                client_addr,
+                world,
+                type,
+                msg,
+                msg_len,
+                frame_number) != 0)
+        {
+            return 0;
+        }
+
+        i += msg_len + 2;
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
 int server_recv(
     struct server*                server,
     const struct server_settings* settings,
     struct world*                 world,
     uint16_t                      frame_number)
 {
-    uint8_t                buf[NET_MAX_UDP_PACKET_SIZE];
+    uint8_t                udp_buf[NET_MAX_UDP_PACKET_SIZE];
     const struct net_addr* server_addr;
     struct net_addr        client_addr;
     struct server_client*  client;
@@ -491,15 +556,15 @@ int server_recv(
     while (1)
     {
         struct server_client* client;
-        int                   i, bytes_received;
+        int                   udp_len;
 
-        bytes_received =
-            net_recvfrom(server->udp_sock, buf, sizeof(buf), &client_addr);
+        udp_len = net_recvfrom(
+            server->udp_sock, udp_buf, sizeof(udp_buf), &client_addr);
 
         /* Nothing received or error */
-        if (bytes_received <= 0)
-            return bytes_received;
-        log_net("Received UDP packet, size=%d\n", bytes_received);
+        if (udp_len <= 0)
+            return udp_len;
+        log_net("Received UDP packet, size=%d\n", udp_len);
 
         /*
          * If we received a packet from a banned client, ignore packet
@@ -530,235 +595,17 @@ int server_recv(
         if (client != NULL)
             client->timeout_counter = 0;
 
-        /*
-         * Packet can contain multiple message objects.
-         * buf[0] == message type
-         * buf[1] == message payload length
-         * buf[2] == beginning of message payload
-         */
-        for (i = 0; i < bytes_received - 1;)
+        if (unpack_packet(
+                server,
+                settings,
+                client,
+                &client_addr,
+                world,
+                udp_buf,
+                udp_len,
+                frame_number) != 0)
         {
-            const uint8_t*       payload;
-            union parsed_payload pp;
-            enum msg_type        type = buf[i + 0];
-            uint8_t              payload_len = buf[i + 1];
-            if (i + 2 + payload_len > bytes_received)
-            {
-                struct net_addr_str ipstr;
-                net_addr_to_str(&ipstr, &client_addr);
-                log_warn(
-                    "Invalid payload length \"%d\" received from client %s\n",
-                    (int)payload_len,
-                    ipstr.cstr);
-                log_warn("Dropping rest of packet\n");
-                mark_client_as_malicious_and_drop(
-                    server,
-                    world,
-                    &client_addr,
-                    client,
-                    settings->malicious_timeout);
-                break;
-            }
-
-            log_net("Unpacking msg type=%d, len=%d\n", type, payload_len);
-
-            /*
-             * Disallow receiving packets from clients that are not registered
-             * with the exception of the "join game request" message.
-             */
-            if (client == NULL && type != MSG_JOIN_REQUEST)
-            {
-                struct net_addr_str ipstr;
-                net_addr_to_str(&ipstr, &client_addr);
-                log_warn(
-                    "Received packet from unknown client %s, ignoring\n",
-                    ipstr.cstr);
-                break;
-            }
-
-            /*
-             * NOTE: Beyond this point, "client" won't be NULL *unless* the
-             * message is MSG_JOIN_REQUEST. This makes the switch/case handling
-             * a little easier for all other cases
-             */
-
-            /* Process message */
-            payload = &buf[i + 2];
-            switch (msg_parse_payload(&pp, type, payload, payload_len))
-            {
-                default: {
-                    mark_client_as_malicious_and_drop(
-                        server,
-                        world,
-                        &client_addr,
-                        client,
-                        settings->malicious_timeout);
-                }
-                break;
-
-                case MSG_JOIN_REQUEST: {
-                    if (hm_count(server->clients) > settings->max_players)
-                    {
-                        char response[2] = {MSG_JOIN_DENY_SERVER_FULL, 0};
-                        net_sendto(server->udp_sock, response, 2, &client_addr);
-                        break;
-                    }
-
-                    if (pp.join_request.username_len >
-                        settings->max_username_len)
-                    {
-                        char response[2] = {MSG_JOIN_DENY_BAD_USERNAME, 0};
-                        net_sendto(server->udp_sock, response, 2, &client_addr);
-                        break;
-                    }
-
-                    /* Create new client. This code is not refactored into a
-                     * separate function because this is the only location where
-                     * clients are created. Clients are destroyed by the
-                     * function remove_client() */
-                    if (client == NULL)
-                    {
-                        struct snake* snake;
-                        int           n;
-                        log_net(
-                            "MSG_JOIN_REQUEST \"%s\"\n",
-                            pp.join_request.username);
-
-                        client = server_client_hm_emplace_new(
-                            &server->clients, &client_addr);
-                        CLITHER_DEBUG_ASSERT(client != NULL);
-
-                        msg_vec_init(&client->pending_msgs);
-                        /* hashmap_init(&client->bezier_handles_ack,*/
-                        /* sizeof(struct bezier_handle), 0);*/
-                        client->timeout_counter = 0;
-                        client->snake_id =
-                            world_spawn_snake(world, pp.join_request.username);
-                        client->last_command_msg_frame = frame_number;
-
-                        /* Hold the snake in place until we receive the first
-                         * command */
-                        snake = world_get_snake(world, client->snake_id);
-                        snake_set_hold(snake);
-
-                        /*
-                         * Init "Command Buffer Fullness" queue with minimum
-                         * granularity. This assumes the client has the most
-                         * stable connection initially.
-                         */
-                        for (n = 0; n != CBF_WINDOW_SIZE; ++n)
-                            client->cbf_window[n] = settings->sim_tick_rate /
-                                                    settings->net_tick_rate;
-                    }
-
-                    /* (Re-)send join accept response */
-                    {
-                        struct snake* snake =
-                            world_get_snake(world, client->snake_id);
-                        struct msg* response = msg_join_accept(
-                            settings->sim_tick_rate,
-                            settings->net_tick_rate,
-                            pp.join_request.frame,
-                            frame_number,
-                            client->snake_id,
-                            &snake->head.pos);
-                        msg_vec_push(&client->pending_msgs, response);
-                    }
-                }
-                break;
-
-                case MSG_JOIN_ACCEPT:
-                case MSG_JOIN_DENY_BAD_PROTOCOL:
-                case MSG_JOIN_DENY_BAD_USERNAME:
-                case MSG_JOIN_DENY_SERVER_FULL: break;
-
-                case MSG_LEAVE: {
-                }
-                break;
-
-                case MSG_COMMANDS: {
-                    uint16_t      first_frame, last_frame;
-                    int           lower;
-                    struct snake* snake =
-                        world_get_snake(world, client->snake_id);
-                    int granularity =
-                        settings->sim_tick_rate / settings->net_tick_rate;
-
-                    /*
-                     * Measure how many frames are in the client's command
-                     * buffer.
-                     *
-                     * A negative value indicates the client is lagging behind,
-                     * and the server will have to make a prediction, which will
-                     * lead to the client having to re-simulate. A positive
-                     * value indicates there are commands in the buffer.
-                     * Depending on how stable the connection is, the client
-                     * will be instructed to shrink the buffer.
-                     */
-                    int client_commands_queued = u16_sub_wrap(
-                        cmd_queue_frame_end(&snake->cmdq), frame_number);
-
-                    /* Returns the first and last frame numbers that were
-                     * unpacked from the message */
-                    if (msg_commands_unpack_into(
-                            &snake->cmdq,
-                            payload,
-                            payload_len,
-                            frame_number,
-                            &first_frame,
-                            &last_frame) < 0)
-                        break; /* something is wrong with the message */
-
-                    /*
-                     * This handles packets being reordered by dropping any
-                     * commands older than the last command received
-                     */
-                    if (u16_le_wrap(last_frame, client->last_command_msg_frame))
-                        break;
-                    client->last_command_msg_frame = last_frame;
-
-                    /*
-                     * Compare the very last frame received with the current
-                     * frame number. By tracking the lower and upper boundaries
-                     * of this difference over time, it can give a good estimate
-                     * of how "healthy" the client's connection is and whether
-                     * the command buffer size needs to be increased or
-                     * decreased.
-                     */
-                    cbf_add(client, client_commands_queued);
-                    lower = cbf_lower_bound(client);
-                    if (client_commands_queued < 0)
-                    {
-                        /*
-                         * Means we do NOT have the command of the current frame
-                         *  -> server is going to make a prediction
-                         *  -> will probably lead to a client-side roll back
-                         * The client needs to warp forwards in time.
-                         */
-                        int8_t diff = client_commands_queued < -10
-                                          ? -10
-                                          : client_commands_queued;
-                        server_queue(client, msg_feedback(diff, frame_number));
-                    }
-                    else if (lower - granularity * 2 > 0)
-                    {
-                        int8_t diff = lower - granularity * 2;
-                        diff = diff > 10 ? 10 : diff;
-                        server_queue(client, msg_feedback(diff, frame_number));
-                    }
-                }
-                break;
-
-                case MSG_SNAKE_CREATE: {
-                }
-                break;
-
-                case MSG_SNAKE_CREATE_ACK: {
-                }
-                break;
-            }
-
-            i += payload_len + 2;
+            return -1;
         }
     }
 

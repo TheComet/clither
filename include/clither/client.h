@@ -1,9 +1,10 @@
 #pragma once
 
 #include "clither/config.h"
-#include <stdint.h>
-
 #if defined(CLITHER_GFX)
+
+#    include <stdint.h>
+
 struct msg;
 struct msg_vec;
 struct world;
@@ -20,6 +21,46 @@ enum client_state
     CLIENT_JOINING,
     CLIENT_CONNECTED
 };
+
+struct client_recv_result
+{
+    unsigned error : 1;        /* Critical error (e.g. oom) */
+    unsigned disconnected : 1; /* The "client_state" property was changed */
+    unsigned tick_rated_changed : 1; /* The server has adjusted the client's
+                                        tick rate */
+};
+
+static inline struct client_recv_result client_recv_ok(void)
+{
+    struct client_recv_result r = {0, 0, 0};
+    return r;
+}
+static inline struct client_recv_result client_recv_error(void)
+{
+    struct client_recv_result r = {0, 0, 0};
+    r.error = 1;
+    return r;
+}
+static inline struct client_recv_result client_recv_disconnected(void)
+{
+    struct client_recv_result r = {0, 0, 0};
+    r.disconnected = 1;
+    return r;
+}
+static inline struct client_recv_result client_recv_tick_rate_changed(void)
+{
+    struct client_recv_result r = {0, 0, 0};
+    r.tick_rated_changed = 1;
+    return r;
+}
+static inline struct client_recv_result client_recv_result_combine(
+    struct client_recv_result r1, struct client_recv_result r2)
+{
+    r1.error |= r2.error;
+    r1.disconnected |= r2.disconnected;
+    r1.tick_rated_changed |= r2.tick_rated_changed;
+    return r1;
+}
 
 struct client
 {
@@ -66,7 +107,8 @@ int client_send_pending_data(struct client* client);
  * \return Returns -1 if an error occurs. Returns 1 if the client's state
  * changed. Returns 0 otherwise.
  */
-int client_recv(struct client* client, struct world* world);
+struct client_recv_result
+client_recv(struct client* client, struct world* world);
 
 /*!
  * \brief The main loop of the client.
@@ -79,4 +121,5 @@ int client_recv(struct client* client, struct world* world);
  */
 struct args;
 void* client_run(const struct args* a);
-#endif
+
+#endif /* CLITHER_GFX */

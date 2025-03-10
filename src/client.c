@@ -1,26 +1,23 @@
+#include "clither/args.h"
+#include "clither/camera.h"
+#include "clither/cli_colors.h"
 #include "clither/client.h"
+#include "clither/gfx.h"
+#include "clither/input.h"
 #include "clither/log.h"
 #include "clither/msg.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
+#include "clither/resource_pack.h"
+#include "clither/signals.h"
 #include "clither/snake.h"
 #include "clither/str.h"
+#include "clither/tick.h"
 #include "clither/world.h"
 #include <string.h> /* memcpy */
-
-#if defined(CLITHER_GFX)
-#    include "clither/args.h"
-#    include "clither/camera.h"
-#    include "clither/cli_colors.h"
-#    include "clither/gfx.h"
-#    include "clither/input.h"
-#    include "clither/resource_pack.h"
-#    include "clither/signals.h"
-#    include "clither/tick.h"
-#    if defined(CLITHER_MCD)
-#        include "clither/mcd_wifi.h"
-#        include "clither/thread.h"
-#    endif
+#if defined(CLITHER_MCD)
+#    include "clither/mcd_wifi.h"
+#    include "clither/thread.h"
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -103,13 +100,13 @@ void client_disconnect(struct client* client)
 
     vec_for_each (client->udp_sockfds, sockfd)
         net_close(*sockfd);
+    sockfd_vec_clear(client->udp_sockfds);
 
     vec_for_each (client->pending_msgs, msg)
         msg_free(*msg);
+    msg_vec_clear(client->pending_msgs);
 
     client->state = CLIENT_DISCONNECTED;
-    sockfd_vec_clear(client->udp_sockfds);
-    msg_vec_clear(client->pending_msgs);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -233,197 +230,232 @@ int client_send_pending_data(struct client* client)
 }
 
 /* ------------------------------------------------------------------------- */
-int client_recv(struct client* client, struct world* world)
+static struct client_recv_result process_message(
+    struct client* client,
+    struct world*  world,
+    enum msg_type  msg_type,
+    const uint8_t* msg_data,
+    uint8_t        msg_len)
 {
-    uint8_t buf[NET_MAX_UDP_PACKET_SIZE];
-    int     i;
-    int     bytes_received;
-    int     retval = 0;
+    union parsed_payload pp;
+
+    log_net("Parsing msg type=%d, len=%d\n", msg_type, msg_len);
+    switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
+    {
+        default: {
+            log_warn(
+                "Received unknown message type \"%d\" from server. "
+                "Malicious?\n",
+                msg_type);
+        }
+        break;
+
+        case MSG_JOIN_REQUEST: break;
+
+        case MSG_JOIN_ACCEPT: {
+            uint16_t rtt;
+
+            if (client->state != CLIENT_JOINING)
+                return client_recv_ok();
+
+            /* Stop sending join request messages */
+            msg_vec_remove_type(client->pending_msgs, MSG_JOIN_REQUEST);
+
+            /*
+             * The server will be on a different frame number than we are,
+             * since we joined at some random time. In our join request
+             * message we sent our current frame number, and the server has
+             * sent back this number plus the server's frame number. From
+             * this it's possible to figure out our offset and synchronize.
+             */
+
+            /*
+             * Round trip time is our current frame number minus the frame
+             * on which the join request was sent.
+             */
+            rtt = client->frame_number - pp.join_accept.client_frame;
+            if (rtt > client->net_tick_rate * 5) /* 5 seconds */
+            {
+                log_err(
+                    "Server sent back a client frame number that is "
+                    "unlikely or impossible (ours: %d, theirs: %d).\n",
+                    client->frame_number,
+                    pp.join_accept.client_frame);
+                log_err(
+                    "This may be a bug, or the server is possibly "
+                    "malicious.\n");
+
+                client_disconnect(client);
+                return client_recv_disconnected();
+            }
+
+            /*
+             * We will be simulating half rtt in the future, relative to the
+             * server, however, the server is now also half rtt further into
+             * the future relative to the frame it sent back. Therefore, we
+             * are a full rtt into the future now.
+             */
+            client->frame_number =
+                pp.join_accept.server_frame + rtt +
+                5 * client->sim_tick_rate / client->net_tick_rate;
+
+            client->snake_id = pp.join_accept.snake_id;
+            if (world_create_snake(
+                    world,
+                    client->snake_id,
+                    pp.join_accept.spawn,
+                    str_cstr(client->username)) == NULL)
+            {
+                return client_recv_error();
+            }
+
+            log_net(
+                "MSG_JOIN_ACCEPT:\n"
+                "  server frame=%d, client frame=%d, rtt=%d\n"
+                "  spawn=%d, %d\n",
+                pp.join_accept.server_frame,
+                client->frame_number,
+                rtt,
+                pp.join_accept.spawn.x,
+                pp.join_accept.spawn.y);
+
+            /* Server may also be running on a different tick rate */
+            client->sim_tick_rate = pp.join_accept.sim_tick_rate;
+            client->net_tick_rate = pp.join_accept.net_tick_rate;
+
+            client->state = CLIENT_CONNECTED;
+
+            return client_recv_tick_rate_changed();
+        }
+
+        case MSG_JOIN_DENY_BAD_PROTOCOL:
+        case MSG_JOIN_DENY_BAD_USERNAME:
+        case MSG_JOIN_DENY_SERVER_FULL: {
+            log_err("Failed to join server: %s\n", pp.join_deny.error);
+            client_disconnect(client);
+
+            /* We don't want to process any more messages */
+            return client_recv_disconnected();
+        }
+
+        case MSG_LEAVE:
+        case MSG_COMMANDS: break;
+
+        case MSG_FEEDBACK: {
+            if (client->warp == 0)
+                client->warp = pp.feedback.diff * 10;
+            return client_recv_ok();
+        }
+
+        case MSG_SNAKE_CREATE: {
+            struct snake* snake = world_create_snake(
+                world,
+                pp.snake_metadata.snake_id,
+                make_qwposi(0, 0), /* Dummy location, not used */
+                pp.snake_metadata.username);
+            return client_recv_ok();
+        }
+
+        case MSG_SNAKE_CREATE_ACK: break;
+
+        case MSG_SNAKE_HEAD: {
+            struct snake* snake = world_get_snake(world, client->snake_id);
+            snake_ack_frame(
+                &snake->data,
+                &snake->head_ack,
+                &snake->head,
+                &pp.snake_head.head,
+                &snake->param,
+                &snake->cmdq,
+                pp.snake_head.frame_number,
+                client->sim_tick_rate);
+            return client_recv_ok();
+        }
+
+        case MSG_SNAKE_BEZIER: {
+            struct snake* snake =
+                world_get_snake(world, pp.snake_bezier.snake_id);
+            if (snake == NULL)
+                break; /* Have to wait for MSG_SNAKE_CREATE to arrive */
+            return client_recv_ok();
+        }
+
+        case MSG_SNAKE_BEZIER_ACK: break;
+    }
+
+    return client_recv_ok();
+}
+
+/* ------------------------------------------------------------------------- */
+static struct client_recv_result unpack_packet(
+    struct client*               client,
+    struct world*                world,
+    const struct net_udp_packet* packet)
+{
+    int                       i;
+    struct client_recv_result result = client_recv_ok();
+
+    /*
+     * Packet can contain multiple message objects.
+     * buf[0] == message type
+     * buf[1] == message payload length
+     * buf[2] == beginning of message payload
+     */
+    for (i = 0; i < packet->len - 1;)
+    {
+        enum msg_type  msg_type = packet->data[i + 0];
+        uint8_t        msg_len = packet->data[i + 1];
+        const uint8_t* msg_data = &packet->data[i + 2];
+        if (i + 2 + msg_len > packet->len)
+        {
+            log_warn(
+                "Invalid payload length \"%d\" received from server\n",
+                (int)msg_len);
+            log_warn("Dropping rest of packet\n");
+            break;
+        }
+
+        result = client_recv_result_combine(
+            result,
+            process_message(client, world, msg_type, msg_data, msg_len));
+        /* Want to stop processing messages if an error occurred, or if the
+         * client disconnected. */
+        if (result.error || result.disconnected)
+            return result;
+
+        i += msg_len + 2;
+    }
+
+    return result;
+}
+
+/* ------------------------------------------------------------------------- */
+struct client_recv_result
+client_recv(struct client* client, struct world* world)
+{
+    struct net_udp_packet packet;
 
     CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
 retry_recv:
-    bytes_received = net_recv(*vec_last(client->udp_sockfds), buf, sizeof(buf));
-    if (bytes_received < 0)
+    packet.len = net_recv(
+        *vec_last(client->udp_sockfds), packet.data, sizeof(packet.data));
+    if (packet.len < 0)
     {
         if (vec_count(client->udp_sockfds) == 1)
-            return -1;
+            return client_recv_error();
         net_close(*sockfd_vec_pop(client->udp_sockfds));
         log_info("Attempting to use next socket\n");
         goto retry_recv;
     }
-    log_net("Received UDP packet, size=%d\n", bytes_received);
+    log_net("Received UDP packet, size=%d\n", packet.len);
 
-    /* Packet can contain multiple message objects. Unpack */
-    for (i = 0; i < bytes_received - 1;)
-    {
-        const uint8_t*       payload;
-        union parsed_payload pp;
-        enum msg_type        type = buf[i + 0];
-        uint8_t              payload_len = buf[i + 1];
-        if (i + 2 + payload_len > bytes_received)
-        {
-            log_warn(
-                "Invalid payload length \"%d\" received from server\n",
-                (int)payload_len);
-            log_warn("Dropping rest of packet\n");
-            break;
-        }
-
-        log_net("Unpacking msg type=%d, len=%d\n", type, payload_len);
-
-        /* Process message */
-        payload = &buf[i + 2];
-        switch (msg_parse_payload(&pp, type, payload, payload_len))
-        {
-            default: {
-                log_warn(
-                    "Received unknown message type \"%d\" from server. "
-                    "Malicious?\n",
-                    type);
-            }
-            break;
-
-            case MSG_JOIN_REQUEST: break;
-
-            case MSG_JOIN_ACCEPT: {
-                uint16_t rtt;
-
-                if (client->state != CLIENT_JOINING)
-                    break;
-
-                /* Stop sending join request messages */
-                msg_vec_remove_type(client->pending_msgs, MSG_JOIN_REQUEST);
-
-                /*
-                 * Regardless of whether we succeed or fail, the client is
-                 * changing state as a result of this message
-                 */
-                retval = 1;
-
-                /*
-                 * The server will be on a different frame number than we are,
-                 * since we joined at some random time. In our join request
-                 * message we sent our current frame number, and the server has
-                 * sent back this number plus the server's frame number. From
-                 * this it's possible to figure out our offset and synchronize.
-                 */
-
-                /*
-                 * Round trip time is our current frame number minus the frame
-                 * on which the join request was sent.
-                 */
-                rtt = client->frame_number - pp.join_accept.client_frame;
-                if (rtt > client->net_tick_rate * 5) /* 5 seconds */
-                {
-                    log_err(
-                        "Server sent back a client frame number that is "
-                        "unlikely or impossible (ours: %d, theirs: %d).\n",
-                        client->frame_number,
-                        pp.join_accept.client_frame);
-                    log_err(
-                        "This may be a bug, or the server is possibly "
-                        "malicious.\n");
-                    client_disconnect(client);
-                    return 1;
-                }
-
-                /*
-                 * We will be simulating half rtt in the future, relative to the
-                 * server, however, the server is now also half rtt further into
-                 * the future relative to the frame it sent back. Therefore, we
-                 * are a full rtt into the future now.
-                 */
-                client->frame_number =
-                    pp.join_accept.server_frame + rtt +
-                    5 * client->sim_tick_rate / client->net_tick_rate;
-
-                /* Server may also be running on a different tick rate */
-                client->sim_tick_rate = pp.join_accept.sim_tick_rate;
-                client->net_tick_rate = pp.join_accept.net_tick_rate;
-
-                client->snake_id = pp.join_accept.snake_id;
-                world_create_snake(
-                    world,
-                    client->snake_id,
-                    pp.join_accept.spawn,
-                    str_cstr(client->username));
-
-                log_net(
-                    "MSG_JOIN_ACCEPT:\n"
-                    "  server frame=%d, client frame=%d, rtt=%d\n"
-                    "  spawn=%d, %d\n",
-                    pp.join_accept.server_frame,
-                    client->frame_number,
-                    rtt,
-                    pp.join_accept.spawn.x,
-                    pp.join_accept.spawn.y);
-                client->state = CLIENT_CONNECTED;
-            }
-            break;
-
-            case MSG_JOIN_DENY_BAD_PROTOCOL:
-            case MSG_JOIN_DENY_BAD_USERNAME:
-            case MSG_JOIN_DENY_SERVER_FULL: {
-                log_err("Failed to join server: %s\n", pp.join_deny.error);
-                client_disconnect(client);
-                return 1; /* Return immediately, as we don't want to process any
-                             more messages */
-            }
-            break;
-
-            case MSG_LEAVE:
-            case MSG_COMMANDS: break;
-
-            case MSG_FEEDBACK: {
-                if (client->warp == 0)
-                    client->warp = pp.feedback.diff * 10;
-            }
-            break;
-
-            case MSG_SNAKE_CREATE: {
-                struct snake* snake = world_create_snake(
-                    world,
-                    pp.snake_metadata.snake_id,
-                    make_qwposi(0, 0), /* Dummy location, not used */
-                    pp.snake_metadata.username);
-            }
-            break;
-
-            case MSG_SNAKE_CREATE_ACK: break;
-
-            case MSG_SNAKE_HEAD: {
-                struct snake* snake = world_get_snake(world, client->snake_id);
-                snake_ack_frame(
-                    &snake->data,
-                    &snake->head_ack,
-                    &snake->head,
-                    &pp.snake_head.head,
-                    &snake->param,
-                    &snake->cmdq,
-                    pp.snake_head.frame_number,
-                    client->sim_tick_rate);
-            }
-            break;
-
-            case MSG_SNAKE_BEZIER: {
-                struct snake* snake =
-                    world_get_snake(world, pp.snake_bezier.snake_id);
-                if (snake == NULL)
-                    break; /* Have to wait for MSG_SNAKE_CREATE to arrive */
-            }
-            break;
-
-            case MSG_SNAKE_BEZIER_ACK: break;
-        }
-
-        i += payload_len + 2;
-    }
-
+    /* Don't let client time out */
     client->timeout_counter = 0;
-    return retval;
+
+    return unpack_packet(client, world, &packet);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -570,13 +602,11 @@ void* client_run(const struct args* a)
         net_update = tick_advance(&net_tick);
         if (net_update && client.state != CLIENT_DISCONNECTED)
         {
-            int action = client_recv(&client, &world);
-
-            /* Some error occurred */
-            if (action == -1)
+            struct client_recv_result result = client_recv(&client, &world);
+            if (result.error)
                 break;
 
-            if (action == 1)
+            if (result.tick_rated_changed)
             {
                 /*
                  * We may have to match our tick rates to the server, because
