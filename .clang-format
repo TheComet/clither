@@ -38,6 +38,8 @@ ColumnLimit: 80
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ForEachMacros: [
     command_queue_for_each,
+    btree_for_each,
+    btree_for_each_full,
     hm_for_each,
     hm_for_each_full,
     net_addr_hm_for_each,

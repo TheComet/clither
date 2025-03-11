@@ -10,6 +10,7 @@
 #include "clither/qwaabb_rb.h"
 #include "clither/rb.h"
 #include "clither/snake.h"
+#include "clither/snake_btree.h"
 #include "clither/vec.h"
 #include "clither/world.h"
 #include <SDL.h>
@@ -604,14 +605,20 @@ static void gfx_sdl_step_anim(struct gfx* gfx, int sim_tick_rate)
 static void gfx_sdl_draw_world(
     struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
+    int16_t             idx;
+    uint16_t            uid;
+    const struct snake* snake;
+
     SDL_SetRenderDrawColor(gfx->renderer, 0, 0, 0, 255);
     SDL_RenderClear(gfx->renderer);
 
     draw_background(gfx, camera);
 
-    WORLD_FOR_EACH_SNAKE(world, uid, snake)
-    draw_snake(gfx, camera, snake);
-    WORLD_END_EACH
+    btree_for_each (world->snakes, idx, uid, snake)
+    {
+        (void)uid;
+        draw_snake(gfx, camera, snake);
+    }
 
     {
         struct spos pos = gfx_world_to_screen(make_qwposi(0, 0), gfx, camera);

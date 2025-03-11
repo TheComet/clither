@@ -239,7 +239,21 @@ int net_connect(
 /* ------------------------------------------------------------------------- */
 void net_close(int sockfd)
 {
-    log_dbg("Closing socket\n");
+#if defined(CLITHER_DEBUG)
+    struct sockaddr     addr;
+    struct net_addr_str ipstr;
+    socklen_t           addr_len = sizeof(addr);
+    getsockname(sockfd, &addr, &addr_len);
+    ai_addr_to_str(&ipstr, &addr);
+    log_dbg(
+        "Closing socket %s:%d\n",
+        ipstr.cstr,
+        addr.sa_family == AF_INET
+            ? ntohs(((struct sockaddr_in*)&addr)->sin_port)
+        : addr.sa_family == AF_INET6
+            ? ntohs(((struct sockaddr_in6*)&addr)->sin6_port)
+            : 0);
+#endif
     close(sockfd);
 }
 

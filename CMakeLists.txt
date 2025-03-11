@@ -19,7 +19,8 @@ cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every
 set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
 cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_MEMORY_DEBUGGING" OFF)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
-option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
+option (CLITHER_DEBUG "Enable debug checks" ON)
+cmake_dependent_option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON "CLITHER_DEBUG" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application." ON)
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
@@ -85,6 +86,7 @@ add_executable (clither
     "include/clither/backtrace.h"
     "include/clither/benchmarks.h"
     "include/clither/bezier.h"
+    "include/clither/btree.h"
     "include/clither/camera.h"
     "include/clither/cli_colors.h"
     "include/clither/client.h"
@@ -119,9 +121,11 @@ add_executable (clither
     "include/clither/server_client.h"
     "include/clither/server_client_hm.h"
     "include/clither/server_instance.h"
+    "include/clither/server_instance_btree.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
+    "include/clither/snake_btree.h"
     "include/clither/snake_param.h"
     "include/clither/snake_split_rb.h"
     "include/clither/str.h"
@@ -159,6 +163,7 @@ add_executable (clither
     "src/resource_snake_part_vec.c"
     "src/resource_sprite_vec.c"
     "src/snake.c"
+    "src/snake_btree.c"
     "src/snake_param.c"
     "src/snake_split_rb.c"
     "src/str.c"
@@ -170,6 +175,7 @@ add_executable (clither
         src/server.c
         src/server_client_hm.c
         src/server_instance.c
+        src/server_instance_btree.c
         src/server_settings.c>
 
     $<$<BOOL:${CLITHER_MCD}>:
@@ -245,8 +251,8 @@ add_executable (clither
         tests/clither/test_tick.cpp
         tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
-        tests/cstructures/test_btree_as_set.cpp
-        tests/cstructures/test_btree.cpp
+        tests/clither/test_btree.cpp
+        tests/clither/test_btree_as_set.cpp
         $<$<BOOL:${CLITHER_GFX}>:
             tests/clither/test_protocol_join.cpp>>
 
@@ -295,11 +301,8 @@ endif ()
 # Dependencies
 ###############################################################################
 
-add_subdirectory ("cstructures")
-
 target_link_libraries (clither
     PRIVATE
-        cstructures
         $<$<PLATFORM_ID:Windows>:ws2_32>
         $<$<PLATFORM_ID:Linux>:m>
         $<$<PLATFORM_ID:Darwin>:m>

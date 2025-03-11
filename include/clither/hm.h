@@ -35,11 +35,7 @@ enum hm_status
         H             hashes[1];                                               \
     };                                                                         \
                                                                                \
-    /*!                                                                        \
-     * @brief This must be called before operating on any hashmap. Initializes \
-     * the structure to a defined state.                                       \
-     * @param[in] hm Pointer to a hashmap of type HM(K,V)*                     \
-     */                                                                        \
+    /*! @brief Call this before using any other functions. */                  \
     static void prefix##_init(struct prefix** hm)                              \
     {                                                                          \
         *hm = NULL;                                                            \
@@ -48,20 +44,42 @@ enum hm_status
     /*!                                                                        \
      * @brief Destroys an existing hashmap and frees all memory allocated by   \
      * inserted elements.                                                      \
-     * @param[in] hm Hashmap of type HM(K,V)                                   \
      */                                                                        \
     void prefix##_deinit(struct prefix* hm);                                   \
                                                                                \
     /*!                                                                        \
-     * @brief Allocates space for a new key.                                   \
+     * @brief If the key does not exist, inserts the key and allocates space   \
+     * for a new value.                                                        \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to insert.                                       \
+     * @return A pointer to the allocated value. If the key already exists, or \
+     * if allocation fails, NULL is returned.                                  \
      */                                                                        \
-    V*             prefix##_emplace_new(struct prefix** hm, K key);            \
+    V* prefix##_emplace_new(struct prefix** hm, K key);                        \
+                                                                               \
+    /*!                                                                        \
+     * @brief If the key does not exist, inserts the key and allocates space   \
+     * for a new value. If the key exists, returns the existing value.         \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to insert or find.                               \
+     * @param[out] value Address of the existing value, or address of the      \
+     * newly allocated value is written to this parameter.                     \
+     * @return Returns HM_OOM if allocation fails. Returns HM_EXISTS if the    \
+     * key exists and value will point to the existing value. Returns HM_NEW   \
+     * if the key did not exist and was inserted and value will point to a     \
+     * newly allocated value.                                                  \
+     */                                                                        \
     enum hm_status prefix##_emplace_or_get(                                    \
         struct prefix** hm, K key, V** value);                                 \
                                                                                \
-    V* prefix##_erase(struct prefix* hm, K key);                               \
-    V* prefix##_find(const struct prefix* hm, K key);                          \
-                                                                               \
+    /*!                                                                        \
+     * @brief If the key does not exist, inserts the key and value.            \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to insert.                                       \
+     * @param[in] value The value to insert, if the key does not exist.        \
+     * @return Returns 0 if the key+value was inserted. Returns -1 if the key  \
+     * existed, or if allocation failed.                                       \
+     */                                                                        \
     static inline int prefix##_insert_new(struct prefix** hm, K key, V value)  \
     {                                                                          \
         V* emplaced = prefix##_emplace_new(hm, key);                           \
@@ -70,6 +88,17 @@ enum hm_status
         *emplaced = value;                                                     \
         return 0;                                                              \
     }                                                                          \
+                                                                               \
+    /*!                                                                        \
+     * @brief If the key does not exist, inserts the key and value. If the key \
+     * exists, then the existing value is overwritten with the new value.      \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to insert or find.                               \
+     * @param[in] value The value to insert or update.                         \
+     * @return Returns HM_OOM if allocation failed. Returns HM_EXISTS if the   \
+     * key existed and the value was updated. Returns HM_NEW if the key did    \
+     * not exist and the value was inserted.                                   \
+     */                                                                        \
     static inline int prefix##_insert_update(                                  \
         struct prefix** hm, K key, V value)                                    \
     {                                                                          \
@@ -81,7 +110,27 @@ enum hm_status
             case HM_NEW: *ins_value = value; break;                            \
         }                                                                      \
         return 0;                                                              \
-    }
+    }                                                                          \
+                                                                               \
+    /*!                                                                        \
+     * @brief Removes the key and its associated value from the hashmap.       \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to erase.                                        \
+     * @return If the key exists, returns a pointer to the value that was      \
+     * removed. It is valid to read/write to this pointer until the next       \
+     * hashmap operation. If the key does not exist, returns NULL.             \
+     */                                                                        \
+    V* prefix##_erase(struct prefix* hm, K key);                               \
+                                                                               \
+    /*!                                                                        \
+     * @brief Finds the value associated with the specified key.               \
+     * @param[in] hm Pointer to an initialized hashmap.                        \
+     * @param[in] key The key to find.                                         \
+     * @return If the key exists, a pointer to the value is returned. It is    \
+     * valid to read/write to the value until the next hashmap operation. If   \
+     * the key does not exist, NULL is returned.                               \
+     */                                                                        \
+    V* prefix##_find(const struct prefix* hm, K key);
 
 #define HM_DEFINE(prefix, K, V, bits)                                          \
     static inline hash32 prefix##_hash(K key)                                  \
@@ -91,7 +140,7 @@ enum hm_status
     HM_DEFINE_HASH(prefix, hash32, K, V, bits, prefix##_hash)
 
 #define HM_DEFINE_HASH(prefix, H, K, V, bits, hash_func)                       \
-    /* Default key-value storage */                                            \
+    /* Default key-value storage implementation */                             \
     static int prefix##_kvs_alloc(                                             \
         struct prefix##_kvs* kvs,                                              \
         struct prefix##_kvs* old_kvs,                                          \
@@ -166,14 +215,14 @@ enum hm_status
     V,                                                                         \
     bits,                                                                      \
     hash_func,                                                                 \
-    storage_alloc_func,                                                        \
-    storage_free_old_func,                                                     \
-    storage_free_func,                                                         \
-    get_key_func,                                                              \
-    set_key_func,                                                              \
-    keys_equal_func,                                                           \
-    get_value_func,                                                            \
-    set_value_func,                                                            \
+    kvs_alloc,                                                                 \
+    kvs_free_old,                                                              \
+    kvs_free,                                                                  \
+    kvs_get_key,                                                               \
+    kvs_set_key,                                                               \
+    kvs_keys_equal,                                                            \
+    kvs_get_value,                                                             \
+    kvs_set_value,                                                             \
     MIN_CAPACITY,                                                              \
     REHASH_AT_PERCENT)                                                         \
                                                                                \
@@ -182,25 +231,23 @@ enum hm_status
         /* These don't do anything, except act as a poor-man's type-check for  \
          * the various key-value storage functions. */                         \
         hash32 (*hash)(K) = hash_func;                                         \
-        int (*storage_alloc)(                                                  \
+        int (*alloc)(                                                          \
             struct prefix##_kvs*, struct prefix##_kvs*, int##bits##_t) =       \
-            storage_alloc_func;                                                \
-        void (*storage_free_old)(struct prefix##_kvs*) =                       \
-            storage_free_old_func;                                             \
-        void (*storage_free)(struct prefix##_kvs*) = storage_free_func;        \
+            kvs_alloc;                                                         \
+        void (*free_old)(struct prefix##_kvs*) = kvs_free_old;                 \
+        void (*free_)(struct prefix##_kvs*) = kvs_free;                        \
         K(*get_key)                                                            \
-        (const struct prefix##_kvs*, int##bits##_t) = get_key_func;            \
-        void (*set_key)(struct prefix##_kvs*, int##bits##_t, K) =              \
-            set_key_func;                                                      \
-        int (*keys_equal)(K, K) = keys_equal_func;                             \
+        (const struct prefix##_kvs*, int##bits##_t) = kvs_get_key;             \
+        void (*set_key)(struct prefix##_kvs*, int##bits##_t, K) = kvs_set_key; \
+        int (*keys_equal)(K, K) = kvs_keys_equal;                              \
         V* (*get_value)(const struct prefix##_kvs*, int##bits##_t) =           \
-            get_value_func;                                                    \
+            kvs_get_value;                                                     \
         void (*set_value)(struct prefix##_kvs*, int##bits##_t, const V*) =     \
-            set_value_func;                                                    \
+            kvs_set_value;                                                     \
         (void)hash;                                                            \
-        (void)storage_alloc;                                                   \
-        (void)storage_free_old;                                                \
-        (void)storage_free;                                                    \
+        (void)alloc;                                                           \
+        (void)free_old;                                                        \
+        (void)free_;                                                           \
         (void)get_key;                                                         \
         (void)set_key;                                                         \
         (void)keys_equal;                                                      \
@@ -209,7 +256,7 @@ enum hm_status
                                                                                \
         if (hm != NULL)                                                        \
         {                                                                      \
-            storage_free_func(&hm->kvs);                                       \
+            kvs_free(&hm->kvs);                                                \
             mem_free(hm);                                                      \
         }                                                                      \
     }                                                                          \
@@ -230,7 +277,7 @@ enum hm_status
         new_hm = (struct prefix*)mem_alloc(header + data);                     \
         if (new_hm == NULL)                                                    \
             goto alloc_hm_failed;                                              \
-        if (storage_alloc_func(&new_hm->kvs, &(*hm)->kvs, new_cap) != 0)       \
+        if (kvs_alloc(&new_hm->kvs, &(*hm)->kvs, new_cap) != 0)                \
             goto alloc_storage_failed;                                         \
                                                                                \
         /* NOTE: Relies on HM_SLOT_UNUSED being 0 */                           \
@@ -249,23 +296,21 @@ enum hm_status
                                                                                \
             /* We use two reserved values for hashes. The hash function could  \
              * produce them, which would mess up collision resolution */       \
-            h = hash_func(get_key_func(&(*hm)->kvs, i));                       \
+            h = hash_func(kvs_get_key(&(*hm)->kvs, i));                        \
             if (h == HM_SLOT_UNUSED || h == HM_SLOT_RIP)                       \
                 h = 2;                                                         \
-            slot =                                                             \
-                prefix##_find_slot(new_hm, get_key_func(&(*hm)->kvs, i), h);   \
+            slot = prefix##_find_slot(new_hm, kvs_get_key(&(*hm)->kvs, i), h); \
             CLITHER_DEBUG_ASSERT(slot >= 0);                                   \
             new_hm->hashes[slot] = h;                                          \
-            set_key_func(&new_hm->kvs, slot, get_key_func(&(*hm)->kvs, i));    \
-            set_value_func(                                                    \
-                &new_hm->kvs, slot, get_value_func(&(*hm)->kvs, i));           \
+            kvs_set_key(&new_hm->kvs, slot, kvs_get_key(&(*hm)->kvs, i));      \
+            kvs_set_value(&new_hm->kvs, slot, kvs_get_value(&(*hm)->kvs, i));  \
             new_hm->count++;                                                   \
         }                                                                      \
                                                                                \
         /* Free old hashmap */                                                 \
         if (*hm != NULL)                                                       \
         {                                                                      \
-            storage_free_old_func(&(*hm)->kvs);                                \
+            kvs_free_old(&(*hm)->kvs);                                         \
             mem_free(*hm);                                                     \
         }                                                                      \
         *hm = new_hm;                                                          \
@@ -299,7 +344,7 @@ enum hm_status
              * comparing the original keys), then we can conclude this key was \
              * already inserted */                                             \
             if (hm->hashes[slot] == h)                                         \
-                if (keys_equal_func(get_key_func(&hm->kvs, slot), key))        \
+                if (kvs_keys_equal(kvs_get_key(&hm->kvs, slot), key))          \
                     return -(1 + slot);                                        \
             /* Keep track of visited tombstones, as it's possible to insert    \
              * into them */                                                    \
@@ -343,8 +388,8 @@ enum hm_status
                                                                                \
         (*hm)->count++;                                                        \
         (*hm)->hashes[slot] = h;                                               \
-        set_key_func(&(*hm)->kvs, slot, key);                                  \
-        return get_value_func(&(*hm)->kvs, slot);                              \
+        kvs_set_key(&(*hm)->kvs, slot, key);                                   \
+        return kvs_get_value(&(*hm)->kvs, slot);                               \
     }                                                                          \
     enum hm_status prefix##_emplace_or_get(                                    \
         struct prefix** hm, K key, V** value)                                  \
@@ -367,14 +412,14 @@ enum hm_status
         slot = prefix##_find_slot(*hm, key, h);                                \
         if (slot < 0)                                                          \
         {                                                                      \
-            *value = get_value_func(&(*hm)->kvs, -1 - slot);                   \
+            *value = kvs_get_value(&(*hm)->kvs, -1 - slot);                    \
             return HM_EXISTS;                                                  \
         }                                                                      \
                                                                                \
         (*hm)->count++;                                                        \
         (*hm)->hashes[slot] = h;                                               \
-        set_key_func(&(*hm)->kvs, slot, key);                                  \
-        *value = get_value_func(&(*hm)->kvs, slot);                            \
+        kvs_set_key(&(*hm)->kvs, slot, key);                                   \
+        *value = kvs_get_value(&(*hm)->kvs, slot);                             \
         return HM_NEW;                                                         \
     }                                                                          \
     V* prefix##_find(const struct prefix* hm, K key)                           \
@@ -395,7 +440,7 @@ enum hm_status
         if (slot >= 0)                                                         \
             return NULL;                                                       \
                                                                                \
-        return get_value_func(&hm->kvs, -1 - slot);                            \
+        return kvs_get_value(&hm->kvs, -1 - slot);                             \
     }                                                                          \
     V* prefix##_erase(struct prefix* hm, K key)                                \
     {                                                                          \
@@ -413,7 +458,7 @@ enum hm_status
                                                                                \
         hm->count--;                                                           \
         hm->hashes[-1 - slot] = HM_SLOT_RIP;                                   \
-        return get_value_func(&hm->kvs, -1 - slot);                            \
+        return kvs_get_value(&hm->kvs, -1 - slot);                             \
     }
 
 #define hm_count(hm)    ((hm) ? (hm)->count : 0)
@@ -439,12 +484,11 @@ hm_next_valid_slot(const hash32* hashes, int slot, intptr_t capacity)
          slot_idx =                                                            \
              hm_next_valid_slot((hm)->hashes, slot_idx, (hm)->capacity))
 
-#define hm_for_each_full(                                                      \
-    hm, slot_idx, key, value, get_key_func, get_value_func)                    \
+#define hm_for_each_full(hm, slot_idx, key, value, kvs_get_key, kvs_get_value) \
     for (slot_idx =                                                            \
              hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);  \
          (hm) && slot_idx != (hm)->capacity &&                                 \
-         ((key = get_key_func(&(hm)->kvs, slot_idx)), 1) &&                    \
-         ((value = get_value_func(&(hm)->kvs, slot_idx)), 1);                  \
+         ((key = kvs_get_key(&(hm)->kvs, slot_idx)), 1) &&                     \
+         ((value = kvs_get_value(&(hm)->kvs, slot_idx)), 1);                   \
          slot_idx =                                                            \
              hm_next_valid_slot((hm)->hashes, slot_idx, (hm)->capacity))

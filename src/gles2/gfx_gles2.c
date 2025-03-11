@@ -9,6 +9,7 @@
 #include "clither/resource_snake_part_vec.h"
 #include "clither/resource_sprite_vec.h"
 #include "clither/snake.h"
+#include "clither/snake_btree.h"
 #include "clither/str.h"
 #include "clither/strlist.h"
 #include "clither/world.h"
@@ -1251,6 +1252,10 @@ static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 static void gfx_gles2_draw_world(
     struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
+    int16_t             idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+
     struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
     {
@@ -1263,16 +1268,20 @@ static void gfx_gles2_draw_world(
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
     }
 
-    WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
-    draw_snake(snake, gfx, camera, &ar, 1);
-    WORLD_END_EACH
+    btree_for_each (world->snakes, idx, snake_id, snake)
+    {
+        (void)snake_id;
+        draw_snake(snake, gfx, camera, &ar, 1);
+    }
 
     draw_background(gfx, camera, &ar);
     // draw_0_0(gfx, camera, &ar);
 
-    WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
-    draw_snake(snake, gfx, camera, &ar, 0);
-    WORLD_END_EACH
+    btree_for_each (world->snakes, idx, snake_id, snake)
+    {
+        (void)snake_id;
+        draw_snake(snake, gfx, camera, &ar, 0);
+    }
 
     glfwSwapBuffers(gfx->window);
 }

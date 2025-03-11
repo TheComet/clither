@@ -1,3 +1,4 @@
+#include "clither/btree.h"
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 #include "clither/mem.h"
@@ -6,7 +7,7 @@
 #include "clither/server_instance.h"
 #include "clither/server_settings.h"
 #include "clither/signals.h"
-#include "clither/snake.h"
+#include "clither/snake_btree.h"
 #include "clither/tick.h"
 #include "clither/world.h"
 #include <stdio.h>  /* sprintf */
@@ -45,9 +46,12 @@ void* server_instance_run(const void* args)
     frame_number = 0;
     while (signals_exit_requested() == 0)
     {
-        int tick_lag;
-        int net_update = tick_advance(&net_tick);
+        struct snake* snake;
+        int16_t       idx;
+        int           tick_lag, net_update;
+        uint16_t      uid;
 
+        net_update = tick_advance(&net_tick);
         if (net_update)
         {
             if (server_recv(
@@ -56,25 +60,27 @@ void* server_instance_run(const void* args)
         }
 
         /* sim_update */
-        WORLD_FOR_EACH_SNAKE(&world, uid, snake)
-        if (!snake_is_held(snake, frame_number))
+        btree_for_each (world.snakes, idx, uid, snake)
         {
-            struct cmd command =
-                cmd_queue_take_or_predict(&snake->cmdq, frame_number);
-            snake_param_update(
-                &snake->param,
-                snake->param.upgrades,
-                snake->param.food_eaten + 1);
-            snake_remove_stale_segments(
-                &snake->data,
-                snake_step(
-                    &snake->data,
-                    &snake->head,
+            (void)uid;
+            if (!snake_is_held(snake, frame_number))
+            {
+                struct cmd command =
+                    cmd_queue_take_or_predict(&snake->cmdq, frame_number);
+                snake_param_update(
                     &snake->param,
-                    command,
-                    instance->settings->sim_tick_rate));
+                    snake->param.upgrades,
+                    snake->param.food_eaten + 1);
+                snake_remove_stale_segments(
+                    &snake->data,
+                    snake_step(
+                        &snake->data,
+                        &snake->head,
+                        &snake->param,
+                        command,
+                        instance->settings->sim_tick_rate));
+            }
         }
-        WORLD_END_EACH
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
 
         if (net_update)

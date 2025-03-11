@@ -99,6 +99,7 @@ void log_raw(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
+#if defined(CLITHER_DEBUG)
 void log_dbg(const char* fmt, ...)
 {
     va_list va;
@@ -123,6 +124,7 @@ void log_dbg(const char* fmt, ...)
     }
 #endif
 }
+#endif
 
 /* ------------------------------------------------------------------------- */
 void log_info(const char* fmt, ...)

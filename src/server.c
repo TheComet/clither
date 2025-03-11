@@ -8,8 +8,10 @@
 #include "clither/server_client.h"
 #include "clither/server_client_hm.h"
 #include "clither/server_instance.h"
+#include "clither/server_instance_btree.h"
 #include "clither/server_settings.h"
 #include "clither/snake.h"
+#include "clither/snake_btree.h"
 #include "clither/thread.h"
 #include "clither/world.h"
 #include "clither/wrap.h"
@@ -209,7 +211,7 @@ void server_queue_snake_data(
 
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
-        struct snake* snake = world_get_snake(world, client->snake_id);
+        struct snake* snake = snake_btree_find(world->snakes, client->snake_id);
         server_queue(client, msg_snake_head(&snake->head, frame_number));
     }
 
@@ -226,8 +228,9 @@ void server_queue_snake_data(
             if (addr == other_addr)
                 continue;
 
-            snake = world_get_snake(world, client->snake_id);
-            other_snake = world_get_snake(world, other_client->snake_id);
+            snake = snake_btree_find(world->snakes, client->snake_id);
+            other_snake =
+                snake_btree_find(world->snakes, other_client->snake_id);
 
             /* TODO better distance check using bezier AABBs */
             dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
@@ -262,29 +265,32 @@ static int process_message(
     union parsed_payload pp;
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
-        default: {
-            mark_client_as_malicious_and_drop(
-                server,
-                client_addr,
-                client,
-                world,
-                settings->malicious_timeout);
-            break;
-        }
-
         case MSG_JOIN_REQUEST: {
-            if (hm_count(server->clients) > settings->max_players)
+            if (hm_count(server->clients) + 1 > settings->max_players)
             {
-                char response[2] = {MSG_JOIN_DENY_SERVER_FULL, 0};
-                net_sendto(server->udp_sock, response, 2, client_addr);
-                break;
+                struct net_udp_packet pkt;
+                struct msg* msg = msg_join_deny_server_full("Server full");
+                pkt.len = msg->payload_len + 2;
+                pkt.data[0] = msg->type;
+                pkt.data[1] = msg->payload_len;
+                memcpy(pkt.data + 2, msg->payload, msg->payload_len);
+                net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
+                msg_free(msg);
+                return 0;
             }
 
             if (pp.join_request.username_len > settings->max_username_len)
             {
-                char response[2] = {MSG_JOIN_DENY_BAD_USERNAME, 0};
-                net_sendto(server->udp_sock, response, 2, client_addr);
-                break;
+                struct net_udp_packet pkt;
+                struct msg*           msg =
+                    msg_join_deny_bad_username("Username too long");
+                pkt.len = msg->payload_len + 2;
+                pkt.data[0] = msg->type;
+                pkt.data[1] = msg->payload_len;
+                memcpy(pkt.data + 2, msg->payload, msg->payload_len);
+                net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
+                msg_free(msg);
+                return 0;
             }
 
             /* Create new client. This code is not refactored into a
@@ -311,7 +317,7 @@ static int process_message(
 
                 /* Hold the snake in place until we receive the first
                  * command */
-                snake = world_get_snake(world, client->snake_id);
+                snake = snake_btree_find(world->snakes, client->snake_id);
                 snake_set_hold(snake);
 
                 /*
@@ -326,8 +332,9 @@ static int process_message(
 
             /* (Re-)send join accept response */
             {
-                struct snake* snake = world_get_snake(world, client->snake_id);
-                struct msg*   response = msg_join_accept(
+                struct snake* snake =
+                    snake_btree_find(world->snakes, client->snake_id);
+                struct msg* response = msg_join_accept(
                     settings->sim_tick_rate,
                     settings->net_tick_rate,
                     pp.join_request.frame,
@@ -336,22 +343,27 @@ static int process_message(
                     &snake->head.pos);
                 msg_vec_push(&client->pending_msgs, response);
             }
-            break;
+            return 0;
         }
 
         case MSG_JOIN_ACCEPT:
         case MSG_JOIN_DENY_BAD_PROTOCOL:
         case MSG_JOIN_DENY_BAD_USERNAME:
-        case MSG_JOIN_DENY_SERVER_FULL: break;
+        case MSG_JOIN_DENY_SERVER_FULL: {
+            log_warn("Server received unexpected message type %d\n", msg_type);
+            break;
+        }
 
         case MSG_LEAVE: {
+            log_warn("MSG_LEAVE: Not yet implemented");
             break;
         }
 
         case MSG_COMMANDS: {
             uint16_t      first_frame, last_frame;
             int           lower;
-            struct snake* snake = world_get_snake(world, client->snake_id);
+            struct snake* snake =
+                snake_btree_find(world->snakes, client->snake_id);
             int granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
             /*
@@ -376,15 +388,17 @@ static int process_message(
                     msg_len,
                     frame_number,
                     &first_frame,
-                    &last_frame) < 0)
+                    &last_frame) != 0)
+            {
                 break; /* something is wrong with the message */
+            }
 
             /*
              * This handles packets being reordered by dropping any
              * commands older than the last command received
              */
             if (u16_le_wrap(last_frame, client->last_command_msg_frame))
-                break;
+                return 0;
             client->last_command_msg_frame = last_frame;
 
             /*
@@ -415,17 +429,22 @@ static int process_message(
                 diff = diff > 10 ? 10 : diff;
                 server_queue(client, msg_feedback(diff, frame_number));
             }
-            break;
+            return 0;
         }
 
         case MSG_SNAKE_CREATE: {
+            log_warn("MSG_SNAKE_CREATE: Not yet implemented\n");
             break;
         }
 
         case MSG_SNAKE_CREATE_ACK: {
+            log_warn("MSG_SNAKE_CREATE_ACK: Not yet implemented\n");
             break;
         }
     }
+
+    mark_client_as_malicious_and_drop(
+        server, client_addr, client, world, settings->malicious_timeout);
 
     return 0;
 }
@@ -615,12 +634,9 @@ int server_recv(
 /* ------------------------------------------------------------------------- */
 void* server_run(const void* args)
 {
-#define INSTANCE_FOR_EACH(btree, port, instance)                               \
-    BTREE_FOR_EACH(btree, struct server_instance, port, instance)
-#define INSTANCE_END_EACH BTREE_END_EACH
-    struct cs_btree        instances;
-    struct server_settings settings;
-    const struct args*     a = args;
+    struct server_instance_btree* instances;
+    struct server_settings        settings;
+    const struct args*            a = args;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -628,7 +644,7 @@ void* server_run(const void* args)
 
     mem_init_threadlocal();
 
-    btree_init(&instances, sizeof(struct server_instance));
+    server_instance_btree_init(&instances);
 
     if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
         goto load_settings_failed;
@@ -646,10 +662,10 @@ void* server_run(const void* args)
          */
         struct server_instance* instance;
         const char*             port = *a->port ? a->port : settings.port;
-        cs_btree_key            key = atoi(port);
+        uint16_t                key = atoi(port);
         assert(key != 0);
 
-        instance = btree_emplace_new(&instances, key);
+        instance = server_instance_btree_emplace_new(&instances, key);
         assert(instance != NULL);
         instance->settings = &settings;
         instance->ip = a->ip;
@@ -667,14 +683,21 @@ void* server_run(const void* args)
     }
 
     /* For now we don't create more instances once the server fills up */
-    INSTANCE_FOR_EACH(&instances, port, instance)
-    thread_join(instance->thread);
-    INSTANCE_END_EACH
-    log_dbg("Joined all server instances\n");
+    {
+        int16_t                     idx;
+        uint16_t                port;
+        struct server_instance* instance;
+        btree_for_each (instances, idx, port, instance)
+        {
+            (void)port;
+            thread_join(instance->thread);
+        }
+        log_dbg("Joined all server instances\n");
+    }
 
     server_settings_save(&settings, a->config_file);
 
-    btree_deinit(&instances);
+    server_instance_btree_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");
@@ -683,7 +706,7 @@ void* server_run(const void* args)
 
 start_default_instance_failed:
 load_settings_failed:
-    btree_deinit(&instances);
+    server_instance_btree_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");

@@ -21,21 +21,20 @@ HM_DEFINE(hm_test, uintptr_t, float, 32);
 
 struct NAME : Test
 {
-    virtual void SetUp() { hm_test_init(&hm_test); }
-
-    virtual void TearDown() { hm_test_deinit(hm_test); }
+    void SetUp() override { hm_test_init(&hm_test); }
+    void TearDown() override { hm_test_deinit(hm_test); }
 
     struct hm_test* hm_test;
 };
 
-TEST_F(NAME, null_hm_test_is_set)
+TEST_F(NAME, null_hm_is_set)
 {
     EXPECT_THAT(hm_test, IsNull());
     EXPECT_THAT(hm_count(hm_test), Eq(0));
     EXPECT_THAT(hm_capacity(hm_test), Eq(0));
 }
 
-TEST_F(NAME, deinit_null_hm_test_works)
+TEST_F(NAME, deinit_null_hm_works)
 {
     hm_test_deinit(hm_test);
 }

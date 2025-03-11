@@ -3,7 +3,7 @@
 /* Config ------------------------------------------------------------------- */
 
 #cmakedefine CLITHER_BENCHMARKS
-#cmakedefine CLITHER_DEBUG_ASSERT
+#cmakedefine CLITHER_DEBUG
 #cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
@@ -13,6 +13,10 @@
 #cmakedefine CLITHER_TESTS
 
 #define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
+
+#if defined(CLITHER_DEBUG)
+#   define CLITHER_DEBUG_ASSERT
+#endif
 
 #if defined(CLITHER_GFX)
 #   cmakedefine CLITHER_GFX_SDL

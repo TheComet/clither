@@ -295,8 +295,11 @@ static struct client_recv_result process_message(
              * the future relative to the frame it sent back. Therefore, we
              * are a full rtt into the future now.
              */
-            client->frame_number =
-                pp.join_accept.server_frame + rtt +
+            client->frame_number = pp.join_accept.server_frame + rtt;
+            /* Add some buffer so the client doesn't mispredict in the
+             * beginning. MSG_FEEDBACK takes care of reducing this if the
+             * connection is good */
+            client->frame_number +=
                 5 * client->sim_tick_rate / client->net_tick_rate;
 
             client->snake_id = pp.join_accept.snake_id;

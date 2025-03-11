@@ -35,7 +35,8 @@ public:
     }
     void TearDown() override
     {
-        client_disconnect(&cl);
+        if (cl.state != CLIENT_DISCONNECTED)
+            client_disconnect(&cl);
         world_deinit(&cl_world);
         world_deinit(&sv_world);
         client_deinit(&cl);
@@ -55,43 +56,23 @@ TEST_F(NAME, client_resends_join_request)
 {
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
 
     ASSERT_THAT(cl.state, Eq(CLIENT_JOINING));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(1));
     ASSERT_THAT((*vec_get(cl.pending_msgs, 0))->type, Eq(MSG_JOIN_REQUEST));
-
-    int             slot;
-    const net_addr* addr;
-    server_client*  svc;
-    server_client_hm_for_each (sv.clients, slot, addr, svc)
-    {
-        (void)addr;
-        ASSERT_THAT(vec_count(svc->pending_msgs), Eq(2));
-        ASSERT_THAT(
-            (*vec_get(svc->pending_msgs, 0))->type, Eq(MSG_JOIN_ACCEPT));
-        ASSERT_THAT(
-            (*vec_get(svc->pending_msgs, 1))->type, Eq(MSG_JOIN_ACCEPT));
-    }
 }
 
 TEST_F(NAME, server_resends_join_accept)
 {
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
-
-    ASSERT_THAT(cl.state, Eq(CLIENT_JOINING));
-    ASSERT_THAT(vec_count(cl.pending_msgs), Eq(1));
-    ASSERT_THAT((*vec_get(cl.pending_msgs, 0))->type, Eq(MSG_JOIN_REQUEST));
 
     int             slot;
     const net_addr* addr;
     server_client*  svc;
+    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
     server_client_hm_for_each (sv.clients, slot, addr, svc)
     {
         (void)addr;
@@ -103,7 +84,35 @@ TEST_F(NAME, server_resends_join_accept)
     }
 }
 
-TEST_F(NAME, client_accepts_join)
+TEST_F(NAME, server_denies_join_full_server)
+{
+    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
+
+    sv_settings.max_players = 0;
+    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+
+    ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
+    ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
+    ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
+}
+
+TEST_F(NAME, server_denies_join_username_too_long)
+{
+    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
+
+    sv_settings.max_username_len = 1;
+    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+
+    ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
+    ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
+    ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
+}
+
+TEST_F(NAME, server_accepts_join)
 {
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));

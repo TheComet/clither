@@ -153,6 +153,7 @@ int msg_parse_payload(
         case MSG_JOIN_DENY_SERVER_FULL: {
             uint8_t error_len;
 
+            /* string length + null terminator must always be present */
             if (payload_len < 2)
             {
                 log_warn("MSG_JOIN_DENY payload is too small\n");
@@ -160,20 +161,21 @@ int msg_parse_payload(
             }
 
             error_len = payload[0];
-
             if (1 + error_len + 1 > payload_len)
             {
                 log_warn("Error string length points outside of payload\n");
                 return -2;
             }
+
             if (payload[1 + error_len] != '\0')
             {
                 log_warn("Error string is not properly null-terminated\n");
                 return -3;
             }
+
             pp->join_deny.error = (const char*)&payload[1];
+            break;
         }
-        break;
 
         case MSG_LEAVE: break;
 
