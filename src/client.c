@@ -718,6 +718,10 @@ void* client_run(const struct args* a)
     }
     log_info("Stopping client\n");
 
+    /* Send quit message to server to be nice */
+    client_queue(&client, msg_leave());
+    client_send_pending_data(&client);
+
     world_deinit(&world);
 load_resource_pack_failed:
     resource_pack_destroy(pack);

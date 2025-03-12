@@ -178,7 +178,7 @@ enum btree_status
         {                                                                      \
             if (*btree)                                                        \
             {                                                                  \
-                mem_free(*btree);                                              \
+                prefix##_kvs_deinit(*btree);                                   \
                 *btree = NULL;                                                 \
             }                                                                  \
             return 0;                                                          \

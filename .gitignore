@@ -1,5 +1,6 @@
 # build files
 /build*
+/.cache
 
 # IDE files
 CMakeLists.txt.user

@@ -279,6 +279,11 @@ target_compile_options (clither
         $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244>
         $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic -Wno-unused-function -Wno-overlength-strings>
         $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>)
+target_link_options (clither
+    PRIVATE
+        $<$<BOOL:${CLITHER_BACKTRACE}>:
+            $<$<C_COMPILER_ID:Clang>:-rdynamic>
+            $<$<C_COMPILER_ID:GNU>:-rdynamic>>)
 set_target_properties (clither
     PROPERTIES
         C_STANDARD 90

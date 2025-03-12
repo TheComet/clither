@@ -18,8 +18,7 @@ struct tick
  * \param[in] tps Ticks per second. Configures how long tick_wait() will wait
  * for to achieve the number of ticks per second.
  */
-void
-tick_cfg(struct tick* t, int tps);
+void tick_cfg(struct tick* t, int tps);
 
 /*!
  * \brief If the period of time configured in tick_cfg() has passed since the
@@ -28,8 +27,7 @@ tick_cfg(struct tick* t, int tps);
  * \return Returns the number of periods (configured in tick_cfg()) that you
  * are behind from where you should be.
  */
-int
-tick_advance(struct tick* t);
+int tick_advance(struct tick* t);
 
 /*!
  * \brief Waits (and sleeps if necessary) until the tick rate configured in
@@ -39,14 +37,11 @@ tick_advance(struct tick* t);
  * \return If a long amount of time has passed between calls to tick_wait(),
  * then this function will return the number of ticks that you are behind from
  * where you should be. Consider checking this value and setting a threshold,
- * and if you ever go over this threshold it might make sense to call tick_init()
+ * and if you ever go over this threshold it might make sense to call tick_cfg()
  * again or tick_skip(). Will return 0 under normal circumstances.
  */
-int
-tick_wait(struct tick* t);
+int tick_wait(struct tick* t);
 
-int
-tick_wait_warp(struct tick* t, int warp, int tps);
+int tick_wait_warp(struct tick* t, int warp, int tps);
 
-void
-tick_skip(struct tick* t);
+void tick_skip(struct tick* t);

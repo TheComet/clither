@@ -356,8 +356,8 @@ static int process_message(
         }
 
         case MSG_LEAVE: {
-            log_warn("MSG_LEAVE: Not yet implemented");
-            break;
+            client_remove(server, world, client_addr, client);
+            return 0;
         }
 
         case MSG_COMMANDS: {
