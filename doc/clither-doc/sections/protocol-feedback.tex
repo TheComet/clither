@@ -1,0 +1,37 @@
+\subsection{Feedback}
+
+Feedback is the mechanism for controlling  the size of the server-side command
+buffer. The  client  will  slightly adjust its simulation speed depending on a
+feedback value sent  by  the  server.  This  is  known  as  ``warping  time''.
+
+\begin{center}
+\input{images/seq-feedback}
+\end{center}
+
+The server would like to keep this buffer  as  small as possible to reduce the
+client's latency. However, this increases the risk  of  the  server  having to
+predict  the  next frame, because the server  may  not  receive  the  client's
+command in time for stepping the simulation. If  this happens, the server will
+extrapolate the  client's  next  command.  If the extrapolated command differs
+from  the client's actual command, then a misprediction has occurred  and  the
+client  will have to rollback and reconcile  once  it  receives  the  server's
+authoritative state.
+
+If  the  buffer  size  is  larger,  then  it  is  more  resillient  to network
+fluctuations and packet loss.
+
+\vspace{1.5em}
+
+\begin{figure}[h]
+\verb$MSG_FEEDBACK$\\
+\vspace{.25em}\\
+\input{images/msg-feedback}
+\begin{itemize}
+\item\textbf{frame:} Server frame-number when the message was sent.
+\item\textbf{diff:}  Difference in simulation-ticks the server would like  the
+client  to ``warp'' to. If negative, the client will slow down its  simulation
+speed.  If  positive,  the  client  will  speed  up  its   simulation   speed.
+\end{itemize}
+\end{figure}
+
+\vspace{1.5em}

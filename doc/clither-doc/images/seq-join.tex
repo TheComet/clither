@@ -1,0 +1,29 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (7,5);
+\coordinate (D) at (7,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(A)!.1!(B)$);
+\coordinate (F) at ($(C)!.25!(D)$);
+\coordinate (G) at ($(C)!.35!(D)$);
+\coordinate (H) at ($(A)!.5!(B)$);
+\coordinate (I) at ($(C)!.5!(D)$);
+\coordinate (J) at ($(A)!.65!(B)$);
+\coordinate (K) at ($(C)!.65!(D)$);
+\coordinate (L) at ($(A)!.8!(B)$);
+\coordinate (M) at ($(C)!.8!(D)$);
+\coordinate (N) at ($(A)!.95!(B)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$JOIN_REQUEST$};
+\draw[dashed,->] (G) -- (H) node[midway,sloped,above]{\verb$JOIN_REQUEST_ACK$};
+\draw[dashed,->] (I) -- (J) node[midway,sloped,above]{\verb$JOIN_DENY_BAD_PROTOCOL$};
+\draw[dashed,->] (K) -- (L) node[midway,sloped,above]{\verb$JOIN_DENY_BAD_USERNAME$};
+\draw[dashed,->] (M) -- (N) node[midway,sloped,above]{\verb$JOIN_DENY_SERVER_FULL$};
+\draw (G) node[right]{Accept?};
+\draw (I) node[right]{Incompatible protocol?};
+\draw (K) node[right]{\makecell[l]{Username  too long? \\ Profanity?}};
+\draw (M) node[right]{Player cap?};
+\end{tikzpicture}
