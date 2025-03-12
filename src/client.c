@@ -11,6 +11,7 @@
 #include "clither/resource_pack.h"
 #include "clither/signals.h"
 #include "clither/snake.h"
+#include "clither/snake_btree.h"
 #include "clither/str.h"
 #include "clither/tick.h"
 #include "clither/world.h"
@@ -362,7 +363,8 @@ static struct client_recv_result process_message(
         case MSG_SNAKE_CREATE_ACK: break;
 
         case MSG_SNAKE_HEAD: {
-            struct snake* snake = world_get_snake(world, client->snake_id);
+            struct snake* snake =
+                snake_btree_find(world->snakes, client->snake_id);
             snake_ack_frame(
                 &snake->data,
                 &snake->head_ack,
@@ -377,7 +379,7 @@ static struct client_recv_result process_message(
 
         case MSG_SNAKE_BEZIER: {
             struct snake* snake =
-                world_get_snake(world, pp.snake_bezier.snake_id);
+                snake_btree_find(world->snakes, pp.snake_bezier.snake_id);
             if (snake == NULL)
                 break; /* Have to wait for MSG_SNAKE_CREATE to arrive */
             return client_recv_ok();
@@ -630,7 +632,8 @@ void* client_run(const struct args* a)
         /* sim_update */
         if (client.state == CLIENT_CONNECTED)
         {
-            struct snake* snake = world_get_snake(&world, client.snake_id);
+            struct snake* snake =
+                snake_btree_find(world.snakes, client.snake_id);
 
             /*
              * Map "input" to "command". This converts the mouse and keyboard

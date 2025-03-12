@@ -318,6 +318,7 @@ static int process_message(
                 /* Hold the snake in place until we receive the first
                  * command */
                 snake = snake_btree_find(world->snakes, client->snake_id);
+                CLITHER_DEBUG_ASSERT(snake != NULL);
                 snake_set_hold(snake);
 
                 /*
@@ -663,10 +664,13 @@ void* server_run(const void* args)
         struct server_instance* instance;
         const char*             port = *a->port ? a->port : settings.port;
         uint16_t                key = atoi(port);
-        assert(key != 0);
+        CLITHER_DEBUG_ASSERT(key != 0);
 
-        instance = server_instance_btree_emplace_new(&instances, key);
-        assert(instance != NULL);
+        if (server_instance_btree_emplace_new(&instances, key, &instance) !=
+            BTREE_NEW)
+        {
+            goto start_default_instance_failed;
+        }
         instance->settings = &settings;
         instance->ip = a->ip;
         strcpy(instance->port, port);
@@ -684,7 +688,7 @@ void* server_run(const void* args)
 
     /* For now we don't create more instances once the server fills up */
     {
-        int16_t                     idx;
+        int16_t                 idx;
         uint16_t                port;
         struct server_instance* instance;
         btree_for_each (instances, idx, port, instance)

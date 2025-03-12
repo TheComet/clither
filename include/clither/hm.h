@@ -95,20 +95,15 @@ enum hm_status
      * @param[in] hm Pointer to an initialized hashmap.                        \
      * @param[in] key The key to insert or find.                               \
      * @param[in] value The value to insert or update.                         \
-     * @return Returns HM_OOM if allocation failed. Returns HM_EXISTS if the   \
-     * key existed and the value was updated. Returns HM_NEW if the key did    \
-     * not exist and the value was inserted.                                   \
+     * @return Returns -1 if allocation failed. Returns 0 otherwise.           \
      */                                                                        \
     static inline int prefix##_insert_update(                                  \
         struct prefix** hm, K key, V value)                                    \
     {                                                                          \
-        V* ins_value;                                                          \
-        switch (prefix##_emplace_or_get(hm, key, &ins_value))                  \
-        {                                                                      \
-            case HM_OOM: return -1;                                            \
-            case HM_EXISTS:                                                    \
-            case HM_NEW: *ins_value = value; break;                            \
-        }                                                                      \
+        V*             ins_value;                                              \
+        enum hm_status status = prefix##_emplace_or_get(hm, key, &ins_value);  \
+        if (status != HM_OOM)                                                  \
+            *ins_value = value;                                                \
         return 0;                                                              \
     }                                                                          \
                                                                                \

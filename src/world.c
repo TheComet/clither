@@ -37,8 +37,8 @@ struct snake* world_create_snake(
     struct qwpos  spawn_pos,
     const char*   username)
 {
-    struct snake* snake = snake_btree_emplace_new(&world->snakes, snake_id);
-    if (snake == NULL)
+    struct snake* snake;
+    if (snake_btree_emplace_new(&world->snakes, snake_id, &snake) != BTREE_NEW)
         return NULL;
     snake_init(snake, spawn_pos, username);
 

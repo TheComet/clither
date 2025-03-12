@@ -10,864 +10,571 @@ extern "C" {
 using namespace testing;
 
 namespace {
-struct value
+struct obj
 {
     float x, y, z;
 };
 
-BTREE_DECLARE(btree_test, int16_t, struct value, 16)
-BTREE_DEFINE(btree_test, int16_t, struct value, 16)
+bool operator==(const obj& v1, const obj& v2)
+{
+    return v1.x == v2.x && v1.y == v2.y && v1.z == v2.z;
+}
+
+BTREE_DECLARE(obj_btree, int16_t, struct obj, 16)
+BTREE_DEFINE(obj_btree, int16_t, struct obj, 16)
 } // namespace
 
 struct NAME : Test
 {
-    void SetUp() override { btree_test_init(&btree_test); }
-    void TearDown() override { btree_test_deinit(btree_test); }
+    void SetUp() override { obj_btree_init(&obj_btree); }
+    void TearDown() override { obj_btree_deinit(obj_btree); }
 
-    struct btree_test* btree_test;
+    struct obj_btree* obj_btree;
 };
 
 TEST_F(NAME, null_btree_is_set)
 {
-    EXPECT_THAT(btree_capacity(btree_test), Eq(0u));
-    EXPECT_THAT(btree_count(btree_test), Eq(0u));
+    EXPECT_THAT(btree_capacity(obj_btree), Eq(0u));
+    EXPECT_THAT(btree_count(obj_btree), Eq(0u));
 }
 
 TEST_F(NAME, deinit_null_btree_works)
 {
-    btree_test_deinit(btree_test);
+    obj_btree_deinit(obj_btree);
 }
 
 TEST_F(NAME, insertion_forwards)
 {
-    value a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18},
-          d = {27, 27, 27}, e = {84, 84, 84};
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 0, a), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(1u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 1, b), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(2u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, c), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(3u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 3, d), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(4u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 4, e), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(5u));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 0, a), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(1u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 1, b), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(2u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(3u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 3, d), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(4u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 4, e), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(5u));
 
-    EXPECT_THAT(btree_test_find(btree_test, 0), Eq(a));
-    EXPECT_THAT(btree_test_find(btree_test, 1), Eq(b));
-    EXPECT_THAT(btree_test_find(btree_test, 2), Eq(c));
-    EXPECT_THAT(btree_test_find(btree_test, 3), Eq(d));
-    EXPECT_THAT(btree_test_find(btree_test, 4), Eq(e));
-    EXPECT_THAT(btree_test_find(btree_test, 5), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), Pointee(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), Pointee(e));
+    EXPECT_THAT(obj_btree_find(obj_btree, 5), IsNull());
 }
 
 TEST_F(NAME, insertion_backwards)
 {
-    value a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18},
-          d = {27, 27, 27}, e = {84, 84, 84};
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 4, a), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(1u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 3, b), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(2u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, c), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(3u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 1, d), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(4u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 0, e), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(5u));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 4, a), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(1u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 3, b), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(2u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(3u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 1, d), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(4u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 0, e), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(5u));
 
-    EXPECT_THAT(btree_test_find(btree_test, 0), Eq(e));
-    EXPECT_THAT(btree_test_find(btree_test, 1), Eq(d));
-    EXPECT_THAT(btree_test_find(btree_test, 2), Eq(c));
-    EXPECT_THAT(btree_test_find(btree_test, 3), Eq(b));
-    EXPECT_THAT(btree_test_find(btree_test, 4), Eq(a));
-    EXPECT_THAT(btree_test_find(btree_test, 5), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(e));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), Pointee(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 5), IsNull());
 }
 
 TEST_F(NAME, insertion_random)
 {
-    value a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18},
-          d = {27, 27, 27}, e = {84, 84, 84};
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 26, a), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(1u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 44, b), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(2u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 82, c), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(3u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 41, d), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(4u));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 70, e), Eq(0));
-    ASSERT_THAT(btree_count(btree_test), Eq(5u));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 26, a), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(1u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 44, b), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(2u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 82, c), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(3u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 41, d), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(4u));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 70, e), Eq(BTREE_NEW));
+    ASSERT_THAT(btree_count(obj_btree), Eq(5u));
 
-    EXPECT_THAT(btree_test_find(btree_test, 26), Eq(a));
-    EXPECT_THAT(btree_test_find(btree_test, 41), Eq(d));
-    EXPECT_THAT(btree_test_find(btree_test, 44), Eq(b));
-    EXPECT_THAT(btree_test_find(btree_test, 70), Eq(e));
-    EXPECT_THAT(btree_test_find(btree_test, 82), Eq(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 26), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 41), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 44), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 70), Pointee(e));
+    EXPECT_THAT(obj_btree_find(obj_btree, 82), Pointee(c));
 }
 
 TEST_F(NAME, insert_new_with_realloc_shifts_data_correctly)
 {
     int16_t midway = BTREE_MIN_CAPACITY / 2;
 
-    value value = {0x55, 0x55, 0x55};
+    obj value = {0x55, 0x55, 0x55};
     for (int16_t i = 0; i != BTREE_MIN_CAPACITY; ++i)
     {
         if (i < midway)
-            ASSERT_THAT(btree_test_insert_new(&btree_test, i, value), Eq(0));
+            ASSERT_THAT(
+                obj_btree_insert_new(&obj_btree, i, value), Eq(BTREE_NEW));
         else
             ASSERT_THAT(
-                btree_test_insert_new(&btree_test, i + 1, value), Eq(0));
+                obj_btree_insert_new(&obj_btree, i + 1, value), Eq(BTREE_NEW));
     }
 
     // Make sure we didn't cause a realloc yet
-    ASSERT_THAT(btree_capacity(btree_test), Eq(BTREE_MIN_CAPACITY));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, midway, value), Eq(0));
+    ASSERT_THAT(btree_capacity(obj_btree), Eq(BTREE_MIN_CAPACITY));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, midway, value), Eq(BTREE_NEW));
     // Now it should have reallocated
-    ASSERT_THAT(btree_capacity(btree_test), Gt(BTREE_MIN_CAPACITY));
+    ASSERT_THAT(btree_capacity(obj_btree), Gt(BTREE_MIN_CAPACITY));
 
     // Check all values are there
     for (int i = 0; i != BTREE_MIN_CAPACITY + 1; ++i)
-        EXPECT_THAT(btree_test_find(btree_test, i), NotNull())
+        EXPECT_THAT(obj_btree_find(obj_btree, i), NotNull())
             << "i: " << i << ", midway: " << midway;
 }
 
 TEST_F(NAME, clear_keeps_underlying_buffer)
 {
-    value a = {53, 53, 53};
-    btree_test_insert_new(&btree_test, 0, a);
-    btree_test_insert_new(&btree_test, 1, a);
-    btree_test_insert_new(&btree_test, 2, a);
+    obj a = {53, 53, 53};
+    obj_btree_insert_new(&obj_btree, 0, a);
+    obj_btree_insert_new(&obj_btree, 1, a);
+    obj_btree_insert_new(&obj_btree, 2, a);
 
     // this should delete all entries but keep the underlying buffer
-    btree_test_clear(btree_test);
+    obj_btree_clear(obj_btree);
 
-    EXPECT_THAT(btree_count(btree_test), Eq(0u));
-    EXPECT_THAT(btree_capacity(btree_test), Ne(0u));
+    EXPECT_THAT(btree_count(obj_btree), Eq(0u));
+    EXPECT_THAT(btree_capacity(obj_btree), Ne(0u));
 }
 
 TEST_F(NAME, compact_when_no_buffer_is_allocated_doesnt_crash)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-    btree_compact(&btree_test);
-    btree_deinit(&btree_test);
+    obj_btree_compact(&obj_btree);
 }
 
 TEST_F(NAME, compact_reduces_capacity_and_keeps_elements_in_tact)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53;
+    obj a = {53, 53, 53};
     for (int i = 0; i != BTREE_MIN_CAPACITY * 3; ++i)
-        ASSERT_THAT(btree_test_insert_new(&btree_test, i, &a), Eq(0));
+        ASSERT_THAT(obj_btree_insert_new(&obj_btree, i, a), Eq(BTREE_NEW));
     for (int i = 0; i != BTREE_MIN_CAPACITY; ++i)
-        btree_erase(&btree_test, i);
+        obj_btree_erase(obj_btree, i);
 
-    cs_btree_size old_capacity = btree_capacity(&btree_test);
-    btree_compact(&btree_test);
-    EXPECT_THAT(btree_capacity(&btree_test), Lt(old_capacity));
-    EXPECT_THAT(btree_count(btree), Eq(BTREE_MIN_CAPACITY * 2));
-    EXPECT_THAT(btree_capacity(&btree_test), Eq(BTREE_MIN_CAPACITY * 2));
-    EXPECT_THAT(btree.data, NotNull());
-
-    btree_deinit(&btree_test);
+    int16_t old_capacity = btree_capacity(obj_btree);
+    obj_btree_compact(&obj_btree);
+    EXPECT_THAT(btree_capacity(obj_btree), Lt(old_capacity));
+    EXPECT_THAT(btree_count(obj_btree), Eq(BTREE_MIN_CAPACITY * 2));
+    EXPECT_THAT(btree_capacity(obj_btree), Eq(BTREE_MIN_CAPACITY * 2));
 }
 
 TEST_F(NAME, clear_and_compact_deletes_underlying_buffer)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53;
-    btree_test_insert_new(&btree_test, 0, &a);
-    btree_test_insert_new(&btree_test, 1, &a);
-    btree_test_insert_new(&btree_test, 2, &a);
+    obj a = {53, 53, 53};
+    obj_btree_insert_new(&obj_btree, 0, a);
+    obj_btree_insert_new(&obj_btree, 1, a);
+    obj_btree_insert_new(&obj_btree, 2, a);
 
     // this should delete all entries + free the underlying buffer
-    btree_clear(&btree_test);
-    btree_compact(&btree_test);
+    obj_btree_clear(obj_btree);
+    obj_btree_compact(&obj_btree);
 
-    ASSERT_THAT(btree_count(btree), Eq(0u));
-    ASSERT_THAT(btree.data, IsNull());
-    ASSERT_THAT(btree_capacity(&btree_test), Eq(0u));
-
-    btree_deinit(&btree_test);
+    ASSERT_THAT(btree_count(obj_btree), Eq(0u));
+    ASSERT_THAT(btree_capacity(obj_btree), Eq(0u));
 }
 
-TEST_F(NAME, insert_new_existing_keys_fails)
+TEST_F(NAME, insert_new_existing_key_keeps_old_value)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53;
-    EXPECT_THAT(btree_test_insert_new(&btree_test, 0, &a), Eq(0));
-    EXPECT_THAT(btree_test_insert_new(&btree_test, 0, &a), Eq(BTREE_EXISTS));
-
-    btree_deinit(&btree_test);
+    obj a = {53, 53, 53};
+    obj b = {69, 69, 69};
+    EXPECT_THAT(obj_btree_insert_new(&obj_btree, 0, a), Eq(BTREE_NEW));
+    EXPECT_THAT(obj_btree_insert_new(&obj_btree, 0, b), Eq(BTREE_EXISTS));
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
 }
 
-TEST_F(NAME, set_existing_fails_if_key_doesnt_exist)
+TEST_F(NAME, insert_update_existing_key_updates_value)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53;
-    EXPECT_THAT(btree_set_existing(&btree_test, 0, &a), Eq(BTREE_NOT_FOUND));
-
-    btree_deinit(&btree_test);
+    obj a = {53, 53, 53};
+    obj b = {69, 69, 69};
+    EXPECT_THAT(obj_btree_insert_update(&obj_btree, 0, a), Eq(BTREE_NEW));
+    EXPECT_THAT(obj_btree_insert_update(&obj_btree, 0, b), Eq(BTREE_EXISTS));
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(b));
 }
 
-TEST_F(NAME, set_existing_key_works_on_keys_that_exist)
+TEST_F(NAME, emplace_or_get_works)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {53, 53, 53}, b = {77, 77, 77}, *get;
+    get = NULL;
+    EXPECT_THAT(obj_btree_emplace_or_get(&obj_btree, 0, &get), Eq(BTREE_NEW));
+    *get = a;
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(btree_count(obj_btree), Eq(1));
 
-    int a = 53, b = 77, c = 99, d = 12;
-    EXPECT_THAT(btree_test_insert_new(&btree_test, 7, &a), Eq(0));
-    EXPECT_THAT(btree_test_insert_new(&btree_test, 3, &b), Eq(0));
-    EXPECT_THAT(btree_set_existing(&btree_test, 3, &d), Eq(0));
-    EXPECT_THAT(btree_set_existing(&btree_test, 7, &c), Eq(0));
-    EXPECT_THAT(*static_cast<int*>(btree_test_find(btree, 3)), Eq(12));
-    EXPECT_THAT(*static_cast<int*>(btree_test_find(btree, 7)), Eq(99));
+    get = NULL;
+    EXPECT_THAT(obj_btree_emplace_or_get(&obj_btree, 1, &get), Eq(BTREE_NEW));
+    *get = b;
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(btree_count(obj_btree), Eq(2));
 
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, insert_or_get_works)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, *get;
+    get = NULL;
     EXPECT_THAT(
-        btree_test_insert_or_get(&btree_test, 0, &a, (void**)&get),
-        Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(get, AllOf(NotNull(), Pointee(Eq(53))));
-    EXPECT_THAT(
-        static_cast<int*>(btree_test_find(btree, 0)),
-        AllOf(NotNull(), Pointee(Eq(53))));
-    EXPECT_THAT(btree_count(btree), Eq(1));
+        obj_btree_emplace_or_get(&obj_btree, 0, &get), Eq(BTREE_EXISTS));
+    EXPECT_THAT(get, Pointee(a));
+    EXPECT_THAT(btree_count(obj_btree), Eq(2));
 
+    get = NULL;
     EXPECT_THAT(
-        btree_test_insert_or_get(&btree_test, 1, &b, (void**)&get),
-        Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(get, AllOf(NotNull(), Pointee(Eq(77))));
-    EXPECT_THAT(
-        static_cast<int*>(btree_test_find(btree, 1)),
-        AllOf(NotNull(), Pointee(Eq(77))));
-    EXPECT_THAT(btree_count(btree), Eq(2));
-
-    EXPECT_THAT(
-        btree_test_insert_or_get(&btree_test, 0, &a, (void**)&get),
-        Eq(BTREE_EXISTS));
-    EXPECT_THAT(get, AllOf(NotNull(), Pointee(Eq(53))));
-    EXPECT_THAT(btree_count(btree), Eq(2));
-
-    EXPECT_THAT(
-        btree_test_insert_or_get(&btree_test, 1, &b, (void**)&get),
-        Eq(BTREE_EXISTS));
-    EXPECT_THAT(get, AllOf(NotNull(), Pointee(Eq(77))));
-    EXPECT_THAT(btree_count(btree), Eq(2));
-
-    btree_deinit(&btree_test);
+        obj_btree_emplace_or_get(&obj_btree, 1, &get), Eq(BTREE_EXISTS));
+    EXPECT_THAT(get, Pointee(b));
+    EXPECT_THAT(btree_count(obj_btree), Eq(2));
 }
 
 TEST_F(NAME, insert_or_get_with_realloc_shifts_data_correctly)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    int16_t midway = BTREE_MIN_CAPACITY / 2;
 
-    cs_btree_size midway = BTREE_MIN_CAPACITY / 2;
-
-    int value = 0x55, *get;
-    btree_reserve(&btree_test, BTREE_MIN_CAPACITY);
+    obj value = {0x55, 0x55, 0x55}, *get;
     for (int i = 0; i != BTREE_MIN_CAPACITY; ++i)
     {
         if (i < (int)midway)
+        {
             ASSERT_THAT(
-                btree_test_insert_or_get(&btree_test, i, &value, (void**)&get),
-                Eq(BTREE_NOT_FOUND));
+                obj_btree_emplace_or_get(&obj_btree, i, &get), Eq(BTREE_NEW));
+            *get = value;
+        }
         else
+        {
             ASSERT_THAT(
-                btree_test_insert_or_get(
-                    &btree_test, i + 1, &value, (void**)&get),
-                Eq(BTREE_NOT_FOUND));
+                obj_btree_emplace_or_get(&obj_btree, i + 1, &get),
+                Eq(BTREE_NEW));
+            *get = value;
+        }
     }
 
     // Make sure we didn't cause a realloc yet
     get = nullptr;
-    ASSERT_THAT(btree_capacity(&btree_test), Eq(BTREE_MIN_CAPACITY));
+    ASSERT_THAT(btree_capacity(obj_btree), Eq(BTREE_MIN_CAPACITY));
     ASSERT_THAT(
-        btree_test_insert_or_get(&btree_test, midway, &value, (void**)&get),
-        Eq(BTREE_NOT_FOUND));
+        obj_btree_emplace_or_get(&obj_btree, midway, &get), Eq(BTREE_NEW));
+    *get = value;
     // Now it should have reallocated
-    ASSERT_THAT(btree_capacity(&btree_test), Gt(BTREE_MIN_CAPACITY));
+    ASSERT_THAT(btree_capacity(obj_btree), Gt(BTREE_MIN_CAPACITY));
 
     // Check all values are there
     for (int i = 0; i != BTREE_MIN_CAPACITY + 1; ++i)
     {
         get = nullptr;
         EXPECT_THAT(
-            btree_test_insert_or_get(&btree_test, i, &value, (void**)&get),
-            Eq(BTREE_EXISTS))
+            obj_btree_emplace_or_get(&obj_btree, i, &get), Eq(BTREE_EXISTS))
             << "i: " << i << ", midway: " << midway;
-        EXPECT_THAT(get, AllOf(NotNull(), Pointee(Eq(0x55))));
+        EXPECT_THAT(get, Pointee(value));
     }
-
-    btree_deinit(&btree_test);
 }
 
 TEST_F(NAME, find_on_empty_btree_doesnt_crash)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    EXPECT_THAT(btree_test_find(btree, 3), IsNull());
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), IsNull());
 }
 
-TEST_F(NAME, find_key_on_empty_btree_doesnt_crash)
+TEST_F(NAME, find_returns_false_if_key_doesnt_exist)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {53, 53, 53}, b = {77, 77, 77}, c = {99, 99, 99};
+    obj_btree_insert_new(&obj_btree, 3, a);
+    obj_btree_insert_new(&obj_btree, 8, b);
+    obj_btree_insert_new(&obj_btree, 2, c);
 
-    int value = 55;
-    EXPECT_THAT(btree_find_key(&btree_test, &value), IsNull());
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), IsNull());
 }
 
-TEST_F(NAME, find_and_compare_on_empty_btree_doesnt_crash)
+TEST_F(NAME, find_returns_value_if_key_exists)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {53, 53, 53}, b = {77, 77, 77}, c = {99, 99, 99};
+    obj_btree_insert_new(&obj_btree, 3, a);
+    obj_btree_insert_new(&obj_btree, 8, b);
+    obj_btree_insert_new(&obj_btree, 2, c);
 
-    int value = 55;
-    EXPECT_THAT(btree_find_and_compare(&btree_test, 34, &value), IsFalse());
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(a));
 }
 
-TEST_F(NAME, search_for_key_using_existing_value_works)
+TEST_F(NAME, erase)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    obj_btree_insert_new(&obj_btree, 0, a);
+    obj_btree_insert_new(&obj_btree, 1, b);
+    obj_btree_insert_new(&obj_btree, 2, c);
+    obj_btree_insert_new(&obj_btree, 3, d);
+    obj_btree_insert_new(&obj_btree, 4, e);
 
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    EXPECT_THAT(
-        btree_find_key(&btree_test, &a), AllOf(NotNull(), Pointee(Eq(3))));
-    EXPECT_THAT(
-        btree_find_key(&btree_test, &b), AllOf(NotNull(), Pointee(Eq(8))));
-    EXPECT_THAT(
-        btree_find_key(&btree_test, &c), AllOf(NotNull(), Pointee(Eq(2))));
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, search_for_key_using_non_existing_value_returns_null)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    int d = 12;
-    EXPECT_THAT(btree_find_key(&btree_test, &d), IsNull());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, find_and_compare_non_existing_key_returns_false)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    int d = 53;
-    EXPECT_THAT(btree_find_and_compare(&btree_test, 4, &d), IsFalse());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, find_and_compare_existing_key_and_different_value_returns_false)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    int d = 53;
-    EXPECT_THAT(btree_find_and_compare(&btree_test, 8, &d), IsFalse());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, find_and_compare_existing_key_and_matching_value_returns_true)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    int d = 53;
-    EXPECT_THAT(btree_find_and_compare(&btree_test, 3, &d), IsTrue());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, key_exists_returns_false_if_key_doesnt_exist)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    EXPECT_THAT(btree_key_exists(&btree_test, 4), IsFalse());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, key_exists_returns_true_if_key_does_exist)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 53, b = 77, c = 99;
-    btree_test_insert_new(&btree_test, 3, &a);
-    btree_test_insert_new(&btree_test, 8, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-
-    EXPECT_THAT(btree_key_exists(&btree_test, 3), IsTrue());
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, erase_by_key)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 56, b = 45, c = 18, d = 27, e = 84;
-    btree_test_insert_new(&btree_test, 0, &a);
-    btree_test_insert_new(&btree_test, 1, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-    btree_test_insert_new(&btree_test, 3, &d);
-    btree_test_insert_new(&btree_test, 4, &e);
-
-    EXPECT_THAT(btree_erase(&btree_test, 2), Eq(0));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 2), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 2), Eq(0));
 
     // 4
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 4), AllOf(NotNull(), Pointee(Eq(e))));
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), Pointee(e));
 
-    EXPECT_THAT(btree_erase(&btree_test, 4), Eq(0));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 4), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 4), Eq(0));
 
     // 3
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), IsNull());
 
-    EXPECT_THAT(btree_erase(&btree_test, 0), Eq(0));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 0), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 0), Eq(0));
 
     // 2
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), IsNull());
 
-    EXPECT_THAT(btree_erase(&btree_test, 1), Eq(0));
-
-    // 1
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 1), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
-
-    EXPECT_THAT(btree_erase(&btree_test, 3), Eq(0));
-
-    // 0
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 1), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 3), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
-
-    EXPECT_THAT(btree_erase(&btree_test, 0), Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(btree_erase(&btree_test, 1), Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(btree_erase(&btree_test, 2), Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(btree_erase(&btree_test, 3), Eq(BTREE_NOT_FOUND));
-    EXPECT_THAT(btree_erase(&btree_test, 4), Eq(BTREE_NOT_FOUND));
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, erase_by_value_on_empty_btree_doesnt_crash)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 56;
-    EXPECT_THAT(btree_erase_value(&btree_test, &a), Eq(BTREE_INVALID_KEY));
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, erase_by_value)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 56, b = 45, c = 18, d = 27, e = 84;
-    btree_test_insert_new(&btree_test, 0, &a);
-    btree_test_insert_new(&btree_test, 1, &b);
-    btree_test_insert_new(&btree_test, 2, &c);
-    btree_test_insert_new(&btree_test, 3, &d);
-    btree_test_insert_new(&btree_test, 4, &e);
-
-    EXPECT_THAT(btree_erase_value(&btree_test, &c), Eq(2));
-
-    // 4
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 4), AllOf(NotNull(), Pointee(Eq(e))));
-
-    EXPECT_THAT(btree_erase_value(&btree_test, &e), Eq(4));
-
-    // 3
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
-
-    EXPECT_THAT(btree_erase_value(&btree_test, &a), Eq(0));
-
-    // 2
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
-
-    EXPECT_THAT(btree_erase_value(&btree_test, &b), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 1), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 1), Eq(0));
 
     // 1
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 1), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), IsNull());
 
-    EXPECT_THAT(btree_erase_value(&btree_test, &d), Eq(3));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 3), Eq(1));
+    EXPECT_THAT(obj_btree_erase(obj_btree, 3), Eq(0));
 
     // 0
-    EXPECT_THAT((int*)btree_test_find(btree, 0), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 1), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 2), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 3), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 4), IsNull());
-
-    EXPECT_THAT(btree_erase_value(&btree_test, &a), Eq(BTREE_INVALID_KEY));
-    EXPECT_THAT(btree_erase_value(&btree_test, &b), Eq(BTREE_INVALID_KEY));
-    EXPECT_THAT(btree_erase_value(&btree_test, &c), Eq(BTREE_INVALID_KEY));
-    EXPECT_THAT(btree_erase_value(&btree_test, &d), Eq(BTREE_INVALID_KEY));
-    EXPECT_THAT(btree_erase_value(&btree_test, &e), Eq(BTREE_INVALID_KEY));
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), IsNull());
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), IsNull());
 }
 
 TEST_F(NAME, reinsertion_forwards)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 0, a), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 1, b), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 3, d), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 4, e), Eq(BTREE_NEW));
 
-    int a = 56, b = 45, c = 18, d = 27, e = 84;
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 0, &a), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 1, &b), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, &c), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 3, &d), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 4, &e), Eq(0));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 4), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 3), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 2), Eq(1));
 
-    ASSERT_THAT(btree_erase(&btree_test, 4), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 3), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 2), Eq(0));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 3, d), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 4, e), Eq(BTREE_NEW));
 
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, &c), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 3, &d), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 4, &e), Eq(0));
-
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 2), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 4), AllOf(NotNull(), Pointee(Eq(e))));
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), Pointee(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), Pointee(e));
 }
 
 TEST_F(NAME, reinsertion_backwards)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 0, a), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 1, b), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 3, d), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 4, e), Eq(BTREE_NEW));
 
-    int a = 56, b = 45, c = 18, d = 27, e = 84;
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 0, &a), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 1, &b), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, &c), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 3, &d), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 4, &e), Eq(0));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 0), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 1), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 2), Eq(1));
 
-    ASSERT_THAT(btree_erase(&btree_test, 0), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 1), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 2), Eq(0));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 2, c), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 1, b), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 0, a), Eq(BTREE_NEW));
 
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 2, &c), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 1, &b), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 0, &a), Eq(0));
-
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 0), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 1), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 2), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 3), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 4), AllOf(NotNull(), Pointee(Eq(e))));
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 0), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 1), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 2), Pointee(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 3), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 4), Pointee(e));
 }
 
 TEST_F(NAME, reinsertion_random)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {56, 56, 56}, b = {45, 45, 45}, c = {18, 18, 18}, d = {27, 27, 27},
+        e = {84, 84, 84};
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 26, a), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 44, b), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 82, c), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 41, d), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 70, e), Eq(BTREE_NEW));
 
-    int a = 56, b = 45, c = 18, d = 27, e = 84;
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 26, &a), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 44, &b), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 82, &c), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 41, &d), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 70, &e), Eq(0));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 44), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 70), Eq(1));
+    ASSERT_THAT(obj_btree_erase(obj_btree, 26), Eq(1));
 
-    ASSERT_THAT(btree_erase(&btree_test, 44), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 70), Eq(0));
-    ASSERT_THAT(btree_erase(&btree_test, 26), Eq(0));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 26, a), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 70, e), Eq(BTREE_NEW));
+    ASSERT_THAT(obj_btree_insert_new(&obj_btree, 44, b), Eq(BTREE_NEW));
 
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 26, &a), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 70, &e), Eq(0));
-    ASSERT_THAT(btree_test_insert_new(&btree_test, 44, &b), Eq(0));
-
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 26), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 44), AllOf(NotNull(), Pointee(Eq(b))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 82), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 41), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 70), AllOf(NotNull(), Pointee(Eq(e))));
-
-    btree_deinit(&btree_test);
-}
-
-TEST_F(NAME, get_any_value)
-{
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int a = 6;
-    EXPECT_THAT(btree_get_any_value(&btree_test), IsNull());
-    btree_test_insert_new(&btree_test, 45, &a);
-    EXPECT_THAT(
-        (int*)btree_get_any_value(&btree_test),
-        AllOf(NotNull(), Pointee(Eq(6))));
-    btree_erase(&btree_test, 45);
-    EXPECT_THAT(btree_get_any_value(&btree_test), IsNull());
-
-    btree_deinit(&btree_test);
+    EXPECT_THAT(obj_btree_find(obj_btree, 26), Pointee(a));
+    EXPECT_THAT(obj_btree_find(obj_btree, 44), Pointee(b));
+    EXPECT_THAT(obj_btree_find(obj_btree, 82), Pointee(c));
+    EXPECT_THAT(obj_btree_find(obj_btree, 41), Pointee(d));
+    EXPECT_THAT(obj_btree_find(obj_btree, 70), Pointee(e));
 }
 
 TEST_F(NAME, iterate_with_no_items)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
-
-    int counter = 0;
-    btree_for_each (&btree_test, int, key, value)
+    int16_t idx, key;
+    obj*    val;
+    int     counter = 0;
+    btree_for_each (obj_btree, idx, key, val)
+    {
+        (void)idx;
+        (void)key;
+        (void)val;
         ++counter;
-    BTREE_END_EACH
+    }
     ASSERT_THAT(counter, Eq(0));
-
-    btree_deinit(&btree_test);
 }
 
 TEST_F(NAME, iterate_5_random_items)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    obj a = {79579, 79579, 79579}, b = {235, 235, 235}, c = {347, 347, 347},
+        d = {124, 124, 124}, e = {457, 457, 457};
+    obj_btree_insert_new(&obj_btree, 243, a);
+    obj_btree_insert_new(&obj_btree, 256, b);
+    obj_btree_insert_new(&obj_btree, 456, c);
+    obj_btree_insert_new(&obj_btree, 468, d);
+    obj_btree_insert_new(&obj_btree, 969, e);
 
-    int a = 79579, b = 235, c = 347, d = 124, e = 457;
-    btree_test_insert_new(&btree_test, 243, &a);
-    btree_test_insert_new(&btree_test, 256, &b);
-    btree_test_insert_new(&btree_test, 456, &c);
-    btree_test_insert_new(&btree_test, 468, &d);
-    btree_test_insert_new(&btree_test, 969, &e);
-
-    int counter = 0;
-    BTREE_FOR_EACH(&btree_test, int, key, value)
-    switch (counter)
+    int16_t idx, key;
+    obj*    val;
+    int     counter = 0;
+    btree_for_each (obj_btree, idx, key, val)
     {
-        case 0:
-            ASSERT_THAT(key, Eq(243u));
-            ASSERT_THAT(a, Eq(*value));
-            break;
-        case 1:
-            ASSERT_THAT(key, Eq(256u));
-            ASSERT_THAT(b, Eq(*value));
-            break;
-        case 2:
-            ASSERT_THAT(key, Eq(456u));
-            ASSERT_THAT(c, Eq(*value));
-            break;
-        case 3:
-            ASSERT_THAT(key, Eq(468u));
-            ASSERT_THAT(d, Eq(*value));
-            break;
-        case 4:
-            ASSERT_THAT(key, Eq(969u));
-            ASSERT_THAT(e, Eq(*value));
-            break;
-        default: ASSERT_THAT(1, Eq(0)); break;
+        switch (counter)
+        {
+            case 0:
+                ASSERT_THAT(key, Eq(243u));
+                ASSERT_THAT(val, Pointee(a));
+                break;
+            case 1:
+                ASSERT_THAT(key, Eq(256u));
+                ASSERT_THAT(val, Pointee(b));
+                break;
+            case 2:
+                ASSERT_THAT(key, Eq(456u));
+                ASSERT_THAT(val, Pointee(c));
+                break;
+            case 3:
+                ASSERT_THAT(key, Eq(468u));
+                ASSERT_THAT(val, Pointee(d));
+                break;
+            case 4:
+                ASSERT_THAT(key, Eq(969u));
+                ASSERT_THAT(val, Pointee(e));
+                break;
+            default: ASSERT_FALSE(true); break;
+        }
+        ++counter;
     }
-    ++counter;
-    BTREE_END_EACH
     ASSERT_THAT(counter, Eq(5));
-
-    btree_deinit(&btree_test);
 }
 
-TEST_F(NAME, erase_in_for_loop)
+TEST_F(NAME, retain_empty)
 {
-    struct cs_btree btree;
-    btree_init(&btree_test, sizeof(int));
+    int counter = 0;
+    EXPECT_THAT(
+        obj_btree_retain(
+            obj_btree,
+            [](int16_t, obj*, void* counter)
+            {
+                ++*(int*)counter;
+                return BTREE_RETAIN;
+            },
+            &counter),
+        Eq(0));
+    EXPECT_THAT(btree_count(obj_btree), Eq(0));
+    EXPECT_THAT(counter, Eq(0));
+}
 
-    int a = 79579, b = 235, c = 347, d = 124, e = 457;
-    btree_test_insert_new(&btree_test, 243, &a);
-    btree_test_insert_new(&btree_test, 256, &b);
-    btree_test_insert_new(&btree_test, 456, &c);
-    btree_test_insert_new(&btree_test, 468, &d);
-    btree_test_insert_new(&btree_test, 969, &e);
+TEST_F(NAME, retain_all)
+{
+    for (int16_t i = 0; i != 8; ++i)
+        obj_btree_insert_new(&obj_btree, i, obj{(float)i, (float)i, (float)i});
 
     int counter = 0;
-    BTREE_FOR_EACH(&btree_test, int, key, value)
-    if (key == 256u)
-        BTREE_ERASE_CURRENT_ITEM_IN_FOR_LOOP(&btree_test, key);
-    ++counter;
-    BTREE_END_EACH
-    EXPECT_THAT(counter, Eq(5u));
+    EXPECT_THAT(btree_count(obj_btree), Eq(8));
+    EXPECT_THAT(
+        obj_btree_retain(
+            obj_btree,
+            [](int16_t, obj*, void* counter)
+            {
+                ++*(int*)counter;
+                return BTREE_RETAIN;
+            },
+            &counter),
+        Eq(0));
+    EXPECT_THAT(btree_count(obj_btree), Eq(8));
+    EXPECT_THAT(counter, Eq(8));
+}
 
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 243), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT((int*)btree_test_find(btree, 256), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 456), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 468), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 969), AllOf(NotNull(), Pointee(Eq(e))));
+TEST_F(NAME, retain_half)
+{
+    for (int16_t i = 0; i != 8; ++i)
+        obj_btree_insert_new(&obj_btree, i, obj{(float)i, (float)i, (float)i});
 
-    counter = 0;
-    BTREE_FOR_EACH(&btree_test, int, key, value)
-    if (key == 969)
-        BTREE_ERASE_CURRENT_ITEM_IN_FOR_LOOP(&btree_test, key);
-    ++counter;
-    BTREE_END_EACH
-    EXPECT_THAT(counter, Eq(4u));
+    int counter = 0;
+    EXPECT_THAT(btree_count(obj_btree), Eq(8));
+    EXPECT_THAT(
+        obj_btree_retain(
+            obj_btree,
+            [](int16_t, obj*, void* user) { return (*(int*)user)++ % 2; },
+            &counter),
+        Eq(0));
+    EXPECT_THAT(btree_count(obj_btree), Eq(4));
+    EXPECT_THAT(counter, Eq(8));
+    EXPECT_THAT(
+        obj_btree_find(obj_btree, 0),
+        Pointee(obj{(float)0, (float)0, (float)0}));
+    EXPECT_THAT(
+        obj_btree_find(obj_btree, 2),
+        Pointee(obj{(float)2, (float)2, (float)2}));
+    EXPECT_THAT(
+        obj_btree_find(obj_btree, 4),
+        Pointee(obj{(float)4, (float)4, (float)4}));
+    EXPECT_THAT(
+        obj_btree_find(obj_btree, 6),
+        Pointee(obj{(float)6, (float)6, (float)6}));
+}
 
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 243), AllOf(NotNull(), Pointee(Eq(a))));
-    EXPECT_THAT((int*)btree_test_find(btree, 256), IsNull());
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 456), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 468), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 969), IsNull());
+TEST_F(NAME, retain_returning_error)
+{
+    for (int16_t i = 0; i != 8; ++i)
+        ASSERT_THAT(
+            obj_btree_insert_new(
+                &obj_btree, i, obj{(float)i, (float)i, (float)i}),
+            Eq(BTREE_NEW));
 
-    counter = 0;
-    BTREE_FOR_EACH(&btree_test, int, key, value)
-    if (key == 243)
-        BTREE_ERASE_CURRENT_ITEM_IN_FOR_LOOP(&btree_test, key);
-    ++counter;
-    BTREE_END_EACH
-    EXPECT_THAT(counter, Eq(3u));
-
-    EXPECT_THAT((int*)btree_test_find(btree, 243), IsNull());
-    EXPECT_THAT((int*)btree_test_find(btree, 256), IsNull());
+    ASSERT_THAT(btree_count(obj_btree), Eq(8));
     EXPECT_THAT(
-        (int*)btree_test_find(btree, 456), AllOf(NotNull(), Pointee(Eq(c))));
-    EXPECT_THAT(
-        (int*)btree_test_find(btree, 468), AllOf(NotNull(), Pointee(Eq(d))));
-    EXPECT_THAT((int*)btree_test_find(btree, 969), IsNull());
-
-    btree_deinit(&btree_test);
+        obj_btree_retain(
+            obj_btree, [](int16_t, obj*, void*) { return -5; }, NULL),
+        Eq(-5));
+    EXPECT_THAT(btree_count(obj_btree), Eq(8));
 }

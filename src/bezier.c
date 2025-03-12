@@ -23,9 +23,9 @@ static q16_16 distance_to_segment_sq(
         q16_16_mul(Ay[3], t3));
     q16_16 dx = q16_16_sub(px, x);
     q16_16 dy = q16_16_sub(py, y);
-    return dx * dx
-           + dy * dy; /* HACK: Not the same as q16_16_mul(), but the precision
-                         of Q16.16 isn't enough so we do this */
+    return dx * dx +
+           dy * dy; /* HACK: Not the same as q16_16_mul(), but the precision
+                       of Q16.16 isn't enough so we do this */
 }
 static q16_16 binary_search_min_dist_sq(
     const struct qwpos* p,
@@ -82,10 +82,10 @@ static void calc_coeff(
     const struct qwpos          off)
 {
     /* Calculate bezier control points */
-    const struct qwpos p0
-        = make_qwposqw(qw_sub(head->pos.x, off.x), qw_sub(head->pos.y, off.y));
-    const struct qwpos p3
-        = make_qwposqw(qw_sub(tail->pos.x, off.x), qw_sub(tail->pos.y, off.y));
+    const struct qwpos p0 =
+        make_qwposqw(qw_sub(head->pos.x, off.x), qw_sub(head->pos.y, off.y));
+    const struct qwpos p3 =
+        make_qwposqw(qw_sub(tail->pos.x, off.x), qw_sub(tail->pos.y, off.y));
     const struct qwpos p1 = make_qwposqw(
         qw_add(p0.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
         qw_add(
@@ -298,16 +298,16 @@ double bezier_fit_trail(
         qw                  head_dy = qw_sub(p1->y, pm->y);
         qw                  tail_dx = qw_sub(p0->x, p1->x);
         qw                  tail_dy = qw_sub(p0->y, p1->y);
-        qw                  head_lensq
-            = qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
-        qw tail_lensq
-            = qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
+        qw                  head_lensq =
+            qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
+        qw tail_lensq =
+            qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
         double head_len = sqrt(qw_to_float(head_lensq));
         double tail_len = sqrt(qw_to_float(tail_lensq));
 
         head->pos = *pm;
-        head->angle
-            = make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
+        head->angle =
+            make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
         head->len_backwards = (uint8_t)(head_len * 255.0);
 
         tail->len_forwards = (uint8_t)(tail_len * 255.0);
@@ -322,16 +322,16 @@ double bezier_fit_trail(
         qw                  head_dy = qw_sub(p2->y, pm->y);
         qw                  tail_dx = qw_sub(p0->x, p1->x);
         qw                  tail_dy = qw_sub(p0->y, p1->y);
-        qw                  head_lensq
-            = qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
-        qw tail_lensq
-            = qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
+        qw                  head_lensq =
+            qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
+        qw tail_lensq =
+            qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
         double head_len = sqrt(qw_to_float(head_lensq));
         double tail_len = sqrt(qw_to_float(tail_lensq));
 
         head->pos = *pm;
-        head->angle
-            = make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
+        head->angle =
+            make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
         head->len_backwards = (uint8_t)(head_len * 255.0);
 
         tail->len_forwards = (uint8_t)(tail_len * 255.0);
@@ -411,8 +411,8 @@ double bezier_fit_trail(
      *   [ a b ]    = ------- [  d -b ]
      *   [ c d ]      ad - bc [ -c  a ]
      */
-    det = q16_16_sub(
-        q16_16_mul(T[0][0], T[1][1]), q16_16_mul(T[0][1], T[1][0]));
+    det =
+        q16_16_sub(q16_16_mul(T[0][0], T[1][1]), q16_16_mul(T[0][1], T[1][0]));
     if (det == 0)
     {
         /*
@@ -511,8 +511,8 @@ double bezier_fit_trail(
         q16_16 _3x0 = 3 * x0;
         q16_16 x1 = q16_16_add(q16_16_sub(mx, Cx[0]), _3x0) / 3;
         q16_16 _6x1 = 6 * x1;
-        q16_16 x2
-            = q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), _6x1) / 3;
+        q16_16 x2 =
+            q16_16_add(q16_16_sub(q16_16_sub(Cx[0], Cx[1]), _3x0), _6x1) / 3;
         q16_16 _3x1 = 3 * x1;
         q16_16 _3x2 = 3 * x2;
         q16_16 x3 = q16_16_add(q16_16_sub(q16_16_add(Cx[1], x0), _3x1), _3x2);
@@ -522,8 +522,8 @@ double bezier_fit_trail(
         q16_16 _3y0 = 3 * y0;
         q16_16 y1 = q16_16_add(q16_16_sub(my, Cy[0]), _3y0) / 3;
         q16_16 _6y1 = 6 * y1;
-        q16_16 y2
-            = q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), _6y1) / 3;
+        q16_16 y2 =
+            q16_16_add(q16_16_sub(q16_16_sub(Cy[0], Cy[1]), _3y0), _6y1) / 3;
         q16_16 _3y1 = 3 * y1;
         q16_16 _3y2 = 3 * y2;
         q16_16 y3 = q16_16_add(q16_16_sub(q16_16_add(Cy[1], y0), _3y1), _3y2);
@@ -543,8 +543,8 @@ double bezier_fit_trail(
 
         /* Update head knot */
         head->pos = *pm;
-        head->angle = make_qa(
-            atan2(q16_16_to_float(head_dy), q16_16_to_float(head_dx)));
+        head->angle =
+            make_qa(atan2(q16_16_to_float(head_dy), q16_16_to_float(head_dx)));
         head->len_backwards = (uint8_t)(head_len * 255.0);
 
         /*
@@ -678,8 +678,8 @@ int bezier_calc_equidistant_points(
                     t = qw_add(t, t_step);
 
                 if (t >= make_qw(1))
-                    t = make_qw(1)
-                        - 1; /* t=1 means we'd be on the next curve segment */
+                    t = make_qw(1) -
+                        1; /* t=1 means we'd be on the next curve segment */
                 if (t < last_t)
                     t = last_t;
 

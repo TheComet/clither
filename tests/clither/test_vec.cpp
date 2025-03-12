@@ -1,32 +1,34 @@
 #include "gmock/gmock.h"
 
-#define NAME vec
+extern "C" {
+#include "clither/vec.h"
+}
+
+#define NAME          vec
+#define MIN_CAPACITY  32
+#define EXPAND_FACTOR 2
 
 using namespace ::testing;
 
-extern "C" {
-#include "clither/vec.h"
-
+namespace {
 struct obj
 {
     uint64_t a, b, c, d;
 };
 
-static bool operator==(const struct obj& a, const struct obj& b)
+bool operator==(const struct obj& a, const struct obj& b)
 {
     return a.a == b.a && a.b == b.b && a.c == b.c && a.d == b.d;
 }
 
-#define MIN_CAPACITY  32
-#define EXPAND_FACTOR 2
 VEC_DECLARE(vobj, struct obj, 16)
 VEC_DEFINE_FULL(vobj, struct obj, 16, MIN_CAPACITY, EXPAND_FACTOR)
 
-static void* shitty_alloc(size_t)
+void* shitty_alloc(size_t)
 {
     return NULL;
 }
-static void* shitty_realloc(void*, size_t)
+void* shitty_realloc(void*, size_t)
 {
     return NULL;
 }
@@ -51,7 +53,7 @@ VEC_DEFINE(shitty_vobj, struct obj, 16)
 #   undef mem_realloc
 #endif
 /* clang-format on */
-}
+} // namespace
 
 class NAME : public Test
 {
@@ -670,15 +672,42 @@ TEST_F(NAME, for_each_three_elements)
     EXPECT_THAT(counter, Eq(3));
 }
 
+TEST_F(NAME, retain_empty_vec)
+{
+    int counter = 0;
+    EXPECT_THAT(
+        vobj_retain(
+            vobj,
+            [](obj*, void* counter)
+            {
+                ++*(int*)counter;
+                return VEC_RETAIN;
+            },
+            &counter),
+        Eq(0));
+    EXPECT_THAT(vec_count(vobj), Eq(0));
+    EXPECT_THAT(counter, Eq(0));
+}
+
 TEST_F(NAME, retain_all)
 {
     for (uint64_t i = 0; i != 8; ++i)
         vobj_push(&vobj, obj{i, i, i, i});
 
+    int counter = 0;
     EXPECT_THAT(vec_count(vobj), Eq(8));
     EXPECT_THAT(
-        vobj_retain(vobj, [](obj*, void*) { return VEC_RETAIN; }, NULL), Eq(0));
+        vobj_retain(
+            vobj,
+            [](obj*, void* counter)
+            {
+                ++*(int*)counter;
+                return VEC_RETAIN;
+            },
+            &counter),
+        Eq(0));
     EXPECT_THAT(vec_count(vobj), Eq(8));
+    EXPECT_THAT(counter, Eq(8));
 }
 
 TEST_F(NAME, retain_half)
@@ -687,12 +716,15 @@ TEST_F(NAME, retain_half)
         vobj_push(&vobj, obj{i, i, i, i});
 
     EXPECT_THAT(vec_count(vobj), Eq(8));
-    int i = 0;
+    int counter = 0;
     EXPECT_THAT(
         vobj_retain(
-            vobj, [](obj*, void* user) { return (*(int*)user)++ % 2; }, &i),
+            vobj,
+            [](obj*, void* user) { return (*(int*)user)++ % 2; },
+            &counter),
         Eq(0));
     EXPECT_THAT(vec_count(vobj), Eq(4));
+    EXPECT_THAT(counter, Eq(8));
     EXPECT_THAT(vec_get(vobj, 0), Pointee(obj{0, 0, 0, 0}));
     EXPECT_THAT(vec_get(vobj, 1), Pointee(obj{2, 2, 2, 2}));
     EXPECT_THAT(vec_get(vobj, 2), Pointee(obj{4, 4, 4, 4}));

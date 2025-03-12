@@ -412,7 +412,7 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
     struct msg*       m;
     uint16_t          first_frame_number;
 
-    assert(cmd_queue_count(cmdq) > 0);
+    CLITHER_DEBUG_ASSERT(cmd_queue_count(cmdq) > 0);
     first_frame_number = cmd_queue_frame_begin(cmdq);
 
     /*

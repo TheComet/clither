@@ -114,10 +114,12 @@ void snake_step_head(
  * \param[in] data The snake's data structure. Trails and curves are
  * updated accordingly.
  * \param[in] head The snake's head is moved forwards by calling
- * snake_step_head(). \param[in] param The matching parameters for the snake's
- * head. The params can change every frame so a history is maintained for
- * rollback purposes. This is currently not implemented. \param[in] command The
- * command to step forwards with. \param[in] sim_tick_rate The simulation speed.
+ * snake_step_head().
+ * \param[in] param The matching parameters for the snake's head. The params
+ * can change every frame so a history is maintained for rollback purposes. This
+ * is currently not implemented.
+ * \param[in] command The command to step forwards with.
+ * \param[in] sim_tick_rate The simulation speed.
  * \return Returns the number of segments that could be removed from the curve.
  *
  * On the server-side this value should be passed to a proceeding call to

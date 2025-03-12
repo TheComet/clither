@@ -314,6 +314,8 @@
         struct prefix* v, int (*on_element)(T * elem, void* user), void* user) \
     {                                                                          \
         int##bits##_t i;                                                       \
+        if (v == NULL)                                                         \
+            return 0;                                                          \
         for (i = 0; i != v->count; ++i)                                        \
         {                                                                      \
             int result = on_element(&v->data[i], user);                        \

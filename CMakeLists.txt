@@ -252,7 +252,6 @@ add_executable (clither
         tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
         tests/clither/test_btree.cpp
-        tests/clither/test_btree_as_set.cpp
         $<$<BOOL:${CLITHER_GFX}>:
             tests/clither/test_protocol_join.cpp>>
 
