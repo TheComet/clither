@@ -1,5 +1,8 @@
 #include "gmock/gmock.h"
+
+extern "C" {
 #include "clither/q.h"
+}
 
 #define NAME q
 
@@ -7,7 +10,7 @@ using namespace testing;
 
 TEST(NAME, qw_to_q16_16)
 {
-    qw a = 36550;
+    qw     a = 36550;
     q16_16 b = qw_to_q16_16(a);
     EXPECT_THAT(b, Eq(146200));
 }

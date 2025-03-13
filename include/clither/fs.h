@@ -1,7 +1,10 @@
 #pragma once
 
-void*
-fs_map_file(const char* utf8_filename, int* length);
+int fs_list(
+    const char* path,
+    int (*on_entry)(const char* name, void* user),
+    void* user);
 
-void
-fs_unmap_file(void* address, int length);
+int fs_file_exists(const char* path);
+
+int fs_dir_exists(const char* path);

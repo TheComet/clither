@@ -1,55 +1,59 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/strspan.h"
+#include <stdarg.h> /* va_list */
 
-C_BEGIN
-
-void
-log_set_prefix(const char* prefix);
-void
-log_set_colors(const char* set, const char* clear);
+void log_set_prefix(const char* prefix);
+void log_set_colors(const char* set, const char* clear);
 
 #if defined(CLITHER_LOGGING)
 
-void
-log_file_open(const char* log_file);
-void
-log_file_close(void);
+void log_file_open(const char* log_file);
+void log_file_close(void);
 
-void
-log_net_open(const char* log_file);
-void
-log_net_close(void);
+void log_net_open(const char* log_file);
+void log_net_close(void);
 
-void
-log_bezier_open(const char* log_file);
-void
-log_bezier_close(void);
+void log_bezier_open(const char* log_file);
+void log_bezier_close(void);
 
 #endif
 
-/* General logging functions ----------------------------------------------- */
-PRINTF_FORMAT(1, 2) void
-log_raw(const char* fmt, ...);
+/* General logging functions ------------------------------------------------ */
 
-PRINTF_FORMAT(1, 2) void
-log_dbg(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_raw(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_info(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_warn(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_err(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_note(const char* fmt, ...);
 
-PRINTF_FORMAT(1, 2) void
-log_info(const char* fmt, ...);
+#if defined(CLITHER_DEBUG)
+CLITHER_PRINTF_FORMAT(1, 2) void log_dbg(const char* fmt, ...);
+#else
+#define log_dbg(fmt, ...)
+#endif
 
-PRINTF_FORMAT(1, 2) void
-log_warn(const char* fmt, ...);
+/* Specialized logging functions -------------------------------------------- */
 
-PRINTF_FORMAT(1, 2) void
-log_err(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) void log_net(const char* fmt, ...);
 
-PRINTF_FORMAT(1, 2) void
-log_note(const char* fmt, ...);
+/* Memory logging functions ------------------------------------------------- */
 
-/* Specialized logging functions ------------------------------------------- */
+int log_oom(int bytes, const char* func_name);
 
-PRINTF_FORMAT(1, 2) void
-log_net(const char* fmt, ...);
+/* Parser/File logging functions -------------------------------------------- */
 
-C_END
+void log_vflc(
+    const char*    filename,
+    const char*    source,
+    struct strspan loc,
+    const char*    fmt,
+    va_list        ap);
+void log_flc(
+    const char*    filename,
+    const char*    source,
+    struct strspan loc,
+    const char*    fmt,
+    ...);
+void log_excerpt(const char* source, struct strspan loc);

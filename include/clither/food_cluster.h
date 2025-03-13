@@ -2,9 +2,7 @@
 
 #include "clither/config.h"
 #include "clither/q.h"
-#include "cstructures/hash.h"
-
-C_BEGIN
+#include "clither/hash.h"
 
 #if 0
 struct food_grid
@@ -36,7 +34,7 @@ struct food_cluster
 	struct qwaabb aabb;
 	struct qwpos food[254];
 	uint8_t food_count;
-	cs_hash32 seed;
+	hash32 seed;
 };
 
 /* NOTE: Changing this also changes the quantization resolution and bit offsets.
@@ -44,8 +42,8 @@ struct food_cluster
 #define FOOD_CLUSTER_SIZE  0x8000
 #define FOOD_CLUSTER_QUANT 0x7F00  /* Top 7 bits are used */
 
-cs_hash32
-food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, cs_hash32 seed);
+hash32
+food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, hash32 seed);
 
 int
 food_eat(struct food_cluster* fc, struct qwpos eat_center, qw eat_range);
@@ -59,4 +57,3 @@ food_compress(uint8_t* buf, int len, const struct food_cluster* fc);
 int
 food_decompress(struct food_cluster* fc, const uint8_t* buf, int len);
 
-C_END

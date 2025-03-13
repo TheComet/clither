@@ -1,3 +1,5 @@
+cmake_minimum_required (VERSION 3.12)
+
 project ("clither-doc"
     LANGUAGES)
 
@@ -7,8 +9,14 @@ if (NOT LATEX_FOUND)
     return ()
 endif ()
 
+if (NOT TARGET clither)
+    set (CLITHER_BUILD_DOCDIR ${PROJECT_BINARY_DIR})
+    set (CLITHER_INSTALL_DOCDIR "share/doc/clither")
+endif ()
+
 # We need to keep track of any changes to .tex files
-file (GLOB_RECURSE TEX_FILES "*.tex")
+file (GLOB_RECURSE TEX_FILES CONFIGURE_DEPENDS
+    "*.tex")
 
 # The name of the main tex without extension
 set (MAIN_TEX "clither-doc")
@@ -31,9 +39,10 @@ add_custom_command (OUTPUT ${FINAL_PDF}
 add_custom_target (clither-doc ALL
     DEPENDS ${FINAL_PDF})
 
-add_dependencies (clither clither-doc)
+if (TARGET clither)
+    add_dependencies (clither clither-doc)
+endif ()
 
 install (
     FILES ${FINAL_PDF}
     DESTINATION ${CLITHER_INSTALL_DOCDIR})
-

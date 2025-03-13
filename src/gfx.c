@@ -11,7 +11,7 @@ extern const struct gfx_interface gfx_gles2;
 extern const struct gfx_interface gfx_vulkan;
 #endif
 
-extern const struct gfx_interface* gfx_backends[] = {
+const struct gfx_interface* gfx_backends[] = {
 #if defined(CLITHER_GFX_GLES2)
     &gfx_gles2,
 #endif

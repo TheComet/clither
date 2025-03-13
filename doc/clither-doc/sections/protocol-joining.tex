@@ -1,0 +1,35 @@
+\subsection{Joining}
+
+\begin{center}
+\input{images/seq-join}
+\end{center}
+
+The  client  initiates  joining  by  sending  a \verb$MSG_JOIN_REQUEST$ to the
+server.  The  join  request is resent periodically to account for  UDP  packet
+loss using a resend counter.
+
+\begin{itemize}
+\item If the server accepts, it  will  spawn a snake in the world and ``hold''
+it in place. Held snakes are not simulated until the server receives the first
+command   message   from   the   client.   The   server  will   respond   with
+\verb$MSG_JOIN_ACCEPT$ for every \verb$MSG_JOIN_REQUEST$ it receives, even  if
+the  snake has already been spawned. The client must therefore  make  sure  to
+only  handle  the  initial  accept  message,  and ignore any subsequent accept
+messages.
+\item The server can deny a join request for a number of reasons. The protocol
+version could differ. The  username  could be too long, or contain blacklisted
+words. The  server could be full. The server does not expect any more messages
+after responding with a deny message.
+\end{itemize}
+
+\vspace{1.5em}
+
+\begin{figure}[h]
+\input{images/msg-join-request}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[h]
+\input{images/msg-join-accept}
+\end{figure}

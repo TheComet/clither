@@ -1,0 +1,69 @@
+﻿---
+AlignAfterOpenBracket: AlwaysBreak
+AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: true
+AccessModifierOffset: -4
+BinPackParameters: false
+BinPackArguments: false
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterExternBlock: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+BreakConstructorInitializers: BeforeComma
+BreakStringLiterals: true
+ColumnLimit: 80
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ForEachMacros: [
+    command_queue_for_each,
+    btree_for_each,
+    btree_for_each_full,
+    hm_for_each,
+    hm_for_each_full,
+    net_addr_hm_for_each,
+    rb_for_each,
+    server_client_hm_for_each,
+    strlist_for_each,
+    vec_for_each,
+    vec_for_each_r,
+    vec_enumerate
+]
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^clither/'
+    Priority:        2
+    SortPriority:    2
+  - Regex:           '^((<|")(gtest|gmock|isl|json)/)'
+    Priority:        1
+  - Regex:           '.*'
+    Priority:        0
+    SortPriority:    0
+IndentWidth: 4
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+InsertNewlineAtEOF: true
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+...

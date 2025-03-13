@@ -1,21 +1,33 @@
 #pragma once
 
-#define CLITHER_STRINGIFY_(x) #x
-#define CLITHER_STRINGIFY(x) CLITHER_STRINGIFY_(x)
+/* Config ------------------------------------------------------------------- */
 
-/* Config ------------------------------------------------------------------ */
 #cmakedefine CLITHER_BENCHMARKS
+#cmakedefine CLITHER_DEBUG
 #cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
+#cmakedefine CLITHER_MEMORY_DEBUGGING
 #cmakedefine CLITHER_POPCOUNT
 #cmakedefine CLITHER_SERVER
 #cmakedefine CLITHER_TESTS
 
+#define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
+
+#if defined(CLITHER_DEBUG)
+#   define CLITHER_DEBUG_ASSERT
+#endif
+
 #if defined(CLITHER_GFX)
-#cmakedefine CLITHER_GFX_SDL
-#cmakedefine CLITHER_GFX_GLES2
-#cmakedefine CLITHER_GFX_VULKAN
+#   cmakedefine CLITHER_GFX_SDL
+#   cmakedefine CLITHER_GFX_GLES2
+#   cmakedefine CLITHER_GFX_VULKAN
+#endif
+
+#if defined(CLITHER_MEMORY_DEBUGGING)
+#   define CLITHER_BACKTRACE_SIZE ${CLITHER_BACKTRACE_SIZE}
+#   cmakedefine CLITHER_BACKTRACE
+#   cmakedefine CLITHER_HEX_DUMP
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
@@ -25,28 +37,47 @@
 #   define CLITHER_POPCOUNT ${CLITHER_POPCOUNT}
 #endif
 
-/* Version string ---------------------------------------------------------- */
+/* Assertions --------------------------------------------------------------- */
+
+#if defined(__cplusplus)
+#   define CLITHER_STATIC_ASSERT(condition) static_assert(condition)
+#else
+#   define CLITHER_STATIC_ASSERT(condition) ${CLITHER_STATIC_ASSERT}
+#endif
+
+#if defined(CLITHER_DEBUG_ASSERT)
+#    undef CLITHER_DEBUG_ASSERT
+#    define CLITHER_DEBUG_ASSERT assert
+#    include <assert.h>
+#else
+#    define CLITHER_DEBUG_ASSERT(condition) ((void)0)
+#endif
+
+/* Version string ----------------------------------------------------------- */
+
+#define STRINGIFY_(x) #x
+#define STRINGIFY(x) STRINGIFY_(x)
+
 #define CLITHER_VERSION_MAJOR ${PROJECT_VERSION_MAJOR}
 #define CLITHER_VERSION_MINOR ${PROJECT_VERSION_MINOR}
 #define CLITHER_VERSION_PATCH ${PROJECT_VERSION_PATCH}
 #define CLITHER_VERSION_STR \
-        CLITHER_STRINGIFY(CLITHER_VERSION_MAJOR) "." CLITHER_STRINGIFY(CLITHER_VERSION_MINOR) "." CLITHER_STRINGIFY(CLITHER_VERSION_PATCH)
+    STRINGIFY(CLITHER_VERSION_MAJOR) "." \
+    STRINGIFY(CLITHER_VERSION_MINOR) "." \
+    STRINGIFY(CLITHER_VERSION_PATCH)
+#undef STRINGIFY
+#undef STRINGIFY_
 
-#define CLITHER_VERSION \
-        ((CLITHER_VERSION_MAJOR << 24) | (CLITHER_VERSION_MINOR << 16) | (CLITHER_VERSION_PATCH << 8) | /* release candidate */ 0)
+#define CLITHER_VERSION ( \
+    (CLITHER_VERSION_MAJOR << 24) | \
+    (CLITHER_VERSION_MINOR << 16) | \
+    (CLITHER_VERSION_PATCH << 8) | \
+    (/* release candidate */ 0))
 
-/* C++ macros -------------------------------------------------------------- */
-#if defined(__cplusplus)
-#   define C_BEGIN extern "C" {
-#   define C_END }
-#else
-#   define C_BEGIN
-#   define C_END
-#endif
+/* printf formatting -------------------------------------------------------- */
 
-/* printf formatting ------------------------------------------------------- */
 #if defined(__GNUC__) || defined(__clang__)
-#   define PRINTF_FORMAT(fmt, params) __attribute__((format(printf, fmt, params)))
+#   define CLITHER_PRINTF_FORMAT(fmt, params) __attribute__((format(printf, fmt, params)))
 #else
-#   define PRINTF_FORMAT(fmt, params)
+#   define CLITHER_PRINTF_FORMAT(fmt, params)
 #endif

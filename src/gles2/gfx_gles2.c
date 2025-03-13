@@ -1,19 +1,19 @@
-#include "clither/bezier.h"
+#include "GLFW/glfw3.h"
+#include "clither/bezier_point_vec.h"
 #include "clither/camera.h"
-#include "clither/command.h"
-#include "clither/fs.h"
 #include "clither/gfx.h"
 #include "clither/input.h"
 #include "clither/log.h"
+#include "clither/mfile.h"
 #include "clither/resource_pack.h"
+#include "clither/resource_snake_part_vec.h"
+#include "clither/resource_sprite_vec.h"
 #include "clither/snake.h"
+#include "clither/snake_btree.h"
+#include "clither/str.h"
+#include "clither/strlist.h"
 #include "clither/world.h"
-
-#include "cstructures/memory.h"
-#include "cstructures/string.h"
-
 #include "glad/gles2.h"
-#include "GLFW/glfw3.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -76,18 +76,18 @@ struct sprite_tex
 struct gfx
 {
     GLFWwindow* window;
-    int width, height;
+    int         width, height;
 
     struct input input_buffer;
 
-    struct bg bg;
-    struct sprite_mesh sprite_mesh;
-    struct sprite_mat sprite_mat;
+    struct bg            bg;
+    struct sprite_mesh   sprite_mesh;
+    struct sprite_mat    sprite_mat;
     struct sprite_shadow sprite_shadow;
-    struct sprite_tex head0_base;
-    struct sprite_tex head0_gather;
-    struct sprite_tex body0_base;
-    struct sprite_tex tail0_base;
+    struct sprite_tex    head0_base;
+    struct sprite_tex    head0_gather;
+    struct sprite_tex    body0_base;
+    struct sprite_tex    tail0_base;
 };
 
 struct aspect_ratio
@@ -103,34 +103,18 @@ struct vertex
 };
 
 static const struct vertex sprite_vertices[4] = {
-    {{-0.125, -0.125}, {0,  1}},
-    {{-0.125,  0.125}, {0,  0}},
-    {{ 0.125, -0.125}, {1,  1}},
-    {{ 0.125,  0.125}, {1,  0}}
-};
-static const GLushort sprite_indices[6] = {
-    0, 2, 1,
-    1, 3, 2
-};
+    {{-0.125, -0.125}, {0, 1}},
+    {{-0.125, 0.125}, {0, 0}},
+    {{0.125, -0.125}, {1, 1}},
+    {{0.125, 0.125}, {1, 0}}};
+static const GLushort      sprite_indices[6] = {0, 2, 1, 1, 3, 2};
 static const struct vertex bg_vertices[4] = {
-    {{-1, -1}, {0,  0}},
-    {{-1,  1}, {0,  1}},
-    {{ 1, -1}, {1,  0}},
-    {{ 1,  1}, {1,  1}}
-};
-static const GLushort bg_indices[6] = {
-    0, 2, 1,
-    1, 3, 2
-};
-static const char* attr_bindings[] = {
-    "vPosition",
-    "vTexCoord",
-    NULL
-};
+    {{-1, -1}, {0, 0}}, {{-1, 1}, {0, 1}}, {{1, -1}, {1, 0}}, {{1, 1}, {1, 1}}};
+static const GLushort bg_indices[6] = {0, 2, 1, 1, 3, 2};
+static const char*    attr_bindings[] = {"vPosition", "vTexCoord", NULL};
 
 /* ------------------------------------------------------------------------- */
-static void
-error_callback(int error_code, const char* error_msg)
+static void error_callback(int error_code, const char* error_msg)
 {
     log_warn("GLFW Error %d: %s\n", error_code, error_msg);
 }
@@ -171,8 +155,7 @@ cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
     gfx->input_buffer.scroll += (int)yoffset;
@@ -180,25 +163,38 @@ scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-framebuffer_size_callback(GLFWwindow* window, int width, int height)
+static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
     gfx->width = width;
     gfx->height = height;
     glViewport(0, 0, width, height);
 
-    // Resize shadow framebuffer
+    /* Resize shadow framebuffer */
     glDeleteTextures(1, &gfx->bg.texShadow);
     glGenTextures(1, &gfx->bg.texShadow);
     glBindTexture(GL_TEXTURE_2D, gfx->bg.texShadow);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width / SHADOW_MAP_SIZE_FACTOR, height / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        width / SHADOW_MAP_SIZE_FACTOR,
+        height / SHADOW_MAP_SIZE_FACTOR,
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gfx->bg.texShadow, 0);
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER,
+        GL_COLOR_ATTACHMENT0,
+        GL_TEXTURE_2D,
+        gfx->bg.texShadow,
+        0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -206,7 +202,7 @@ framebuffer_size_callback(GLFWwindow* window, int width, int height)
 static GLuint load_shader_type(const char* code, GLint length, GLenum type)
 {
     GLuint shader;
-    GLint compiled;
+    GLint  compiled;
 
     shader = glCreateShader(type);
     if (shader == 0)
@@ -224,10 +220,10 @@ static GLuint load_shader_type(const char* code, GLint length, GLenum type)
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &info_len);
         if (info_len > 1)
         {
-            char* info = MALLOC(sizeof(char) * info_len);
+            char* info = mem_alloc(sizeof(char) * info_len);
             glGetShaderInfoLog(shader, info_len, NULL, info);
             log_err("Failed to compile shader\n%s", info);
-            FREE(info);
+            mem_free(info);
         }
 
         glDeleteShader(shader);
@@ -236,11 +232,13 @@ static GLuint load_shader_type(const char* code, GLint length, GLenum type)
 
     return shader;
 }
-static GLuint load_shader(char* shaders[], const char* attribute_bindings[])
+static GLuint
+load_shader(struct strlist* shader_fnames, const char* attribute_bindings[])
 {
-    int i;
-    GLuint program;
-    GLint linked;
+    int         i;
+    const char* fname;
+    GLuint      program;
+    GLint       linked;
 
     program = glCreateProgram();
     if (program == 0)
@@ -249,16 +247,20 @@ static GLuint load_shader(char* shaders[], const char* attribute_bindings[])
         goto create_program_failed;
     }
 
-    for (i = 0; shaders[i]; ++i)
+    strlist_for_each (shader_fnames, i, fname)
     {
-        int length;
-        GLuint shader;
-        void* source = fs_map_file(shaders[i], &length);
-        if (source == NULL)
+        GLuint       shader;
+        struct mfile source;
+
+        if (mfile_map_read(&source, fname, 1) != 0)
             goto load_shaders_failed;
 
-        shader = load_shader_type(source, length, string_ends_with(shaders[i], ".vsh") ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER);
-        fs_unmap_file(source, length);
+        shader = load_shader_type(
+            source.address,
+            source.size,
+            cstr_ends_with(fname, ".vsh") ? GL_VERTEX_SHADER
+                                          : GL_FRAGMENT_SHADER);
+        mfile_unmap(&source);
         if (shader == 0)
             goto load_shaders_failed;
 
@@ -277,10 +279,10 @@ static GLuint load_shader(char* shaders[], const char* attribute_bindings[])
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &info_len);
         if (info_len > 1)
         {
-            char* info = MALLOC(sizeof(char) * info_len);
+            char* info = mem_alloc(sizeof(char) * info_len);
             glGetProgramInfoLog(program, info_len, NULL, info);
             log_err("Failed to link shader\n%s\n", info);
-            FREE(info);
+            mem_free(info);
             goto link_program_failed;
         }
     }
@@ -295,8 +297,7 @@ create_program_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-static GLuint
-get_uniform_location_and_warn(GLuint program, const char* name)
+static GLuint get_uniform_location_and_warn(GLuint program, const char* name)
 {
     GLuint ret = glGetUniformLocation(program, name);
     if (ret == (GLuint)-1)
@@ -305,22 +306,31 @@ get_uniform_location_and_warn(GLuint program, const char* name)
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-bg_init(struct bg* bg, int fbwidth, int fbheight)
+static int bg_init(struct bg* bg, int fbwidth, int fbheight)
 {
-    memset(bg, 0, sizeof * bg);
+    memset(bg, 0, sizeof *bg);
 
     /* Set up shadow framebuffer */
     glGenTextures(1, &bg->texShadow);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbwidth / SHADOW_MAP_SIZE_FACTOR, fbheight / SHADOW_MAP_SIZE_FACTOR, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        fbwidth / SHADOW_MAP_SIZE_FACTOR,
+        fbheight / SHADOW_MAP_SIZE_FACTOR,
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenFramebuffers(1, &bg->fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     {
         log_err("Incomplete framebuffer!\n");
@@ -331,12 +341,17 @@ bg_init(struct bg* bg, int fbwidth, int fbheight)
     /* Set up quad mesh */
     glGenBuffers(1, &bg->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, bg->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenBuffers(1, &bg->ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bg->ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bg_indices), bg_indices, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        sizeof(bg_indices),
+        bg_indices,
+        GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     /* Prepare background textures */
@@ -344,7 +359,8 @@ bg_init(struct bg* bg, int fbwidth, int fbheight)
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -352,7 +368,8 @@ bg_init(struct bg* bg, int fbwidth, int fbheight)
     glBindTexture(GL_TEXTURE_2D, bg->texNor);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -376,8 +393,7 @@ incomplete_shadow_framebuffer:
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-bg_deinit(struct bg* bg)
+static void bg_deinit(struct bg* bg)
 {
     glDeleteTextures(1, &bg->texNor);
     glDeleteTextures(1, &bg->texCol);
@@ -390,31 +406,31 @@ bg_deinit(struct bg* bg)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-bg_unload(struct bg* bg)
+static void bg_unload(struct bg* bg)
 {
     if (bg->program != 0)
         glDeleteProgram(bg->program);
     bg->program = 0;
 
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, bg->texNor);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-bg_load(struct bg* bg, const struct resource_pack* pack)
+static int bg_load(struct bg* bg, const struct resource_pack* pack)
 {
-    int img_width, img_height, img_channels;
+    int      img_width, img_height, img_channels;
     stbi_uc* img_data;
 
     assert(bg->program == 0);
 
     /* For now we only support a single background layer */
-    if (pack->sprites.background[0] == NULL)
+    if (vec_count(pack->sprites.background) == 0)
     {
         log_warn("No background texture defined\n");
         return -1;
@@ -425,66 +441,105 @@ bg_load(struct bg* bg, const struct resource_pack* pack)
     if (bg->program == 0)
         return -1;
 
-    bg->uAspectRatio = get_uniform_location_and_warn(bg->program, "uAspectRatio");
+    bg->uAspectRatio =
+        get_uniform_location_and_warn(bg->program, "uAspectRatio");
     bg->uCamera = get_uniform_location_and_warn(bg->program, "uCamera");
-    bg->uShadowInvRes = get_uniform_location_and_warn(bg->program, "uShadowInvRes");
+    bg->uShadowInvRes =
+        get_uniform_location_and_warn(bg->program, "uShadowInvRes");
     bg->sShadow = get_uniform_location_and_warn(bg->program, "sShadow");
     bg->sCol = get_uniform_location_and_warn(bg->program, "sCol");
     bg->sNM = get_uniform_location_and_warn(bg->program, "sNM");
 
-    img_data = stbi_load(pack->sprites.background[0]->texture0, &img_width, &img_height, &img_channels, 3);
+    img_data = stbi_load(
+        strlist_cstr((*vec_first(pack->sprites.background))->textures, 0),
+        &img_width,
+        &img_height,
+        &img_channels,
+        3);
     if (img_data)
     {
         glBindTexture(GL_TEXTURE_2D, bg->texCol);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGB,
+            img_width,
+            img_height,
+            0,
+            GL_RGB,
+            GL_UNSIGNED_BYTE,
+            img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         stbi_image_free(img_data);
     }
     else
-        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture0);
+        log_err(
+            "Failed to load image \"%s\"\n",
+            strlist_cstr((*vec_first(pack->sprites.background))->textures, 0));
 
-    img_data = stbi_load(pack->sprites.background[0]->texture1, &img_width, &img_height, &img_channels, 3);
+    img_data = stbi_load(
+        strlist_cstr((*vec_first(pack->sprites.background))->textures, 1),
+        &img_width,
+        &img_height,
+        &img_channels,
+        3);
     if (img_data)
     {
         glBindTexture(GL_TEXTURE_2D, bg->texNor);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGB,
+            img_width,
+            img_height,
+            0,
+            GL_RGB,
+            GL_UNSIGNED_BYTE,
+            img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         stbi_image_free(img_data);
     }
     else
-        log_err("Failed to load image \"%s\"\n", pack->sprites.background[0]->texture1);
+        log_err(
+            "Failed to load image \"%s\"\n",
+            strlist_cstr((*vec_first(pack->sprites.background))->textures, 1));
 
     return 0;
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_mesh_init(struct sprite_mesh* sm)
+static void sprite_mesh_init(struct sprite_mesh* sm)
 {
     glGenBuffers(1, &sm->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, sm->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(sprite_vertices), sprite_vertices, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        sizeof(sprite_vertices),
+        sprite_vertices,
+        GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenBuffers(1, &sm->ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sm->ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(sprite_indices), sprite_indices, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        sizeof(sprite_indices),
+        sprite_indices,
+        GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_mesh_deinit(struct sprite_mesh* sm)
+static void sprite_mesh_deinit(struct sprite_mesh* sm)
 {
     glDeleteBuffers(1, &sm->ibo);
     glDeleteBuffers(1, &sm->vbo);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_shadow_init(struct sprite_shadow* ss)
+static void sprite_shadow_init(struct sprite_shadow* ss)
 {
     ss->program = 0;
     ss->uAspectRatio = (GLuint)-1;
@@ -496,16 +551,14 @@ sprite_shadow_init(struct sprite_shadow* ss)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_shadow_deinit(struct sprite_shadow* ss)
+static void sprite_shadow_deinit(struct sprite_shadow* ss)
 {
     if (ss->program != 0)
         glDeleteProgram(ss->program);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_shadow_unload(struct sprite_shadow* ss)
+static void sprite_shadow_unload(struct sprite_shadow* ss)
 {
     if (ss->program != 0)
         glDeleteProgram(ss->program);
@@ -521,8 +574,10 @@ sprite_shadow_load(struct sprite_shadow* ss, const struct resource_pack* pack)
     if (ss->program == 0)
         return -1;
 
-    ss->uAspectRatio = get_uniform_location_and_warn(ss->program, "uAspectRatio");
-    ss->uPosCameraSpace = get_uniform_location_and_warn(ss->program, "uPosCameraSpace");
+    ss->uAspectRatio =
+        get_uniform_location_and_warn(ss->program, "uAspectRatio");
+    ss->uPosCameraSpace =
+        get_uniform_location_and_warn(ss->program, "uPosCameraSpace");
     ss->uDir = get_uniform_location_and_warn(ss->program, "uDir");
     ss->uSize = get_uniform_location_and_warn(ss->program, "uSize");
     ss->uAnim = get_uniform_location_and_warn(ss->program, "uAnim");
@@ -532,8 +587,7 @@ sprite_shadow_load(struct sprite_shadow* ss, const struct resource_pack* pack)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_mat_init(struct sprite_mat* mat)
+static void sprite_mat_init(struct sprite_mat* mat)
 {
     mat->program = 0;
     mat->uAspectRatio = (GLuint)-1;
@@ -546,16 +600,14 @@ sprite_mat_init(struct sprite_mat* mat)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_mat_deinit(struct sprite_mat* mat)
+static void sprite_mat_deinit(struct sprite_mat* mat)
 {
     if (mat->program != 0)
         glDeleteProgram(mat->program);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_mat_unload(struct sprite_mat* mat)
+static void sprite_mat_unload(struct sprite_mat* mat)
 {
     if (mat->program != 0)
         glDeleteProgram(mat->program);
@@ -571,8 +623,10 @@ sprite_mat_load(struct sprite_mat* mat, const struct resource_pack* pack)
     if (mat->program == 0)
         return -1;
 
-    mat->uAspectRatio = get_uniform_location_and_warn(mat->program, "uAspectRatio");
-    mat->uPosCameraSpace = get_uniform_location_and_warn(mat->program, "uPosCameraSpace");
+    mat->uAspectRatio =
+        get_uniform_location_and_warn(mat->program, "uAspectRatio");
+    mat->uPosCameraSpace =
+        get_uniform_location_and_warn(mat->program, "uPosCameraSpace");
     mat->uDir = get_uniform_location_and_warn(mat->program, "uDir");
     mat->uSize = get_uniform_location_and_warn(mat->program, "uSize");
     mat->uAnim = get_uniform_location_and_warn(mat->program, "uAnim");
@@ -583,14 +637,14 @@ sprite_mat_load(struct sprite_mat* mat, const struct resource_pack* pack)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_tex_init(struct sprite_tex* tex)
+static void sprite_tex_init(struct sprite_tex* tex)
 {
     glGenTextures(1, &tex->texDiffuse);
     glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -598,27 +652,28 @@ sprite_tex_init(struct sprite_tex* tex)
     glBindTexture(GL_TEXTURE_2D, tex->texNM);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_tex_deinit(struct sprite_tex* tex)
+static void sprite_tex_deinit(struct sprite_tex* tex)
 {
     glDeleteTextures(1, &tex->texNM);
     glDeleteTextures(1, &tex->texDiffuse);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-sprite_tex_unload(struct sprite_tex* tex)
+static void sprite_tex_unload(struct sprite_tex* tex)
 {
     glBindTexture(GL_TEXTURE_2D, tex->texNM);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -626,32 +681,62 @@ sprite_tex_unload(struct sprite_tex* tex)
 static void
 sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
 {
-    int img_width, img_height, img_channels;
+    int      img_width, img_height, img_channels;
     stbi_uc* img_data;
 
-    img_data = stbi_load(res->texture0, &img_width, &img_height, &img_channels, 4);
+    img_data = stbi_load(
+        strlist_cstr(res->textures, 0),
+        &img_width,
+        &img_height,
+        &img_channels,
+        4);
     if (img_data != NULL)
     {
         glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            img_width,
+            img_height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         stbi_image_free(img_data);
     }
     else
-        log_err("Failed to load image \"%s\"\n", res->texture0);
+        log_err(
+            "Failed to load image \"%s\"\n", strlist_cstr(res->textures, 0));
 
-    img_data = stbi_load(res->texture1, &img_width, &img_height, &img_channels, 4);
+    img_data = stbi_load(
+        strlist_cstr(res->textures, 1),
+        &img_width,
+        &img_height,
+        &img_channels,
+        4);
     if (img_data != NULL)
     {
         glBindTexture(GL_TEXTURE_2D, tex->texNM);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img_width, img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            img_width,
+            img_height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            img_data);
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(img_data);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     else
-        log_err("Failed to load image \"%s\"\n", res->texture1);
+        log_err(
+            "Failed to load image \"%s\"\n", strlist_cstr(res->textures, 1));
 
     tex->tile_x = res->tile_x;
     tex->tile_y = res->tile_y;
@@ -670,13 +755,17 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     if (sprite_mat_load(&gfx->sprite_mat, pack) < 0)
         goto sprite_mat_load_failed;
 
-    if (pack->sprites.head[0])
+    if (vec_count(pack->sprites.heads) > 0)
     {
-        sprite_tex_load(&gfx->head0_base, pack->sprites.head[0]->base);
-        sprite_tex_load(&gfx->head0_gather, pack->sprites.head[0]->gather);
+        struct resource_snake_part* head = vec_first(pack->sprites.heads);
+        sprite_tex_load(&gfx->head0_base, head->base);
+        sprite_tex_load(&gfx->head0_gather, head->gather);
     }
-    if (pack->sprites.body[0])
-        sprite_tex_load(&gfx->body0_base, pack->sprites.body[0]->base);
+    if (vec_count(pack->sprites.bodies) > 0)
+    {
+        struct resource_snake_part* body = vec_first(pack->sprites.bodies);
+        sprite_tex_load(&gfx->body0_base, body->base);
+    }
 
     return 0;
 
@@ -689,8 +778,7 @@ bg_load_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-gfx_gles2_global_init(void)
+static int gfx_gles2_global_init(void)
 {
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
@@ -702,26 +790,26 @@ gfx_gles2_global_init(void)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-gfx_gles2_global_deinit(void)
+static void gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
     glfwSetErrorCallback(NULL);
 }
 
 /* ------------------------------------------------------------------------- */
-static struct gfx*
-gfx_gles2_create(int initial_width, int initial_height)
+static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 {
-    int fbwidth, fbheight;
-    struct gfx* gfx = MALLOC(sizeof *gfx);
+    int         fbwidth, fbheight;
+    struct gfx* gfx = mem_alloc(sizeof *gfx);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);  /* Required for GL ES */
+    glfwWindowHint(
+        GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE); /* Required for GL ES */
 
-    gfx->window = glfwCreateWindow(initial_width, initial_height, "Clither", NULL, NULL);
+    gfx->window =
+        glfwCreateWindow(initial_width, initial_height, "Clither", NULL, NULL);
     if (gfx->window == NULL)
     {
         log_err("Failed to create Window\n");
@@ -768,13 +856,12 @@ gfx_gles2_create(int initial_width, int initial_height)
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
-    FREE(gfx);
+    mem_free(gfx);
     return NULL;
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-gfx_gles2_destroy(struct gfx* gfx)
+static void gfx_gles2_destroy(struct gfx* gfx)
 {
     sprite_tex_deinit(&gfx->head0_base);
     sprite_tex_deinit(&gfx->head0_gather);
@@ -786,52 +873,59 @@ gfx_gles2_destroy(struct gfx* gfx)
     bg_deinit(&gfx->bg);
 
     glfwDestroyWindow(gfx->window);
-    FREE(gfx);
+    mem_free(gfx);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
+static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 {
     glfwPollEvents();
     *input = gfx->input_buffer;
-    gfx->input_buffer.scroll = 0;  /* Clear deltas */
+    gfx->input_buffer.scroll = 0; /* Clear deltas */
 
     if (glfwWindowShouldClose(gfx->window))
         input->quit = 1;
 }
 
 /* ------------------------------------------------------------------------- */
-static struct command
-gfx_gles2_input_to_command(
-    struct command prev,
-    const struct input* input,
-    const struct gfx* gfx,
+static struct cmd gfx_gles2_input_to_cmd(
+    struct cmd           prev,
+    const struct input*  input,
+    const struct gfx*    gfx,
     const struct camera* camera,
-    struct qwpos snake_head)
+    struct qwpos         snake_head)
 {
-    float a, d, dx, dy;
-    int max_dist;
+    float       a, d, dx, dy;
+    int         max_dist;
     struct spos snake_head_screen;
 
     /* world -> camera space */
-    struct qwpos pos_cameraSpace = {
-        qw_mul(qw_sub(snake_head.x, camera->pos.x), camera->scale),
-        qw_mul(qw_sub(snake_head.y, camera->pos.y), camera->scale)
-    };
+    struct qwpos pos_cameraSpace;
+    pos_cameraSpace.x =
+        qw_mul(qw_sub(snake_head.x, camera->pos.x), camera->scale);
+    pos_cameraSpace.y =
+        qw_mul(qw_sub(snake_head.y, camera->pos.y), camera->scale);
 
     /* camera space -> screen space + keep aspect ratio */
     if (gfx->width < gfx->height)
     {
         int pad = (gfx->height - gfx->width) / 2;
-        snake_head_screen.x = qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->width)) + (gfx->width / 2);
-        snake_head_screen.y = qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->width)) + (gfx->width / 2 + pad);
+        snake_head_screen.x =
+            qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->width)) +
+            (gfx->width / 2);
+        snake_head_screen.y =
+            qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->width)) +
+            (gfx->width / 2 + pad);
     }
     else
     {
         int pad = (gfx->width - gfx->height) / 2;
-        snake_head_screen.x = qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->height)) + (gfx->height / 2 + pad);
-        snake_head_screen.y = qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->height)) + (gfx->height / 2);
+        snake_head_screen.x =
+            qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->height)) +
+            (gfx->height / 2 + pad);
+        snake_head_screen.y =
+            qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->height)) +
+            (gfx->height / 2);
     }
 
     /* Scale the speed vector to a quarter of the screen's size */
@@ -845,18 +939,36 @@ gfx_gles2_input_to_command(
     if (d > max_dist)
         d = max_dist;
 
-    return command_make(prev, a, d / max_dist, input->boost ? COMMAND_ACTION_BOOST : COMMAND_ACTION_NONE);
+    return cmd_make(
+        prev,
+        a,
+        d / max_dist,
+        input->boost ? CMD_ACTION_BOOST : CMD_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-draw_background(const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar)
+static void draw_background(
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar)
 {
     glBindBuffer(GL_ARRAY_BUFFER, gfx->bg.vbo);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex), (void*)offsetof(struct vertex, pos));
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex), (void*)offsetof(struct vertex, uv));
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, uv));
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->bg.ibo);
 
     glUseProgram(gfx->bg.program);
@@ -866,9 +978,17 @@ draw_background(const struct gfx* gfx, const struct camera* camera, const struct
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, gfx->bg.texNor);
 
-    glUniform4f(gfx->bg.uAspectRatio, ar->scale_x, ar->scale_y, ar->pad_x, ar->pad_y);
-    glUniform3f(gfx->bg.uCamera, qw_to_float(camera->pos.x), qw_to_float(camera->pos.y), qw_to_float(camera->scale));
-    glUniform2f(gfx->bg.uShadowInvRes, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width, (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
+    glUniform4f(
+        gfx->bg.uAspectRatio, ar->scale_x, ar->scale_y, ar->pad_x, ar->pad_y);
+    glUniform3f(
+        gfx->bg.uCamera,
+        qw_to_float(camera->pos.x),
+        qw_to_float(camera->pos.y),
+        qw_to_float(camera->scale));
+    glUniform2f(
+        gfx->bg.uShadowInvRes,
+        (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width,
+        (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
     glUniform1i(gfx->bg.sCol, 1);
     glUniform1i(gfx->bg.sNM, 2);
 
@@ -885,15 +1005,31 @@ draw_background(const struct gfx* gfx, const struct camera* camera, const struct
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera* camera, const struct aspect_ratio* ar, char shadow_pass)
+static void draw_snake(
+    const struct snake*        snake,
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar,
+    char                       shadow_pass)
 {
     int i;
     glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex), (void*)offsetof(struct vertex, pos));
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex), (void*)offsetof(struct vertex, uv));
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, uv));
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->sprite_mesh.ibo);
 
     if (shadow_pass)
@@ -901,13 +1037,18 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         const GLint nmUnits[4] = {0, 1, 2, 3};
         glUseProgram(gfx->sprite_shadow.program);
         glUniform2f(gfx->sprite_shadow.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(gfx->sprite_shadow.uSize, qw_to_float(snake_scale(&snake->param)));
+        glUniform1f(
+            gfx->sprite_shadow.uSize, qw_to_float(snake_scale(&snake->param)));
         glUniform1iv(gfx->sprite_shadow.sNM, 4, nmUnits);
 
         glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texNM);
 
         glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
-        glViewport(0, 0, gfx->width / SHADOW_MAP_SIZE_FACTOR, gfx->height / SHADOW_MAP_SIZE_FACTOR);
+        glViewport(
+            0,
+            0,
+            gfx->width / SHADOW_MAP_SIZE_FACTOR,
+            gfx->height / SHADOW_MAP_SIZE_FACTOR);
         glClearColor(0.0, 0.0, 0.0, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
     }
@@ -915,7 +1056,8 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     {
         glUseProgram(gfx->sprite_mat.program);
         glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(gfx->sprite_mat.uSize, qw_to_float(snake_scale(&snake->param)));
+        glUniform1f(
+            gfx->sprite_mat.uSize, qw_to_float(snake_scale(&snake->param)));
         glUniform1i(gfx->sprite_mat.sCol, 0);
         glUniform1i(gfx->sprite_mat.sNM, 1);
 
@@ -926,26 +1068,40 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
     }
 
     /* body parts */
-    for (i = vector_count(&snake->data.bezier_points) - 1; i >= 1; --i)
+    for (i = vec_count(snake->data.bezier_points) - 1; i >= 1; --i)
     {
-        struct bezier_point* bp = vector_get(&snake->data.bezier_points, i);
-        /* world -> camera space */
-        struct qwpos pos_cameraSpace = {
-            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
-            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale)
-        };
+        int                  tile_x, tile_y;
+        struct qwpos         pos_cameraSpace;
+        struct bezier_point* bp = vec_get(snake->data.bezier_points, i);
 
-        int tile_x = (gfx->body0_base.frame+i*3) % gfx->body0_base.tile_x;
-        int tile_y = ((gfx->body0_base.frame+i*3) / gfx->body0_base.tile_x) % gfx->body0_base.tile_y;
+        /* world -> camera space */
+        pos_cameraSpace.x =
+            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale);
+        pos_cameraSpace.y =
+            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale);
+
+        tile_x = (gfx->body0_base.frame + i * 3) % gfx->body0_base.tile_x;
+        tile_y = ((gfx->body0_base.frame + i * 3) / gfx->body0_base.tile_x) %
+                 gfx->body0_base.tile_y;
 
         if (shadow_pass)
         {
-            pos_cameraSpace.x = qw_sub(pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
-            pos_cameraSpace.y = qw_sub(pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
+            pos_cameraSpace.x = qw_sub(
+                pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
+            pos_cameraSpace.y = qw_sub(
+                pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
 
-            glUniform3f(gfx->sprite_shadow.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-            glUniform2f(gfx->sprite_shadow.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
-            glUniform4f(gfx->sprite_shadow.uAnim,
+            glUniform3f(
+                gfx->sprite_shadow.uPosCameraSpace,
+                qw_to_float(pos_cameraSpace.x),
+                qw_to_float(pos_cameraSpace.y),
+                qw_to_float(camera->scale));
+            glUniform2f(
+                gfx->sprite_shadow.uDir,
+                qw_to_float(bp->dir.x),
+                qw_to_float(bp->dir.y));
+            glUniform4f(
+                gfx->sprite_shadow.uAnim,
                 1.0 / gfx->body0_base.tile_x,
                 1.0 / gfx->body0_base.tile_y,
                 (GLfloat)tile_x / gfx->body0_base.tile_x,
@@ -953,9 +1109,17 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         }
         else
         {
-            glUniform3f(gfx->sprite_mat.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-            glUniform2f(gfx->sprite_mat.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
-            glUniform4f(gfx->sprite_mat.uAnim,
+            glUniform3f(
+                gfx->sprite_mat.uPosCameraSpace,
+                qw_to_float(pos_cameraSpace.x),
+                qw_to_float(pos_cameraSpace.y),
+                qw_to_float(camera->scale));
+            glUniform2f(
+                gfx->sprite_mat.uDir,
+                qw_to_float(bp->dir.x),
+                qw_to_float(bp->dir.y));
+            glUniform4f(
+                gfx->sprite_mat.uAnim,
                 1.0 / gfx->body0_base.tile_x,
                 1.0 / gfx->body0_base.tile_y,
                 (GLfloat)tile_x / gfx->body0_base.tile_x,
@@ -967,14 +1131,18 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 
     /* head */
     {
-        struct bezier_point* bp = vector_front(&snake->data.bezier_points);
+        int                  tile_x, tile_y;
+        struct qwpos         pos_cameraSpace;
+        struct bezier_point* bp = vec_first(snake->data.bezier_points);
+
         /* world -> camera space */
-        struct qwpos pos_cameraSpace = {
-            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale),
-            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale)
-        };
-        int tile_x = gfx->head0_base.frame % gfx->head0_base.tile_x;
-        int tile_y = gfx->head0_base.frame / gfx->head0_base.tile_x;
+        pos_cameraSpace.x =
+            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale);
+        pos_cameraSpace.y =
+            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale);
+
+        tile_x = gfx->head0_base.frame % gfx->head0_base.tile_x;
+        tile_y = gfx->head0_base.frame / gfx->head0_base.tile_x;
 
         if (shadow_pass)
             glBindTexture(GL_TEXTURE_2D, gfx->head0_base.texNM);
@@ -988,13 +1156,25 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 
         if (shadow_pass)
         {
-            pos_cameraSpace.x = qw_sub(pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
-            pos_cameraSpace.y = qw_sub(pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
+            pos_cameraSpace.x = qw_sub(
+                pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
+            pos_cameraSpace.y = qw_sub(
+                pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
 
-            glUniform1f(gfx->sprite_shadow.uSize, 2 * qw_to_float(snake_scale(&snake->param)));
-            glUniform3f(gfx->sprite_shadow.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-            glUniform2f(gfx->sprite_shadow.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
-            glUniform4f(gfx->sprite_shadow.uAnim,
+            glUniform1f(
+                gfx->sprite_shadow.uSize,
+                2 * qw_to_float(snake_scale(&snake->param)));
+            glUniform3f(
+                gfx->sprite_shadow.uPosCameraSpace,
+                qw_to_float(pos_cameraSpace.x),
+                qw_to_float(pos_cameraSpace.y),
+                qw_to_float(camera->scale));
+            glUniform2f(
+                gfx->sprite_shadow.uDir,
+                qw_to_float(bp->dir.x),
+                qw_to_float(bp->dir.y));
+            glUniform4f(
+                gfx->sprite_shadow.uAnim,
                 1.0 / gfx->head0_base.tile_x,
                 1.0 / gfx->head0_base.tile_y,
                 (GLfloat)tile_x / gfx->head0_base.tile_x,
@@ -1002,10 +1182,20 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
         }
         else
         {
-            glUniform1f(gfx->sprite_mat.uSize, 2 * qw_to_float(snake_scale(&snake->param)));
-            glUniform3f(gfx->sprite_mat.uPosCameraSpace, qw_to_float(pos_cameraSpace.x), qw_to_float(pos_cameraSpace.y), qw_to_float(camera->scale));
-            glUniform2f(gfx->sprite_mat.uDir, qw_to_float(bp->dir.x), qw_to_float(bp->dir.y));
-            glUniform4f(gfx->sprite_mat.uAnim,
+            glUniform1f(
+                gfx->sprite_mat.uSize,
+                2 * qw_to_float(snake_scale(&snake->param)));
+            glUniform3f(
+                gfx->sprite_mat.uPosCameraSpace,
+                qw_to_float(pos_cameraSpace.x),
+                qw_to_float(pos_cameraSpace.y),
+                qw_to_float(camera->scale));
+            glUniform2f(
+                gfx->sprite_mat.uDir,
+                qw_to_float(bp->dir.x),
+                qw_to_float(bp->dir.y));
+            glUniform4f(
+                gfx->sprite_mat.uAnim,
                 1.0 / gfx->head0_base.tile_x,
                 1.0 / gfx->head0_base.tile_y,
                 (GLfloat)tile_x / gfx->head0_base.tile_x,
@@ -1041,8 +1231,7 @@ draw_snake(const struct snake* snake, const struct gfx* gfx, const struct camera
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
+static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 {
     static int frame_update;
     if (frame_update-- == 0)
@@ -1060,10 +1249,14 @@ gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-gfx_gles2_draw_world(struct gfx* gfx, const struct world* world, const struct camera* camera)
+static void gfx_gles2_draw_world(
+    struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
-    struct aspect_ratio ar = { 1.0, 1.0, 0.0, 0.0 };
+    int16_t             idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+
+    struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
     {
         ar.scale_x = (GLfloat)gfx->width / gfx->height;
@@ -1075,16 +1268,20 @@ gfx_gles2_draw_world(struct gfx* gfx, const struct world* world, const struct ca
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
     }
 
-    WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
+    btree_for_each (world->snakes, idx, snake_id, snake)
+    {
+        (void)snake_id;
         draw_snake(snake, gfx, camera, &ar, 1);
-    WORLD_END_EACH
+    }
 
     draw_background(gfx, camera, &ar);
-    //draw_0_0(gfx, camera, &ar);
+    // draw_0_0(gfx, camera, &ar);
 
-    WORLD_FOR_EACH_SNAKE(world, snake_id, snake)
+    btree_for_each (world->snakes, idx, snake_id, snake)
+    {
+        (void)snake_id;
         draw_snake(snake, gfx, camera, &ar, 0);
-    WORLD_END_EACH
+    }
 
     glfwSwapBuffers(gfx->window);
 }
@@ -1098,7 +1295,6 @@ struct gfx_interface gfx_gles2 = {
     &gfx_gles2_destroy,
     &gfx_gles2_load_resource_pack,
     &gfx_gles2_poll_input,
-    &gfx_gles2_input_to_command,
+    &gfx_gles2_input_to_cmd,
     &gfx_gles2_step_anim,
-    &gfx_gles2_draw_world
-};
+    &gfx_gles2_draw_world};

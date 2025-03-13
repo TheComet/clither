@@ -1,0 +1,26 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (6,5);
+\coordinate (D) at (6,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(A)!.1!(B)$);
+\coordinate (F) at ($(C)!.25!(D)$);
+\coordinate (G) at ($(C)!.54!(D)$);
+\coordinate (H) at ($(C)!.75!(D)$);
+\coordinate (I) at ($(A)!.9!(B)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$COMMANDS$};
+\draw[->] (H) -- (I) node[midway,sloped,above]{\verb$FEEDBACK$};
+\draw (G) node[right]{
+\begin{bytefield}[bitwidth=4em]{1}
+\bitbox{1}{$\text{cmd}_n$} \\
+\bitbox{1}{\ldots} \\
+\bitbox{1}{$\text{cmd}_2$} \\
+\bitbox{1}{$\text{cmd}_1$} \\
+\end{bytefield}
+};
+\end{tikzpicture}
+

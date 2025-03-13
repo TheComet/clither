@@ -1,17 +1,16 @@
 #pragma once
 
-#include "clither/config.h"
+#include "clither/vec.h"
 
-C_BEGIN
+struct str;
 
 struct resource_sprite
 {
-    char* texture0;
-    char* texture1;
-    int tile_x, tile_y;
-    int num_frames;
-    int fps;
-    float scale;
+    struct strlist* textures;
+    int             tile_x, tile_y;
+    int             num_frames;
+    int             fps;
+    float           scale;
 };
 
 /*!
@@ -35,35 +34,36 @@ struct resource_snake_part
 
 struct resource_pack
 {
-    struct {
-        struct {
-            /*! List of source files that comprise the background shader. List is NULL terminated */
-            char** background;
-            /*! List of source files that comprise the shadow shader. List is NULL terminated */
-            char** shadow;
-            /*! List of source files that comprise the sprite shader. List is NULL terminated */
-            char** sprite;
+    struct
+    {
+        struct
+        {
+            /*! List of source files that comprise the background shader. List
+             * is NULL terminated */
+            struct strlist* background;
+            /*! List of source files that comprise the shadow shader. List is
+             * NULL terminated */
+            struct strlist* shadow;
+            /*! List of source files that comprise the sprite shader. List is
+             * NULL terminated */
+            struct strlist* sprite;
         } glsl;
     } shaders;
 
-    struct {
+    struct
+    {
         /*! List of textures that make up the background. There can be multiple
          * layers of textures with different grid spacings. The details of how
          * they're pieced together is all part of the background shader */
-        struct resource_sprite** background;
-        /*! List of head parts. List is NULL terminated */
-        struct resource_snake_part** head;
-        /*! List of body parts. List is NULL terminated */
-        struct resource_snake_part** body;
-        /*! List of tail parts. List is NULL terminated */
-        struct resource_snake_part** tail;
+        struct resource_sprite_vec* background;
+        /*! List of head parts. */
+        struct resource_snake_part_vec* heads;
+        /*! List of body parts. */
+        struct resource_snake_part_vec* bodies;
+        /*! List of tail parts. */
+        struct resource_snake_part_vec* tails;
     } sprites;
 };
 
-struct resource_pack*
-resource_pack_parse(const char* pack_path);
-
-void
-resource_pack_destroy(struct resource_pack* pack);
-
-C_END
+struct resource_pack* resource_pack_parse(const char* pack_path);
+void                  resource_pack_destroy(struct resource_pack* pack);

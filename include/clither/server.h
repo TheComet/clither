@@ -1,18 +1,21 @@
 #pragma once
 
 #include "clither/config.h"
-#include "cstructures/hashmap.h"
+#include "clither/hm.h"
 
-C_BEGIN
-
+struct net_addr;
 struct server_settings;
+struct server_client;
 struct world;
+struct server_client_hm;
+struct net_addr_hm;
 
 struct server
 {
-    struct cs_hashmap client_table;       /* struct (key size depends on protocol) -> struct client_table_entry (see net.c) */
-    struct cs_hashmap malicious_clients;  /* struct sockaddr (key size depends on protocol) */
-    struct cs_hashmap banned_clients;     /* struct sockaddr (key size depends on protocol) */
+    struct server_client_hm* clients;
+    struct net_addr_hm*      malicious_clients;
+    struct net_addr_hm*      banned_clients;
+
     int udp_sock;
 };
 
@@ -28,38 +31,35 @@ struct server
  * from. Note that if you pass in
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
-int
-server_init(
-    struct server* server,
-    const char* bind_address,
-    const char* port);
+int server_init(
+    struct server* server, const char* bind_address, const char* port);
 
 /*!
- * \brief Closes all sockets and frees all data. Saves the settings structure
- * back to the config.ini file.
+ * \brief Closes all sockets and frees all data.
  * \param[in] server The server to free.
  * \param[in] config_filename The name of the config.ini file to save settings
  * to.
  */
-void
-server_deinit(struct server* server);
+void server_deinit(struct server* server);
 
-void
-server_queue_snake_data(
-    struct server* server,
-    const struct world* world,
-    uint16_t frame_number);
+void server_update_snakes_in_range(
+    struct server* server, const struct world* world);
+
+void server_queue_snake_data(
+    struct server* server, const struct world* world, uint16_t frame_number);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
-void
-server_send_pending_data(struct server* server);
+int server_send_pending_data(struct server* server);
 
 /*!
  *
  */
-int
-server_recv(struct server* server, const struct server_settings* settings, struct world* world, uint16_t frame_number);
+int server_recv(
+    struct server*                server,
+    const struct server_settings* settings,
+    struct world*                 world,
+    uint16_t                      frame_number);
 
-C_END
+void* server_run(const void* args);

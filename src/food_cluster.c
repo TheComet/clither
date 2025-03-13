@@ -2,8 +2,8 @@
 #include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
-cs_hash32
-food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, cs_hash32 seed)
+hash32
+food_cluster_init(struct food_cluster* fc, struct qwpos center, uint8_t food_count, hash32 seed)
 {
     int i;
     const qw size_2 = FOOD_CLUSTER_SIZE / 2 - 1;

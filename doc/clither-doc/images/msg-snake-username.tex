@@ -1,0 +1,16 @@
+\verb$MSG_SNAKE_USERNAME$
+\vspace{.25em}\\
+
+\begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
+    \bitheader{0-1} \\
+    \bitbox{1}{len}
+    \bitbox{3}{username}
+    \bitbox{1}{NULL}
+\end{bytefield}
+
+\begin{itemize}
+    \item\textbf{len:} $strlen()$ of the username (excluding null terminator).
+    \item\textbf{username:} UTF-8 encoded username.
+    \item\textbf{NULL:} Username string is null terminated.
+\end{itemize}
+

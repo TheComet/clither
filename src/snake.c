@@ -1,23 +1,25 @@
 #include "clither/bezier.h"
+#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_point_vec.h"
 #include "clither/log.h"
 #include "clither/q.h"
+#include "clither/qwaabb_rb.h"
+#include "clither/qwpos_vec.h"
+#include "clither/qwpos_vec_rb.h"
 #include "clither/snake.h"
+#include "clither/str.h"
 #include "clither/wrap.h"
 
-#include "cstructures/memory.h"
-
-#include <assert.h>
-
 #define _USE_MATH_DEFINES
-#include <string.h>
+#include <assert.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define SNAKE_PART_SPACING make_qw2(1, 6)
 
 /* ------------------------------------------------------------------------- */
-void
-snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
+void snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 {
     head->pos = spawn_pos;
     head->angle = make_qa(0);
@@ -25,90 +27,118 @@ snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-snake_data_init(struct snake_data* data, struct qwpos spawn_pos, const char* name)
+static int snake_data_init(
+    struct snake_data* data, struct qwpos spawn_pos, const char* name)
 {
-    struct cs_vector* trail;
+    struct qwpos_vec**    trail;
+    struct bezier_handle* h1;
+    struct bezier_handle* h2;
+    struct qwaabb*        aabb;
 
-    data->name = MALLOC(strlen(name) + 1);
-    strcpy(data->name, name);
+    str_init(&data->name);
+    if (str_set_cstr(&data->name, name) != 0)
+        goto set_name_failed;
 
-    rb_init(&data->head_trails, sizeof(struct cs_vector));
-    rb_init(&data->bezier_handles, sizeof(struct bezier_handle));
-    rb_init(&data->bezier_aabbs, sizeof(struct qwaabb));
-    vector_init(&data->bezier_points, sizeof(struct bezier_point));
+    qwpos_vec_rb_init(&data->head_trails);
+    bezier_handle_rb_init(&data->bezier_handles);
+    qwaabb_rb_init(&data->bezier_aabbs);
+    bezier_point_vec_init(&data->bezier_points);
 
     /*
      * Create the initial trail, which is the list of points the curve
      * is fitted to. This grows as the head moves forwards. Add the spawn pos
      * now, as we want the curve to begin there.
      */
-    trail = rb_emplace(&data->head_trails);
-    vector_init(trail, sizeof(struct qwpos));
-    vector_push(trail, &spawn_pos);
+    trail = qwpos_vec_rb_emplace_realloc(&data->head_trails);
+    if (trail == NULL)
+        goto emplace_trail_failed;
+    qwpos_vec_init(trail);
+    if (qwpos_vec_push(trail, spawn_pos) != 0)
+        goto push_spawn_pos_failed;
 
     /*
      * Create the first bezier segment, which consists of two handles. By
      * convention all snakes start out facing to the right, but maybe this can
      * be changed in the future.
      */
-    bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
-    bezier_handle_init(rb_emplace(&data->bezier_handles), spawn_pos, make_qa(0));
+    h1 = bezier_handle_rb_emplace_realloc(&data->bezier_handles);
+    if (h1 == NULL)
+        goto emplace_h1_failed;
+    bezier_handle_init(h1, spawn_pos, make_qa(0));
+    h2 = bezier_handle_rb_emplace_realloc(&data->bezier_handles);
+    if (h2 == NULL)
+        goto emplace_h2_failed;
+    bezier_handle_init(h2, spawn_pos, make_qa(0));
 
     /*
      * Create the curve's bounding box and also set the entire snake's bounding
      * box.
      */
-    data->aabb = *(struct qwaabb*)rb_emplace(&data->bezier_aabbs) =
+    aabb = qwaabb_rb_emplace_realloc(&data->bezier_aabbs);
+    if (aabb == NULL)
+        goto emplace_aabb_failed;
+    data->aabb = *aabb =
         make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
+
+    return 0;
+
+emplace_aabb_failed:
+emplace_h2_failed:
+emplace_h1_failed:
+push_spawn_pos_failed:
+    while (rb_count(data->head_trails) > 0)
+        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
+emplace_trail_failed:
+    bezier_point_vec_deinit(data->bezier_points);
+    qwaabb_rb_deinit(data->bezier_aabbs);
+    bezier_handle_rb_deinit(data->bezier_handles);
+    qwpos_vec_rb_deinit(data->head_trails);
+    str_deinit(data->name);
+set_name_failed:
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-snake_data_deinit(struct snake_data* data)
+static void snake_data_deinit(struct snake_data* data)
 {
-    vector_deinit(&data->bezier_points);
-    rb_deinit(&data->bezier_aabbs);
-    rb_deinit(&data->bezier_handles);
-
-    RB_FOR_EACH(&data->head_trails, struct cs_vector, trail)
-        vector_deinit(trail);
-    RB_END_EACH
-    rb_deinit(&data->head_trails);
-
-    FREE(data->name);
+    bezier_point_vec_deinit(data->bezier_points);
+    qwaabb_rb_deinit(data->bezier_aabbs);
+    bezier_handle_rb_deinit(data->bezier_handles);
+    while (rb_count(data->head_trails) > 0)
+        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
+    qwpos_vec_rb_deinit(data->head_trails);
+    str_deinit(data->name);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
+int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 {
-    command_rb_init(&snake->command_rb);
+    if (snake_data_init(&snake->data, spawn_pos, name) != 0)
+        return -1;
+    cmd_queue_init(&snake->cmdq);
     snake_param_init(&snake->param);
-    snake_data_init(&snake->data, spawn_pos, name);
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
 
     snake->hold = 0;
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_deinit(struct snake* snake)
+void snake_deinit(struct snake* snake)
 {
     snake_data_deinit(&snake->data);
-    command_rb_deinit(&snake->command_rb);
+    cmd_queue_deinit(&snake->cmdq);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_step_head(
-    struct snake_head* head,
+void snake_step_head(
+    struct snake_head*        head,
     const struct snake_param* param,
-    struct command command,
-    uint8_t sim_tick_rate)
+    struct cmd                command,
+    uint8_t                   sim_tick_rate)
 {
-    qw dx, dy;
+    qw      dx, dy;
     uint8_t target_speed;
 
     /*
@@ -127,16 +157,21 @@ snake_step_head(
      * maximum turning speed.
      */
     if (angle_diff > snake_turn_speed(param))
-        head->angle = qa_sub(head->angle, qa_mul(snake_turn_speed(param), make_qa2(sim_tick_rate, 60)));
+        head->angle = qa_sub(
+            head->angle,
+            qa_mul(snake_turn_speed(param), make_qa2(sim_tick_rate, 60)));
     else if (angle_diff < -snake_turn_speed(param))
         head->angle = qa_add(head->angle, snake_turn_speed(param));
     else
         head->angle = target_angle;
 
     /* Integrate speed over time */
-    target_speed = command.action == COMMAND_ACTION_BOOST ?
-        255 :
-        qw_sub(snake_max_speed(param), snake_min_speed(param)) * command.speed / qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    target_speed =
+        command.action == CMD_ACTION_BOOST
+            ? 255
+            : qw_sub(snake_max_speed(param), snake_min_speed(param)) *
+                  command.speed /
+                  qw_sub(snake_boost_speed(param), snake_min_speed(param));
     if (head->speed - target_speed > snake_acceleration(param))
         head->speed -= snake_acceleration(param);
     else if (head->speed - target_speed < -snake_acceleration(param))
@@ -163,17 +198,14 @@ snake_step_head(
  * \brief Recalculates the AABB of the entire curve/snake by merging the AABBs
  * of each segment.
  */
-static void
-snake_update_aabb(struct snake_data* data)
+static void snake_update_aabb(struct snake_data* data)
 {
     int i;
-
-    data->aabb = *(struct qwaabb*)rb_peek(&data->bezier_aabbs, 0);
-    for (i = 1; i < (int)rb_count(&data->bezier_aabbs); ++i)
+    data->aabb = *rb_peek(data->bezier_aabbs, 0);
+    for (i = 1; i < rb_count(data->bezier_aabbs); ++i)
     {
-        data->aabb = qwaabb_union(
-            data->aabb,
-            *(struct qwaabb*)rb_peek(&data->bezier_aabbs, i));
+        struct qwaabb aabb = *rb_peek(data->bezier_aabbs, i);
+        data->aabb = qwaabb_union(data->aabb, aabb);
     }
 }
 
@@ -181,13 +213,12 @@ snake_update_aabb(struct snake_data* data)
 /*!
  * \brief Updates the front-most segment of the curve (the head).
  */
-static void
-snake_update_head_trail_aabb(struct snake_data* data)
+static void snake_update_head_trail_aabb(struct snake_data* data)
 {
-    int i;
-    struct qwaabb* bb = rb_peek_write(&data->bezier_aabbs);
-    const struct cs_vector* trail = rb_peek_write(&data->head_trails);
-    const struct qwpos* p = vector_get(trail, 0);
+    int                     i;
+    struct qwaabb*          bb = rb_peek_write(data->bezier_aabbs);
+    const struct qwpos_vec* trail = *rb_peek_write(data->head_trails);
+    const struct qwpos*     p = vec_get(trail, 0);
 
     /*
      * The AABB *has* to be calculated from the trail, rather than from the
@@ -201,32 +232,36 @@ snake_update_head_trail_aabb(struct snake_data* data)
      * In short: DON'T use bezier_calc_aabb() here.
      */
     *bb = make_qwaabbqw(p->x, p->y, p->x, p->y);
-    for (i = 1; i < (int)vector_count(trail); ++i)
+    for (i = 1; i < vec_count(trail); ++i)
     {
-        p = vector_get(trail, i);
-        if (bb->x1 > p->x) bb->x1 = p->x;
-        if (bb->x2 < p->x) bb->x2 = p->x;
-        if (bb->y1 > p->y) bb->y1 = p->y;
-        if (bb->y2 < p->y) bb->y2 = p->y;
+        p = vec_get(trail, i);
+        if (bb->x1 > p->x)
+            bb->x1 = p->x;
+        if (bb->x2 < p->x)
+            bb->x2 = p->x;
+        if (bb->y1 > p->y)
+            bb->y1 = p->y;
+        if (bb->y2 < p->y)
+            bb->y2 = p->y;
     }
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-snake_update_curve_from_head(struct snake_data* data, const struct snake_head* head)
+static int snake_update_curve_from_head(
+    struct snake_data* data, const struct snake_head* head)
 {
-    struct cs_vector* trail;
-    double error_squared;
+    struct qwpos_vec** trail;
+    double             error_squared;
 
     /* Append new position to the trail */
-    trail = rb_peek_write(&data->head_trails);
-    vector_push(trail, &head->pos);
+    trail = rb_peek_write(data->head_trails);
+    qwpos_vec_push(trail, head->pos);
 
     /* Fit current bezier segment to trail */
     error_squared = bezier_fit_trail(
-        rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 1),
-        rb_peek(&data->bezier_handles, rb_count(&data->bezier_handles) - 2),
-        trail);
+        rb_peek(data->bezier_handles, rb_count(data->bezier_handles) - 1),
+        rb_peek(data->bezier_handles, rb_count(data->bezier_handles) - 2),
+        *trail);
 
     /*
      * If the fit's error exceeds some threshold (determined empirically),
@@ -245,29 +280,32 @@ snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
      * now, because we will want the start position of the curve to line up
      * with the end position of the previous curve.
      */
-    struct cs_vector* trail = rb_emplace(&data->head_trails);
-    vector_init(trail, sizeof(struct qwpos));
-    vector_push(trail, &head->pos);
+    struct qwpos_vec** trail = qwpos_vec_rb_emplace_realloc(&data->head_trails);
+    qwpos_vec_init(trail);
+    qwpos_vec_push(trail, head->pos);
 
     /*
      * Add a new bezier handle. Since there is only one datapoint, the curve
      * is completely defined by the current head position.
      */
-    bezier_handle_init(rb_emplace(&data->bezier_handles), head->pos, qa_add(head->angle, QA_PI));
+    bezier_handle_init(
+        bezier_handle_rb_emplace_realloc(&data->bezier_handles),
+        head->pos,
+        qa_add(head->angle, QA_PI));
 
-    /* Add a new bounding box, which is also defined by the current head position */
-    *(struct qwaabb*)rb_emplace(&data->bezier_aabbs) =
+    /* Add a new bounding box, which is also defined by the current head
+     * position */
+    *qwaabb_rb_emplace_realloc(&data->bezier_aabbs) =
         make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
 }
 
 /* ------------------------------------------------------------------------- */
-int
-snake_step(
-    struct snake_data* data,
-    struct snake_head* head,
+int snake_step(
+    struct snake_data*        data,
+    struct snake_head*        head,
     const struct snake_param* param,
-    struct command command,
-    uint8_t sim_tick_rate)
+    struct cmd                command,
+    uint8_t                   sim_tick_rate)
 {
     int need_new_segment;
 
@@ -284,40 +322,38 @@ snake_step(
     if (need_new_segment)
         snake_add_new_segment(data, head);
 
-    bezier_squeeze_step(&data->bezier_handles, sim_tick_rate);
+    bezier_squeeze_step(data->bezier_handles, sim_tick_rate);
 
     /* This function returns the number of segments that are superfluous. */
     return bezier_calc_equidistant_points(
         &data->bezier_points,
-        &data->bezier_handles,
+        data->bezier_handles,
         qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
         snake_length(param));
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_remove_stale_segments(struct snake_data* data, int stale_segments)
+void snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
-    assert(stale_segments < (int)rb_count(&data->head_trails));
+    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
 
     while (stale_segments--)
     {
-        vector_deinit(rb_take(&data->head_trails));
-        rb_take(&data->bezier_handles);
-        rb_take(&data->bezier_aabbs);
+        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
+        bezier_handle_rb_take(data->bezier_handles);
+        qwaabb_rb_take(data->bezier_aabbs);
     }
 
     snake_update_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_remove_stale_segments_with_rollback_constraint(
-    struct snake_data* data,
+void snake_remove_stale_segments_with_rollback_constraint(
+    struct snake_data*       data,
     const struct snake_head* head_ack,
-    int stale_segments)
+    int                      stale_segments)
 {
-    assert(stale_segments < (int)rb_count(&data->head_trails));
+    assert(stale_segments < rb_count(data->head_trails));
 
     while (stale_segments--)
     {
@@ -326,47 +362,54 @@ snake_remove_stale_segments_with_rollback_constraint(
          * that we want to remove, abort, because this curve segment is still
          * required for rollback.
          */
-        if (qwaabb_qwpos(*(struct qwaabb*)rb_peek_read(&data->bezier_aabbs), head_ack->pos))
+        if (qwaabb_qwpos(*rb_peek_read(data->bezier_aabbs), head_ack->pos))
             break;
 
-        vector_deinit(rb_take(&data->head_trails));
-        rb_take(&data->bezier_handles);
-        rb_take(&data->bezier_aabbs);
+        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
+        bezier_handle_rb_take(data->bezier_handles);
+        qwaabb_rb_take(data->bezier_aabbs);
     }
 
     snake_update_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
-void
-snake_ack_frame(
-    struct snake_data* data,
-    struct snake_head* acknowledged_head,
-    struct snake_head* predicted_head,
-    const struct snake_head* authoritative_head,
+void snake_ack_frame(
+    struct snake_data*        data,
+    struct snake_head*        acknowledged_head,
+    struct snake_head*        predicted_head,
+    const struct snake_head*  authoritative_head,
     const struct snake_param* param,
-    struct command_rb* command_rb,
-    uint16_t frame_number,
-    uint8_t sim_tick_rate)
+    struct cmd_queue*         cmdq,
+    uint16_t                  frame_number,
+    uint8_t                   sim_tick_rate)
 {
     uint16_t last_ackd_frame, predicted_frame;
 
-    if (command_rb_count(command_rb) == 0)
+    if (cmd_queue_count(cmdq) == 0)
     {
-        log_warn("snake_ack_frame(): Command buffer of snake \"%s\" is empty. Can't step.\n", data->name);
+        log_warn(
+            "snake_ack_frame(): Command buffer of snake \"%s\" is empty. Can't "
+            "step.\n",
+            str_cstr(data->name));
         return;
     }
-    last_ackd_frame = command_rb_frame_begin(command_rb);
-    predicted_frame = command_rb_frame_end(command_rb);
+    last_ackd_frame = cmd_queue_frame_begin(cmdq);
+    predicted_frame = cmd_queue_frame_end(cmdq);
 
     /* last_ackd_frame <= frame_number <= predicted_frame */
-    if (u16_lt_wrap(frame_number, last_ackd_frame) || u16_gt_wrap(frame_number, predicted_frame))
+    if (u16_lt_wrap(frame_number, last_ackd_frame) ||
+        u16_gt_wrap(frame_number, predicted_frame))
     {
-        log_warn("snake_ack_frame(): Frame number is outside of the command buffer range! Something is very wrong.\n"
+        log_warn(
+            "snake_ack_frame(): Frame number is outside of the command buffer "
+            "range! Something is very wrong.\n"
             "  frame_number=%d\n"
             "  last_ackd_frame=%d\n"
             "  predicted_frame=%d\n",
-            frame_number, last_ackd_frame, predicted_frame);
+            frame_number,
+            last_ackd_frame,
+            predicted_frame);
         return;
     }
 
@@ -376,8 +419,9 @@ snake_ack_frame(
      */
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
-        /* "last_ackd_frame" refers to the next frame to simulate on the ack'd head */
-        struct command command = command_rb_take_or_predict(command_rb, last_ackd_frame);
+        /* "last_ackd_frame" refers to the next frame to simulate on the ack'd
+         * head */
+        struct cmd command = cmd_queue_take_or_predict(cmdq, last_ackd_frame);
         snake_step_head(acknowledged_head, param, command, sim_tick_rate);
         last_ackd_frame++;
     }
@@ -389,15 +433,26 @@ snake_ack_frame(
      */
     if (snake_heads_are_equal(acknowledged_head, authoritative_head) == 0)
     {
-        int handles_to_squeeze;
-        struct cs_vector* trail;
+        int               handles_to_squeeze;
+        struct qwpos_vec* trail;
+        uint16_t          frame;
+        int               i;
+        struct cmd*       command;
 
-        log_dbg("Rollback from frame %d to %d\n"
+        log_dbg(
+            "Rollback from frame %d to %d\n"
             "  ackd head: pos=%d,%d, angle=%d, speed=%d\n"
             "  auth head: pos=%d,%d, angle=%d, speed=%d\n",
-            predicted_frame, frame_number,
-            acknowledged_head->pos.x, acknowledged_head->pos.y, acknowledged_head->angle, acknowledged_head->speed,
-            authoritative_head->pos.x, authoritative_head->pos.y, authoritative_head->angle, authoritative_head->speed);
+            predicted_frame,
+            frame_number,
+            acknowledged_head->pos.x,
+            acknowledged_head->pos.y,
+            acknowledged_head->angle,
+            acknowledged_head->speed,
+            authoritative_head->pos.x,
+            authoritative_head->pos.y,
+            authoritative_head->angle,
+            authoritative_head->speed);
 
         /*
          * Remove all points generated since the last acknowledged frame.
@@ -409,21 +464,20 @@ snake_ack_frame(
          * share the same position, so when removing a bezier segment, two
          * points need to be removed.
          */
-        assert(rb_count(&data->head_trails) > 0);
-        trail = rb_peek_write(&data->head_trails);
+        assert(rb_count(data->head_trails) > 0);
+        trail = *rb_peek_write(data->head_trails);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
-            vector_pop(trail);
-            if (vector_count(trail) == 0)
+            qwpos_vec_pop(trail);
+            if (vec_count(trail) == 0)
             {
-                vector_deinit(rb_takew(&data->head_trails));
-                rb_takew(&data->bezier_handles);
-                rb_takew(&data->bezier_aabbs);
+                qwpos_vec_deinit(qwpos_vec_rb_takew(data->head_trails));
+                bezier_handle_rb_takew(data->bezier_handles);
+                qwaabb_rb_takew(data->bezier_aabbs);
 
                 /* Remove duplicate point */
-                assert(rb_count(&data->head_trails) > 0);
-                trail = rb_peek_write(&data->head_trails);
-                vector_pop(trail);
+                trail = *rb_peek_write(data->head_trails);
+                qwpos_vec_pop(trail);
             }
 
             predicted_frame--;
@@ -444,7 +498,8 @@ snake_ack_frame(
         }
 
         /* Simulate head forwards again */
-        COMMAND_RB_FOR_EACH(command_rb, frame, command)
+        cmd_queue_for_each(cmdq, i, frame, command)
+        {
             snake_step_head(predicted_head, param, *command, sim_tick_rate);
             if (snake_update_curve_from_head(data, predicted_head))
             {
@@ -458,8 +513,9 @@ snake_ack_frame(
              * to re-squeeze the handles that were recreated during forwards
              * simulation.
              */
-            bezier_squeeze_n_recent_step(&data->bezier_handles, handles_to_squeeze, sim_tick_rate);
-        COMMAND_RB_END_EACH
+            bezier_squeeze_n_recent_step(
+                data->bezier_handles, handles_to_squeeze, sim_tick_rate);
+        }
 
         snake_update_head_trail_aabb(data);
         snake_update_aabb(data);
@@ -467,21 +523,20 @@ snake_ack_frame(
         /* TODO: distance is a function of the snake's length */
         bezier_calc_equidistant_points(
             &data->bezier_points,
-            &data->bezier_handles,
+            data->bezier_handles,
             qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
             snake_length(param));
     }
 }
 
 /* ------------------------------------------------------------------------- */
-char
-snake_is_held(struct snake* snake, uint16_t frame_number)
+int snake_try_reset_hold(struct snake* snake, uint16_t frame_number)
 {
-    if (command_rb_count(&snake->command_rb) > 0 &&
-        command_rb_frame_begin(&snake->command_rb) == frame_number)
+    if (cmd_queue_count(&snake->cmdq) > 0 &&
+        cmd_queue_frame_begin(&snake->cmdq) == frame_number)
     {
         snake->hold = 0;
     }
 
-    return snake->hold;
+    return !snake->hold;
 }

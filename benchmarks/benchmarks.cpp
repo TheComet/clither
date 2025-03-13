@@ -1,18 +1,18 @@
 #include "benchmark/benchmark.h"
 #include "clither/benchmarks.h"
-#include "cstructures/memory.h"
+#include "clither/mem.h"
 
 using namespace benchmark;
 
-int benchmarks_run(int argc, char** argv) {
+int benchmarks_run(int argc, char** argv)
+{
     Initialize(&argc, argv);
     if (ReportUnrecognizedArguments(argc, argv))
         return 1;
 
-    memory_init_thread();
+    mem_init_threadlocal();
     RunSpecifiedBenchmarks();
-    memory_deinit_thread();
+    mem_deinit_threadlocal();
 
     return 0;
 }
-
