@@ -735,73 +735,53 @@ struct msg* msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 }
 
 /* ------------------------------------------------------------------------- */
-void msg_snake_bezier(
-    struct msg_vec**               msgs,
-    uint16_t                       snake_id,
-    const struct bezier_handle_rb* bezier_handles)
+struct msg* msg_snake_bezier(
+    uint16_t                    snake_id,
+    uint16_t                    bezier_handle_idx,
+    const struct bezier_handle* bezier_handle)
 {
-    struct msg* m;
-    uint16_t    handle_idx_start, handle_idx_end;
-    int         i;
-    int         byte;
-    int         handle_size = 6 + /* World position (2x 24-bit qwpos) */
-                      1 +         /* Angle */
-                      2;          /* Length forwards + backwards */
+    struct msg* m = msg_alloc(
+        MSG_SNAKE_BEZIER,
+        1,
+        2 +     /* snake_id */
+            2 + /* bezier_handle_idx */
+            6 + /* World position (2x 24-bit qwpos) */
+            2 + /* Angle */
+            1 + /* Length forwards */
+            1); /* Length backwards */
+    if (m == NULL)
+        return NULL;
 
-    m = NULL;
-    byte = 0;
-    handle_idx_start = 0;
-    for (i = 0; i != rb_count(bezier_handles); ++i)
-    {
-        const struct bezier_handle* handle = rb_peek(bezier_handles, i);
-        if (handle->ackd)
-            continue;
+    m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
 
-        if (m == NULL || byte + handle_size >= m->payload_len)
-        {
-            if (m)
-            {
-                handle_idx_end = (uint16_t)i;
-                m->payload[2] = (handle_idx_start >> 8) & 0xFF;
-                m->payload[3] = (handle_idx_start >> 0) & 0xFF;
-                m->payload[4] = (handle_idx_end >> 8) & 0xFF;
-                m->payload[5] = (handle_idx_end >> 0) & 0xFF;
-                m->payload_len = byte;
-                msg_vec_push(msgs, m);
-            }
+    m->payload[2] = bezier_handle_idx >> 8;
+    m->payload[3] = bezier_handle_idx & 0xFF;
 
-            byte = 0;
-            handle_idx_start = (uint16_t)i;
-            m = msg_alloc(MSG_SNAKE_BEZIER, 2, -1);
-            m->payload[byte++] = (snake_id >> 8) & 0xFF;
-            m->payload[byte++] = (snake_id >> 0) & 0xFF;
-            byte += 4; /* Make room for handle indices */
-        }
+    m->payload[4] = (bezier_handle->pos.x >> 16) & 0xFF;
+    m->payload[5] = (bezier_handle->pos.x >> 8) & 0xFF;
+    m->payload[6] = bezier_handle->pos.x & 0xFF;
 
-        m->payload[byte++] = (handle->pos.x >> 16) & 0xFF;
-        m->payload[byte++] = (handle->pos.x >> 8) & 0xFF;
-        m->payload[byte++] = (handle->pos.x >> 0) & 0xFF;
+    m->payload[7] = (bezier_handle->pos.y >> 16) & 0xFF;
+    m->payload[8] = (bezier_handle->pos.y >> 8) & 0xFF;
+    m->payload[9] = bezier_handle->pos.y & 0xFF;
 
-        m->payload[byte++] = (handle->pos.y >> 16) & 0xFF;
-        m->payload[byte++] = (handle->pos.y >> 8) & 0xFF;
-        m->payload[byte++] = (handle->pos.y >> 0) & 0xFF;
+    m->payload[10] = (bezier_handle->angle >> 8) & 0xFF;
+    m->payload[11] = bezier_handle->angle & 0xFF;
 
-        m->payload[byte++] = qa_to_u8(handle->angle);
+    m->payload[12] = bezier_handle->len_backwards;
+    m->payload[13] = bezier_handle->len_forwards;
 
-        m->payload[byte++] = handle->len_backwards;
-        m->payload[byte++] = handle->len_forwards;
-    }
+    log_net(
+        "MSG_SNAKE_BEZIER: pos=[%d, %d], angle=%d, len_backwards=%d, "
+        "len_forwards=%d\n",
+        bezier_handle->pos.x,
+        bezier_handle->pos.y,
+        bezier_handle->angle,
+        bezier_handle->len_backwards,
+        bezier_handle->len_forwards);
 
-    if (m)
-    {
-        handle_idx_end = (uint16_t)i;
-        m->payload[2] = (handle_idx_start >> 8) & 0xFF;
-        m->payload[3] = (handle_idx_start >> 0) & 0xFF;
-        m->payload[4] = (handle_idx_end >> 8) & 0xFF;
-        m->payload[5] = (handle_idx_end >> 0) & 0xFF;
-        m->payload_len = byte;
-        msg_vec_push(msgs, m);
-    }
+    return m;
 }
 
 /* ------------------------------------------------------------------------- */

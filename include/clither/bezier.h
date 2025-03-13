@@ -29,9 +29,7 @@ struct bezier_handle
 {
     struct qwpos pos;
     qa           angle;
-    uint16_t     id;
     uint8_t      len_backwards, len_forwards;
-    unsigned     ackd : 1;
 };
 
 void bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle);

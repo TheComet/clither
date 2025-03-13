@@ -139,7 +139,6 @@ void bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
     bh->angle = angle;
     bh->len_forwards = 0;
     bh->len_backwards = 0;
-    bh->ackd = 0;
 }
 
 /* ------------------------------------------------------------------------- */

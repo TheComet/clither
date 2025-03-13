@@ -12,6 +12,7 @@
 #include "clither/server_settings.h"
 #include "clither/snake.h"
 #include "clither/snake_btree.h"
+#include "clither/snake_id_vec.h"
 #include "clither/thread.h"
 #include "clither/world.h"
 #include "clither/wrap.h"
@@ -30,6 +31,7 @@ static void client_remove(
     world_remove_snake(world, client->snake_id);
     vec_for_each (client->pending_msgs, pmsg)
         msg_free(*pmsg);
+    snake_id_vec_deinit(client->snakes_in_range);
     msg_vec_deinit(client->pending_msgs);
     server_client_hm_erase(server->clients, addr);
 }
@@ -203,8 +205,8 @@ static int server_queue(struct server_client* client, struct msg* msg)
 }
 
 /* ------------------------------------------------------------------------- */
-void server_queue_snake_data(
-    struct server* server, const struct world* world, uint16_t frame_number)
+void server_update_snakes_in_range(
+    struct server* server, const struct world* world)
 {
     int                    slot;
     int                    other_slot;
@@ -213,14 +215,7 @@ void server_queue_snake_data(
     struct server_client*  client;
     struct server_client*  other_client;
 
-    server_client_hm_for_each (server->clients, slot, addr, client)
-    {
-        struct snake* snake = snake_btree_find(world->snakes, client->snake_id);
-        if (snake_is_held(snake))
-            continue;
-        server_queue(client, msg_snake_head(&snake->head, frame_number));
-    }
-
+    /* TODO: O(n^2) */
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
         server_client_hm_for_each (
@@ -245,9 +240,28 @@ void server_queue_snake_data(
             if (dist_sq > make_qw(1 * 1))
                 continue;
 
-            /* TODO queue bezier handles */
+            /* TODO: Update snakes_in_range property on client */
         }
     }
+}
+
+/* ------------------------------------------------------------------------- */
+void server_queue_snake_data(
+    struct server* server, const struct world* world, uint16_t frame_number)
+{
+    int                    slot;
+    const struct net_addr* addr;
+    struct server_client*  client;
+
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        struct snake* snake = snake_btree_find(world->snakes, client->snake_id);
+        if (snake_is_held(snake))
+            continue;
+        server_queue(client, msg_snake_head(&snake->head, frame_number));
+    }
+
+    /* TODO queue bezier handles */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -314,8 +328,7 @@ static int process_message(
                 CLITHER_DEBUG_ASSERT(client != NULL);
 
                 msg_vec_init(&client->pending_msgs);
-                /* hashmap_init(&client->bezier_handles_ack,*/
-                /* sizeof(struct bezier_handle), 0);*/
+                snake_id_vec_init(&client->snakes_in_range);
                 client->timeout_counter = 0;
                 client->snake_id =
                     world_spawn_snake(world, pp.join_request.username);

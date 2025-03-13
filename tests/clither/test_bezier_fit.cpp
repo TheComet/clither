@@ -170,13 +170,11 @@ TEST_F(NAME, misfit)
      * 28469, 28533, 28594, 28654, 28712, 28766, 28818, 28867, 28915, 28963,
      * 29008, 29051, 29093, 29133, 29173, 29210, 29245, 29280, 29312];
      */
-    struct bezier_handle head = {{0, 0}, 0, 0, 0, 0, 0};
+    struct bezier_handle head = {{0, 0}, 0, 0, 0};
     struct bezier_handle tail = {
         {make_qw2(36550, 1 << 14), make_qw2(25912, 1 << 14)},
         make_qa2(-4676, 1 << 12),
         17,
-        0,
-        0,
         0};
 
     for (int i = 0; i != array_len(points3); ++i)

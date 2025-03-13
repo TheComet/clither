@@ -149,10 +149,10 @@ struct msg* msg_feedback(int8_t diff, uint16_t frame_number);
 struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 
-void msg_snake_bezier(
-    struct msg_vec**               msgs,
-    uint16_t                       snake_id,
-    const struct bezier_handle_rb* bezier_handles);
+struct msg* msg_snake_bezier(
+    uint16_t                    snake_id,
+    uint16_t                    bezier_handle_idx,
+    const struct bezier_handle* bezier_handle);
 
 struct msg* msg_snake_bezier_ack(
     struct bezier_handle_rb* bezier_handles, const union parsed_payload* pp);

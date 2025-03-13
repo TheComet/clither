@@ -42,6 +42,9 @@ int server_init(
  */
 void server_deinit(struct server* server);
 
+void server_update_snakes_in_range(
+    struct server* server, const struct world* world);
+
 void server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number);
 
