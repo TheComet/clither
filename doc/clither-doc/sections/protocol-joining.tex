@@ -25,32 +25,11 @@ after responding with a deny message.
 \vspace{1.5em}
 
 \begin{figure}[h]
-\verb$MSG_JOIN_REQUEST$\\
-\vspace{.25em}\\
 \input{images/msg-join-request}
-\begin{itemize}
-    \item\textbf{major:} Protocol version major.
-    \item\textbf{minor:} Protocol version minor.
-    \item\textbf{frame:} Current frame number of the client.
-    \item\textbf{len:} $strlen()$ of the username (excluding null terminator).
-    \item\textbf{username:} UTF-8 encoded username.
-    \item\textbf{NULL:} Username string is null terminated.
-\end{itemize}
 \end{figure}
 
 \vspace{1.5em}
 
 \begin{figure}[h]
-\verb$MSG_JOIN_ACCEPT$\\
-\vspace{.25em}\\
 \input{images/msg-join-accept}
-\begin{itemize}
-    \item\textbf{str:} Simulation tick-rate used by the server.
-    \item\textbf{ntr:} Networking tick-rate used by the server.
-    \item\textbf{cl frame:} Client frame number sent back from \verb$MSG_JOIN_REQUEST$.
-    \item\textbf{sv frame:} Current frame number of the server.
-    \item\textbf{snake ID:} Unique identifier of the snake spawned by the server.
-    \item\textbf{spawn X:} X-coordinate of spawn location in Q19.5 in world space.
-    \item\textbf{spawn Y:} Y-coordinate of spawn location in Q19.5 in world space.
-\end{itemize}
 \end{figure}

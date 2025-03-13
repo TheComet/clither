@@ -1,0 +1,19 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (6,5);
+\coordinate (D) at (6,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(C)!.1!(D)$);
+\coordinate (F) at ($(A)!.25!(B)$);
+\coordinate (G) at ($(A)!.35!(B)$);
+\coordinate (H) at ($(C)!.5!(D)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$SNAKE_DESTROY$};
+\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$SNAKE_DESTROY_ACK$};
+\draw (E) node[right]{No Proximity?};
+\end{tikzpicture}
+
+

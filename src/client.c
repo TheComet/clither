@@ -351,17 +351,6 @@ static struct client_recv_result process_message(
             return client_recv_ok();
         }
 
-        case MSG_SNAKE_CREATE: {
-            struct snake* snake = world_create_snake(
-                world,
-                pp.snake_metadata.snake_id,
-                make_qwposi(0, 0), /* Dummy location, not used */
-                pp.snake_metadata.username);
-            return client_recv_ok();
-        }
-
-        case MSG_SNAKE_CREATE_ACK: break;
-
         case MSG_SNAKE_HEAD: {
             struct snake* snake =
                 snake_btree_find(world->snakes, client->snake_id);
@@ -655,10 +644,10 @@ void* client_run(const struct args* a)
             cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
 
             /* Update snake */
-            snake_param_update(
-                &snake->param,
-                snake->param.upgrades,
-                snake->param.food_eaten + 1);
+            //snake_param_update(
+            //    &snake->param,
+            //    snake->param.upgrades,
+            //    snake->param.food_eaten + 1);
             snake_remove_stale_segments_with_rollback_constraint(
                 &snake->data,
                 &snake->head_ack,

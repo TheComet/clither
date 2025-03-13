@@ -1,10 +1,22 @@
+\verb$MSG_JOIN_REQUEST$
+\vspace{.25em}\\
+
 \begin{bytefield}[bitwidth=4em,bitformatting=\small]{1}
-\bitheader{0-4} \\
-\bitbox{1}{major}
-\bitbox{1}{minor}
-\bitbox{2}{frame}
-\bitbox{1}{len}
-\bitbox{3}{username}
-\bitbox{1}{NULL}
+    \bitheader{0-4} \\
+    \bitbox{1}{major}
+    \bitbox{1}{minor}
+    \bitbox{2}{frame}
+    \bitbox{1}{len}
+    \bitbox{3}{username}
+    \bitbox{1}{NULL}
 \end{bytefield}
+
+\begin{itemize}
+    \item\textbf{major:} Protocol version major.
+    \item\textbf{minor:} Protocol version minor.
+    \item\textbf{frame:} Current frame number of the client.
+    \item\textbf{len:} $strlen()$ of the username (excluding null terminator).
+    \item\textbf{username:} UTF-8 encoded username.
+    \item\textbf{NULL:} Username string is null terminated.
+\end{itemize}
 

@@ -25,7 +25,11 @@ static void client_remove(
     const struct net_addr*      addr,
     const struct server_client* client)
 {
+    struct msg** pmsg;
+
     world_remove_snake(world, client->snake_id);
+    vec_for_each (client->pending_msgs, pmsg)
+        msg_free(*pmsg);
     msg_vec_deinit(client->pending_msgs);
     server_client_hm_erase(server->clients, addr);
 }
@@ -212,6 +216,8 @@ void server_queue_snake_data(
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
         struct snake* snake = snake_btree_find(world->snakes, client->snake_id);
+        if (snake_is_held(snake))
+            continue;
         server_queue(client, msg_snake_head(&snake->head, frame_number));
     }
 
@@ -296,7 +302,7 @@ static int process_message(
             /* Create new client. This code is not refactored into a
              * separate function because this is the only location where
              * clients are created. Clients are destroyed by the
-             * function remove_client() */
+             * function client_remove() */
             if (client == NULL)
             {
                 struct snake* snake;
@@ -431,16 +437,6 @@ static int process_message(
                 server_queue(client, msg_feedback(diff, frame_number));
             }
             return 0;
-        }
-
-        case MSG_SNAKE_CREATE: {
-            log_warn("MSG_SNAKE_CREATE: Not yet implemented\n");
-            break;
-        }
-
-        case MSG_SNAKE_CREATE_ACK: {
-            log_warn("MSG_SNAKE_CREATE_ACK: Not yet implemented\n");
-            break;
         }
     }
 

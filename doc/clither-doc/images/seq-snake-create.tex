@@ -1,0 +1,30 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (6,5);
+\coordinate (D) at (6,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(C)!.1!(D)$);
+\coordinate (F) at ($(A)!.25!(B)$);
+\coordinate (G) at ($(C)!.2!(D)$);
+\coordinate (H) at ($(A)!.35!(B)$);
+\coordinate (I) at ($(C)!.3!(D)$);
+\coordinate (J) at ($(A)!.45!(B)$);
+\coordinate (K) at ($(A)!.55!(B)$);
+\coordinate (L) at ($(C)!.7!(D)$);
+\coordinate (M) at ($(A)!.65!(B)$);
+\coordinate (N) at ($(C)!.8!(D)$);
+\coordinate (O) at ($(A)!.75!(B)$);
+\coordinate (P) at ($(C)!.9!(D)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$SNAKE_USERNAME$};
+\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$SNAKE_BEZIER 1$};
+\draw[->] (I) -- (J) node[midway,sloped,above]{\verb$SNAKE_BEZIER 2$};
+\draw[->] (K) -- (L) node[midway,sloped,above]{\verb$SNAKE_USERNAME_ACK$};
+\draw[->] (M) -- (N) node[midway,sloped,above]{\verb$SNAKE_BEZIER_ACK 1$};
+\draw[->] (O) -- (P) node[midway,sloped,above]{\verb$SNAKE_BEZIER_ACK 2$};
+\draw (E) node[right]{Proximity?};
+\end{tikzpicture}
+

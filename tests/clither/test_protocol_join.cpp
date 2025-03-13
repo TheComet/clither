@@ -7,6 +7,7 @@ extern "C" {
 #include "clither/server.h"
 #include "clither/server_client_hm.h"
 #include "clither/server_settings.h"
+#include "clither/snake_btree.h"
 #include "clither/world.h"
 }
 
@@ -124,4 +125,73 @@ TEST_F(NAME, server_accepts_join)
         client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
+    // Ensure snakes were created
+    ASSERT_THAT(snake_btree_find(cl_world.snakes, cl.snake_id), NotNull());
+    ASSERT_THAT(snake_btree_find(sv_world.snakes, cl.snake_id), NotNull());
+}
+
+TEST_F(NAME, client_calculates_frame_number_with_buffer)
+{
+    uint16_t sv_frame_number = 32;
+    uint16_t rtt = 8;
+    cl.frame_number = 8;
+
+    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
+
+    ASSERT_THAT(
+        server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+
+    cl.frame_number += rtt; // simulate rtt frames passing since joining
+    ASSERT_THAT(
+        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+    ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
+
+    uint16_t expected_cl_frame_number = sv_frame_number + rtt;
+    // Client adds some buffer initially
+    expected_cl_frame_number +=
+        5 * sv_settings.sim_tick_rate / sv_settings.net_tick_rate;
+    ASSERT_THAT(cl.frame_number, Eq(expected_cl_frame_number));
+}
+
+TEST_F(NAME, client_updates_tick_rates_from_server)
+{
+    sv_settings.sim_tick_rate = 120;
+    sv_settings.net_tick_rate = 80;
+    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
+    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 32), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(
+        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+    ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
+
+    ASSERT_THAT(cl.sim_tick_rate, Eq(sv_settings.sim_tick_rate));
+    ASSERT_THAT(cl.net_tick_rate, Eq(sv_settings.net_tick_rate));
+}
+
+TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
+{
+    uint16_t sv_frame_number = 32;
+    uint16_t rtt = 8;
+    cl.frame_number = 8;
+
+    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
+
+    ASSERT_THAT(
+        server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+
+    cl.frame_number += rtt; // simulate rtt frames passing since joining
+    ASSERT_THAT(
+        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+    ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
+
+    uint16_t expected_cl_frame_number = sv_frame_number + rtt;
+    // Client adds some buffer initially
+    expected_cl_frame_number +=
+        5 * sv_settings.sim_tick_rate / sv_settings.net_tick_rate;
+    ASSERT_THAT(cl.frame_number, Eq(expected_cl_frame_number));
 }

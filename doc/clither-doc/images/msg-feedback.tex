@@ -1,6 +1,16 @@
+\verb$MSG_FEEDBACK$
+\vspace{.25em}\\
+
 \begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
-\bitheader{0-2} \\
-\bitbox{2}{frame}
-\bitbox{1}{diff}
+    \bitheader{0-2} \\
+    \bitbox{2}{frame}
+    \bitbox{1}{diff}
 \end{bytefield}
+
+\begin{itemize}
+    \item\textbf{diff:}  Difference in simulation-ticks the server would  like  the
+    \item\textbf{frame:} Server frame-number when the  message  was sent. client to
+    ``warp''  to. If negative, the client will slow down its simulation  speed.  If
+    positive, the client will speed up its simulation speed.
+\end{itemize}
 

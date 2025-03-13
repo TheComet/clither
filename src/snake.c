@@ -530,7 +530,7 @@ void snake_ack_frame(
 }
 
 /* ------------------------------------------------------------------------- */
-char snake_is_held(struct snake* snake, uint16_t frame_number)
+int snake_try_reset_hold(struct snake* snake, uint16_t frame_number)
 {
     if (cmd_queue_count(&snake->cmdq) > 0 &&
         cmd_queue_frame_begin(&snake->cmdq) == frame_number)
@@ -538,5 +538,5 @@ char snake_is_held(struct snake* snake, uint16_t frame_number)
         snake->hold = 0;
     }
 
-    return snake->hold;
+    return !snake->hold;
 }

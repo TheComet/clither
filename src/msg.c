@@ -54,22 +54,27 @@ void msg_update_frame_number(struct msg* m, uint16_t frame_number)
             m->payload[3] = frame_number & 0xFF;
             break;
 
-        case MSG_JOIN_ACCEPT:
-        case MSG_JOIN_DENY_BAD_PROTOCOL:
-        case MSG_JOIN_DENY_BAD_USERNAME:
-        case MSG_JOIN_DENY_SERVER_FULL:
+        case MSG_JOIN_ACCEPT: break;
+        case MSG_JOIN_DENY_BAD_PROTOCOL: break;
+        case MSG_JOIN_DENY_BAD_USERNAME: break;
+        case MSG_JOIN_DENY_SERVER_FULL: break;
         case MSG_LEAVE: break;
 
         case MSG_COMMANDS: break;
+        case MSG_FEEDBACK: break;
 
-        case MSG_SNAKE_CREATE:
-        case MSG_SNAKE_CREATE_ACK: break;
-
+        case MSG_SNAKE_USERNAME: break;
+        case MSG_SNAKE_USERNAME_ACK: break;
+        case MSG_SNAKE_BEZIER: break;
+        case MSG_SNAKE_BEZIER_ACK: break;
         case MSG_SNAKE_HEAD: break;
 
-        case MSG_FOOD_GRID_PARAMS:
-        case MSG_FOOD_GRID_PARAMS_ACK:
+        case MSG_FOOD_GRID_PARAMS: break;
+        case MSG_FOOD_GRID_PARAMS_ACK: break;
         case MSG_FOOD_CLUSTER_UPDATE: break;
+        case MSG_FOOD_CLUSTER_CREATE: break;
+        case MSG_FOOD_CLUSTER_CREATE_ACK: break;
+        case MSG_FOOD_CLUSTER_UPDATE_ACK: break;
     }
 }
 
@@ -213,12 +218,6 @@ int msg_parse_payload(
                 pp->feedback.diff);
         }
         break;
-
-        case MSG_SNAKE_CREATE: {
-        }
-        break;
-
-        case MSG_SNAKE_CREATE_ACK: break;
 
         case MSG_SNAKE_HEAD: {
             if (payload_len < 11)

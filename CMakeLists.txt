@@ -253,6 +253,7 @@ add_executable (clither
         tests/clither/test_wrap.cpp
         tests/clither/test_btree.cpp
         $<$<BOOL:${CLITHER_GFX}>:
+            tests/clither/test_protocol_feedback.cpp
             tests/clither/test_protocol_join.cpp>>
 
     $<$<BOOL:${CLITHER_BENCHMARKS}>:

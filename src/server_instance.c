@@ -62,24 +62,23 @@ void* server_instance_run(const void* args)
         /* sim_update */
         btree_for_each (world.snakes, idx, uid, snake)
         {
+            struct cmd cmd;
             (void)uid;
-            if (!snake_is_held(snake, frame_number))
-            {
-                struct cmd command =
-                    cmd_queue_take_or_predict(&snake->cmdq, frame_number);
-                snake_param_update(
-                    &snake->param,
-                    snake->param.upgrades,
-                    snake->param.food_eaten + 1);
-                snake_remove_stale_segments(
+            if (!snake_try_reset_hold(snake, frame_number))
+                continue;
+            cmd = cmd_queue_take_or_predict(&snake->cmdq, frame_number);
+            //snake_param_update(
+            //    &snake->param,
+            //    snake->param.upgrades,
+            //    snake->param.food_eaten + 1);
+            snake_remove_stale_segments(
+                &snake->data,
+                snake_step(
                     &snake->data,
-                    snake_step(
-                        &snake->data,
-                        &snake->head,
-                        &snake->param,
-                        command,
-                        instance->settings->sim_tick_rate));
-            }
+                    &snake->head,
+                    &snake->param,
+                    cmd,
+                    instance->settings->sim_tick_rate));
         }
         world_step(&world, frame_number, instance->settings->sim_tick_rate);
 

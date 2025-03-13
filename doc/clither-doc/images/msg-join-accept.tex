@@ -1,11 +1,23 @@
+\verb$MSG_JOIN_ACCEPT$
+\vspace{.25em}\\
+
 \begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
-\bitheader{0-13} \\
-\bitbox{1}{str}
-\bitbox{1}{ntr}
-\bitbox{2}{cl frame}
-\bitbox{2}{sv frame}
-\bitbox{2}{snake ID}
-\bitbox{3}{spawn X}
-\bitbox{3}{spawn Y}
+    \bitheader{0-13} \\
+    \bitbox{1}{str}
+    \bitbox{1}{ntr}
+    \bitbox{2}{cl frame}
+    \bitbox{2}{sv frame}
+    \bitbox{2}{snake ID}
+    \bitbox{3}{spawn X}
+    \bitbox{3}{spawn Y}
 \end{bytefield}
 
+\begin{itemize}
+    \item\textbf{str:} Simulation tick-rate used by the server.
+    \item\textbf{ntr:} Networking tick-rate used by the server.
+    \item\textbf{cl frame:} Client frame number sent back from \verb$MSG_JOIN_REQUEST$.
+    \item\textbf{sv frame:} Current frame number of the server.
+    \item\textbf{snake ID:} Unique identifier of the snake spawned by the server.
+    \item\textbf{spawn X:} X-coordinate of spawn location in Q19.5 in world space.
+    \item\textbf{spawn Y:} Y-coordinate of spawn location in Q19.5 in world space.
+\end{itemize}

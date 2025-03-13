@@ -90,13 +90,15 @@ snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
  */
 #define snake_set_hold(snake) (snake)->hold = 1
 
+#define snake_is_held(snake) (snake)->hold
+
 /*!
  * \brief If a snake is in hold mode (@see snake_set_hold), this
  * function checks the condition for resetting the hold state.
  * If the condition applies, the snake's hold state is reset and
- * false is returned. Otherwise true is returned,
+ * true is returned. Otherwise false is returned.
  */
-char snake_is_held(struct snake* snake, uint16_t frame_number);
+int snake_try_reset_hold(struct snake* snake, uint16_t frame_number);
 
 void snake_step_param(
     struct snake_data* data, struct snake_param* param, uint32_t food_eaten);

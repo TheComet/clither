@@ -888,7 +888,7 @@ static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-static struct cmd gfx_gles2_input_to_command(
+static struct cmd gfx_gles2_input_to_cmd(
     struct cmd           prev,
     const struct input*  input,
     const struct gfx*    gfx,
@@ -1295,6 +1295,6 @@ struct gfx_interface gfx_gles2 = {
     &gfx_gles2_destroy,
     &gfx_gles2_load_resource_pack,
     &gfx_gles2_poll_input,
-    &gfx_gles2_input_to_command,
+    &gfx_gles2_input_to_cmd,
     &gfx_gles2_step_anim,
     &gfx_gles2_draw_world};

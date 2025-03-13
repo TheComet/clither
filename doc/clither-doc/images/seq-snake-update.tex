@@ -1,0 +1,32 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (6,5);
+\coordinate (D) at (6,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(C)!.1!(D)$);
+\coordinate (F) at ($(A)!.25!(B)$);
+\coordinate (G) at ($(C)!.2!(D)$);
+\coordinate (H) at ($(A)!.35!(B)$);
+\coordinate (I) at ($(C)!.35!(D)$);
+\coordinate (J) at ($(A)!.5!(B)$);
+\coordinate (K) at ($(C)!.45!(D)$);
+\coordinate (L) at ($(A)!.6!(B)$);
+\coordinate (M) at ($(C)!.6!(D)$);
+\coordinate (N) at ($(A)!.75!(B)$);
+\coordinate (O) at ($(C)!.7!(D)$);
+\coordinate (P) at ($(A)!.85!(B)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$SNAKE_HEAD$};
+\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$SNAKE_PARAM$};
+\draw[->] (I) -- (J) node[midway,sloped,above]{\verb$SNAKE_HEAD$};
+\draw[->] (K) -- (L) node[midway,sloped,above]{\verb$SNAKE_PARAM$};
+\draw[->] (M) -- (N) node[midway,sloped,above]{\verb$SNAKE_HEAD$};
+\draw[->] (O) -- (P) node[midway,sloped,above]{\verb$SNAKE_PARAM$};
+\draw (E) node[right]{frame 1};
+\draw (I) node[right]{frame 2};
+\draw (M) node[right]{frame 3};
+\end{tikzpicture}
+
