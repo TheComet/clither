@@ -21,7 +21,7 @@
 static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
 {
     struct msg* msg;
-    assert(size <= 255); /* The payload length field is 1 byte */
+    CLITHER_DEBUG_ASSERT(size <= 255); /* The payload length field is 1 byte */
 
     if (size < 0)
         size = 255;
@@ -443,11 +443,6 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
         if (send_count > 100)
             send_count = 100;
 
-        log_net(
-            "Packing command for frames %d-%d\n",
-            first_frame_number,
-            (uint16_t)(first_frame_number + send_count - 1));
-
         /*
          * command structure: 19 bits
          * delta:
@@ -461,6 +456,12 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
             sizeof(first_frame_number) + /* frame number */
                 3 +
                 (12 * send_count + 8) / 8); /* upper bound for all commands */
+
+        log_net(
+            "Packing command for frames %d-%d, payload_len=%d\n",
+            first_frame_number,
+            (uint16_t)(first_frame_number + send_count - 1),
+            m->payload_len);
 
         m->payload[0] = first_frame_number >> 8;
         m->payload[1] = first_frame_number & 0xFF;
