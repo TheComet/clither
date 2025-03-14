@@ -7,7 +7,7 @@ extern "C" {
 #include "clither/server.h"
 #include "clither/server_client_hm.h"
 #include "clither/server_settings.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/world.h"
 }
 
@@ -50,7 +50,7 @@ public:
     void SimClient()
     {
         cl_cmd = cmd_make(cl_cmd, 0, 1, CMD_ACTION_NONE);
-        struct snake* snake = snake_btree_find(cl_world.snakes, cl.snake_id);
+        struct snake* snake = snake_bmap_find(cl_world.snakes, cl.snake_id);
         cmd_queue_put(&snake->cmdq, cl_cmd, cl.frame_number);
         snake_remove_stale_segments_with_rollback_constraint(
             &snake->data,
@@ -69,7 +69,7 @@ public:
         int16_t       idx;
         uint16_t      uid;
         struct snake* snake;
-        btree_for_each (sv_world.snakes, idx, uid, snake)
+        bmap_for_each (sv_world.snakes, idx, uid, snake)
         {
             struct cmd cmd;
             (void)uid;
@@ -103,7 +103,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, sv_frame), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
         client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
@@ -117,7 +117,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
 
     auto RunServerClient = [this, &sv_frame]()
     {
-        struct snake* cl_snake = snake_btree_find(cl_world.snakes, cl.snake_id);
+        struct snake* cl_snake = snake_bmap_find(cl_world.snakes, cl.snake_id);
         client_recv(&cl, &cl_world);
         SimClient();
         SimClient();
@@ -130,7 +130,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
         SimServer(sv_frame++);
         SimServer(sv_frame);
         server_queue_snake_data(&sv, &sv_world, sv_frame);
-        server_send_pending_data(&sv);
+        server_send_pending_data(&sv, &sv_world);
         sv_frame++;
     };
 
@@ -142,7 +142,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
         (void)slot;
         (void)addr;
         struct snake* sv_snake =
-            snake_btree_find(sv_world.snakes, sv_client->snake_id);
+            snake_bmap_find(sv_world.snakes, sv_client->snake_id);
         ASSERT_THAT(snake_is_held(sv_snake), IsTrue());
     }
 
@@ -154,7 +154,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
         (void)slot;
         (void)addr;
         struct snake* sv_snake =
-            snake_btree_find(sv_world.snakes, sv_client->snake_id);
+            snake_bmap_find(sv_world.snakes, sv_client->snake_id);
         ASSERT_THAT(snake_is_held(sv_snake), IsFalse());
     }
 }

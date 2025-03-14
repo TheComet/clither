@@ -30,30 +30,30 @@ struct client_recv_result
                                         tick rate */
 };
 
-static inline struct client_recv_result client_recv_ok(void)
+static struct client_recv_result client_recv_ok(void)
 {
     struct client_recv_result r = {0, 0, 0};
     return r;
 }
-static inline struct client_recv_result client_recv_error(void)
+static struct client_recv_result client_recv_error(void)
 {
     struct client_recv_result r = {0, 0, 0};
     r.error = 1;
     return r;
 }
-static inline struct client_recv_result client_recv_disconnected(void)
+static struct client_recv_result client_recv_disconnected(void)
 {
     struct client_recv_result r = {0, 0, 0};
     r.disconnected = 1;
     return r;
 }
-static inline struct client_recv_result client_recv_tick_rate_changed(void)
+static struct client_recv_result client_recv_tick_rate_changed(void)
 {
     struct client_recv_result r = {0, 0, 0};
     r.tick_rated_changed = 1;
     return r;
 }
-static inline struct client_recv_result client_recv_result_combine(
+static struct client_recv_result client_recv_result_combine(
     struct client_recv_result r1, struct client_recv_result r2)
 {
     r1.error |= r2.error;

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "clither/config.h"
-#include "clither/hm.h"
+#include "clither/q.h"
 
 struct net_addr;
 struct server_settings;
@@ -42,16 +41,16 @@ int server_init(
  */
 void server_deinit(struct server* server);
 
-void server_update_snakes_in_range(
-    struct server* server, const struct world* world);
+int server_update_snakes_in_range(
+    struct server* server, const struct world* world, qw proximity_range);
 
-void server_queue_snake_data(
+int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */
-int server_send_pending_data(struct server* server);
+int server_send_pending_data(struct server* server, struct world* world);
 
 /*!
  *

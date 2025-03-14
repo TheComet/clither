@@ -1,6 +1,5 @@
 #include "clither/cmd.h"
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include "clither/config.h"
 
 /* ------------------------------------------------------------------------- */
 struct cmd cmd_default(void)

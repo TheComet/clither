@@ -1,7 +1,7 @@
 #include "clither/log.h"
 #include "clither/q.h"
 #include "clither/snake.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/str.h"
 #include "clither/world.h"
 #include <stddef.h>
@@ -9,7 +9,7 @@
 /* ------------------------------------------------------------------------- */
 void world_init(struct world* world)
 {
-    snake_btree_init(&world->snakes);
+    snake_bmap_init(&world->snakes);
 
     world->inner_radius = make_qw(20);
     world->ring_start = make_qw(40);
@@ -22,12 +22,12 @@ void world_deinit(struct world* world)
     int16_t       idx;
     uint16_t      uid;
     struct snake* snake;
-    btree_for_each (world->snakes, idx, uid, snake)
+    bmap_for_each (world->snakes, idx, uid, snake)
     {
         (void)uid;
         snake_deinit(snake);
     }
-    snake_btree_deinit(world->snakes);
+    snake_bmap_deinit(world->snakes);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -38,7 +38,7 @@ struct snake* world_create_snake(
     const char*   username)
 {
     struct snake* snake;
-    if (snake_btree_emplace_new(&world->snakes, snake_id, &snake) != BTREE_NEW)
+    if (snake_bmap_emplace_new(&world->snakes, snake_id, &snake) != BMAP_NEW)
         return NULL;
     snake_init(snake, spawn_pos, username);
 
@@ -57,7 +57,7 @@ uint16_t world_spawn_snake(struct world* world, const char* username)
 {
     /* Snake ID 0 is reserved to mean "invalid" */
     uint16_t i, snake_id = 1;
-    for (i = 0; i != btree_count(world->snakes); ++i)
+    for (i = 0; i != bmap_count(world->snakes); ++i)
     {
         if (i + 1 != (int)snake_id)
             break;
@@ -72,7 +72,7 @@ uint16_t world_spawn_snake(struct world* world, const char* username)
 /* ------------------------------------------------------------------------- */
 void world_remove_snake(struct world* world, uint16_t snake_id)
 {
-    struct snake* snake = snake_btree_find(world->snakes, snake_id);
+    struct snake* snake = snake_bmap_find(world->snakes, snake_id);
     if (snake == NULL)
     {
         log_warn("Tried removing snake %d, but it doesn't exist\n", snake_id);
@@ -84,7 +84,7 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
         snake_id,
         str_cstr(snake->data.name));
     snake_deinit(snake);
-    snake_btree_erase(world->snakes, snake_id);
+    snake_bmap_erase(world->snakes, snake_id);
 }
 
 /* ------------------------------------------------------------------------- */

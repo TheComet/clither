@@ -83,7 +83,7 @@ int bezier_calc_equidistant_points(
     qw                             spacing,
     qw                             snake_length);
 
-static inline int bezier_handles_equal(
+static int bezier_handles_equal(
     const struct bezier_handle* a, const struct bezier_handle* b)
 {
     return a->pos.x == b->pos.x && a->pos.y == b->pos.y &&
@@ -91,7 +91,7 @@ static inline int bezier_handles_equal(
            a->len_forwards == b->len_forwards;
 }
 
-static inline int bezier_handles_equal_pos(
+static int bezier_handles_equal_pos(
     const struct bezier_handle* a, const struct bezier_handle* b)
 {
     return a->pos.x == b->pos.x && a->pos.y == b->pos.y;

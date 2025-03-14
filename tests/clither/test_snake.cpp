@@ -399,7 +399,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         // not contain the acknowledged head position. The method used to
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
-            qwaabb_qwpos(
+            qwaabb_test_qwpos(
                 *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
             IsTrue());
     }
@@ -429,7 +429,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     ASSERT_THAT(rb_count(client.data.bezier_handles), Eq(4u));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3u));
     ASSERT_THAT(
-        qwaabb_qwpos(
+        qwaabb_test_qwpos(
             *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
@@ -461,7 +461,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         // not contain the acknowledged head position. The method used to
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
-            qwaabb_qwpos(
+            qwaabb_test_qwpos(
                 *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
             IsTrue());
     }
@@ -491,7 +491,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     ASSERT_THAT(rb_count(client.data.bezier_handles), Eq(3u));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2u));
     ASSERT_THAT(
-        qwaabb_qwpos(
+        qwaabb_test_qwpos(
             *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
@@ -520,7 +520,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         ASSERT_THAT(rb_count(client.data.bezier_handles), Eq(2u));
         ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(1u));
         ASSERT_THAT(
-            qwaabb_qwpos(
+            qwaabb_test_qwpos(
                 *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
             IsTrue());
     }

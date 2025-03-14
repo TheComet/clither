@@ -15,7 +15,7 @@ struct strlist
     char data[1];
 };
 
-static inline void strlist_init(struct strlist** l)
+static void strlist_init(struct strlist** l)
 {
     *l = NULL;
 }
@@ -30,29 +30,29 @@ void mem_unown_strlist(struct strlist* l);
 #    define mem_unown_strlist(l)
 #endif
 
-int strlist_add(struct strlist** l, struct strview str);
-int strlist_add_cstr(struct strlist** l, const char* cstr);
-int strlist_insert(struct strlist** l, int insert, const char* cstr);
+int  strlist_add(struct strlist** l, struct strview str);
+int  strlist_add_cstr(struct strlist** l, const char* cstr);
+int  strlist_insert(struct strlist** l, int insert, const char* cstr);
 void strlist_erase(struct strlist* l, int idx);
 
-static inline struct strspan strlist_span(const struct strlist* l, int i)
+static struct strspan strlist_span(const struct strlist* l, int i)
 {
     return STRLIST_TABLE_PTR(l)[-i];
 }
 
-static inline struct strview strlist_view(const struct strlist* l, int i)
+static struct strview strlist_view(const struct strlist* l, int i)
 {
     struct strspan span = strlist_span(l, i);
     return strview(l->data, span.off, span.len);
 }
 
-static inline const char* strlist_cstr(const struct strlist* l, int i)
+static const char* strlist_cstr(const struct strlist* l, int i)
 {
     struct strspan span = strlist_span(l, i);
     return l->data + span.off;
 }
 
-static inline int strlist_count(const struct strlist* l)
+static int strlist_count(const struct strlist* l)
 {
     return l ? l->count : 0;
 }

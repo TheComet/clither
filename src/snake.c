@@ -362,7 +362,7 @@ void snake_remove_stale_segments_with_rollback_constraint(
          * that we want to remove, abort, because this curve segment is still
          * required for rollback.
          */
-        if (qwaabb_qwpos(*rb_peek_read(data->bezier_aabbs), head_ack->pos))
+        if (qwaabb_test_qwpos(*rb_peek_read(data->bezier_aabbs), head_ack->pos))
             break;
 
         qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));

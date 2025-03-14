@@ -80,7 +80,7 @@ enum hm_status
      * @return Returns 0 if the key+value was inserted. Returns -1 if the key  \
      * existed, or if allocation failed.                                       \
      */                                                                        \
-    static inline int prefix##_insert_new(struct prefix** hm, K key, V value)  \
+    static int prefix##_insert_new(struct prefix** hm, K key, V value)         \
     {                                                                          \
         V* emplaced = prefix##_emplace_new(hm, key);                           \
         if (emplaced == NULL)                                                  \
@@ -97,8 +97,7 @@ enum hm_status
      * @param[in] value The value to insert or update.                         \
      * @return Returns -1 if allocation failed. Returns 0 otherwise.           \
      */                                                                        \
-    static inline int prefix##_insert_update(                                  \
-        struct prefix** hm, K key, V value)                                    \
+    static int prefix##_insert_update(struct prefix** hm, K key, V value)      \
     {                                                                          \
         V*             ins_value;                                              \
         enum hm_status status = prefix##_emplace_or_get(hm, key, &ins_value);  \
@@ -128,7 +127,7 @@ enum hm_status
     V* prefix##_find(const struct prefix* hm, K key);
 
 #define HM_DEFINE(prefix, K, V, bits)                                          \
-    static inline hash32 prefix##_hash(K key)                                  \
+    static hash32 prefix##_hash(K key)                                         \
     {                                                                          \
         return hash32_jenkins_oaat(&key, sizeof(K));                           \
     }                                                                          \
@@ -459,8 +458,7 @@ enum hm_status
 #define hm_count(hm)    ((hm) ? (hm)->count : 0)
 #define hm_capacity(hm) ((hm) ? (hm)->capacity : 0)
 
-static inline int
-hm_next_valid_slot(const hash32* hashes, int slot, intptr_t capacity)
+static int hm_next_valid_slot(const hash32* hashes, int slot, intptr_t capacity)
 {
     do
     {

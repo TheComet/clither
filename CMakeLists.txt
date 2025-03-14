@@ -86,7 +86,11 @@ add_executable (clither
     "include/clither/backtrace.h"
     "include/clither/benchmarks.h"
     "include/clither/bezier.h"
-    "include/clither/btree.h"
+    "include/clither/bezier_handle_rb.h"
+    "include/clither/bezier_pending_acks_bset.h"
+    "include/clither/bezier_point_vec.h"
+    "include/clither/bmap.h"
+    "include/clither/bset.h"
     "include/clither/camera.h"
     "include/clither/cli_colors.h"
     "include/clither/client.h"
@@ -108,6 +112,8 @@ add_executable (clither
     "include/clither/net.h"
     "include/clither/net_addr_hm.h"
     "include/clither/popcount.h"
+    "include/clither/proximity_state.h"
+    "include/clither/proximity_state_bmap.h"
     "include/clither/q.h"
     "include/clither/quadtree.h"
     "include/clither/qwaabb_rb.h"
@@ -121,12 +127,11 @@ add_executable (clither
     "include/clither/server_client.h"
     "include/clither/server_client_hm.h"
     "include/clither/server_instance.h"
-    "include/clither/server_instance_btree.h"
+    "include/clither/server_instance_bmap.h"
     "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
-    "include/clither/snake_btree.h"
-    "include/clither/snake_id_vec.h"
+    "include/clither/snake_bmap.h"
     "include/clither/snake_param.h"
     "include/clither/snake_split_rb.h"
     "include/clither/str.h"
@@ -144,6 +149,7 @@ add_executable (clither
     "src/args.c"
     "src/bezier.c"
     "src/bezier_handle_rb.c"
+    "src/bezier_pending_acks_bset.c"
     "src/bezier_point_vec.c"
     "src/camera.c"
     "src/cmd.c"
@@ -156,6 +162,8 @@ add_executable (clither
     "src/msg.c"
     "src/msg_vec.c"
     "src/net_addr_hm.c"
+    "src/proximity_state.c"
+    "src/proximity_state_bmap.c"
     "src/quadtree.c"
     "src/qwaabb_rb.c"
     "src/qwpos_vec.c"
@@ -164,8 +172,7 @@ add_executable (clither
     "src/resource_snake_part_vec.c"
     "src/resource_sprite_vec.c"
     "src/snake.c"
-    "src/snake_btree.c"
-    "src/snake_id_vec.c"
+    "src/snake_bmap.c"
     "src/snake_param.c"
     "src/snake_split_rb.c"
     "src/str.c"
@@ -177,7 +184,7 @@ add_executable (clither
         src/server.c
         src/server_client_hm.c
         src/server_instance.c
-        src/server_instance_btree.c
+        src/server_instance_bmap.c
         src/server_settings.c>
 
     $<$<BOOL:${CLITHER_MCD}>:
@@ -253,7 +260,8 @@ add_executable (clither
         tests/clither/test_tick.cpp
         tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
-        tests/clither/test_btree.cpp
+        tests/clither/test_bmap.cpp
+        tests/clither/test_bset.cpp
         $<$<BOOL:${CLITHER_GFX}>:
             tests/clither/test_protocol_feedback.cpp
             tests/clither/test_protocol_join.cpp>>

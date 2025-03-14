@@ -2,7 +2,7 @@
 #include <signal.h>
 #include <stddef.h>
 
-static volatile char ctrl_c_pressed = 0;
+static volatile char    ctrl_c_pressed = 0;
 static struct sigaction old_act;
 
 /* ------------------------------------------------------------------------- */
@@ -13,8 +13,7 @@ static void handle_ctrl_c(int sig)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-signals_install(void)
+void signals_install(void)
 {
     struct sigaction act;
     act.sa_handler = handle_ctrl_c;
@@ -26,15 +25,13 @@ signals_install(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-signals_remove(void)
+void signals_remove(void)
 {
     sigaction(SIGINT, &old_act, NULL);
 }
 
 /* ------------------------------------------------------------------------- */
-char
-signals_exit_requested(void)
+char signals_exit_requested(void)
 {
     return ctrl_c_pressed;
 }

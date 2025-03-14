@@ -10,7 +10,7 @@
 #include "clither/qwaabb_rb.h"
 #include "clither/rb.h"
 #include "clither/snake.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/vec.h"
 #include "clither/world.h"
 #include <SDL.h>
@@ -614,7 +614,7 @@ static void gfx_sdl_draw_world(
 
     draw_background(gfx, camera);
 
-    btree_for_each (world->snakes, idx, uid, snake)
+    bmap_for_each (world->snakes, idx, uid, snake)
     {
         (void)uid;
         draw_snake(gfx, camera, snake);

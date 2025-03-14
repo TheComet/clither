@@ -6,7 +6,7 @@ struct strview
     int         off, len;
 };
 
-static inline struct strview strview(const char* data, int off, int len)
+static struct strview strview(const char* data, int off, int len)
 {
     struct strview view;
     view.data = data;

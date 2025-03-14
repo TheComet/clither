@@ -84,13 +84,13 @@ TEST(NAME, compress_multiple_controls)
 
 TEST(NAME, parse_join_request_payload_too_small)
 {
+    // clang-format off
     uint8_t payload[5] = {
-        0x00,
-        0x00, // Protocol version
-        0x00,
-        0x00, // Frame number
-        0,    // Username length
+        0x00, 0x00, // Protocol version
+        0x00, 0x00, // Frame number
+        0,          // Username length
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 5), Eq(-1));
@@ -98,13 +98,13 @@ TEST(NAME, parse_join_request_payload_too_small)
 
 TEST(NAME, parse_join_request_empty_username)
 {
+    // clang-format off
     uint8_t payload[6] = {
-        0x00,
-        0x00, // Protocol version
-        0x00,
-        0x00, // Frame number
-        0,    // Username length
+        0x00, 0x00, // Protocol version
+        0x00, 0x00, // Frame number
+        0,          // Username length
         '\0'};
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 6), Eq(-2));
@@ -112,14 +112,14 @@ TEST(NAME, parse_join_request_empty_username)
 
 TEST(NAME, parse_join_request_incorrect_username_length)
 {
+    // clang-format off
     uint8_t payload[7] = {
-        0x00,
-        0x00, // Protocol version
-        0x00,
-        0x00, // Frame number
-        1,    // Username length
-        '\0',
-        '\0'};
+        0x00, 0x00, // Protocol version
+        0x00, 0x00, // Frame number
+        1,          // Username length
+        '\0', '\0'
+    };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 6), Eq(-3));
@@ -127,14 +127,14 @@ TEST(NAME, parse_join_request_incorrect_username_length)
 
 TEST(NAME, parse_join_request_incorrect_username_not_null_terminated)
 {
+    // clang-format off
     uint8_t payload[7] = {
-        0x00,
-        0x00, // Protocol version
-        0x00,
-        0x00, // Frame number
-        1,    // Username length
-        'a',
-        'b'};
+        0x00, 0x00, // Protocol version
+        0x00, 0x00, // Frame number
+        1,          // Username length
+        'a', 'b'
+    };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 7), Eq(-4));
@@ -142,16 +142,14 @@ TEST(NAME, parse_join_request_incorrect_username_not_null_terminated)
 
 TEST(NAME, parse_join_request)
 {
+    // clang-format off
     uint8_t payload[9] = {
-        0xAA,
-        0xBB, // Protocol version
-        0xCC,
-        0xDD, // Frame number
-        3,    // Username length
-        'a',
-        'b',
-        'c',
-        '\0'};
+        0xAA, 0xBB, // Protocol version
+        0xCC, 0xDD, // Frame number
+        3,         // Username length
+        'a', 'b', 'c', '\0'
+    };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -165,22 +163,17 @@ TEST(NAME, parse_join_request)
 
 TEST(NAME, parse_join_accept_payload_too_small)
 {
+    // clang-format off
     uint8_t payload[14] = {
-        0xAA, // Sim tick rate
-        0xBB, // Net tick rate
-        0x12,
-        0x34, // Client frame
-        0x56,
-        0x78, // Server frame
-        0x90,
-        0xA0, // Snake ID
-        0xAB,
-        0xCD,
-        0xEF, // Spawn X
-        0xFE,
-        0xDC,
-        0xBA, // Spawn Y
+        0xAA,             // Sim tick rate
+        0xBB,             // Net tick rate
+        0x12, 0x34,       // Client frame
+        0x56, 0x78,       // Server frame
+        0x90, 0xA0,       // Snake ID
+        0xAB, 0xCD, 0xEF, // Spawn X
+        0xFE, 0xDC, 0xBA, // Spawn Y
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 13), Eq(-1));
@@ -188,22 +181,17 @@ TEST(NAME, parse_join_accept_payload_too_small)
 
 TEST(NAME, parse_join_accept_qw_sign_extension)
 {
+    // clang-format off
     uint8_t payload[14] = {
-        0xAA, // Sim tick rate
-        0xBB, // Net tick rate
-        0x12,
-        0x34, // Client frame
-        0x56,
-        0x78, // Server frame
-        0x90,
-        0xA0, // Snake ID
-        0xFF,
-        0xFF,
-        0xFF, // Spawn X
-        0xFF,
-        0xFF,
-        0xFF, // Spawn Y
+        0xAA,             // Sim tick rate
+        0xBB,             // Net tick rate
+        0x12, 0x34,       // Client frame
+        0x56, 0x78,       // Server frame
+        0x90, 0xA0,       // Snake ID
+        0xFF, 0xFF, 0xFF, // Spawn X
+        0xFF, 0xFF, 0xFF, // Spawn Y
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -215,22 +203,17 @@ TEST(NAME, parse_join_accept_qw_sign_extension)
 
 TEST(NAME, parse_join_accept)
 {
+    // clang-format off
     uint8_t payload[14] = {
-        0xAA, // Sim tick rate
-        0xBB, // Net tick rate
-        0x12,
-        0x34, // Client frame
-        0x56,
-        0x78, // Server frame
-        0x90,
-        0xA0, // Snake ID
-        0x0B,
-        0xCD,
-        0xEF, // Spawn X
-        0x0E,
-        0xDC,
-        0xBA, // Spawn Y
+        0xAA,             // Sim tick rate
+        0xBB,             // Net tick rate
+        0x12, 0x34,       // Client frame
+        0x56, 0x78,       // Server frame
+        0x90, 0xA0,       // Snake ID
+        0x0B, 0xCD, 0xEF, // Spawn X
+        0x0E, 0xDC, 0xBA, // Spawn Y
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -247,14 +230,12 @@ TEST(NAME, parse_join_accept)
 
 TEST(NAME, parse_join_deny_payload_too_small)
 {
+    // clang-format off
     uint8_t payload[] = {
         4,
-        'o',
-        'o',
-        'p',
-        's',
-        '\0',
+        'o', 'o', 'p', 's', '\0'
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -267,11 +248,12 @@ TEST(NAME, parse_join_deny_payload_too_small)
 
 TEST(NAME, parse_join_deny_invalid_string_length)
 {
+    // clang-format off
     uint8_t payload[] = {
         1,
-        '\0',
-        '\0',
+        '\0', '\0',
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -284,7 +266,12 @@ TEST(NAME, parse_join_deny_invalid_string_length)
 
 TEST(NAME, parse_join_deny_string_not_null_terminated)
 {
-    uint8_t payload[] = {3, 'o', 'o', 'p', 's'};
+    // clang-format off
+    uint8_t payload[] = {
+        3, 
+        'o', 'o', 'p', 's'
+    };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -297,7 +284,12 @@ TEST(NAME, parse_join_deny_string_not_null_terminated)
 
 TEST(NAME, parse_join_deny)
 {
-    uint8_t payload[] = {4, 'o', 'o', 'p', 's', '\0'};
+    // clang-format off
+    uint8_t payload[] = {
+        4,
+        'o', 'o', 'p', 's', '\0'
+    };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
@@ -316,135 +308,85 @@ TEST(NAME, parse_join_deny)
 
 TEST(NAME, parse_snake_bezier_payload_too_small)
 {
+    // clang-format off
     uint8_t payload[] = {
-        0xAA,
-        0xBB, // Snake ID
-        0x00,
-        0x01, // Handle count
-    };
-
-    parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 2), Eq(-1));
-}
-
-TEST(NAME, parse_snake_bezier_invalid_handle_count_1)
-{
-    uint8_t payload[15] = {
-        0xAA,
-        0xBB, // Snake ID
-        0x00,
-        0x02, // Handle start idx
-        0x00,
-        0x03, // Handle end idx
-        0x12,
-        0x34,
-        0x56, // X Position
-        0x65,
-        0x43,
-        0x21, // Y Position
-        0x50, // Angle
-        0x20,
-        0x21, // Length backwards/forwards
-    };
-
-    parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14), Eq(-3));
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 16), Eq(-3));
-}
-
-TEST(NAME, parse_snake_bezier_invalid_handle_count_2)
-{
-    uint8_t payload[24] = {
         0xAA, 0xBB, // Snake ID
-        0x00, 0x02, // Handle start idx
-        0x00, 0x04, // Handle end idx
+        0x00, 0x01, // Handle idx
+    };
+    // clang-format on
 
+    parsed_payload pp;
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 4), Eq(-1));
+}
+
+TEST(NAME, parse_snake_bezier_negative_handle_index)
+{
+    // clang-format off
+    uint8_t payload[24] = {
+        0xAA, 0xBB,       // Snake ID
+        0x80, 0x00,       // Handle idx
         0x12, 0x34, 0x56, // X Position
         0x65, 0x43, 0x21, // Y Position
         0x50,             // Angle
         0x20, 0x21,       // Length backwards/forwards
-
-        0x23, 0x45, 0x67, // X Position
-        0x76, 0x54, 0x32, // Y Position
-        0x60,             // Angle
-        0x40, 0x41,       // Length backwards/forwards
     };
+    // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 23), Eq(-3));
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 25), Eq(-3));
-}
-
-TEST(NAME, parse_snake_bezier_invalid_handle_indices_1)
-{
-    uint8_t payload[24] = {
-        0xAA, 0xBB, // Snake ID
-        0x00, 0x02, // Handle start idx
-        0x00, 0x02, // Handle end idx
-
-        0x12, 0x34, 0x56, // X Position
-        0x65, 0x43, 0x21, // Y Position
-        0x50,             // Angle
-        0x20, 0x21,       // Length backwards/forwards
-
-        0x23, 0x45, 0x67, // X Position
-        0x76, 0x54, 0x32, // Y Position
-        0x60,             // Angle
-        0x40, 0x41,       // Length backwards/forwards
-    };
-
-    parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24), Eq(-2));
-}
-
-TEST(NAME, parse_snake_bezier_invalid_handle_indices_2)
-{
-    uint8_t payload[24] = {
-        0xAA, 0xBB, // Snake ID
-        0x00, 0x03, // Handle start idx
-        0x00, 0x02, // Handle end idx
-
-        0x12, 0x34, 0x56, // X Position
-        0x65, 0x43, 0x21, // Y Position
-        0x50,             // Angle
-        0x20, 0x21,       // Length backwards/forwards
-
-        0x23, 0x45, 0x67, // X Position
-        0x76, 0x54, 0x32, // Y Position
-        0x60,             // Angle
-        0x40, 0x41,       // Length backwards/forwards
-    };
-
-    parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24), Eq(-2));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14), Eq(-2));
 }
 
 TEST(NAME, parse_snake_bezier)
 {
-    uint8_t payload[24] = {
+    // clang-format off
+    uint8_t payload[14] = {
         0xAA, 0xBB, // Snake ID
-        0x00, 0x02, // Handle start idx
-        0x00, 0x04, // Handle end idx
+        0x02, 0x00, // Handle idx
 
         0x12, 0x34, 0x56, // X Position
         0x65, 0x43, 0x21, // Y Position
         0x50,             // Angle
         0x20, 0x21,       // Length backwards/forwards
-
-        0x23, 0x45, 0x67, // X Position
-        0x76, 0x54, 0x32, // Y Position
-        0x60,             // Angle
-        0x40, 0x41,       // Length backwards/forwards
     };
+    // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
         msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24),
         Eq(MSG_SNAKE_BEZIER));
     EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
-    EXPECT_THAT(pp.snake_bezier.handle_idx_start, Eq(2));
-    EXPECT_THAT(pp.snake_bezier.handle_idx_end, Eq(4));
-    EXPECT_THAT(pp.snake_bezier.handles_buf[0], Eq(0x12));
-    EXPECT_THAT(pp.snake_bezier.handles_buf[1], Eq(0x34));
-    EXPECT_THAT(pp.snake_bezier.handles_buf[2], Eq(0x56));
+    EXPECT_THAT(pp.snake_bezier.handle_idx, Eq(0x200));
+    EXPECT_THAT(pp.snake_bezier.pos.x, Eq(0x123456));
+    EXPECT_THAT(pp.snake_bezier.pos.y, Eq(0x654321));
+    EXPECT_THAT(pp.snake_bezier.angle, Eq(0x50));
+    EXPECT_THAT(pp.snake_bezier.len_backwards, Eq(0x20));
+    EXPECT_THAT(pp.snake_bezier.len_forwards, Eq(0x21));
+    EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
+}
+
+TEST(NAME, parse_snake_bezier_qwpos_sign_extension)
+{
+    // clang-format off
+    uint8_t payload[14] = {
+        0xAA, 0xBB, // Snake ID
+        0x02, 0x00, // Handle idx
+
+        0xFF, 0xFF, 0xFF, // X Position
+        0xFF, 0xFF, 0xFF, // Y Position
+        0x50,             // Angle
+        0x20, 0x21,       // Length backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14),
+        Eq(MSG_SNAKE_BEZIER));
+    EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
+    EXPECT_THAT(pp.snake_bezier.handle_idx, Eq(0x200));
+    EXPECT_THAT(pp.snake_bezier.pos.x, Eq(-1));
+    EXPECT_THAT(pp.snake_bezier.pos.y, Eq(-1));
+    EXPECT_THAT(pp.snake_bezier.angle, Eq(0x50));
+    EXPECT_THAT(pp.snake_bezier.len_backwards, Eq(0x20));
+    EXPECT_THAT(pp.snake_bezier.len_forwards, Eq(0x21));
 }

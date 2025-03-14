@@ -1,18 +1,20 @@
 #include "clither/args.h"
+#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_pending_acks_bset.h"
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/net_addr_hm.h"
+#include "clither/proximity_state_bmap.h"
 #include "clither/server.h"
 #include "clither/server_client.h"
 #include "clither/server_client_hm.h"
 #include "clither/server_instance.h"
-#include "clither/server_instance_btree.h"
+#include "clither/server_instance_bmap.h"
 #include "clither/server_settings.h"
 #include "clither/snake.h"
-#include "clither/snake_btree.h"
-#include "clither/snake_id_vec.h"
+#include "clither/snake_bmap.h"
 #include "clither/thread.h"
 #include "clither/world.h"
 #include "clither/wrap.h"
@@ -31,7 +33,7 @@ static void client_remove(
     world_remove_snake(world, client->snake_id);
     vec_for_each (client->pending_msgs, pmsg)
         msg_free(*pmsg);
-    snake_id_vec_deinit(client->snakes_in_range);
+    proximity_state_bmap_deinit(client->snakes_in_proximity);
     msg_vec_deinit(client->pending_msgs);
     server_client_hm_erase(server->clients, addr);
 }
@@ -125,11 +127,7 @@ static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
-    log_net(
-        "Packing msg type=%d, len=%d, resend=%d\n",
-        msg->type,
-        msg->payload_len,
-        msg->resend_rate);
+    log_net("Packing msg type=%d, len=%d", msg->type, msg->payload_len);
 
     type = (uint8_t)msg->type;
     memcpy(ctx->buf + ctx->len + 0, &type, 1);
@@ -150,15 +148,20 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     if (msg_is_unreliable(msg))
         return VEC_RETAIN;
 
-    if (--msg->resend_rate_counter > 0)
+    if (--msg->resend_period_counter > 0)
         return VEC_RETAIN;
-    msg->resend_rate_counter = msg->resend_rate;
+    msg->resend_period_counter = msg->resend_period;
+    if (--msg->resend_retry_counter == 0)
+        return log_err(
+            "Client did not acknowledge reliable message: type=%d\n",
+            msg->type);
 
     log_net(
-        "Packing msg type=%d, len=%d, resend=%d\n",
+        "Packing msg type=%d, len=%d, resend=%d, retry=%d\n",
         msg->type,
         msg->payload_len,
-        msg->resend_rate);
+        msg->resend_period,
+        msg->resend_retry_counter);
 
     type = (uint8_t)msg->type;
     memcpy(ctx->buf + ctx->len + 0, &type, 1);
@@ -170,7 +173,7 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
 }
 
 /* ------------------------------------------------------------------------- */
-int server_send_pending_data(struct server* server)
+int server_send_pending_data(struct server* server, struct world* world)
 {
     int                    slot;
     const struct net_addr* addr;
@@ -183,7 +186,12 @@ int server_send_pending_data(struct server* server)
         ctx.len = 0;
         msg_vec_retain(
             client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
-        msg_vec_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
+        if (msg_vec_retain(
+                client->pending_msgs, append_reliable_msgs_to_buf, &ctx) == -1)
+        {
+            client_remove(server, world, addr, client);
+            continue;
+        }
 
         if (ctx.len == 0)
             continue;
@@ -205,8 +213,8 @@ static int server_queue(struct server_client* client, struct msg* msg)
 }
 
 /* ------------------------------------------------------------------------- */
-void server_update_snakes_in_range(
-    struct server* server, const struct world* world)
+int server_update_snakes_in_range(
+    struct server* server, const struct world* world, qw proximity_range)
 {
     int                    slot;
     int                    other_slot;
@@ -223,45 +231,110 @@ void server_update_snakes_in_range(
         {
             struct snake* snake;
             struct snake* other_snake;
-            qw            dx, dy, dist_sq;
+            struct qwaabb other_aabb;
 
             /* OK to compare pointers here -- they're from the same hashmap */
             if (addr == other_addr)
                 continue;
 
-            snake = snake_btree_find(world->snakes, client->snake_id);
+            snake = snake_bmap_find(world->snakes, client->snake_id);
             other_snake =
-                snake_btree_find(world->snakes, other_client->snake_id);
+                snake_bmap_find(world->snakes, other_client->snake_id);
+            other_aabb = other_snake->data.aabb;
+            other_aabb.x1 = qw_sub(other_aabb.x1, proximity_range);
+            other_aabb.y1 = qw_sub(other_aabb.y1, proximity_range);
+            other_aabb.x2 = qw_add(other_aabb.x2, proximity_range);
+            other_aabb.y2 = qw_add(other_aabb.y2, proximity_range);
+            if (qwaabb_test_qwpos(other_aabb, snake->head.pos))
+            {
+                int32_t                     handle_id;
+                const struct bezier_handle* handle;
+                struct proximity_state*     prox;
+                enum bmap_status status = proximity_state_bmap_emplace_or_get(
+                    &client->snakes_in_proximity,
+                    other_client->snake_id,
+                    &prox);
+                switch (status)
+                {
+                    case HM_OOM: return -1;
+                    case HM_EXISTS: continue;
+                    case HM_NEW: break;
+                }
 
-            /* TODO better distance check using bezier AABBs */
-            dx = qw_sub(snake->head.pos.x, other_snake->head.pos.x);
-            dy = qw_sub(snake->head.pos.y, other_snake->head.pos.y);
-            dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-            if (dist_sq > make_qw(1 * 1))
-                continue;
+                proximity_state_init(prox);
 
-            /* TODO: Update snakes_in_range property on client */
+                /* Queue all bezier handles of the snake in proximity. These
+                 * remain in the server's message queue until they get ACK'd by
+                 * the client */
+                rb_for_each (
+                    other_snake->data.bezier_handles, handle_id, handle)
+                {
+                    server_queue(
+                        client,
+                        msg_snake_bezier(
+                            other_client->snake_id, handle_id, handle));
+                }
+            }
+            else
+            {
+                struct proximity_state* prox = proximity_state_bmap_find(
+                    client->snakes_in_proximity, other_client->snake_id);
+                if (prox == NULL)
+                    continue;
+
+                server_queue(client, msg_snake_destroy(other_client->snake_id));
+                proximity_state_bmap_erase(
+                    client->snakes_in_proximity, other_client->snake_id);
+            }
         }
     }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
-void server_queue_snake_data(
+int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number)
 {
     int                    slot;
     const struct net_addr* addr;
     struct server_client*  client;
 
+    /* Send back real position of client snake's head */
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
-        struct snake* snake = snake_btree_find(world->snakes, client->snake_id);
+        struct snake* snake = snake_bmap_find(world->snakes, client->snake_id);
+        CLITHER_DEBUG_ASSERT(snake != NULL);
         if (snake_is_held(snake))
             continue;
         server_queue(client, msg_snake_head(&snake->head, frame_number));
     }
 
-    /* TODO queue bezier handles */
+    /* Queue bezier handles of all snakes in proximity */
+    server_client_hm_for_each (server->clients, slot, addr, client)
+    {
+        int16_t                 prox_idx;
+        uint16_t                snake_id;
+        struct proximity_state* prox;
+        bmap_for_each (client->snakes_in_proximity, prox_idx, snake_id, prox)
+        {
+            int                   handle_id;
+            struct bezier_handle* handle;
+            struct snake* snake = snake_bmap_find(world->snakes, snake_id);
+            CLITHER_DEBUG_ASSERT(snake != NULL);
+            rb_for_each (snake->data.bezier_handles, handle_id, handle)
+            {
+                if (bezier_pending_acks_bset_find(
+                        prox->bezier_pending_acks, handle_id))
+                {
+                    server_queue(
+                        client, msg_snake_bezier(snake_id, handle_id, handle));
+                }
+            }
+        }
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -328,7 +401,7 @@ static int process_message(
                 CLITHER_DEBUG_ASSERT(client != NULL);
 
                 msg_vec_init(&client->pending_msgs);
-                snake_id_vec_init(&client->snakes_in_range);
+                proximity_state_bmap_init(&client->snakes_in_proximity);
                 client->timeout_counter = 0;
                 client->snake_id =
                     world_spawn_snake(world, pp.join_request.username);
@@ -336,7 +409,7 @@ static int process_message(
 
                 /* Hold the snake in place until we receive the first
                  * command */
-                snake = snake_btree_find(world->snakes, client->snake_id);
+                snake = snake_bmap_find(world->snakes, client->snake_id);
                 CLITHER_DEBUG_ASSERT(snake != NULL);
                 snake_set_hold(snake);
 
@@ -353,7 +426,7 @@ static int process_message(
             /* (Re-)send join accept response */
             {
                 struct snake* snake =
-                    snake_btree_find(world->snakes, client->snake_id);
+                    snake_bmap_find(world->snakes, client->snake_id);
                 struct msg* response = msg_join_accept(
                     settings->sim_tick_rate,
                     settings->net_tick_rate,
@@ -383,7 +456,7 @@ static int process_message(
             uint16_t      first_frame, last_frame;
             int           lower;
             struct snake* snake =
-                snake_btree_find(world->snakes, client->snake_id);
+                snake_bmap_find(world->snakes, client->snake_id);
             int granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
             /*
@@ -450,6 +523,11 @@ static int process_message(
                 server_queue(client, msg_feedback(diff, frame_number));
             }
             return 0;
+        }
+
+        case MSG_SNAKE_BEZIER: break;
+        case MSG_SNAKE_BEZIER_ACK: {
+            break;
         }
     }
 
@@ -644,9 +722,9 @@ int server_recv(
 /* ------------------------------------------------------------------------- */
 void* server_run(const void* args)
 {
-    struct server_instance_btree* instances;
-    struct server_settings        settings;
-    const struct args*            a = args;
+    struct server_instance_bmap* instances;
+    struct server_settings       settings;
+    const struct args*           a = args;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("Server: ");
@@ -654,7 +732,7 @@ void* server_run(const void* args)
 
     mem_init_threadlocal();
 
-    server_instance_btree_init(&instances);
+    server_instance_bmap_init(&instances);
 
     if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
         goto load_settings_failed;
@@ -675,8 +753,8 @@ void* server_run(const void* args)
         uint16_t                key = atoi(port);
         CLITHER_DEBUG_ASSERT(key != 0);
 
-        if (server_instance_btree_emplace_new(&instances, key, &instance) !=
-            BTREE_NEW)
+        if (server_instance_bmap_emplace_new(&instances, key, &instance) !=
+            BMAP_NEW)
         {
             goto start_default_instance_failed;
         }
@@ -700,7 +778,7 @@ void* server_run(const void* args)
         int16_t                 idx;
         uint16_t                port;
         struct server_instance* instance;
-        btree_for_each (instances, idx, port, instance)
+        bmap_for_each (instances, idx, port, instance)
         {
             (void)port;
             thread_join(instance->thread);
@@ -710,7 +788,7 @@ void* server_run(const void* args)
 
     server_settings_save(&settings, a->config_file);
 
-    server_instance_btree_deinit(instances);
+    server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");
@@ -719,7 +797,7 @@ void* server_run(const void* args)
 
 start_default_instance_failed:
 load_settings_failed:
-    server_instance_btree_deinit(instances);
+    server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");
     log_set_prefix("");

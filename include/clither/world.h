@@ -2,14 +2,14 @@
 
 #include "clither/q.h"
 
-struct snake_btree;
+struct snake_bmap;
 
 struct world
 {
-    struct snake_btree* snakes;
-    qw                  inner_radius;
-    qw                  ring_start;
-    qw                  ring_end;
+    struct snake_bmap* snakes;
+    qw                 inner_radius;
+    qw                 ring_start;
+    qw                 ring_end;
 };
 
 void world_init(struct world* world);

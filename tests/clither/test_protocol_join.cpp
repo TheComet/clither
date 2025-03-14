@@ -7,7 +7,7 @@ extern "C" {
 #include "clither/server.h"
 #include "clither/server_client_hm.h"
 #include "clither/server_settings.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/world.h"
 }
 
@@ -92,7 +92,7 @@ TEST_F(NAME, server_denies_join_full_server)
 
     sv_settings.max_players = 0;
     ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
@@ -106,7 +106,7 @@ TEST_F(NAME, server_denies_join_username_too_long)
 
     sv_settings.max_username_len = 1;
     ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
@@ -119,15 +119,15 @@ TEST_F(NAME, server_accepts_join)
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
         client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
     // Ensure snakes were created
-    ASSERT_THAT(snake_btree_find(cl_world.snakes, cl.snake_id), NotNull());
-    ASSERT_THAT(snake_btree_find(sv_world.snakes, cl.snake_id), NotNull());
+    ASSERT_THAT(snake_bmap_find(cl_world.snakes, cl.snake_id), NotNull());
+    ASSERT_THAT(snake_bmap_find(sv_world.snakes, cl.snake_id), NotNull());
 }
 
 TEST_F(NAME, client_calculates_frame_number_with_buffer)
@@ -141,7 +141,7 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
 
     ASSERT_THAT(
         server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(
@@ -162,7 +162,7 @@ TEST_F(NAME, client_updates_tick_rates_from_server)
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 32), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     ASSERT_THAT(
         client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
@@ -182,7 +182,7 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
 
     ASSERT_THAT(
         server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
-    ASSERT_THAT(server_send_pending_data(&sv), Eq(0));
+    ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(

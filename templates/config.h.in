@@ -81,3 +81,10 @@
 #else
 #   define CLITHER_PRINTF_FORMAT(fmt, params)
 #endif
+
+/* misc --------------------------------------------------------------------- */
+
+#ifndef M_PI
+#    define M_PI 3.14159265358979323846
+#endif
+

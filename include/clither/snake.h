@@ -77,7 +77,7 @@ void snake_deinit(struct snake* snake);
 
 void snake_head_init(struct snake_head* head, struct qwpos spawn_pos);
 
-static inline int
+static int
 snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
 {
     return a->pos.x == b->pos.x && a->pos.y == b->pos.y &&
