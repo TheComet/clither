@@ -8,7 +8,7 @@ struct food_cluster;
 struct snake;
 struct msg_vec;
 
-enum __attribute__((packed)) msg_type
+enum msg_type
 {
     MSG_JOIN_REQUEST,
     MSG_JOIN_ACCEPT,
@@ -36,10 +36,11 @@ enum __attribute__((packed)) msg_type
     MSG_FOOD_CLUSTER_UPDATE_ACK
 };
 
-struct __attribute__((packed)) msg
+struct msg
 {
-    uint8_t       resend_rate;
-    uint8_t       resend_rate_counter;
+    uint8_t       resend_period;
+    uint8_t       resend_period_counter;
+    uint8_t       resend_retry_counter;
     enum msg_type type;
     uint8_t       payload_len;
     uint8_t       payload[1];
@@ -95,11 +96,18 @@ union parsed_payload
 
     struct
     {
-        const uint8_t* handles_buf;
-        int            handle_idx_start;
-        int            handle_idx_end;
-        uint16_t       snake_id;
+        struct qwpos pos;
+        uint16_t     snake_id;
+        qa           angle;
+        int16_t      handle_idx;
+        uint8_t      len_backwards;
+        uint8_t      len_forwards;
     } snake_bezier;
+
+    struct
+    {
+        uint16_t handle_idx;
+    } snake_bezier_ack;
 };
 
 int msg_parse_payload(
@@ -110,8 +118,8 @@ int msg_parse_payload(
 
 void msg_free(struct msg* m);
 
-#define msg_is_reliable(m)   ((m)->resend_rate > 0)
-#define msg_is_unreliable(m) ((m)->resend_rate == 0)
+#define msg_is_reliable(m)   ((m)->resend_period > 0)
+#define msg_is_unreliable(m) ((m)->resend_period == 0)
 
 void msg_update_frame_number(struct msg* m, uint16_t frame_number);
 
@@ -153,9 +161,10 @@ struct msg* msg_snake_bezier(
     uint16_t                    snake_id,
     uint16_t                    bezier_handle_idx,
     const struct bezier_handle* bezier_handle);
+struct msg* msg_snake_bezier_ack(uint16_t bezier_handle_idx);
 
-struct msg* msg_snake_bezier_ack(
-    struct bezier_handle_rb* bezier_handles, const union parsed_payload* pp);
+struct msg* msg_snake_destroy(uint16_t snake_id);
+struct msg* msg_snake_destroy_ack(uint16_t snake_id);
 
 struct msg*
 msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number);

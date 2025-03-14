@@ -1,4 +1,4 @@
-#include "clither/btree.h"
+#include "clither/bmap.h"
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 #include "clither/mem.h"
@@ -7,7 +7,7 @@
 #include "clither/server_instance.h"
 #include "clither/server_settings.h"
 #include "clither/signals.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/tick.h"
 #include "clither/world.h"
 #include <stdio.h>  /* sprintf */
@@ -60,17 +60,17 @@ void* server_instance_run(const void* args)
         }
 
         /* sim_update */
-        btree_for_each (world.snakes, idx, uid, snake)
+        bmap_for_each (world.snakes, idx, uid, snake)
         {
             struct cmd cmd;
             (void)uid;
             if (!snake_try_reset_hold(snake, frame_number))
                 continue;
             cmd = cmd_queue_take_or_predict(&snake->cmdq, frame_number);
-            //snake_param_update(
-            //    &snake->param,
-            //    snake->param.upgrades,
-            //    snake->param.food_eaten + 1);
+            /*snake_param_update(
+                 &snake->param,
+                 snake->param.upgrades,
+                 snake->param.food_eaten + 1);*/
             snake_remove_stale_segments(
                 &snake->data,
                 snake_step(
@@ -84,8 +84,13 @@ void* server_instance_run(const void* args)
 
         if (net_update)
         {
-            server_queue_snake_data(&server, &world, frame_number);
-            server_send_pending_data(&server);
+            if (server_update_snakes_in_range(&server, &world, make_qw(10)) !=
+                0)
+                break;
+            if (server_queue_snake_data(&server, &world, frame_number) != 0)
+                break;
+            if (server_send_pending_data(&server, &world) != 0)
+                break;
         }
 
         if ((tick_lag = tick_wait(&sim_tick)) > 0)

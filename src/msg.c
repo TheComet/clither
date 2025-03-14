@@ -18,7 +18,7 @@
 #define alloc_msg(extra_bytes) mem_alloc(msg_size(extra_bytes))
 
 /* ------------------------------------------------------------------------- */
-static struct msg* msg_alloc(enum msg_type type, int8_t resend_rate, int size)
+static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
 {
     struct msg* msg;
     assert(size <= 255); /* The payload length field is 1 byte */
@@ -28,9 +28,14 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_rate, int size)
 
     msg = alloc_msg(255);
     msg->type = type;
-    msg->resend_rate = resend_rate;
-    msg->resend_rate_counter = 1;
     msg->payload_len = size;
+
+    msg->resend_period = resend_period;
+    /* Make sure to send it immediately first */
+    msg->resend_period_counter = 1;
+    /* How many times to retry before dropping the connection */
+    msg->resend_retry_counter = 10;
+
     return msg;
 }
 
@@ -67,13 +72,15 @@ void msg_update_frame_number(struct msg* m, uint16_t frame_number)
         case MSG_SNAKE_USERNAME_ACK: break;
         case MSG_SNAKE_BEZIER: break;
         case MSG_SNAKE_BEZIER_ACK: break;
+        case MSG_SNAKE_DESTROY: break;
+        case MSG_SNAKE_DESTROY_ACK: break;
         case MSG_SNAKE_HEAD: break;
 
         case MSG_FOOD_GRID_PARAMS: break;
         case MSG_FOOD_GRID_PARAMS_ACK: break;
-        case MSG_FOOD_CLUSTER_UPDATE: break;
         case MSG_FOOD_CLUSTER_CREATE: break;
         case MSG_FOOD_CLUSTER_CREATE_ACK: break;
+        case MSG_FOOD_CLUSTER_UPDATE: break;
         case MSG_FOOD_CLUSTER_UPDATE_ACK: break;
     }
 }
@@ -216,8 +223,63 @@ int msg_parse_payload(
                 "MSG_FEEDBACK: frame=%d, diff=%d\n",
                 pp->feedback.frame_number,
                 pp->feedback.diff);
+            break;
         }
-        break;
+
+        case MSG_SNAKE_USERNAME: break;
+        case MSG_SNAKE_USERNAME_ACK: break;
+
+        case MSG_SNAKE_BEZIER: {
+            if (payload_len < 14)
+            {
+                log_warn(
+                    "MSG_SNAKE_BEZIER: Payload is too small (%d) < 14\n",
+                    payload_len);
+                return -1;
+            }
+
+            pp->snake_bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->snake_bezier.handle_idx = (payload[2] << 8) | (payload[3] << 0);
+            if (pp->snake_bezier.handle_idx < 0)
+                return -2;
+
+            pp->snake_bezier.pos.x =
+                (payload[4] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[4] << 16) |
+                (payload[5] << 8) | (payload[6] << 0);
+            pp->snake_bezier.pos.y =
+                (payload[7] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[7] << 16) |
+                (payload[8] << 8) | (payload[9] << 0);
+
+            pp->snake_bezier.angle = (payload[10] << 8) | (payload[11] << 0);
+
+            pp->snake_bezier.len_backwards = payload[12];
+            pp->snake_bezier.len_forwards = payload[13];
+
+            break;
+        }
+
+        case MSG_SNAKE_BEZIER_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn(
+                    "MSG_SNAKE_BEZIER_ACK: Payload is too small (%d) < 2\n",
+                    payload_len);
+                return -1;
+            }
+
+            pp->snake_bezier_ack.handle_idx =
+                (payload[0] << 8) | (payload[1] << 0);
+            break;
+        }
+
+        case MSG_SNAKE_DESTROY: break;
+        case MSG_SNAKE_DESTROY_ACK: break;
 
         case MSG_SNAKE_HEAD: {
             if (payload_len < 11)
@@ -241,59 +303,15 @@ int msg_parse_payload(
                 (payload[6] << 8) | (payload[7] << 0);
             pp->snake_head.head.angle = (payload[8] << 8) | (payload[9] << 0);
             pp->snake_head.head.speed = payload[10];
+            break;
         }
-        break;
 
-        case MSG_SNAKE_BEZIER: {
-            int handle_size = 6 + /* World position (2x 24-bit qwpos) */
-                              1 + /* Angle */
-                              2;  /* Length forwards + backwards */
-
-            if (payload_len < 6)
-            {
-                log_warn(
-                    "MSG_SNAKE_BEZIER: Payload is too small (%d) < 4\n",
-                    payload_len);
-                return -1;
-            }
-
-            pp->snake_bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_bezier.handle_idx_start =
-                (payload[2] << 8) | (payload[3] << 0);
-            pp->snake_bezier.handle_idx_end =
-                (payload[4] << 8) | (payload[5] << 0);
-
-            if (pp->snake_bezier.handle_idx_end <=
-                pp->snake_bezier.handle_idx_start)
-            {
-                log_warn(
-                    "MSG_SNAKE_BEZIER: Invalid start and end indices: "
-                    "start=%d, end=%d\n",
-                    pp->snake_bezier.handle_idx_start,
-                    pp->snake_bezier.handle_idx_end);
-                return -2;
-            }
-
-            if (6 + (pp->snake_bezier.handle_idx_end -
-                     pp->snake_bezier.handle_idx_start) *
-                        handle_size !=
-                payload_len)
-            {
-                log_warn(
-                    "MSG_SNAKE_BEZIER: Handle indices point outside of payload "
-                    "range!\n");
-                return -3;
-            }
-
-            pp->snake_bezier.handles_buf = payload + 6;
-        }
-        break;
-
-        case MSG_SNAKE_BEZIER_ACK: break;
-
-        case MSG_FOOD_GRID_PARAMS:
-        case MSG_FOOD_GRID_PARAMS_ACK:
+        case MSG_FOOD_GRID_PARAMS: break;
+        case MSG_FOOD_GRID_PARAMS_ACK: break;
+        case MSG_FOOD_CLUSTER_CREATE: break;
+        case MSG_FOOD_CLUSTER_CREATE_ACK: break;
         case MSG_FOOD_CLUSTER_UPDATE: break;
+        case MSG_FOOD_CLUSTER_UPDATE_ACK: break;
     }
 
     return type;
@@ -363,14 +381,14 @@ struct msg* msg_join_accept(
 
 /* ------------------------------------------------------------------------- */
 static struct msg* msg_alloc_string_payload(
-    enum msg_type type, int8_t resend_rate, const char* str)
+    enum msg_type type, int8_t resend_period, const char* str)
 {
     int     len_i32 = (int)strlen(str);
     uint8_t len = len_i32 > 254 ? 254 : (uint8_t)len_i32;
 
     struct msg* m = msg_alloc(
         type,
-        resend_rate,
+        resend_period,
         sizeof(len) + len + 1 /* we need to include the null terminator */
     );
     m->payload[0] = len;
@@ -785,60 +803,42 @@ struct msg* msg_snake_bezier(
 }
 
 /* ------------------------------------------------------------------------- */
-static struct bezier_handle* find_bezier_handle_in_rb(
-    const struct bezier_handle* handle, struct bezier_handle_rb* rb)
+struct msg* msg_snake_bezier_ack(uint16_t bezier_handle_idx)
 {
-    struct bezier_handle* existing_handle;
-    int                   i;
-    rb_for_each (rb, i, existing_handle)
-    {
-        if (bezier_handles_equal_pos(handle, existing_handle))
-            return existing_handle;
-    }
-    return NULL;
+    struct msg* m = msg_alloc(MSG_SNAKE_BEZIER_ACK, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (bezier_handle_idx >> 8) & 0xFF;
+    m->payload[1] = bezier_handle_idx & 0xFF;
+
+    return m;
 }
-struct msg* msg_snake_bezier_ack(
-    struct bezier_handle_rb* bezier_handles, const union parsed_payload* pp)
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_destroy(uint16_t snake_id)
 {
-    int            i;
-    const uint8_t* buf = pp->snake_bezier.handles_buf;
-    for (i = pp->snake_bezier.handle_idx_start;
-         i != pp->snake_bezier.handle_idx_end;
-         ++i, buf += 9)
-    {
-        struct bezier_handle* existing_handle;
-        struct bezier_handle  handle;
-        handle.pos.x =
-            (buf[0] & 0x80
-                 ? 0xFF << 24
-                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-            (buf[0] << 16) |
-            (buf[1] << 8) | (buf[2] << 0);
-        handle.pos.y =
-            (buf[3] & 0x80
-                 ? 0xFF << 24
-                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-            (buf[3] << 16) |
-            (buf[4] << 8) | (buf[5] << 0);
-        handle.angle = u8_to_qa(buf[6]);
-        handle.len_backwards = buf[7];
-        handle.len_forwards = buf[8];
+    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY, 10, 2);
+    if (m == NULL)
+        return NULL;
 
-        existing_handle = find_bezier_handle_in_rb(&handle, bezier_handles);
-        if (existing_handle != NULL)
-        {
-            /*
-             * The length forwards from the second-to-front handle can change
-             * continuously because the front segment is always being updated.
-             * Make sure to update it here, regardless of whether we've
-             * acknowledged this handle or not
-             */
-            existing_handle->len_forwards = handle.len_forwards;
-            continue;
-        }
-    }
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = snake_id & 0xFF;
 
-    return NULL;
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_destroy_ack(uint16_t snake_id)
+{
+    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY_ACK, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
 }
 
 /* ------------------------------------------------------------------------- */

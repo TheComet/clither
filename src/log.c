@@ -113,7 +113,7 @@ void log_dbg(const char* fmt, ...)
     vfprintf(stderr, fmt, va);
     va_end(va);
 
-#if defined(CLITHER_LOGGING)
+#    if defined(CLITHER_LOGGING)
     if (g_log)
     {
         fprintf(g_log, "[Debug] %s", g_prefix);
@@ -122,7 +122,7 @@ void log_dbg(const char* fmt, ...)
         va_end(va);
         fflush(g_log);
     }
-#endif
+#    endif
 }
 #endif
 
@@ -179,7 +179,7 @@ void log_warn(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
-void log_err(const char* fmt, ...)
+int log_err(const char* fmt, ...)
 {
     va_list va;
     fprintf(
@@ -202,6 +202,7 @@ void log_err(const char* fmt, ...)
         fflush(g_log);
     }
 #endif
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */

@@ -25,13 +25,13 @@ void log_bezier_close(void);
 CLITHER_PRINTF_FORMAT(1, 2) void log_raw(const char* fmt, ...);
 CLITHER_PRINTF_FORMAT(1, 2) void log_info(const char* fmt, ...);
 CLITHER_PRINTF_FORMAT(1, 2) void log_warn(const char* fmt, ...);
-CLITHER_PRINTF_FORMAT(1, 2) void log_err(const char* fmt, ...);
+CLITHER_PRINTF_FORMAT(1, 2) int log_err(const char* fmt, ...);
 CLITHER_PRINTF_FORMAT(1, 2) void log_note(const char* fmt, ...);
 
 #if defined(CLITHER_DEBUG)
 CLITHER_PRINTF_FORMAT(1, 2) void log_dbg(const char* fmt, ...);
 #else
-#define log_dbg(fmt, ...)
+#    define log_dbg(fmt, ...)
 #endif
 
 /* Specialized logging functions -------------------------------------------- */

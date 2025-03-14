@@ -11,7 +11,7 @@
 #include "clither/resource_pack.h"
 #include "clither/signals.h"
 #include "clither/snake.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/str.h"
 #include "clither/tick.h"
 #include "clither/world.h"
@@ -134,11 +134,7 @@ static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
-    log_net(
-        "Packing msg type=%d, len=%d, resend=%d\n",
-        msg->type,
-        msg->payload_len,
-        msg->resend_rate);
+    log_net("Packing msg type=%d, len=%d\n", msg->type, msg->payload_len);
 
     type = (uint8_t)msg->type;
     memcpy(ctx->buf + ctx->len + 0, &type, 1);
@@ -160,9 +156,15 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     if (msg_is_unreliable(msg))
         return VEC_RETAIN;
 
-    if (--msg->resend_rate_counter > 0)
+    if (--msg->resend_period_counter > 0)
         return VEC_RETAIN;
-    msg->resend_rate_counter = msg->resend_rate;
+    msg->resend_period_counter = msg->resend_period;
+    if (--msg->resend_retry_counter == 0)
+    {
+        return log_err(
+            "Server did not acknowledge reliable message: type=%d\n",
+            msg->type);
+    }
 
     /*
      * Some messages in the reliable queue contain the frame number they were
@@ -173,10 +175,11 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     msg_update_frame_number(msg, ctx->frame_number);
 
     log_net(
-        "Packing msg type=%d, len=%d, resend=%d\n",
+        "Packing msg type=%d, len=%d, resend=%d, retry=%d\n",
         msg->type,
         msg->payload_len,
-        msg->resend_rate);
+        msg->resend_period,
+        msg->resend_retry_counter);
 
     type = (uint8_t)msg->type;
     memcpy(ctx->buf + ctx->len + 0, &type, 1);
@@ -196,7 +199,11 @@ int client_send_pending_data(struct client* client)
     ctx.len = 0;
     ctx.frame_number = client->frame_number;
     msg_vec_retain(client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
-    msg_vec_retain(client->pending_msgs, append_reliable_msgs_to_buf, &ctx);
+    if (msg_vec_retain(
+            client->pending_msgs, append_reliable_msgs_to_buf, &ctx) == -1)
+    {
+        return -1;
+    }
 
     if (ctx.len > 0)
     {
@@ -218,10 +225,13 @@ int client_send_pending_data(struct client* client)
             log_info("Attempting to use next socket\n");
             goto retry_send;
         }
+
+        /* We can't reset our timeout counter if we aren't sending data */
         client->timeout_counter++;
     }
 
-    if (client->timeout_counter > 100)
+    /* 3 second timeout */
+    if (client->timeout_counter > client->net_tick_rate * 3)
     {
         log_err("Server timed out\n");
         return -1;
@@ -353,7 +363,7 @@ static struct client_recv_result process_message(
 
         case MSG_SNAKE_HEAD: {
             struct snake* snake =
-                snake_btree_find(world->snakes, client->snake_id);
+                snake_bmap_find(world->snakes, client->snake_id);
             snake_ack_frame(
                 &snake->data,
                 &snake->head_ack,
@@ -368,7 +378,7 @@ static struct client_recv_result process_message(
 
         case MSG_SNAKE_BEZIER: {
             struct snake* snake =
-                snake_btree_find(world->snakes, pp.snake_bezier.snake_id);
+                snake_bmap_find(world->snakes, pp.snake_bezier.snake_id);
             if (snake == NULL)
             {
                 snake = world_create_snake(
@@ -450,11 +460,14 @@ retry_recv:
         log_info("Attempting to use next socket\n");
         goto retry_recv;
     }
-    log_net("Received UDP packet, size=%d\n", packet.len);
+
+    if (packet.len == 0)
+        return client_recv_ok();
 
     /* Don't let client time out */
     client->timeout_counter = 0;
 
+    log_net("Received UDP packet, size=%d\n", packet.len);
     return unpack_packet(client, world, &packet);
 }
 
@@ -628,7 +641,7 @@ void* client_run(const struct args* a)
         if (client.state == CLIENT_CONNECTED)
         {
             struct snake* snake =
-                snake_btree_find(world.snakes, client.snake_id);
+                snake_bmap_find(world.snakes, client.snake_id);
 
             /*
              * Map "input" to "command". This converts the mouse and keyboard
@@ -650,10 +663,10 @@ void* client_run(const struct args* a)
             cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
 
             /* Update snake */
-            // snake_param_update(
-            //     &snake->param,
-            //     snake->param.upgrades,
-            //     snake->param.food_eaten + 1);
+            /* snake_param_update(
+                   &snake->param,
+                   snake->param.upgrades,
+                   snake->param.food_eaten + 1);*/
             snake_remove_stale_segments_with_rollback_constraint(
                 &snake->data,
                 &snake->head_ack,

@@ -50,12 +50,12 @@ struct qwaabb
 #define q16_16_rebase(q, den) ((q) * den / (1 << Q16_16_Q))
 #define qw_to_q16_16(qw) ((int64_t)(qw) * (1 << Q16_16_Q) / (1 << QW_Q))
 
-static inline q16_16 q16_16_add(q16_16 a, q16_16 b)
+static q16_16 q16_16_add(q16_16 a, q16_16 b)
 {
     return a + b;
 }
 
-static inline q16_16 q16_16_add_sat(q16_16 a, q16_16 b)
+static q16_16 q16_16_add_sat(q16_16 a, q16_16 b)
 {
     int64_t tmp = (int64_t)a + (int64_t)b;
     if (tmp > 0x7FFFFFFF)
@@ -65,20 +65,20 @@ static inline q16_16 q16_16_add_sat(q16_16 a, q16_16 b)
     return (q16_16)tmp;
 }
 
-static inline q16_16 q16_16_sub(q16_16 a, q16_16 b)
+static q16_16 q16_16_sub(q16_16 a, q16_16 b)
 {
     return a - b;
 }
 
 /* saturate to range of 24-bit signed int */
-static inline q16_16 q16_16_sat32(int64_t x)
+static q16_16 q16_16_sat32(int64_t x)
 {
     if (x > 0x7FFFFFFFL) return 0x7FFFFFFFL;
     else if (x < -(int64_t)0x80000000L) return -(int64_t)0x80000000L;
     else return (q16_16)x;
 }
 
-static inline q16_16 q16_16_mul(q16_16 a, q16_16 b)
+static q16_16 q16_16_mul(q16_16 a, q16_16 b)
 {
     int64_t temp = (int64_t)a * (int64_t)b; /* result type is operand's type */
     /* Rounding; mid values are rounded up */
@@ -87,7 +87,7 @@ static inline q16_16 q16_16_mul(q16_16 a, q16_16 b)
     return q16_16_sat32(temp >> Q16_16_Q);
 }
 
-static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
+static q16_16 q16_16_div(q16_16 a, q16_16 b)
 {
     /* pre-multiply by the base (Upscale to Q64 so that the result will be in Q32 format) */
     int64_t temp = (int64_t)a << Q16_16_Q;
@@ -110,7 +110,7 @@ static inline q16_16 q16_16_div(q16_16 a, q16_16 b)
 #define qw_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 #define q16_16_to_qw(q16) qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
 
-static inline struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
+static struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
 {
     struct qwaabb bb;
     bb.x1 = make_qw(x1); bb.y1 = make_qw(y1);
@@ -118,7 +118,7 @@ static inline struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
     return bb;
 }
 
-static inline struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
+static struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
 {
     struct qwaabb bb;
     bb.x1 = x1; bb.y1 = y1;
@@ -126,7 +126,7 @@ static inline struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
     return bb;
 }
 
-static inline struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
+static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
 {
     if (a.x1 > b.x1) a.x1 = b.x1;
     if (a.x2 < b.x2) a.x2 = b.x2;
@@ -135,17 +135,17 @@ static inline struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
     return a;
 }
 
-static inline int qwaabb_qwpos(struct qwaabb bb, const struct qwpos p)
+static int qwaabb_test_qwpos(struct qwaabb bb, const struct qwpos p)
 {
     return p.x >= bb.x1 && p.x <= bb.x2 && p.y >= bb.y1 && p.y <= bb.y2;
 }
 
-static inline qw qw_add(qw a, qw b)
+static qw qw_add(qw a, qw b)
 {
     return a + b;
 }
 
-static inline qw qw_add_sat(qw a, qw b)
+static qw qw_add_sat(qw a, qw b)
 {
     int64_t tmp;
 
@@ -157,20 +157,20 @@ static inline qw qw_add_sat(qw a, qw b)
     return (qw)tmp;
 }
 
-static inline qw qw_sub(qw a, qw b)
+static qw qw_sub(qw a, qw b)
 {
     return a - b;
 }
 
 /* saturate to range of 24-bit signed int */
-static inline qw qw_sat24(int64_t x)
+static qw qw_sat24(int64_t x)
 {
     if (x > 0x7FFFFF) return 0x7FFFFF;
     else if (x < -0x800000) return -0x800000;
     else return (qw)x;
 }
 
-static inline qw qw_mul(qw a, qw b)
+static qw qw_mul(qw a, qw b)
 {
     int64_t temp = (int64_t)a * (int64_t)b; /* result type is operand's type */
     /* Rounding; mid values are rounded up */
@@ -179,7 +179,7 @@ static inline qw qw_mul(qw a, qw b)
     return qw_sat24(temp >> QW_Q);
 }
 
-static inline int qw_mul_to_int(qw a, int b)
+static int qw_mul_to_int(qw a, int b)
 {
     int64_t temp = (int64_t)a * (int64_t)b; /* result type is operand's type */
     /* Rounding; mid values are rounded up */
@@ -189,7 +189,7 @@ static inline int qw_mul_to_int(qw a, int b)
     return qw_to_int(temp);
 }
 
-static inline qw qw_div(qw a, qw b)
+static qw qw_div(qw a, qw b)
 {
     /* pre-multiply by the base (Upscale to Q64 so that the result will be in Q32 format) */
     int64_t temp = (int64_t)a << QW_Q;
@@ -204,34 +204,34 @@ static inline qw qw_div(qw a, qw b)
     return (qw)(temp / b);
 }
 
-static inline qw qw_sq(qw q)
+static qw qw_sq(qw q)
 {
     return qw_mul(q, q);
 }
 
 #include <math.h>
 
-static inline qw qw_sqrt(qw q)
+static qw qw_sqrt(qw q)
 {
     /* TODO */
     return make_qw(sqrt(qw_to_float(q)));
 }
 
-static inline struct qwpos make_qwposi(int x, int y)
+static struct qwpos make_qwposi(int x, int y)
 {
     struct qwpos p;
     p.x = make_qw(x);
     p.y = make_qw(y);
     return p;
 }
-static inline struct qwpos make_qwposf(double x, double y)
+static struct qwpos make_qwposf(double x, double y)
 {
     struct qwpos p;
     p.x = make_qw(x);
     p.y = make_qw(y);
     return p;
 }
-static inline struct qwpos make_qwposqw(qw x, qw y)
+static struct qwpos make_qwposqw(qw x, qw y)
 {
     struct qwpos p;
     p.x = x;
@@ -239,7 +239,7 @@ static inline struct qwpos make_qwposqw(qw x, qw y)
     return p;
 }
 
-static inline struct qwpos qwpos_normalize(struct qwpos p)
+static struct qwpos qwpos_normalize(struct qwpos p)
 {
     qw len = qw_sqrt(qw_add(qw_mul(p.x, p.x), qw_mul(p.y, p.y)));
     if (len == 0)
@@ -262,7 +262,7 @@ static inline struct qwpos qwpos_normalize(struct qwpos p)
 #define qa_to_u8(q) \
     qa_rescale((q + QA_PI), 256, 2*QA_PI)
 
-static inline qa qa_wrapvalue(int32_t value)
+static qa qa_wrapvalue(int32_t value)
 {
     /* Ensure the angle remains in the range [-pi .. pi) or bad things happen */
     if (value < -QA_PI)
@@ -272,25 +272,25 @@ static inline qa qa_wrapvalue(int32_t value)
     return (qa)value;
 }
 
-static inline qa qa_add(qa a, qa b)
+static qa qa_add(qa a, qa b)
 {
     return qa_wrapvalue((int32_t)a + (int32_t)b);
 }
 
-static inline qa qa_sub(qa a, qa b)
+static qa qa_sub(qa a, qa b)
 {
     return qa_wrapvalue((int32_t)a - (int32_t)b);
 }
 
 /* saturate to range of 16-bit signed int */
-static inline qa qa_sat16(int32_t x)
+static qa qa_sat16(int32_t x)
 {
     if (x > 0x7FFF) return 0x7FFF;
     else if (x < -0x8000) return -0x8000;
     else return (qa)x;
 }
 
-static inline qa qa_mul(qa a, qa b)
+static qa qa_mul(qa a, qa b)
 {
     int32_t temp = (int32_t)a * (int32_t)b; /* result type is operand's type */
     /* Rounding; mid values are rounded up */
@@ -299,13 +299,13 @@ static inline qa qa_mul(qa a, qa b)
     return qa_sat16(temp >> QA_Q);
 }
 
-static inline qw qa_cos(qa q)
+static qw qa_cos(qa q)
 {
     /* TODO */
     return make_qw(cos(qa_to_float(q)));
 }
 
-static inline qw qa_sin(qa q)
+static qw qa_sin(qa q)
 {
     /* TODO */
     return make_qw(sin(qa_to_float(q)));

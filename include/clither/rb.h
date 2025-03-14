@@ -37,7 +37,7 @@
      * Initializes the structure to a defined state.                           \
      * @param[in] rb Pointer to a ring buffer of type RB(T,B)*                 \
      */                                                                        \
-    static inline void prefix##_init(struct prefix** rb)                       \
+    static void prefix##_init(struct prefix** rb)                              \
     {                                                                          \
         *rb = NULL;                                                            \
     }                                                                          \
@@ -71,7 +71,7 @@
      * @param[in] elem The element to copy into the ring buffer.               \
      * @return Returns 0 on success, or negative if the buffer was full.       \
      */                                                                        \
-    static inline int prefix##_put(struct prefix* rb, T elem)                  \
+    static int prefix##_put(struct prefix* rb, T elem)                         \
     {                                                                          \
         int##bits##_t write;                                                   \
         CLITHER_DEBUG_ASSERT(rb);                                              \
@@ -82,7 +82,7 @@
         rb->data[write] = elem;                                                \
         return 0;                                                              \
     }                                                                          \
-    static inline int prefix##_put_realloc(struct prefix** rb, T elem)         \
+    static int prefix##_put_realloc(struct prefix** rb, T elem)                \
     {                                                                          \
         int##bits##_t write;                                                   \
         if (*rb == NULL || rb_is_full(*rb))                                    \
@@ -109,7 +109,7 @@
      * @return Returns a pointer to the uninitialized element if insertion is  \
      * successfull, or NULL if there is no space left.                         \
      */                                                                        \
-    static inline T* prefix##_emplace(struct prefix* rb)                       \
+    static T* prefix##_emplace(struct prefix* rb)                              \
     {                                                                          \
         int##bits##_t write = rb->write;                                       \
         T*            value = &rb->data[write];                                \
@@ -118,7 +118,7 @@
         rb->write = (write + 1) & ((int##bits##_t)rb->capacity - 1);           \
         return value;                                                          \
     }                                                                          \
-    static inline T* prefix##_emplace_realloc(struct prefix** rb)              \
+    static T* prefix##_emplace_realloc(struct prefix** rb)                     \
     {                                                                          \
         int##bits##_t write;                                                   \
         T*            value;                                                   \
@@ -141,7 +141,7 @@
      * Use @see rb_is_empty() first if you need to.                            \
      * @param[in] rb Pointer to a ring buffer of type RB(T,B)*                 \
      */                                                                        \
-    static inline T prefix##_take(struct prefix* rb)                           \
+    static T prefix##_take(struct prefix* rb)                                  \
     {                                                                          \
         int##bits##_t read;                                                    \
         T             data;                                                    \
@@ -159,7 +159,7 @@
      * Use @see rb_is_empty() first if you need to.                            \
      * @param[in] rb Pointer to a ring buffer of type RB(T,B)*                 \
      */                                                                        \
-    static inline T prefix##_takew(struct prefix* rb)                          \
+    static T prefix##_takew(struct prefix* rb)                                 \
     {                                                                          \
         int##bits##_t write;                                                   \
         T             data;                                                    \
@@ -170,7 +170,7 @@
         return data;                                                           \
     }                                                                          \
                                                                                \
-    static inline void prefix##_clear(struct prefix* rb)                       \
+    static void prefix##_clear(struct prefix* rb)                              \
     {                                                                          \
         CLITHER_DEBUG_ASSERT(rb);                                              \
         rb->read = rb->write;                                                  \

@@ -9,7 +9,7 @@
 #include "clither/resource_snake_part_vec.h"
 #include "clither/resource_sprite_vec.h"
 #include "clither/snake.h"
-#include "clither/snake_btree.h"
+#include "clither/snake_bmap.h"
 #include "clither/str.h"
 #include "clither/strlist.h"
 #include "clither/world.h"
@@ -1130,6 +1130,7 @@ static void draw_snake(
     }
 
     /* head */
+    if (vec_count(snake->data.bezier_points) > 0)
     {
         int                  tile_x, tile_y;
         struct qwpos         pos_cameraSpace;
@@ -1268,7 +1269,7 @@ static void gfx_gles2_draw_world(
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
     }
 
-    btree_for_each (world->snakes, idx, snake_id, snake)
+    bmap_for_each (world->snakes, idx, snake_id, snake)
     {
         (void)snake_id;
         draw_snake(snake, gfx, camera, &ar, 1);
@@ -1277,7 +1278,7 @@ static void gfx_gles2_draw_world(
     draw_background(gfx, camera, &ar);
     // draw_0_0(gfx, camera, &ar);
 
-    btree_for_each (world->snakes, idx, snake_id, snake)
+    bmap_for_each (world->snakes, idx, snake_id, snake)
     {
         (void)snake_id;
         draw_snake(snake, gfx, camera, &ar, 0);

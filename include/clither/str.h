@@ -11,11 +11,13 @@ void str_deinit(struct str* str);
 int  str_set_cstr(struct str** str, const char* cstr);
 int  str_join_path(struct str** str, struct strview path);
 int  str_join_path_cstr(struct str** str, const char* path);
-static inline const char* str_cstr(const struct str* str)
+
+static const char* str_cstr(const struct str* str)
 {
     return str ? ((const struct str_impl*)str)->data : "";
 }
-static inline int str_len(const struct str* str)
+
+static int str_len(const struct str* str)
 {
     return str ? ((const struct str_impl*)str)->count - 1 : 0;
 }

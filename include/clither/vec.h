@@ -30,7 +30,7 @@
      * the structure to a defined state.                                       \
      * @param[in] v Pointer to a vector of type VEC(T,B)*                      \
      */                                                                        \
-    static inline void prefix##_init(struct prefix** v)                        \
+    static void prefix##_init(struct prefix** v)                               \
     {                                                                          \
         *v = NULL;                                                             \
     }                                                                          \
@@ -58,7 +58,7 @@
      * see vec_clear_compact().                                                \
      * @param[in] v Pointer to a vector of type VEC(T,B)*                      \
      */                                                                        \
-    static inline void prefix##_clear(struct prefix* v)                        \
+    static void prefix##_clear(struct prefix* v)                               \
     {                                                                          \
         if (v)                                                                 \
             v->count = 0;                                                      \
@@ -76,7 +76,7 @@
      * the vector's count to 0 and frees all underlying memory.                \
      * @param[in] v Pointer to a vector of type VEC(T,B)*                      \
      */                                                                        \
-    static inline void prefix##_clear_compact(struct prefix** v)               \
+    static void prefix##_clear_compact(struct prefix** v)                      \
     {                                                                          \
         prefix##_clear(*v);                                                    \
         prefix##_compact(v);                                                   \
@@ -109,7 +109,7 @@
      * @param[in] elem The element to copy into the vector.                    \
      * @return Returns 0 on success, negative on error.                        \
      */                                                                        \
-    static inline int prefix##_push(struct prefix** v, T elem)                 \
+    static int prefix##_push(struct prefix** v, T elem)                        \
     {                                                                          \
         T* ins = prefix##_emplace(v);                                          \
         if (ins == NULL)                                                       \
@@ -151,8 +151,7 @@
      * @param[in] elem The element to copy into the vector.                    \
      * @return Returns 0 on success, negative on error.                        \
      */                                                                        \
-    static inline int prefix##_insert(                                         \
-        struct prefix** v, int##bits##_t i, T elem)                            \
+    static int prefix##_insert(struct prefix** v, int##bits##_t i, T elem)     \
     {                                                                          \
         T* ins = prefix##_insert_emplace(v, i);                                \
         if (ins == NULL)                                                       \
@@ -173,13 +172,13 @@
      * @return A pointer to the popped element. See warning and use with       \
      * caution. Vector must not be empty.                                      \
      */                                                                        \
-    static inline T* prefix##_pop(struct prefix* v)                            \
+    static T* prefix##_pop(struct prefix* v)                                   \
     {                                                                          \
         CLITHER_DEBUG_ASSERT(v->count > 0);                                    \
         return &v->data[--(v->count)];                                         \
     }                                                                          \
                                                                                \
-    static inline T* prefix##_pop_by(struct prefix* v, int##bits##_t count)    \
+    static T* prefix##_pop_by(struct prefix* v, int##bits##_t count)           \
     {                                                                          \
         return &v->data[v->count -= count];                                    \
     }                                                                          \
@@ -193,7 +192,7 @@
      */                                                                        \
     void prefix##_erase(struct prefix* v, int##bits##_t i);                    \
                                                                                \
-    static inline void prefix##_swap_values(                                   \
+    static void prefix##_swap_values(                                          \
         struct prefix* v, int##bits##_t a, int##bits##_t b)                    \
     {                                                                          \
         T tmp = v->data[a];                                                    \
