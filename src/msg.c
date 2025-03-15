@@ -1,5 +1,5 @@
 #include "clither/bezier.h"
-#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_knot_rb.h"
 #include "clither/cmd.h"
 #include "clither/food_cluster.h"
 #include "clither/log.h"
@@ -34,7 +34,7 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
     /* Make sure to send it immediately first */
     msg->resend_period_counter = 1;
     /* How many times to retry before dropping the connection */
-    msg->resend_retry_counter = 10;
+    msg->resend_retry_counter = 20;
 
     return msg;
 }
@@ -70,11 +70,13 @@ void msg_update_frame_number(struct msg* m, uint16_t frame_number)
 
         case MSG_SNAKE_USERNAME: break;
         case MSG_SNAKE_USERNAME_ACK: break;
-        case MSG_SNAKE_BEZIER: break;
-        case MSG_SNAKE_BEZIER_ACK: break;
         case MSG_SNAKE_DESTROY: break;
         case MSG_SNAKE_DESTROY_ACK: break;
         case MSG_SNAKE_HEAD: break;
+
+        case MSG_BEZIER: break;
+        case MSG_KNOT: break;
+        case MSG_KNOT_ACK: break;
 
         case MSG_FOOD_GRID_PARAMS: break;
         case MSG_FOOD_GRID_PARAMS_ACK: break;
@@ -128,8 +130,8 @@ int msg_parse_payload(
                 log_warn("Name string is not properly null-terminated\n");
                 return -4;
             }
+            return type;
         }
-        break;
 
         case MSG_JOIN_ACCEPT: {
             if (payload_len < 14)
@@ -157,8 +159,8 @@ int msg_parse_payload(
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[11] << 16) |
                 (payload[12] << 8) | (payload[13] << 0);
+            return type;
         }
-        break;
 
         case MSG_JOIN_DENY_BAD_PROTOCOL:
         case MSG_JOIN_DENY_BAD_USERNAME:
@@ -186,10 +188,10 @@ int msg_parse_payload(
             }
 
             pp->join_deny.error = (const char*)&payload[1];
-            break;
+            return type;
         }
 
-        case MSG_LEAVE: break;
+        case MSG_LEAVE: return type;
 
         case MSG_COMMANDS: {
             /*
@@ -207,8 +209,8 @@ int msg_parse_payload(
             pp->command.frame_number = (payload[0] << 8) | (payload[1] << 0);
             log_net(
                 "MSG_COMMANDS: frame_number=%x\n", pp->command.frame_number);
+            return type;
         }
-        break;
 
         case MSG_FEEDBACK: {
             if (payload_len < 3)
@@ -223,63 +225,73 @@ int msg_parse_payload(
                 "MSG_FEEDBACK: frame=%d, diff=%d\n",
                 pp->feedback.frame_number,
                 pp->feedback.diff);
-            break;
+            return type;
         }
 
-        case MSG_SNAKE_USERNAME: break;
-        case MSG_SNAKE_USERNAME_ACK: break;
+        case MSG_SNAKE_USERNAME: {
+            uint8_t username_len;
 
-        case MSG_SNAKE_BEZIER: {
-            if (payload_len < 14)
+            if (payload_len < 3)
             {
-                log_warn(
-                    "MSG_SNAKE_BEZIER: Payload is too small (%d) < 14\n",
-                    payload_len);
+                log_warn("MSG_SNAKE_USERNAME payload is too small\n");
                 return -1;
             }
 
-            pp->snake_bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_bezier.handle_idx = (payload[2] << 8) | (payload[3] << 0);
-            if (pp->snake_bezier.handle_idx < 0)
+            pp->snake_username.snake_id = (payload[0] << 8) | (payload[1] << 0);
+
+            username_len = payload[2];
+            if (3 + username_len + 1 > payload_len)
+            {
+                log_warn("Username length points outside of payload\n");
                 return -2;
+            }
+            if (payload[3 + username_len] != '\0')
+            {
+                log_warn("Username string is not properly null-terminated\n");
+                return -3;
+            }
+            pp->snake_username.username = (const char*)&payload[3];
 
-            pp->snake_bezier.pos.x =
-                (payload[4] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[4] << 16) |
-                (payload[5] << 8) | (payload[6] << 0);
-            pp->snake_bezier.pos.y =
-                (payload[7] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[7] << 16) |
-                (payload[8] << 8) | (payload[9] << 0);
-
-            pp->snake_bezier.angle = (payload[10] << 8) | (payload[11] << 0);
-
-            pp->snake_bezier.len_backwards = payload[12];
-            pp->snake_bezier.len_forwards = payload[13];
-
-            break;
+            return type;
         }
 
-        case MSG_SNAKE_BEZIER_ACK: {
+        case MSG_SNAKE_USERNAME_ACK: {
             if (payload_len < 2)
             {
-                log_warn(
-                    "MSG_SNAKE_BEZIER_ACK: Payload is too small (%d) < 2\n",
-                    payload_len);
+                log_warn("MSG_SNAKE_USERNAME_ACK payload is too small\n");
                 return -1;
             }
 
-            pp->snake_bezier_ack.handle_idx =
+            pp->snake_username_ack.snake_id =
                 (payload[0] << 8) | (payload[1] << 0);
+
             break;
         }
 
-        case MSG_SNAKE_DESTROY: break;
-        case MSG_SNAKE_DESTROY_ACK: break;
+        case MSG_SNAKE_DESTROY: {
+            if (payload_len < 2)
+            {
+                log_warn("MSG_SNAKE_DESTROY payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_destroy.snake_id = (payload[0] << 8) | (payload[1] << 0);
+
+            return type;
+        }
+
+        case MSG_SNAKE_DESTROY_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn("MSG_SNAKE_DESTROY_ACK payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_destroy_ack.snake_id =
+                (payload[0] << 8) | (payload[1] << 0);
+
+            return type;
+        }
 
         case MSG_SNAKE_HEAD: {
             if (payload_len < 11)
@@ -303,7 +315,81 @@ int msg_parse_payload(
                 (payload[6] << 8) | (payload[7] << 0);
             pp->snake_head.head.angle = (payload[8] << 8) | (payload[9] << 0);
             pp->snake_head.head.speed = payload[10];
-            break;
+            return type;
+        }
+
+        case MSG_BEZIER: {
+            if (payload_len < 6)
+            {
+                log_warn("MSG_SNAKE_BEZIER: Payload is too small\n");
+                return -1;
+            }
+
+            pp->bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->bezier.rb_read = (payload[2] << 8) | (payload[3] << 0);
+            pp->bezier.rb_write = (payload[4] << 8) | (payload[5] << 0);
+
+            if (pp->bezier.rb_read < 0)
+            {
+                log_warn("MSG_SNAKE_BEZIER: rb_read cannot be negative!\n");
+                return -2;
+            }
+            if (pp->bezier.rb_write < 0)
+            {
+                log_warn("MSG_SNAKE_BEZIER: rb_write cannot be negative!\n");
+                return -2;
+            }
+
+            return type;
+        }
+
+        case MSG_KNOT: {
+            if (payload_len < 14)
+            {
+                log_warn(
+                    "MSG_SNAKE_KNOT: Payload is too small (%d) < 14\n",
+                    payload_len);
+                return -1;
+            }
+
+            pp->knot.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->knot.knot_idx = (payload[2] << 8) | (payload[3] << 0);
+            if (pp->knot.knot_idx < 0)
+                return -2;
+
+            pp->knot.pos.x =
+                (payload[4] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[4] << 16) |
+                (payload[5] << 8) | (payload[6] << 0);
+            pp->knot.pos.y =
+                (payload[7] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[7] << 16) |
+                (payload[8] << 8) | (payload[9] << 0);
+
+            pp->knot.angle = (payload[10] << 8) | (payload[11] << 0);
+
+            pp->knot.len_backwards = payload[12];
+            pp->knot.len_forwards = payload[13];
+
+            return type;
+        }
+
+        case MSG_KNOT_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn(
+                    "MSG_SNAKE_BEZIER_ACK: Payload is too small (%d) < 2\n",
+                    payload_len);
+                return -1;
+            }
+
+            pp->knot_ack.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->knot_ack.knot_idx = (payload[2] << 8) | (payload[3] << 0);
+            return type;
         }
 
         case MSG_FOOD_GRID_PARAMS: break;
@@ -314,7 +400,7 @@ int msg_parse_payload(
         case MSG_FOOD_CLUSTER_UPDATE_ACK: break;
     }
 
-    return type;
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -381,7 +467,7 @@ struct msg* msg_join_accept(
 
 /* ------------------------------------------------------------------------- */
 static struct msg* msg_alloc_string_payload(
-    enum msg_type type, int8_t resend_period, const char* str)
+    enum msg_type type, int8_t resend_period, int extra_bytes, const char* str)
 {
     int     len_i32 = (int)strlen(str);
     uint8_t len = len_i32 > 254 ? 254 : (uint8_t)len_i32;
@@ -389,30 +475,32 @@ static struct msg* msg_alloc_string_payload(
     struct msg* m = msg_alloc(
         type,
         resend_period,
-        sizeof(len) + len + 1 /* we need to include the null terminator */
-    );
-    m->payload[0] = len;
+        extra_bytes + /* Extra fields appear before the string payload */
+            sizeof(len) + len + 1); /* we need to include the null terminator */
+
     /* we need to include the null terminator */
-    memcpy(m->payload + 1, str, len + 1);
+    m->payload[extra_bytes] = len;
+    memcpy(&m->payload[extra_bytes + 1], str, len + 1);
+
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_join_deny_bad_protocol(const char* error)
 {
-    return msg_alloc_string_payload(MSG_JOIN_DENY_BAD_PROTOCOL, 0, error);
+    return msg_alloc_string_payload(MSG_JOIN_DENY_BAD_PROTOCOL, 0, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_join_deny_bad_username(const char* error)
 {
-    return msg_alloc_string_payload(MSG_JOIN_DENY_BAD_USERNAME, 0, error);
+    return msg_alloc_string_payload(MSG_JOIN_DENY_BAD_USERNAME, 0, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_join_deny_server_full(const char* error)
 {
-    return msg_alloc_string_payload(MSG_JOIN_DENY_SERVER_FULL, 0, error);
+    return msg_alloc_string_payload(MSG_JOIN_DENY_SERVER_FULL, 0, 0, error);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -717,6 +805,59 @@ struct msg* msg_feedback(int8_t diff, uint16_t frame_number)
 }
 
 /* ------------------------------------------------------------------------- */
+struct msg* msg_snake_username(uint16_t snake_id, const char* username)
+{
+    struct msg* m = msg_alloc_string_payload(
+        MSG_SNAKE_USERNAME, 0, 2 /* snake_id */, username);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_username_ack(uint16_t snake_id)
+{
+    struct msg* m = msg_alloc(MSG_SNAKE_USERNAME_ACK, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_destroy(uint16_t snake_id)
+{
+    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY, 10, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_destroy_ack(uint16_t snake_id)
+{
+    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY_ACK, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
 struct msg* msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 {
     struct msg* m = msg_alloc(
@@ -754,16 +895,38 @@ struct msg* msg_snake_head(const struct snake_head* head, uint16_t frame_number)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_snake_bezier(
-    uint16_t                    snake_id,
-    uint16_t                    bezier_handle_idx,
-    const struct bezier_handle* bezier_handle)
+struct msg* msg_bezier(uint16_t snake_id, int16_t rb_read, int16_t rb_write)
 {
     struct msg* m = msg_alloc(
-        MSG_SNAKE_BEZIER,
-        1,
+        MSG_BEZIER,
+        0,
         2 +     /* snake_id */
-            2 + /* bezier_handle_idx */
+            2 + /* rb_read */
+            2); /* rb_write */
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
+
+    m->payload[2] = rb_read >> 8;
+    m->payload[3] = rb_read & 0xFF;
+
+    m->payload[4] = rb_write >> 8;
+    m->payload[5] = rb_write & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot)
+{
+    struct msg* m = msg_alloc(
+        MSG_KNOT,
+        0,
+        2 +     /* snake_id */
+            2 + /* knot_idx */
             6 + /* World position (2x 24-bit qwpos) */
             2 + /* Angle */
             1 + /* Length forwards */
@@ -774,70 +937,51 @@ struct msg* msg_snake_bezier(
     m->payload[0] = snake_id >> 8;
     m->payload[1] = snake_id & 0xFF;
 
-    m->payload[2] = bezier_handle_idx >> 8;
-    m->payload[3] = bezier_handle_idx & 0xFF;
+    m->payload[2] = knot_idx >> 8;
+    m->payload[3] = knot_idx & 0xFF;
 
-    m->payload[4] = (bezier_handle->pos.x >> 16) & 0xFF;
-    m->payload[5] = (bezier_handle->pos.x >> 8) & 0xFF;
-    m->payload[6] = bezier_handle->pos.x & 0xFF;
+    m->payload[4] = (knot->pos.x >> 16) & 0xFF;
+    m->payload[5] = (knot->pos.x >> 8) & 0xFF;
+    m->payload[6] = knot->pos.x & 0xFF;
 
-    m->payload[7] = (bezier_handle->pos.y >> 16) & 0xFF;
-    m->payload[8] = (bezier_handle->pos.y >> 8) & 0xFF;
-    m->payload[9] = bezier_handle->pos.y & 0xFF;
+    m->payload[7] = (knot->pos.y >> 16) & 0xFF;
+    m->payload[8] = (knot->pos.y >> 8) & 0xFF;
+    m->payload[9] = knot->pos.y & 0xFF;
 
-    m->payload[10] = (bezier_handle->angle >> 8) & 0xFF;
-    m->payload[11] = bezier_handle->angle & 0xFF;
+    m->payload[10] = (knot->angle >> 8) & 0xFF;
+    m->payload[11] = knot->angle & 0xFF;
 
-    m->payload[12] = bezier_handle->len_backwards;
-    m->payload[13] = bezier_handle->len_forwards;
+    m->payload[12] = knot->len_backwards;
+    m->payload[13] = knot->len_forwards;
 
     log_net(
         "MSG_SNAKE_BEZIER: pos=[%d, %d], angle=%d, len_backwards=%d, "
         "len_forwards=%d\n",
-        bezier_handle->pos.x,
-        bezier_handle->pos.y,
-        bezier_handle->angle,
-        bezier_handle->len_backwards,
-        bezier_handle->len_forwards);
+        knot->pos.x,
+        knot->pos.y,
+        knot->angle,
+        knot->len_backwards,
+        knot->len_forwards);
 
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_snake_bezier_ack(uint16_t bezier_handle_idx)
+struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx)
 {
-    struct msg* m = msg_alloc(MSG_SNAKE_BEZIER_ACK, 0, 2);
-    if (m == NULL)
-        return NULL;
-
-    m->payload[0] = (bezier_handle_idx >> 8) & 0xFF;
-    m->payload[1] = bezier_handle_idx & 0xFF;
-
-    return m;
-}
-
-/* ------------------------------------------------------------------------- */
-struct msg* msg_snake_destroy(uint16_t snake_id)
-{
-    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY, 10, 2);
+    struct msg* m = msg_alloc(
+        MSG_KNOT_ACK,
+        0,
+        2 +     /* snake_id */
+            2); /* knot_idx */
     if (m == NULL)
         return NULL;
 
     m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
-    return m;
-}
-
-/* ------------------------------------------------------------------------- */
-struct msg* msg_snake_destroy_ack(uint16_t snake_id)
-{
-    struct msg* m = msg_alloc(MSG_SNAKE_DESTROY_ACK, 0, 2);
-    if (m == NULL)
-        return NULL;
-
-    m->payload[0] = (snake_id >> 8) & 0xFF;
-    m->payload[1] = snake_id & 0xFF;
+    m->payload[2] = (knot_idx >> 8) & 0xFF;
+    m->payload[3] = knot_idx & 0xFF;
 
     return m;
 }

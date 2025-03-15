@@ -1,4 +1,4 @@
-#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_knot_rb.h"
 #include "clither/bezier_point_vec.h"
 #include "clither/camera.h"
 #include "clither/cmd.h"
@@ -374,8 +374,8 @@ static struct cmd gfx_sdl_input_to_command(
 static void draw_bezier(
     const struct gfx*           gfx,
     const struct camera*        camera,
-    const struct bezier_handle* head,
-    const struct bezier_handle* tail,
+    const struct bezier_knot* head,
+    const struct bezier_knot* tail,
     int                         num_points)
 {
     SDL_Point* points;
@@ -494,12 +494,12 @@ static void draw_snake(
         draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
     }
 
-    for (i = 0; i < rb_count(snake->data.bezier_handles) - 1; ++i)
+    for (i = 0; i < rb_count(snake->data.bezier_knots) - 1; ++i)
     {
-        const struct bezier_handle* tail =
-            rb_peek(snake->data.bezier_handles, i + 0);
-        const struct bezier_handle* head =
-            rb_peek(snake->data.bezier_handles, i + 1);
+        const struct bezier_knot* tail =
+            rb_peek(snake->data.bezier_knots, i + 0);
+        const struct bezier_knot* head =
+            rb_peek(snake->data.bezier_knots, i + 1);
         if (i & 1)
             SDL_SetRenderDrawColor(gfx->renderer, 255, 0, 0, 255);
         else

@@ -12,7 +12,7 @@ struct food_grid
 
 struct food_corpse
 {
-	struct cs_vector bezier_handles;
+	struct cs_vector bezier_knots;
 };
 #endif
 

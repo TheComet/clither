@@ -20,6 +20,8 @@ TEST(NAME, no_args_check_defaults)
 #endif
 #if defined(CLITHER_LOGGING)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
+    EXPECT_THAT(a.netlog_file, StrEq("net.txt"));
+    EXPECT_THAT(a.prefix, StrEq("Client: "));
 #endif
 #if defined(CLITHER_GFX)
     EXPECT_THAT(a.mode, Eq(MODE_CLIENT));
@@ -145,6 +147,22 @@ TEST(NAME, set_log_file_short)
     struct args a;
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0));
     EXPECT_THAT(a.log_file, StrEq("mylog.txt"));
+}
+
+TEST(NAME, set_netlog_file_long)
+{
+    const char* argv[] = {"./clither", "--netlog", "mylog.txt"};
+    struct args a;
+    ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0));
+    EXPECT_THAT(a.netlog_file, StrEq("mylog.txt"));
+}
+
+TEST(NAME, set_prefix_long)
+{
+    const char* argv[] = {"./clither", "--prefix", "MyPrefix"};
+    struct args a;
+    ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0));
+    EXPECT_THAT(a.prefix, StrEq("MyPrefix"));
 }
 #endif
 

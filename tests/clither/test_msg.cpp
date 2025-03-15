@@ -316,7 +316,7 @@ TEST(NAME, parse_snake_bezier_payload_too_small)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 4), Eq(-1));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 4), Eq(-1));
 }
 
 TEST(NAME, parse_snake_bezier_negative_handle_index)
@@ -333,7 +333,7 @@ TEST(NAME, parse_snake_bezier_negative_handle_index)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14), Eq(-2));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 14), Eq(-2));
 }
 
 TEST(NAME, parse_snake_bezier)
@@ -351,17 +351,15 @@ TEST(NAME, parse_snake_bezier)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 24),
-        Eq(MSG_SNAKE_BEZIER));
-    EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
-    EXPECT_THAT(pp.snake_bezier.handle_idx, Eq(0x200));
-    EXPECT_THAT(pp.snake_bezier.pos.x, Eq(0x123456));
-    EXPECT_THAT(pp.snake_bezier.pos.y, Eq(0x654321));
-    EXPECT_THAT(pp.snake_bezier.angle, Eq(0x50));
-    EXPECT_THAT(pp.snake_bezier.len_backwards, Eq(0x20));
-    EXPECT_THAT(pp.snake_bezier.len_forwards, Eq(0x21));
-    EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 24), Eq(MSG_KNOT));
+    EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
+    EXPECT_THAT(pp.knot.knot_idx, Eq(0x200));
+    EXPECT_THAT(pp.knot.pos.x, Eq(0x123456));
+    EXPECT_THAT(pp.knot.pos.y, Eq(0x654321));
+    EXPECT_THAT(pp.knot.angle, Eq(0x50));
+    EXPECT_THAT(pp.knot.len_backwards, Eq(0x20));
+    EXPECT_THAT(pp.knot.len_forwards, Eq(0x21));
+    EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
 }
 
 TEST(NAME, parse_snake_bezier_qwpos_sign_extension)
@@ -379,14 +377,12 @@ TEST(NAME, parse_snake_bezier_qwpos_sign_extension)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_SNAKE_BEZIER, payload, 14),
-        Eq(MSG_SNAKE_BEZIER));
-    EXPECT_THAT(pp.snake_bezier.snake_id, Eq(0xAABB));
-    EXPECT_THAT(pp.snake_bezier.handle_idx, Eq(0x200));
-    EXPECT_THAT(pp.snake_bezier.pos.x, Eq(-1));
-    EXPECT_THAT(pp.snake_bezier.pos.y, Eq(-1));
-    EXPECT_THAT(pp.snake_bezier.angle, Eq(0x50));
-    EXPECT_THAT(pp.snake_bezier.len_backwards, Eq(0x20));
-    EXPECT_THAT(pp.snake_bezier.len_forwards, Eq(0x21));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 14), Eq(MSG_KNOT));
+    EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
+    EXPECT_THAT(pp.knot.knot_idx, Eq(0x200));
+    EXPECT_THAT(pp.knot.pos.x, Eq(-1));
+    EXPECT_THAT(pp.knot.pos.y, Eq(-1));
+    EXPECT_THAT(pp.knot.angle, Eq(0x50));
+    EXPECT_THAT(pp.knot.len_backwards, Eq(0x20));
+    EXPECT_THAT(pp.knot.len_forwards, Eq(0x21));
 }

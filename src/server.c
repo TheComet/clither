@@ -1,6 +1,6 @@
 #include "clither/args.h"
-#include "clither/bezier_handle_rb.h"
-#include "clither/bezier_pending_acks_bset.h"
+#include "clither/bezier_knot_acks_bmap.h"
+#include "clither/bezier_knot_rb.h"
 #include "clither/cli_colors.h"
 #include "clither/log.h"
 #include "clither/msg_vec.h"
@@ -28,11 +28,32 @@ static void client_remove(
     const struct net_addr*      addr,
     const struct server_client* client)
 {
-    struct msg** pmsg;
+    struct msg**            pmsg;
+    int16_t                 idx;
+    uint16_t                snake_id;
+    struct net_addr         other_addr;
+    struct server_client*   other_client;
+    struct proximity_state* prox;
+
+    hm_for_each (server->clients, idx, other_addr, other_client)
+    {
+        struct proximity_state* prox;
+        (void)idx, (void)other_addr;
+
+        prox = proximity_state_bmap_find(
+            other_client->snakes_in_proximity, client->snake_id);
+        if (prox == NULL)
+            continue;
+        proximity_state_deinit(prox);
+        proximity_state_bmap_erase(
+            other_client->snakes_in_proximity, client->snake_id);
+    }
 
     world_remove_snake(world, client->snake_id);
     vec_for_each (client->pending_msgs, pmsg)
         msg_free(*pmsg);
+    bmap_for_each (client->snakes_in_proximity, idx, snake_id, prox)
+        (void)idx, (void)snake_id, proximity_state_deinit(prox);
     proximity_state_bmap_deinit(client->snakes_in_proximity);
     msg_vec_deinit(client->pending_msgs);
     server_client_hm_erase(server->clients, addr);
@@ -247,32 +268,28 @@ int server_update_snakes_in_range(
             other_aabb.y2 = qw_add(other_aabb.y2, proximity_range);
             if (qwaabb_test_qwpos(other_aabb, snake->head.pos))
             {
-                int32_t                     handle_id;
-                const struct bezier_handle* handle;
-                struct proximity_state*     prox;
+                int32_t                   knot_idx;
+                const struct bezier_knot* knot;
+                struct proximity_state*   prox;
                 enum bmap_status status = proximity_state_bmap_emplace_or_get(
                     &client->snakes_in_proximity,
                     other_client->snake_id,
                     &prox);
                 switch (status)
                 {
-                    case HM_OOM: return -1;
-                    case HM_EXISTS: continue;
-                    case HM_NEW: break;
+                    case BMAP_OOM: return -1;
+                    case BMAP_EXISTS: continue;
+                    case BMAP_NEW: break;
                 }
 
                 proximity_state_init(prox);
 
-                /* Queue all bezier handles of the snake in proximity. These
-                 * remain in the server's message queue until they get ACK'd by
-                 * the client */
-                rb_for_each (
-                    other_snake->data.bezier_handles, handle_id, handle)
+                /* Add all snake bezier knots to the list to send. */
+                rb_for_each (other_snake->data.bezier_knots, knot_idx, knot)
                 {
-                    server_queue(
-                        client,
-                        msg_snake_bezier(
-                            other_client->snake_id, handle_id, handle));
+                    if (bezier_knot_acks_bmap_insert_new(
+                            &prox->bezier_knot_acks, knot_idx, 0) == BMAP_OOM)
+                        return -1;
                 }
             }
             else
@@ -304,13 +321,13 @@ int server_queue_snake_data(
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
         struct snake* snake = snake_bmap_find(world->snakes, client->snake_id);
-        CLITHER_DEBUG_ASSERT(snake != NULL);
+        CLITHER_DEBUG_ASSERT(snake != NULL), (void)addr;
         if (snake_is_held(snake))
             continue;
         server_queue(client, msg_snake_head(&snake->head, frame_number));
     }
 
-    /* Queue bezier handles of all snakes in proximity */
+    /* Queue bezier knots of all snakes in proximity */
     server_client_hm_for_each (server->clients, slot, addr, client)
     {
         int16_t                 prox_idx;
@@ -318,19 +335,33 @@ int server_queue_snake_data(
         struct proximity_state* prox;
         bmap_for_each (client->snakes_in_proximity, prox_idx, snake_id, prox)
         {
-            int                   handle_id;
-            struct bezier_handle* handle;
+            int16_t             knot_idx;
+            struct bezier_knot* handle;
             struct snake* snake = snake_bmap_find(world->snakes, snake_id);
             CLITHER_DEBUG_ASSERT(snake != NULL);
-            rb_for_each (snake->data.bezier_handles, handle_id, handle)
+            rb_for_each (snake->data.bezier_knots, knot_idx, handle)
             {
-                if (bezier_pending_acks_bset_find(
-                        prox->bezier_pending_acks, handle_id))
+                char* ackd;
+                switch (bezier_knot_acks_bmap_emplace_or_get(
+                    &prox->bezier_knot_acks, knot_idx, &ackd))
                 {
+                    case BMAP_OOM: return -1;
+                    case BMAP_EXISTS: break;
+                    case BMAP_NEW: *ackd = 0; break;
+                }
+                if (*ackd == 0 &&
                     server_queue(
-                        client, msg_snake_bezier(snake_id, handle_id, handle));
+                        client, msg_knot(snake_id, knot_idx, handle)) != 0)
+                {
+                    return -1;
                 }
             }
+
+            /* As the snake moves, stale knots need to be removed from the
+             * acknowledgement list explicitly. Otherwise, if the client doesn't
+             * ack them, then they'd remain in the list forever. */
+            bezier_knot_acks_bmap_remove_stale_knots(
+                prox->bezier_knot_acks, snake->data.bezier_knots);
         }
     }
 
@@ -338,7 +369,13 @@ int server_queue_snake_data(
 }
 
 /* ------------------------------------------------------------------------- */
-static int process_message(
+enum process_message_result
+{
+    PROCESS_MESSAGE_OOM = -1,
+    PROCESS_MESSAGE_OK,
+    PROCESS_MESSAGE_CLIENT_DROPPED
+};
+static enum process_message_result process_message(
     struct server*                server,
     const struct server_settings* settings,
     struct server_client*         client,
@@ -369,7 +406,7 @@ static int process_message(
                 memcpy(pkt.data + 2, msg->payload, msg->payload_len);
                 net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
                 msg_free(msg);
-                return 0;
+                return PROCESS_MESSAGE_OK;
             }
 
             if (pp.join_request.username_len > settings->max_username_len)
@@ -383,7 +420,7 @@ static int process_message(
                 memcpy(pkt.data + 2, msg->payload, msg->payload_len);
                 net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
                 msg_free(msg);
-                return 0;
+                return PROCESS_MESSAGE_OK;
             }
 
             /* Create new client. This code is not refactored into a
@@ -425,18 +462,21 @@ static int process_message(
 
             /* (Re-)send join accept response */
             {
-                struct snake* snake =
-                    snake_bmap_find(world->snakes, client->snake_id);
-                struct msg* response = msg_join_accept(
+                struct snake* snake;
+                struct msg*   response;
+                snake = snake_bmap_find(world->snakes, client->snake_id);
+                CLITHER_DEBUG_ASSERT(snake != NULL);
+                response = msg_join_accept(
                     settings->sim_tick_rate,
                     settings->net_tick_rate,
                     pp.join_request.frame,
                     frame_number,
                     client->snake_id,
                     &snake->head.pos);
-                msg_vec_push(&client->pending_msgs, response);
+                if (msg_vec_push(&client->pending_msgs, response) != 0)
+                    return PROCESS_MESSAGE_OOM;
             }
-            return 0;
+            return PROCESS_MESSAGE_OK;
         }
 
         case MSG_JOIN_ACCEPT:
@@ -449,15 +489,21 @@ static int process_message(
 
         case MSG_LEAVE: {
             client_remove(server, world, client_addr, client);
-            return 0;
+            return PROCESS_MESSAGE_OK;
         }
 
         case MSG_COMMANDS: {
             uint16_t      first_frame, last_frame;
-            int           lower;
+            int           lower, granularity, client_commands_queued;
             struct snake* snake =
                 snake_bmap_find(world->snakes, client->snake_id);
-            int granularity = settings->sim_tick_rate / settings->net_tick_rate;
+            if (snake == NULL)
+            {
+                log_warn("Received commands for unknown snake\n");
+                break;
+            }
+
+            granularity = settings->sim_tick_rate / settings->net_tick_rate;
 
             /*
              * Measure how many frames are in the client's command
@@ -470,7 +516,7 @@ static int process_message(
              * Depending on how stable the connection is, the client
              * will be instructed to shrink the buffer.
              */
-            int client_commands_queued =
+            client_commands_queued =
                 u16_sub_wrap(cmd_queue_frame_end(&snake->cmdq), frame_number);
 
             /* Returns the first and last frame numbers that were
@@ -491,7 +537,7 @@ static int process_message(
              * commands older than the last command received
              */
             if (u16_le_wrap(last_frame, client->last_command_msg_frame))
-                return 0;
+                return PROCESS_MESSAGE_OK;
             client->last_command_msg_frame = last_frame;
 
             /*
@@ -522,19 +568,74 @@ static int process_message(
                 diff = diff > 10 ? 10 : diff;
                 server_queue(client, msg_feedback(diff, frame_number));
             }
-            return 0;
+            return PROCESS_MESSAGE_OK;
         }
 
-        case MSG_SNAKE_BEZIER: break;
-        case MSG_SNAKE_BEZIER_ACK: {
+        case MSG_SNAKE_USERNAME: {
+            log_warn("Server received unexpected message type %d\n", msg_type);
             break;
+        }
+
+        case MSG_SNAKE_USERNAME_ACK: {
+            msg_vec_remove_snake_username(
+                client->pending_msgs, pp.snake_username_ack.snake_id);
+            return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_SNAKE_DESTROY: {
+            log_warn("Server received unexpected message type %d\n", msg_type);
+            break;
+        }
+
+        case MSG_SNAKE_DESTROY_ACK: {
+            msg_vec_remove_snake_destroy(
+                client->pending_msgs, pp.snake_destroy_ack.snake_id);
+            return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_BEZIER:
+        case MSG_KNOT: {
+            log_warn("Server received unexpected message type %d\n", msg_type);
+            break;
+        }
+
+        case MSG_KNOT_ACK: {
+            struct proximity_state* prox;
+            struct snake*           other_snake;
+            char*                   ackd;
+
+            other_snake = snake_bmap_find(world->snakes, pp.knot_ack.snake_id);
+            if (other_snake == NULL)
+            {
+                log_warn("Received knot ack for unknown snake\n");
+                break;
+            }
+
+            prox = proximity_state_bmap_find(
+                client->snakes_in_proximity, pp.knot_ack.snake_id);
+            if (prox == NULL)
+                return PROCESS_MESSAGE_OK;
+
+            ackd = bezier_knot_acks_bmap_find(
+                prox->bezier_knot_acks, pp.knot_ack.knot_idx);
+            if (ackd == NULL)
+                return PROCESS_MESSAGE_OK;
+            *ackd = 1;
+
+            /* Send ring-buffer extents */
+            server_queue(
+                client,
+                msg_bezier(
+                    pp.knot_ack.snake_id,
+                    rb_read_idx(other_snake->data.bezier_knots),
+                    rb_write_idx(other_snake->data.bezier_knots)));
+            return PROCESS_MESSAGE_OK;
         }
     }
 
     mark_client_as_malicious_and_drop(
         server, client_addr, client, world, settings->malicious_timeout);
-
-    return 0;
+    return PROCESS_MESSAGE_CLIENT_DROPPED;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -595,18 +696,20 @@ static int unpack_packet(
             break;
         }
 
-        if (process_message(
-                server,
-                settings,
-                client,
-                client_addr,
-                world,
-                type,
-                msg,
-                msg_len,
-                frame_number) != 0)
+        switch (process_message(
+            server,
+            settings,
+            client,
+            client_addr,
+            world,
+            type,
+            msg,
+            msg_len,
+            frame_number))
         {
-            return 0;
+            case PROCESS_MESSAGE_OOM: return -1;
+            case PROCESS_MESSAGE_OK: break;
+            case PROCESS_MESSAGE_CLIENT_DROPPED: return 0;
         }
 
         i += msg_len + 2;

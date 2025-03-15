@@ -1,5 +1,5 @@
 #include "clither/bezier.h"
-#include "clither/bezier_handle_rb.h"
+#include "clither/bezier_knot_rb.h"
 #include "clither/bezier_point_vec.h"
 #include "clither/qwpos_vec.h"
 
@@ -75,11 +75,11 @@ static q16_16 binary_search_min_dist_sq(
 
 /* ------------------------------------------------------------------------- */
 static void calc_coeff(
-    qw*                         Ax,
-    qw*                         Ay,
-    const struct bezier_handle* head,
-    const struct bezier_handle* tail,
-    const struct qwpos          off)
+    qw*                       Ax,
+    qw*                       Ay,
+    const struct bezier_knot* head,
+    const struct bezier_knot* tail,
+    const struct qwpos        off)
 {
     /* Calculate bezier control points */
     const struct qwpos p0 =
@@ -133,12 +133,17 @@ static struct qwpos bezier_xy(const qw Ax[4], const qw Ay[4], const qw t)
 }
 
 /* ------------------------------------------------------------------------- */
-void bezier_handle_init(struct bezier_handle* bh, struct qwpos pos, qa angle)
+void bezier_knot_init(
+    struct bezier_knot* bh,
+    struct qwpos        pos,
+    qa                  angle,
+    uint8_t             len_backwards,
+    uint8_t             len_forwards)
 {
     bh->pos = pos;
     bh->angle = angle;
-    bh->len_forwards = 0;
-    bh->len_backwards = 0;
+    bh->len_backwards = len_backwards;
+    bh->len_forwards = len_forwards;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -246,9 +251,9 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
     }
 }
 void bezier_calc_aabb(
-    struct qwaabb*              bb,
-    const struct bezier_handle* head,
-    const struct bezier_handle* tail)
+    struct qwaabb*            bb,
+    const struct bezier_knot* head,
+    const struct bezier_knot* tail)
 {
     qw Ax[4], Ay[4];
     calc_coeff(Ax, Ay, head, tail, head->pos);
@@ -261,8 +266,8 @@ void bezier_calc_aabb(
 
 /* ------------------------------------------------------------------------- */
 double bezier_fit_trail(
-    struct bezier_handle*   head,
-    struct bezier_handle*   tail,
+    struct bezier_knot*     head,
+    struct bezier_knot*     tail,
     const struct qwpos_vec* trail)
 {
     int      i, m;
@@ -478,7 +483,7 @@ double bezier_fit_trail(
     }
 
     /*
-     * Convert fitted coefficients Cx and Cy to bezier handle coordinates
+     * Convert fitted coefficients Cx and Cy to bezier knot coordinates
      * x0, x1, x2, x3 and y0, y1, y2, y3.
      *
      * The fitted polynomial is:
@@ -605,23 +610,22 @@ double bezier_fit_trail(
 }
 
 /* ------------------------------------------------------------------------- */
-void bezier_squeeze_step(
-    struct bezier_handle_rb* bezier_handles, int sim_tick_rate)
+void bezier_squeeze_step(struct bezier_knot_rb* knots, int sim_tick_rate)
 {
 }
 
 /* ------------------------------------------------------------------------- */
 void bezier_squeeze_n_recent_step(
-    struct bezier_handle_rb* bezier_handles, int n, int sim_tick_rate)
+    struct bezier_knot_rb* knots, int n, int sim_tick_rate)
 {
 }
 
 /* ------------------------------------------------------------------------- */
 int bezier_calc_equidistant_points(
-    struct bezier_point_vec**      bezier_points,
-    const struct bezier_handle_rb* bezier_handles,
-    qw                             spacing,
-    qw                             snake_length)
+    struct bezier_point_vec**    bezier_points,
+    const struct bezier_knot_rb* knots,
+    qw                           spacing,
+    qw                           snake_length)
 {
     int i;
 
@@ -635,23 +639,23 @@ int bezier_calc_equidistant_points(
      * the result back.
      */
     struct qwpos pos = make_qwposi(0, 0);
-    struct qwpos off = rb_peek_write(bezier_handles)->pos;
+    struct qwpos off = rb_peek_write(knots)->pos;
 
     /* Insert first point */
     bezier_point_vec_clear(*bezier_points);
     {
-        struct bezier_point* bp = bezier_point_vec_emplace(bezier_points);
-        const struct bezier_handle* head = rb_peek_write(bezier_handles);
+        struct bezier_point*      bp = bezier_point_vec_emplace(bezier_points);
+        const struct bezier_knot* head = rb_peek_write(knots);
         bp->pos.x = qw_add(pos.x, off.x);
         bp->pos.y = qw_add(pos.y, off.y);
         bp->dir.x = -qa_cos(head->angle);
         bp->dir.y = -qa_sin(head->angle);
     }
 
-    for (i = rb_count(bezier_handles) - 2; i >= 0; --i)
+    for (i = rb_count(knots) - 2; i >= 0; --i)
     {
-        const struct bezier_handle* head = rb_peek(bezier_handles, i + 1);
-        const struct bezier_handle* tail = rb_peek(bezier_handles, i + 0);
+        const struct bezier_knot* head = rb_peek(knots, i + 1);
+        const struct bezier_knot* tail = rb_peek(knots, i + 0);
 
         qw t = make_qw(0); /* Begin search at head of curve */
         qw last_t = make_qw(0);

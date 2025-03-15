@@ -573,6 +573,7 @@ int mem_deinit_threadlocal(void)
     int32_t             slot;
     hm_for_each (state.report, slot, addr, info)
     {
+        (void)addr;
         fprintf(
             stderr,
             "un-freed memory at 0x%" PRIx64 ", size 0x%" PRIx32 "\n",

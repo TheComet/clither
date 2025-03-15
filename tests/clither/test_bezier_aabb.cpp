@@ -16,9 +16,9 @@ public:
 
 TEST_F(NAME, aabb_straight_line)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.2, 0.3), 0);
-    bezier_handle_init(&tail, make_qwposf(0.8, 0.7), 0);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.2, 0.3), 0, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.8, 0.7), 0, 0, 0);
 
     qwaabb bb;
     bezier_calc_aabb(&bb, &head, &tail);
@@ -31,9 +31,9 @@ TEST_F(NAME, aabb_straight_line)
 
 TEST_F(NAME, aabb_x_extremities_1)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
-    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.2, 0.1), 0, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.2, 0.9), 0, 0, 0);
     head.len_backwards = 255;
     tail.len_forwards = 255;
 
@@ -48,9 +48,9 @@ TEST_F(NAME, aabb_x_extremities_1)
 
 TEST_F(NAME, aabb_x_extremities_2)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
-    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.2, 0.1), 0, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.2, 0.9), 0, 0, 0);
     head.len_backwards = 0;
     tail.len_forwards = 255;
 
@@ -65,9 +65,9 @@ TEST_F(NAME, aabb_x_extremities_2)
 
 TEST_F(NAME, aabb_x_extremities_3)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.2, 0.1), 0);
-    bezier_handle_init(&tail, make_qwposf(0.2, 0.9), 0);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.2, 0.1), 0, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.2, 0.9), 0, 0, 0);
     head.len_backwards = 255;
     tail.len_forwards = 0;
 
@@ -82,9 +82,9 @@ TEST_F(NAME, aabb_x_extremities_3)
 
 TEST_F(NAME, aabb_y_extremities_1)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
-    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2, 0, 0);
     head.len_backwards = 255;
     tail.len_forwards = 255;
 
@@ -99,9 +99,9 @@ TEST_F(NAME, aabb_y_extremities_1)
 
 TEST_F(NAME, aabb_y_extremities_2)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
-    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2, 0, 0);
     head.len_backwards = 0;
     tail.len_forwards = 255;
 
@@ -116,9 +116,9 @@ TEST_F(NAME, aabb_y_extremities_2)
 
 TEST_F(NAME, aabb_y_extremities_3)
 {
-    bezier_handle head, tail;
-    bezier_handle_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2);
-    bezier_handle_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2);
+    bezier_knot head, tail;
+    bezier_knot_init(&head, make_qwposf(0.1, 0.2), QA_PI / 2, 0, 0);
+    bezier_knot_init(&tail, make_qwposf(0.9, 0.2), QA_PI / 2, 0, 0);
     head.len_backwards = 255;
     tail.len_forwards = 0;
 

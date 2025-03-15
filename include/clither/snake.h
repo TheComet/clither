@@ -13,9 +13,9 @@ struct snake_head
 
 struct snake_split
 {
-    struct qwpos split_handle; /* Set to equal the position of a bezier handle
+    struct qwpos split_knot; /* Set to equal the position of a bezier knot
                                   where the snake splits into 2 */
-    struct qwpos join_handle;  /* Set to equal the position of a bezier handle
+    struct qwpos join_knot;  /* Set to equal the position of a bezier knot
                                   where the snake joins up again */
     struct qwpos axis; /* Snake is mirrored across this normalized vector */
     unsigned ack : 1; /* Server acknowledged this split. Predicted splits can be
@@ -39,12 +39,12 @@ struct snake_data
      */
     struct qwpos_vec_rb* head_trails;
 
-    /* List of bezier handles that define the shape of the entire snake. */
-    struct bezier_handle_rb* bezier_handles;
+    /* List of bezier knots that define the shape of the entire snake. */
+    struct bezier_knot_rb* bezier_knots;
 
     /*
      * List of axis-aligned bounding-boxes (qwaabb) for each bezier segment.
-     * This list will be 1 shorter than the list of bezier_handles.
+     * This list will be 1 shorter than the list of bezier_knots.
      */
     struct qwaabb_rb* bezier_aabbs;
 
@@ -152,3 +152,31 @@ void snake_ack_frame(
     struct cmd_queue*         cmdq,
     uint16_t                  frame_number,
     uint8_t                   sim_tick_rate);
+
+/*!
+ * \brief This is used to manage other player's snakes. The bezier knots are
+ * sent asynchronously by the server and inserted into the snake's ring buffer
+ * with this function.
+ * \note The function does not perform any calculations on the bezier knots,
+ * such as AABBs. This is handled by @see snake_update_bezier_extents().
+ */
+int snake_create_or_update_knot(
+    struct snake_data* data,
+    int16_t            knot_idx,
+    struct qwpos       pos,
+    qa                 angle,
+    uint8_t            len_backwards,
+    uint8_t            len_forwards);
+
+/*!
+ * \brief This is used to manage other player's snakes. Once the bezier knots
+ * have been received from the server (@see snake_create_or_update_knot), the
+ * server sends the start and end index of the knot ring-buffer as a way to
+ * "finalize" the snake.
+ * \note This function will calculate AABBs and points for rendering.
+ */
+int snake_update_bezier_extents(
+    struct snake_data*        data,
+    const struct snake_param* param,
+    int16_t                   rb_read,
+    int16_t                   rb_write);

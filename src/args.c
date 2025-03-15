@@ -3,11 +3,11 @@
 #include "clither/log.h"
 
 #if defined(CLITHER_GFX)
-#   include "clither/gfx.h"
+#    include "clither/gfx.h"
 #endif
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define SECTION        COL_B_WHITE
@@ -22,19 +22,21 @@
 #define RESET          COL_RESET
 
 #define DEFAULT_LOG_FILE    "clither.txt"
+#define DEFAULT_NETLOG_FILE "net.txt"
 #define DEFAULT_CONFIG_FILE "config.ini"
+#define DEFAULT_PREFIX      "Client: "
 
 /* ------------------------------------------------------------------------- */
 /*!
  * \brief Prints all help text and examples.
  * \param[in] prog_name Pass argv[0] here.
  */
-static void
-print_help(const char* prog_name)
+static void print_help(const char* prog_name)
 {
     /*
      * Examples section
      */
+    /* clang-format off */
     fprintf(stderr, SECTION "Usage:\n" RESET "  %s [" ARG2 "options" RESET "]\n\n", prog_name);
     fprintf(stderr, SECTION "Examples:\n" RESET);
 #if defined(CLITHER_GFX)
@@ -125,6 +127,14 @@ print_help(const char* prog_name)
         "  " ARG2 "-l" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">    Write log output to a custom file. The default file is\n"
         "                      \"clither.txt\".  To disable logging to a file, set this\n"
         "                      to an empty string.\n");
+    fprintf(stderr,
+        "     " ARG1 " --netlog " RESET "<" ARG2 "file" RESET "> Write  networking  log output  to  a  custom file. The\n"
+        "                      default file  is  \"net.txt\".  To  disable logging to a\n"
+        "                      file, set this to an empty string.\n");
+    fprintf(stderr,
+        "     " ARG1 " --prefix " RESET "<" ARG2 "name" RESET "> Sets the \"log prefix\" of the client.  This is the text\n"
+        "                      that appears in front of  every log  message generated\n"
+        "                      by the client. The default is \"Client: \".");
 #endif
 
     /* Disabled options */
@@ -144,13 +154,13 @@ print_help(const char* prog_name)
 #if !defined(CLITHER_LOGGING)
     fprintf(stderr, "  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">    (Recompile with -DCLITHER_LOGGING=ON).\n");
 #endif
+    /* clang-format on */
 }
 
 /* ------------------------------------------------------------------------- */
-int
-args_parse(struct args* a, int argc, char* argv[])
+int args_parse(struct args* a, int argc, char* argv[])
 {
-    int i;
+    int  i;
     char tests_flag = 0;
     char bench_flag = 0;
 #if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
@@ -164,6 +174,8 @@ args_parse(struct args* a, int argc, char* argv[])
     a->port = "";
 #if defined(CLITHER_LOGGING)
     a->log_file = DEFAULT_LOG_FILE;
+    a->netlog_file = DEFAULT_NETLOG_FILE;
+    a->prefix = DEFAULT_PREFIX;
 #endif
 #if defined(CLITHER_GFX)
     a->mode = MODE_CLIENT;
@@ -213,10 +225,14 @@ args_parse(struct args* a, int argc, char* argv[])
                     }
                     a->gfx_backend = atoi(argv[i]);
 
-                    for (count = 0; gfx_backends[count]; ++count) {}
+                    for (count = 0; gfx_backends[count]; ++count)
+                    {
+                    }
                     if (a->gfx_backend >= count || a->gfx_backend < 0)
                     {
-                        log_err("Graphics backend index \"%d\" is out of range!\n", a->gfx_backend);
+                        log_err(
+                            "Graphics backend index \"%d\" is out of range!\n",
+                            a->gfx_backend);
                         return -1;
                     }
                 }
@@ -255,10 +271,10 @@ args_parse(struct args* a, int argc, char* argv[])
                         log_err("Missing argument for --mcd\n");
                         return -1;
                     }
-                    a->mcd_latency = atoi(argv[i+1]);
-                    a->mcd_loss = atoi(argv[i+2]);
-                    a->mcd_dup = atoi(argv[i+3]);
-                    a->mcd_reorder = atoi(argv[i+4]);
+                    a->mcd_latency = atoi(argv[i + 1]);
+                    a->mcd_loss = atoi(argv[i + 2]);
+                    a->mcd_dup = atoi(argv[i + 3]);
+                    a->mcd_reorder = atoi(argv[i + 4]);
                     i += 4;
                 }
 #endif
@@ -272,6 +288,26 @@ args_parse(struct args* a, int argc, char* argv[])
                         return -1;
                     }
                     a->log_file = argv[i];
+                }
+                else if (strcmp(arg, "netlog") == 0)
+                {
+                    ++i;
+                    if (i >= argc /*|| !*argv[i] empty string is valid*/)
+                    {
+                        log_err("Missing argument for --netlog\n");
+                        return -1;
+                    }
+                    a->netlog_file = argv[i];
+                }
+                else if (strcmp(arg, "prefix") == 0)
+                {
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err("Missing argument for --prefix\n");
+                        return -1;
+                    }
+                    a->prefix = argv[i];
                 }
 #endif
                 else if (strcmp(argv[i], "--") == 0)
@@ -307,7 +343,8 @@ args_parse(struct args* a, int argc, char* argv[])
                     else if (*p == 'l')
                     {
                         ++i;
-                        if (p[1] || i >= argc /*|| !*argv[i] empty string is valid*/)
+                        if (p[1] ||
+                            i >= argc /*|| !*argv[i] empty string is valid*/)
                         {
                             log_err("Missing argument for -l\n");
                             return -1;
@@ -336,7 +373,9 @@ args_parse(struct args* a, int argc, char* argv[])
         }
     }
 
-    if (0) {}
+    if (0)
+    {
+    }
 #if defined(CLITHER_TESTS)
     else if (tests_flag)
         a->mode = MODE_TESTS;

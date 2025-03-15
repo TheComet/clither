@@ -3,19 +3,20 @@
 If another player is in  proximity  of  the  client,  the server begins sending
 information of that player's snake to the client.
 
-The server initially sends all \verb$MSG_SNAKE_BEZIER$ packets of that player's
-snake  to  the  client. The client can send back \verb$MSG_SNAKE_BEZIER_ACK$ to
-acknowledge a knot  has  been  received.  The server keeps track of which knots
-need to be  sent  to  a  client, and will only send non-acknowledged knots. The
-server   will   also   send   \verb$MSG_SNAKE_USERNAME$   until   it   receives
-\verb$MSG_SNAKE_USERNAME_ACK$.
+The snake's ring-buffer of bezier knots  is  split  up  into  multiple packets.
+\verb$MSG_BEZIER$  is sent whenever new knots are appended  or  old  knots  are
+removed on the server side. This happens naturally as the snake moves forwards.
+This message contains the ``read'' and ``write'' pointers of  the  ring buffer.
+The  client  can   use   this   to   resize   its   ring-buffer  appropriately.
 
-Parallel  to  snake  creation,  the server will send \verb$MSG_SNAKE_HEAD$  and
-\verb$MSG_SNAKE_PARAM$ updates whenever the snake moves forwards. These packets
-are  lossy  and  the  client  only  needs  the  most recent head position/snake
-parameters. The snake  parameters  contain status effects as well as the length
-of the snake, which allows the  client  to  remove  stale bezier knots from the
-tail end of the snake.
+Each bezier knot is sent separately via the \verb$MSG_KNOT$ message. The client
+must acknowledge each knot with \verb$MSG_KNOT_ACK$. The server keeps track  of
+which  knots  have  not  been  acknowledged and will resend them  periodically.
+
+When  the  snake goes out of range of the client, the server will stop  sending
+updates to the client and send \verb$MSG_SNAKE_DESTROY$ (must be acknowledged).
+If the snake comes  into  proximity  again,  the  server will always assume the
+client has destroyed the snake and send everything again.
 
 \begin{figure}[H]
     \centering
@@ -26,16 +27,23 @@ tail end of the snake.
     \end{subfigure}
     \begin{subfigure}{.48\linewidth}
         \centering
-        \input{images/seq-snake-update}
-        \caption{Snake updates}
+        \input{images/seq-snake-destroy}
+        \caption{Snake destruction}
     \end{subfigure}
 \end{figure}
 
-When  the  snake  goes out of range of the client, the server will simply  stop
-sending updates to the client. The  client  can use a timeout to determine when
-to  destroy  its  local  copy of the snake. If the snake comes  into  proximity
-again, the server will always assume the client has  destroyed  the  snake  and
-send everything again.
+Parallel  to  snake  creation,  the server will send \verb$MSG_SNAKE_HEAD$  and
+\verb$MSG_SNAKE_PARAM$ updates whenever the snake moves forwards. These packets
+are  lossy  and  the  client  only  needs  the  most recent head position/snake
+parameters. The snake  parameters  contain status effects as well as the length
+of the snake, which allows the  client  to  remove  stale bezier knots from the
+tail end of the snake.
+
+\begin{figure}[H]
+    \centering
+    \input{images/seq-snake-update}
+    \caption{Snake updates}
+\end{figure}
 
 \begin{figure}[h]
 \input{images/msg-snake-username}
@@ -47,4 +55,9 @@ send everything again.
 \input{images/msg-snake-bezier}
 \end{figure}
 
+\vspace{1.5em}
+
+\begin{figure}[h]
+\input{images/msg-snake-bezier-ack}
+\end{figure}
 

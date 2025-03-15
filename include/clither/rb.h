@@ -219,6 +219,8 @@
 #define rb_count(rb)                                                           \
     ((rb) ? ((rb)->write - (rb)->read) & ((rb)->capacity - 1) : 0)
 
+#define rb_capacity(rb) ((rb) ? ((rb)->capacity) : 0)
+
 #define rb_space(rb)                                                           \
     ((rb) ? ((rb)->read - (rb)->write - 1) & ((rb)->capacity - 1) : 0)
 
@@ -240,6 +242,14 @@
 #define rb_peek_write(rb)                                                      \
     (CLITHER_DEBUG_ASSERT((rb) && (rb)->read != (rb)->write),                  \
      &(rb)->data[((rb)->write - 1) & ((rb)->capacity - 1)])
+
+#define rb_read_idx(rb)  ((rb) ? (rb)->read : 0)
+#define rb_write_idx(rb) ((rb) ? (rb)->write : 0)
+#define rb_is_idx_valid_data(rb, idx)                                          \
+    ((rb) ? (rb)->read > (rb)->write                                           \
+                ? ((idx) >= (rb)->read || (idx) < (rb)->write)                 \
+                : ((idx) >= (rb)->read && (idx) < (rb)->write)                 \
+          : 0)
 
 /*!
  * @brief Iterates over the elements in a ring buffer.

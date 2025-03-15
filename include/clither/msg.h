@@ -22,11 +22,13 @@ enum msg_type
 
     MSG_SNAKE_USERNAME,
     MSG_SNAKE_USERNAME_ACK,
-    MSG_SNAKE_BEZIER,
-    MSG_SNAKE_BEZIER_ACK,
     MSG_SNAKE_DESTROY,
     MSG_SNAKE_DESTROY_ACK,
     MSG_SNAKE_HEAD,
+
+    MSG_BEZIER,
+    MSG_KNOT,
+    MSG_KNOT_ACK,
 
     MSG_FOOD_GRID_PARAMS,
     MSG_FOOD_GRID_PARAMS_ACK,
@@ -86,7 +88,22 @@ union parsed_payload
     {
         uint16_t    snake_id;
         const char* username;
-    } snake_metadata;
+    } snake_username;
+
+    struct
+    {
+        uint16_t snake_id;
+    } snake_username_ack;
+
+    struct
+    {
+        uint16_t snake_id;
+    } snake_destroy;
+
+    struct
+    {
+        uint16_t snake_id;
+    } snake_destroy_ack;
 
     struct
     {
@@ -96,18 +113,26 @@ union parsed_payload
 
     struct
     {
-        struct qwpos pos;
-        uint16_t     snake_id;
-        qa           angle;
-        int16_t      handle_idx;
-        uint8_t      len_backwards;
-        uint8_t      len_forwards;
-    } snake_bezier;
+        uint16_t snake_id;
+        int16_t  rb_read;
+        int16_t  rb_write;
+    } bezier;
 
     struct
     {
-        uint16_t handle_idx;
-    } snake_bezier_ack;
+        struct qwpos pos;
+        uint16_t     snake_id;
+        qa           angle;
+        int16_t      knot_idx;
+        uint8_t      len_backwards;
+        uint8_t      len_forwards;
+    } knot;
+
+    struct
+    {
+        uint16_t snake_id;
+        int16_t  knot_idx;
+    } knot_ack;
 };
 
 int msg_parse_payload(
@@ -135,36 +160,31 @@ struct msg* msg_join_accept(
     struct qwpos* spawn_pos);
 
 struct msg* msg_join_deny_bad_protocol(const char* error);
-
 struct msg* msg_join_deny_bad_username(const char* error);
-
 struct msg* msg_join_deny_server_full(const char* error);
-
 struct msg* msg_leave(void);
 
 void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq);
-
-int msg_commands_unpack_into(
-    struct cmd_queue* cmdq,
-    const uint8_t*    payload,
-    uint8_t           payload_len,
-    uint16_t          frame_number,
-    uint16_t*         first_frame,
-    uint16_t*         last_frame);
-
+int  msg_commands_unpack_into(
+     struct cmd_queue* cmdq,
+     const uint8_t*    payload,
+     uint8_t           payload_len,
+     uint16_t          frame_number,
+     uint16_t*         first_frame,
+     uint16_t*         last_frame);
 struct msg* msg_feedback(int8_t diff, uint16_t frame_number);
 
+struct msg* msg_snake_username(uint16_t snake_id, const char* username);
+struct msg* msg_snake_username_ack(uint16_t snake_id);
+struct msg* msg_snake_destroy(uint16_t snake_id);
+struct msg* msg_snake_destroy_ack(uint16_t snake_id);
 struct msg*
 msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
 
-struct msg* msg_snake_bezier(
-    uint16_t                    snake_id,
-    uint16_t                    bezier_handle_idx,
-    const struct bezier_handle* bezier_handle);
-struct msg* msg_snake_bezier_ack(uint16_t bezier_handle_idx);
-
-struct msg* msg_snake_destroy(uint16_t snake_id);
-struct msg* msg_snake_destroy_ack(uint16_t snake_id);
+struct msg* msg_bezier(uint16_t snake_id, int16_t rb_read, int16_t rb_write);
+struct msg*
+msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot);
+struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx);
 
 struct msg*
 msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number);

@@ -3,4 +3,4 @@
 #include "clither/bezier.h"
 #include "clither/rb.h"
 
-RB_DECLARE(bezier_handle_rb, struct bezier_handle, 16)
+RB_DECLARE(bezier_knot_rb, struct bezier_knot, 16)

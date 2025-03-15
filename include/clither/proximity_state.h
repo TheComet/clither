@@ -1,10 +1,10 @@
 #pragma once
 
-struct bezier_pending_acks_set;
+struct bezier_knot_acks_bmap;
 
 struct proximity_state
 {
-    struct bezier_pending_acks_bset* bezier_pending_acks;
+    struct bezier_knot_acks_bmap* bezier_knot_acks;
 };
 
 void proximity_state_init(struct proximity_state* ps);

@@ -1,4 +1,5 @@
 #include "clither/args.h"
+#include "clither/bezier_knot_rb.h"
 #include "clither/camera.h"
 #include "clither/cli_colors.h"
 #include "clither/client.h"
@@ -253,14 +254,6 @@ static struct client_recv_result process_message(
     log_net("Parsing msg type=%d, len=%d\n", msg_type, msg_len);
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
-        default: {
-            log_warn(
-                "Received unknown message type \"%d\" from server. "
-                "Malicious?\n",
-                msg_type);
-        }
-        break;
-
         case MSG_JOIN_REQUEST: break;
 
         case MSG_JOIN_ACCEPT: {
@@ -361,9 +354,39 @@ static struct client_recv_result process_message(
             return client_recv_ok();
         }
 
+        case MSG_SNAKE_USERNAME: {
+            struct snake* snake =
+                snake_bmap_find(world->snakes, pp.snake_username.snake_id);
+            if (snake == NULL)
+                return client_recv_ok();
+
+            if (str_set_cstr(&snake->data.name, pp.snake_username.username) !=
+                0)
+            {
+                return client_recv_error();
+            }
+
+            client_queue(
+                client, msg_snake_username_ack(pp.snake_username.snake_id));
+
+            return client_recv_ok();
+        }
+        case MSG_SNAKE_USERNAME_ACK: break;
+
+        case MSG_SNAKE_DESTROY: {
+            world_remove_snake(world, pp.snake_destroy.snake_id);
+            client_queue(
+                client, msg_snake_destroy_ack(pp.snake_destroy.snake_id));
+            return client_recv_ok();
+        }
+        case MSG_SNAKE_DESTROY_ACK: break;
+
         case MSG_SNAKE_HEAD: {
             struct snake* snake =
                 snake_bmap_find(world->snakes, client->snake_id);
+            if (snake == NULL)
+                return client_recv_ok();
+
             snake_ack_frame(
                 &snake->data,
                 &snake->head_ack,
@@ -373,26 +396,61 @@ static struct client_recv_result process_message(
                 &snake->cmdq,
                 pp.snake_head.frame_number,
                 client->sim_tick_rate);
+
             return client_recv_ok();
         }
 
-        case MSG_SNAKE_BEZIER: {
+        case MSG_BEZIER: {
             struct snake* snake =
-                snake_bmap_find(world->snakes, pp.snake_bezier.snake_id);
+                snake_bmap_find(world->snakes, pp.bezier.snake_id);
+            /* The message should have arrived after MSG_KNOT. Ignore until
+             * then. */
+            if (snake == NULL)
+                return client_recv_ok();
+
+            snake_update_bezier_extents(
+                &snake->data,
+                &snake->param,
+                pp.bezier.rb_read,
+                pp.bezier.rb_write);
+            return client_recv_ok();
+        }
+
+        case MSG_KNOT: {
+            struct snake* snake =
+                snake_bmap_find(world->snakes, pp.knot.snake_id);
             if (snake == NULL)
             {
                 snake = world_create_snake(
-                    world, pp.snake_bezier.snake_id, make_qwposi(0, 0), "");
+                    world, pp.knot.snake_id, make_qwposi(0, 0), "");
                 if (snake == NULL)
                     return client_recv_error();
             }
 
+            if (snake_create_or_update_knot(
+                    &snake->data,
+                    pp.knot.knot_idx,
+                    pp.knot.pos,
+                    pp.knot.angle,
+                    pp.knot.len_backwards,
+                    pp.knot.len_forwards) != 0)
+            {
+                return client_recv_error();
+            }
+
+            client_queue(
+                client, msg_knot_ack(pp.knot.snake_id, pp.knot.knot_idx));
+
             return client_recv_ok();
         }
 
-        case MSG_SNAKE_BEZIER_ACK: break;
+        case MSG_KNOT_ACK: break;
     }
 
+    log_warn(
+        "Received unknown message type \"%d\" from server. "
+        "Malicious?\n",
+        msg_type);
     return client_recv_ok();
 }
 
@@ -491,7 +549,7 @@ void* client_run(const struct args* a)
     int                         tick_lag;
 
     /* Change log prefix and color for server log messages */
-    log_set_prefix("Client: ");
+    log_set_prefix(a->prefix);
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     /* If McDonald's WiFi is enabled, start that */
@@ -727,6 +785,7 @@ void* client_run(const struct args* a)
     log_info("Stopping client\n");
 
     /* Send quit message to server to be nice */
+    client.timeout_counter = 0;
     client_queue(&client, msg_leave());
     client_send_pending_data(&client);
 

@@ -44,7 +44,8 @@ int main(int argc, char* argv[])
 #if defined(CLITHER_LOGGING)
     if (*args.log_file)
         log_file_open(args.log_file);
-    log_net_open("net.txt");
+    if (*args.netlog_file)
+        log_net_open(args.netlog_file);
 #endif
 
     /* Init networking */

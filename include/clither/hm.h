@@ -472,8 +472,8 @@ static int hm_next_valid_slot(const hash32* hashes, int slot, intptr_t capacity)
     for (slot_idx =                                                            \
              hm_next_valid_slot((hm)->hashes, -1, (hm) ? (hm)->capacity : 0);  \
          (hm) && slot_idx != (hm)->capacity &&                                 \
-         ((key = (hm)->kvs.keys[slot_idx]) || 1) &&                            \
-         ((value = &(hm)->kvs.values[slot_idx]) || 1);                         \
+         ((key = (hm)->kvs.keys[slot_idx]), 1) &&                              \
+         ((value = &(hm)->kvs.values[slot_idx]), 1);                           \
          slot_idx =                                                            \
              hm_next_valid_slot((hm)->hashes, slot_idx, (hm)->capacity))
 

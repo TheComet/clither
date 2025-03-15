@@ -7,24 +7,27 @@
 \draw (A) node[above]{\Large Client};
 \draw (C) node[above]{\Large Server};
 
-\coordinate (E) at ($(C)!.1!(D)$);
-\coordinate (F) at ($(A)!.25!(B)$);
-\coordinate (G) at ($(C)!.2!(D)$);
-\coordinate (H) at ($(A)!.35!(B)$);
-\coordinate (I) at ($(C)!.3!(D)$);
-\coordinate (J) at ($(A)!.45!(B)$);
-\coordinate (K) at ($(A)!.55!(B)$);
-\coordinate (L) at ($(C)!.7!(D)$);
-\coordinate (M) at ($(A)!.65!(B)$);
-\coordinate (N) at ($(C)!.8!(D)$);
-\coordinate (O) at ($(A)!.75!(B)$);
-\coordinate (P) at ($(C)!.9!(D)$);
+\coordinate (E) at ($(C)!.05!(D)$);
+\coordinate (F) at ($(A)!.2!(B)$);
+\coordinate (G) at ($(C)!.15!(D)$);
+\coordinate (H) at ($(A)!.3!(B)$);
+\coordinate (I) at ($(C)!.25!(D)$);
+\coordinate (J) at ($(A)!.4!(B)$);
+\coordinate (K) at ($(C)!.35!(D)$);
+\coordinate (L) at ($(A)!.5!(B)$);
+\coordinate (M) at ($(A)!.6!(B)$);
+\coordinate (N) at ($(C)!.75!(D)$);
+\coordinate (O) at ($(A)!.7!(B)$);
+\coordinate (P) at ($(C)!.85!(D)$);
+\coordinate (Q) at ($(A)!.8!(B)$);
+\coordinate (R) at ($(C)!.95!(D)$);
 \draw[->] (E) -- (F) node[midway,sloped,above]{\verb$SNAKE_USERNAME$};
-\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$SNAKE_BEZIER 1$};
-\draw[->] (I) -- (J) node[midway,sloped,above]{\verb$SNAKE_BEZIER 2$};
-\draw[->] (K) -- (L) node[midway,sloped,above]{\verb$SNAKE_USERNAME_ACK$};
-\draw[->] (M) -- (N) node[midway,sloped,above]{\verb$SNAKE_BEZIER_ACK 1$};
-\draw[->] (O) -- (P) node[midway,sloped,above]{\verb$SNAKE_BEZIER_ACK 2$};
+\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$SNAKE_BEZIER$};
+\draw[->] (I) -- (J) node[midway,sloped,above]{\verb$SNAKE_KNOT 1$};
+\draw[->] (K) -- (L) node[midway,sloped,above]{\verb$SNAKE_KNOT 2$};
+\draw[->] (M) -- (N) node[midway,sloped,above]{\verb$SNAKE_USERNAME_ACK$};
+\draw[->] (O) -- (P) node[midway,sloped,above]{\verb$SNAKE_KNOT_ACK 1$};
+\draw[->] (Q) -- (R) node[midway,sloped,above]{\verb$SNAKE_KNOT_ACK 2$};
 \draw (E) node[right]{Proximity?};
 \end{tikzpicture}
 
