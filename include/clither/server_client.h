@@ -16,3 +16,11 @@ struct server_client
     uint16_t snake_id;
     uint16_t last_command_msg_frame;
 };
+
+void server_client_init(
+    struct server_client* client,
+    uint16_t              snake_id,
+    uint16_t              frame_number,
+    uint8_t               sim_tick_rate,
+    uint8_t               net_tick_rate);
+void server_client_deinit(struct server_client* client);

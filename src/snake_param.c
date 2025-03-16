@@ -4,7 +4,7 @@
 void snake_param_init(struct snake_param* param)
 {
     /* Food count influences base stats */
-    param->food_eaten = 40;
+    param->food_eaten = 200;
 
     /* Base stats of snake's movement */
     param->base_stats.turn_speed = make_qa2(1, 16);

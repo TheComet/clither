@@ -355,7 +355,7 @@ void snake_remove_stale_segments_with_rollback_constraint(
     const struct snake_head* head_ack,
     int                      stale_segments)
 {
-    assert(stale_segments < rb_count(data->head_trails));
+    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
 
     while (stale_segments--)
     {
@@ -466,7 +466,7 @@ void snake_ack_frame(
          * share the same position, so when removing a bezier segment, two
          * points need to be removed.
          */
-        assert(rb_count(data->head_trails) > 0);
+        CLITHER_DEBUG_ASSERT(rb_count(data->head_trails) > 0);
         trail = *rb_peek_write(data->head_trails);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
@@ -623,4 +623,32 @@ int snake_update_bezier_extents(
         snake_length(param));
 
     return 0;
+}
+
+void snake_update_head(
+    struct snake_data*        data,
+    const struct snake_param* param,
+    const struct snake_head*  auth_head)
+{
+    struct bezier_knot* head_knot;
+    struct bezier_knot* prev_knot;
+    struct qwaabb*      segment_bb;
+
+    if (rb_count(data->bezier_knots) < 2)
+        return;
+
+    head_knot = rb_peek_write(data->bezier_knots);
+    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+    segment_bb = rb_peek_write(data->bezier_aabbs);
+
+    head_knot->pos = auth_head->pos;
+    head_knot->angle = qa_add(auth_head->angle, QA_PI);
+
+    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
+    snake_update_aabb(data);
+    bezier_calc_equidistant_points(
+        &data->bezier_points,
+        data->bezier_knots,
+        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+        snake_length(param));
 }

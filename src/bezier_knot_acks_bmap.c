@@ -7,8 +7,8 @@ BMAP_DEFINE(bezier_knot_acks_bmap, int16_t, char, 16)
 static int retain_active_knots(int16_t knot_idx, char* ackd, void* user)
 {
     const struct bezier_knot_rb* knots_rb = (const struct bezier_knot_rb*)user;
-    if (rb_is_idx_valid_data(knots_rb, knot_idx))
-        return BMAP_RETAIN;
+    if (!rb_is_idx_valid_data(knots_rb, knot_idx))
+        return BMAP_ERASE;
     return BMAP_RETAIN;
 }
 

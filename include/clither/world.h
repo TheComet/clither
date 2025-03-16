@@ -10,6 +10,7 @@ struct world
     qw                 inner_radius;
     qw                 ring_start;
     qw                 ring_end;
+    uint16_t           next_free_snake_id;
 };
 
 void world_init(struct world* world);
@@ -19,6 +20,8 @@ void world_deinit(struct world* world);
 /*
  * \brief Spawn a new snake in the world at a random location and return the
  * snake ID. This is usually a server-side call.
+ * \return The snake ID of the newly spawned snake. If the function fails, 0 is
+ * returned.
  */
 uint16_t world_spawn_snake(struct world* world, const char* username);
 

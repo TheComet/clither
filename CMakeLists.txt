@@ -182,6 +182,7 @@ add_executable (clither
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/server.c
+        src/server_client.c
         src/server_client_hm.c
         src/server_instance.c
         src/server_instance_bmap.c

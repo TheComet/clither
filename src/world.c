@@ -14,6 +14,7 @@ void world_init(struct world* world)
     world->inner_radius = make_qw(20);
     world->ring_start = make_qw(40);
     world->ring_end = make_qw(64);
+    world->next_free_snake_id = 1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -55,16 +56,15 @@ struct snake* world_create_snake(
 /* ------------------------------------------------------------------------- */
 uint16_t world_spawn_snake(struct world* world, const char* username)
 {
-    /* Snake ID 0 is reserved to mean "invalid" */
-    uint16_t i, snake_id = 1;
-    for (i = 0; i != bmap_count(world->snakes); ++i)
-    {
-        if (i + 1 != (int)snake_id)
-            break;
-        snake_id++;
-    }
+    struct qwpos spawn = make_qwposi(0, 0);
 
-    world_create_snake(world, snake_id, make_qwposi(0, 0), username);
+    /* Snake ID 0 is reserved to mean "invalid" */
+    uint16_t snake_id = world->next_free_snake_id++;
+    if (world->next_free_snake_id == 0)
+        world->next_free_snake_id++;
+
+    if (world_create_snake(world, snake_id, spawn, username) == NULL)
+        return 0;
 
     return snake_id;
 }

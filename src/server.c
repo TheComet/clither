@@ -22,19 +22,25 @@
 #include <string.h> /* memcpy */
 
 /* ------------------------------------------------------------------------- */
-static void client_remove(
-    struct server*              server,
-    struct world*               world,
-    const struct net_addr*      addr,
-    const struct server_client* client)
+static int server_queue(struct server_client* client, struct msg* msg)
 {
-    struct msg**            pmsg;
-    int16_t                 idx;
-    uint16_t                snake_id;
-    struct net_addr         other_addr;
-    struct server_client*   other_client;
-    struct proximity_state* prox;
+    return msg_vec_push(&client->pending_msgs, msg);
+}
 
+/* ------------------------------------------------------------------------- */
+static void server_client_remove(
+    struct server*         server,
+    struct world*          world,
+    const struct net_addr* addr,
+    struct server_client*  client)
+{
+    int16_t               idx;
+    struct net_addr       other_addr;
+    struct server_client* other_client;
+
+    /* Other clients might still have this client in their proximity list. If
+     * so, we need to remove this client and also send MSG_SNAKE_DESTROY so all
+     * other clients destroy the snake. */
     hm_for_each (server->clients, idx, other_addr, other_client)
     {
         struct proximity_state* prox;
@@ -47,28 +53,26 @@ static void client_remove(
         proximity_state_deinit(prox);
         proximity_state_bmap_erase(
             other_client->snakes_in_proximity, client->snake_id);
+
+        if (other_client != client)
+            server_queue(other_client, msg_snake_destroy(client->snake_id));
     }
 
     world_remove_snake(world, client->snake_id);
-    vec_for_each (client->pending_msgs, pmsg)
-        msg_free(*pmsg);
-    bmap_for_each (client->snakes_in_proximity, idx, snake_id, prox)
-        (void)idx, (void)snake_id, proximity_state_deinit(prox);
-    proximity_state_bmap_deinit(client->snakes_in_proximity);
-    msg_vec_deinit(client->pending_msgs);
+    server_client_deinit(client);
     server_client_hm_erase(server->clients, addr);
 }
 
 /* ------------------------------------------------------------------------- */
 static void mark_client_as_malicious_and_drop(
-    struct server*              server,
-    const struct net_addr*      addr,
-    const struct server_client* client,
-    struct world*               world,
-    int                         timeout)
+    struct server*         server,
+    const struct net_addr* addr,
+    struct server_client*  client,
+    struct world*          world,
+    int                    timeout)
 {
     net_addr_hm_insert_update(&server->malicious_clients, addr, timeout);
-    client_remove(server, world, addr, client);
+    server_client_remove(server, world, addr, client);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -99,14 +103,7 @@ void server_deinit(struct server* server)
     net_addr_hm_deinit(server->malicious_clients);
 
     server_client_hm_for_each (server->clients, slot, addr, client)
-    {
-        struct msg** pmsg;
-        (void)addr;
-
-        vec_for_each (client->pending_msgs, pmsg)
-            msg_free(*pmsg);
-        msg_vec_deinit(client->pending_msgs);
-    }
+        (void)addr, server_client_deinit(client);
     server_client_hm_deinit(server->clients);
 }
 
@@ -210,7 +207,7 @@ int server_send_pending_data(struct server* server, struct world* world)
         if (msg_vec_retain(
                 client->pending_msgs, append_reliable_msgs_to_buf, &ctx) == -1)
         {
-            client_remove(server, world, addr, client);
+            server_client_remove(server, world, addr, client);
             continue;
         }
 
@@ -225,12 +222,6 @@ int server_send_pending_data(struct server* server, struct world* world)
     }
 
     return 0;
-}
-
-/* ------------------------------------------------------------------------- */
-static int server_queue(struct server_client* client, struct msg* msg)
-{
-    return msg_vec_push(&client->pending_msgs, msg);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -300,6 +291,7 @@ int server_update_snakes_in_range(
                     continue;
 
                 server_queue(client, msg_snake_destroy(other_client->snake_id));
+                proximity_state_deinit(prox);
                 proximity_state_bmap_erase(
                     client->snakes_in_proximity, other_client->snake_id);
             }
@@ -324,7 +316,9 @@ int server_queue_snake_data(
         CLITHER_DEBUG_ASSERT(snake != NULL), (void)addr;
         if (snake_is_held(snake))
             continue;
-        server_queue(client, msg_snake_head(&snake->head, frame_number));
+        server_queue(
+            client,
+            msg_snake_head(client->snake_id, frame_number, &snake->head));
     }
 
     /* Queue bezier knots of all snakes in proximity */
@@ -362,6 +356,9 @@ int server_queue_snake_data(
              * ack them, then they'd remain in the list forever. */
             bezier_knot_acks_bmap_remove_stale_knots(
                 prox->bezier_knot_acks, snake->data.bezier_knots);
+
+            server_queue(
+                client, msg_snake_head(snake_id, frame_number, &snake->head));
         }
     }
 
@@ -379,7 +376,7 @@ static enum process_message_result process_message(
     struct server*                server,
     const struct server_settings* settings,
     struct server_client*         client,
-    const struct net_addr*        client_addr,
+    const struct net_addr*        addr,
     struct world*                 world,
     enum msg_type                 msg_type,
     const uint8_t*                msg_data,
@@ -404,7 +401,7 @@ static enum process_message_result process_message(
                 pkt.data[0] = msg->type;
                 pkt.data[1] = msg->payload_len;
                 memcpy(pkt.data + 2, msg->payload, msg->payload_len);
-                net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
+                net_sendto(server->udp_sock, pkt.data, pkt.len, addr);
                 msg_free(msg);
                 return PROCESS_MESSAGE_OK;
             }
@@ -418,46 +415,41 @@ static enum process_message_result process_message(
                 pkt.data[0] = msg->type;
                 pkt.data[1] = msg->payload_len;
                 memcpy(pkt.data + 2, msg->payload, msg->payload_len);
-                net_sendto(server->udp_sock, pkt.data, pkt.len, client_addr);
+                net_sendto(server->udp_sock, pkt.data, pkt.len, addr);
                 msg_free(msg);
                 return PROCESS_MESSAGE_OK;
             }
 
-            /* Create new client. This code is not refactored into a
-             * separate function because this is the only location where
-             * clients are created. Clients are destroyed by the
-             * function client_remove() */
+            /* Create new client */
             if (client == NULL)
             {
                 struct snake* snake;
-                int           cbf_idx;
+                uint16_t      snake_id;
                 log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
-                client =
-                    server_client_hm_emplace_new(&server->clients, client_addr);
-                CLITHER_DEBUG_ASSERT(client != NULL);
+                client = server_client_hm_emplace_new(&server->clients, addr);
+                if (client == NULL)
+                    return PROCESS_MESSAGE_OOM;
 
-                msg_vec_init(&client->pending_msgs);
-                proximity_state_bmap_init(&client->snakes_in_proximity);
-                client->timeout_counter = 0;
-                client->snake_id =
-                    world_spawn_snake(world, pp.join_request.username);
-                client->last_command_msg_frame = frame_number;
+                snake_id = world_spawn_snake(world, pp.join_request.username);
+                if (snake_id == 0)
+                {
+                    server_client_hm_erase(server->clients, addr);
+                    return PROCESS_MESSAGE_OOM;
+                }
 
                 /* Hold the snake in place until we receive the first
                  * command */
-                snake = snake_bmap_find(world->snakes, client->snake_id);
+                snake = snake_bmap_find(world->snakes, snake_id);
                 CLITHER_DEBUG_ASSERT(snake != NULL);
                 snake_set_hold(snake);
 
-                /*
-                 * Init "Command Buffer Fullness" queue with minimum
-                 * granularity. This assumes the client has the most
-                 * stable connection initially.
-                 */
-                for (cbf_idx = 0; cbf_idx != CBF_WINDOW_SIZE; ++cbf_idx)
-                    client->cbf_window[cbf_idx] =
-                        settings->sim_tick_rate / settings->net_tick_rate;
+                server_client_init(
+                    client,
+                    snake_id,
+                    frame_number,
+                    settings->sim_tick_rate,
+                    settings->net_tick_rate);
             }
 
             /* (Re-)send join accept response */
@@ -488,7 +480,7 @@ static enum process_message_result process_message(
         }
 
         case MSG_LEAVE: {
-            client_remove(server, world, client_addr, client);
+            server_client_remove(server, world, addr, client);
             return PROCESS_MESSAGE_OK;
         }
 
@@ -608,7 +600,7 @@ static enum process_message_result process_message(
             if (other_snake == NULL)
             {
                 log_warn("Received knot ack for unknown snake\n");
-                break;
+                return PROCESS_MESSAGE_OK;
             }
 
             prox = proximity_state_bmap_find(
@@ -634,7 +626,7 @@ static enum process_message_result process_message(
     }
 
     mark_client_as_malicious_and_drop(
-        server, client_addr, client, world, settings->malicious_timeout);
+        server, addr, client, world, settings->malicious_timeout);
     return PROCESS_MESSAGE_CLIENT_DROPPED;
 }
 
@@ -745,7 +737,7 @@ int server_recv(
             struct net_addr_str ipstr;
             net_addr_to_str(&ipstr, server_addr);
             log_warn("Client %s timed out\n", ipstr.cstr);
-            client_remove(server, world, server_addr, client);
+            server_client_remove(server, world, server_addr, client);
         }
     }
 
@@ -865,7 +857,7 @@ void* server_run(const void* args)
         instance->ip = a->ip;
         strcpy(instance->port, port);
 
-        log_dbg("Starting default server instance\n");
+        log_info("Starting default server instance\n");
         instance->thread = thread_start(server_instance_run, instance);
         if (instance->thread == NULL)
         {
@@ -886,7 +878,7 @@ void* server_run(const void* args)
             (void)port;
             thread_join(instance->thread);
         }
-        log_dbg("Joined all server instances\n");
+        log_info("Joined all server instances\n");
     }
 
     server_settings_save(&settings, a->config_file);

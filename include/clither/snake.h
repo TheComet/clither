@@ -180,3 +180,8 @@ int snake_update_bezier_extents(
     const struct snake_param* param,
     int16_t                   rb_read,
     int16_t                   rb_write);
+
+void snake_update_head(
+    struct snake_data*        data,
+    const struct snake_param* param,
+    const struct snake_head*  head);

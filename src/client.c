@@ -374,6 +374,12 @@ static struct client_recv_result process_message(
         case MSG_SNAKE_USERNAME_ACK: break;
 
         case MSG_SNAKE_DESTROY: {
+            if (pp.snake_destroy.snake_id == client->snake_id)
+            {
+                log_warn("Received MSG_SNAKE_DESTROY for self\n");
+                return client_recv_ok();
+            }
+
             world_remove_snake(world, pp.snake_destroy.snake_id);
             client_queue(
                 client, msg_snake_destroy_ack(pp.snake_destroy.snake_id));
@@ -382,20 +388,36 @@ static struct client_recv_result process_message(
         case MSG_SNAKE_DESTROY_ACK: break;
 
         case MSG_SNAKE_HEAD: {
-            struct snake* snake =
-                snake_bmap_find(world->snakes, client->snake_id);
+            struct snake_head auth_head;
+            struct snake*     snake =
+                snake_bmap_find(world->snakes, pp.snake_head.snake_id);
             if (snake == NULL)
                 return client_recv_ok();
 
-            snake_ack_frame(
-                &snake->data,
-                &snake->head_ack,
-                &snake->head,
-                &pp.snake_head.head,
-                &snake->param,
-                &snake->cmdq,
-                pp.snake_head.frame_number,
-                client->sim_tick_rate);
+            auth_head.pos = pp.snake_head.pos;
+            auth_head.angle = pp.snake_head.angle;
+            auth_head.speed = pp.snake_head.speed;
+
+            if (pp.snake_head.snake_id == client->snake_id)
+            {
+                snake_ack_frame(
+                    &snake->data,
+                    &snake->head_ack,
+                    &snake->head,
+                    &auth_head,
+                    &snake->param,
+                    &snake->cmdq,
+                    pp.snake_head.frame_number,
+                    client->sim_tick_rate);
+            }
+            else
+            {
+                snake_update_head(&snake->data, &snake->param, &auth_head);
+
+                /* SDL will draw the head and ack'd head */
+                snake->head = auth_head;
+                snake->head_ack = auth_head;
+            }
 
             return client_recv_ok();
         }

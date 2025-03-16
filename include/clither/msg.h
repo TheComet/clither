@@ -107,8 +107,11 @@ union parsed_payload
 
     struct
     {
-        struct snake_head head;
-        uint16_t          frame_number;
+        struct qwpos pos;
+        uint16_t     frame_number;
+        uint16_t     snake_id;
+        qa           angle;
+        uint8_t      speed;
     } snake_head;
 
     struct
@@ -178,8 +181,8 @@ struct msg* msg_snake_username(uint16_t snake_id, const char* username);
 struct msg* msg_snake_username_ack(uint16_t snake_id);
 struct msg* msg_snake_destroy(uint16_t snake_id);
 struct msg* msg_snake_destroy_ack(uint16_t snake_id);
-struct msg*
-msg_snake_head(const struct snake_head* snake, uint16_t frame_number);
+struct msg* msg_snake_head(
+    uint16_t snake_id, uint16_t frame_number, const struct snake_head* head);
 
 struct msg* msg_bezier(uint16_t snake_id, int16_t rb_read, int16_t rb_write);
 struct msg*

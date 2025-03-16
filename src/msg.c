@@ -294,27 +294,28 @@ int msg_parse_payload(
         }
 
         case MSG_SNAKE_HEAD: {
-            if (payload_len < 11)
+            if (payload_len < 13)
             {
                 log_warn("MSG_SNAKE_HEAD payload is too small\n");
                 return -1;
             }
 
-            pp->snake_head.frame_number = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_head.head.pos.x =
-                (payload[2] & 0x80
+            pp->snake_head.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->snake_head.frame_number = (payload[2] << 8) | (payload[3] << 0);
+            pp->snake_head.pos.x =
+                (payload[4] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[2] << 16) |
-                (payload[3] << 8) | (payload[4] << 0);
-            pp->snake_head.head.pos.y =
-                (payload[5] & 0x80
+                (payload[4] << 16) |
+                (payload[5] << 8) | (payload[6] << 0);
+            pp->snake_head.pos.y =
+                (payload[7] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[5] << 16) |
-                (payload[6] << 8) | (payload[7] << 0);
-            pp->snake_head.head.angle = (payload[8] << 8) | (payload[9] << 0);
-            pp->snake_head.head.speed = payload[10];
+                (payload[7] << 16) |
+                (payload[8] << 8) | (payload[9] << 0);
+            pp->snake_head.angle = (payload[10] << 8) | (payload[11] << 0);
+            pp->snake_head.speed = payload[12];
             return type;
         }
 
@@ -858,38 +859,46 @@ struct msg* msg_snake_destroy_ack(uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_snake_head(const struct snake_head* head, uint16_t frame_number)
+struct msg* msg_snake_head(
+    uint16_t snake_id, uint16_t frame_number, const struct snake_head* head)
 {
     struct msg* m = msg_alloc(
         MSG_SNAKE_HEAD,
         0,
-        sizeof(frame_number) + 6 + /* world position (2x 24-bit qwpos) */
-            2 +                    /* angle (16-bit) */
-            1);                    /* speed (uint8_t) */
+        2 +     /* snake id */
+            2 + /* frame number */
+            6 + /* world position (2x 24-bit qwpos) */
+            2 + /* angle (16-bit) */
+            1); /* speed (uint8_t) */
 
-    m->payload[0] = (frame_number >> 8) & 0xFF;
-    m->payload[1] = (frame_number & 0xFF);
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = (snake_id & 0xFF);
 
-    m->payload[2] = (head->pos.x >> 16) & 0xFF;
-    m->payload[3] = (head->pos.x >> 8) & 0xFF;
-    m->payload[4] = head->pos.x & 0xFF;
+    m->payload[2] = (frame_number >> 8) & 0xFF;
+    m->payload[3] = (frame_number & 0xFF);
 
-    m->payload[5] = (head->pos.y >> 16) & 0xFF;
-    m->payload[6] = (head->pos.y >> 8) & 0xFF;
-    m->payload[7] = head->pos.y & 0xFF;
+    m->payload[4] = (head->pos.x >> 16) & 0xFF;
+    m->payload[5] = (head->pos.x >> 8) & 0xFF;
+    m->payload[6] = head->pos.x & 0xFF;
 
-    m->payload[8] = (head->angle >> 8) & 0xFF;
-    m->payload[9] = head->angle & 0xFF;
+    m->payload[7] = (head->pos.y >> 16) & 0xFF;
+    m->payload[8] = (head->pos.y >> 8) & 0xFF;
+    m->payload[9] = head->pos.y & 0xFF;
 
-    m->payload[10] = head->speed;
+    m->payload[10] = (head->angle >> 8) & 0xFF;
+    m->payload[11] = head->angle & 0xFF;
+
+    m->payload[12] = head->speed;
 
     log_net(
-        "MSG_SNAKE_HEAD: pos=%d,%d, angle=%d, speed=%d, frame=%d\n",
+        "MSG_SNAKE_HEAD: snake_id=%d, frame=%d, pos=%d,%d, angle=%d, "
+        "speed=%d\n",
+        snake_id,
+        frame_number,
         head->pos.x,
         head->pos.y,
         head->angle,
-        head->speed,
-        frame_number);
+        head->speed);
 
     return m;
 }
@@ -955,11 +964,11 @@ msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot)
     m->payload[13] = knot->len_forwards;
 
     log_net(
-        "MSG_SNAKE_BEZIER: pos=[%d, %d], angle=%d, len_backwards=%d, "
+        "MSG_KNOT: pos=[%f, %f], angle=%f, len_backwards=%d, "
         "len_forwards=%d\n",
-        knot->pos.x,
-        knot->pos.y,
-        knot->angle,
+        qw_to_float(knot->pos.x),
+        qw_to_float(knot->pos.y),
+        qa_to_float(knot->angle),
         knot->len_backwards,
         knot->len_forwards);
 
