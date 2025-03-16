@@ -1,37 +1,38 @@
+#include "clither/mem.h"
+#include "clither/mfile.h"
+#include "clither/utf8.h"
+#include "clither/log.h"
+
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#include "odb-util/mem.h"
-#include "odb-util/mfile.h"
-#include "odb-util/utf8.h"
-#include "odb-util/log.h"
-
 int
-mfile_map_read(struct mfile* mf, struct ospathc filepath, int log_error)
+mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
 {
     HANDLE hFile;
     LARGE_INTEGER liFileSize;
     HANDLE hMapping;
-    struct utf16 utf16_filename = empty_utf16();
+    wchar_t* utf16_filename;
 
-    if (utf8_to_utf16(&utf16_filename, ospathc_view(filepath)) != 0)
+    utf16_filename = utf8_to_utf16(filepath, (int)strlen(filepath));
+    if (utf16_filename == NULL)
         goto utf16_conv_failed;
 
     /* Try to open the file */
     hFile = CreateFileW(
-        utf16_cstr(utf16_filename), /* File name */
+        utf16_filename,             /* File name */
         GENERIC_READ,               /* Read only */
         FILE_SHARE_READ,
         NULL,                       /* Default security */
         OPEN_EXISTING,              /* File must exist */
         FILE_ATTRIBUTE_NORMAL,      /* Default attributes */
-            NULL);                      /* No attribute template */
+        NULL);                      /* No attribute template */
     if (hFile == INVALID_HANDLE_VALUE)
     {
         if (log_error)
             log_err(
-                "Failed to open file {quote:%s}: {win32error}\n",
-                ospathc_cstr(filepath));
+                "Failed to open file \"%s\": {win32error}\n",
+                filepath);
         goto open_failed;
     }
     
@@ -41,8 +42,8 @@ mfile_map_read(struct mfile* mf, struct ospathc filepath, int log_error)
     if (liFileSize.QuadPart > (1ULL << 31) - 1)  /* mf->size is an int */
     {
         log_err(
-            "Failed to map file {quote:%s}: Mapping files >4GiB is not implemented\n",
-            ospathc_cstr(filepath));
+            "Failed to map file \"%s\": Mapping files >4GiB is not implemented\n",
+            filepath);
         goto get_file_size_failed;
     }
     mf->size = (int)liFileSize.LowPart;
@@ -56,8 +57,8 @@ mfile_map_read(struct mfile* mf, struct ospathc filepath, int log_error)
     if (hMapping == NULL)
     {
         log_err(
-            "Failed to create file mapping for file {quote:%s}: {win32error}\n",
-            ospathc_cstr(filepath));
+            "Failed to create file mapping for file \"%s\": {win32error}\n",
+            filepath);
         goto create_file_mapping_failed;
     }
 
@@ -69,8 +70,8 @@ mfile_map_read(struct mfile* mf, struct ospathc filepath, int log_error)
     if (mf->address == NULL)
     {
         log_err(
-            "Failed to map view of file {quote:%s}: {win32error}\n",
-            ospathc_cstr(filepath));
+            "Failed to map view of file \"%s\": {win32error}\n",
+            filepath);
         goto map_view_failed;
     }
 
@@ -79,31 +80,31 @@ mfile_map_read(struct mfile* mf, struct ospathc filepath, int log_error)
     /* Don't need these anymore */
     CloseHandle(hMapping);
     CloseHandle(hFile);
-    utf16_deinit(utf16_filename);
+    utf16_free(utf16_filename);
 
     return 0;
 
     map_view_failed            :
     create_file_mapping_failed : CloseHandle(hMapping);
     get_file_size_failed       : CloseHandle(hFile);
-    open_failed                : utf16_deinit(utf16_filename);
+    open_failed                : utf16_free(utf16_filename);
     utf16_conv_failed          : return -1;
 }
 
 int
-mfile_map_overwrite(struct mfile* mf, int size, struct ospathc filepath)
+mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
 {
     HANDLE hFile;
-    LARGE_INTEGER liFileSize;
     HANDLE hMapping;
-    struct utf16 utf16_filename = empty_utf16();
+    wchar_t* utf16_filename;
 
-    if (utf8_to_utf16(&utf16_filename, ospathc_view(filepath)) != 0)
+    utf16_filename = utf8_to_utf16(filepath, (int)strlen(filepath));
+    if (utf16_filename == NULL)
         goto utf16_conv_failed;
 
     /* Try to open the file */
     hFile = CreateFileW(
-        utf16_cstr(utf16_filename),   /* File name */
+        utf16_filename,               /* File name */
         GENERIC_READ | GENERIC_WRITE, /* Read/write */
         0,
         NULL,                         /* Default security */
@@ -113,8 +114,8 @@ mfile_map_overwrite(struct mfile* mf, int size, struct ospathc filepath)
     if (hFile == INVALID_HANDLE_VALUE)
     {
         log_err(
-            "Failed to open file {quote:%s}: {win32error}\n",
-            ospathc_cstr(filepath));
+            "Failed to open file \"%s\": {win32error}\n",
+            filepath);
         goto open_failed;
     }
 
@@ -127,8 +128,8 @@ mfile_map_overwrite(struct mfile* mf, int size, struct ospathc filepath)
     if (hMapping == NULL)
     {
         log_err(
-            "Failed to create file mapping for file {quote:%s}: {win32error}\n",
-            ospathc_cstr(filepath));
+            "Failed to create file mapping for file \"%s\": {win32error}\n",
+            filepath);
         goto create_file_mapping_failed;
     }
 
@@ -140,8 +141,8 @@ mfile_map_overwrite(struct mfile* mf, int size, struct ospathc filepath)
     if (mf->address == NULL)
     {
         log_err(
-            "Failed to map view of file {quote:%s}: {win32error}\n",
-            ospathc_cstr(filepath));
+            "Failed to map view of file \"%s\": {win32error}\n",
+            filepath);
         goto map_view_failed;
     }
 
@@ -150,13 +151,13 @@ mfile_map_overwrite(struct mfile* mf, int size, struct ospathc filepath)
     /* Don't need these anymore */
     CloseHandle(hMapping);
     CloseHandle(hFile);
-    utf16_deinit(utf16_filename);
+    utf16_free(utf16_filename);
 
     return 0;
 
     map_view_failed            : CloseHandle(hMapping);
     create_file_mapping_failed : CloseHandle(hFile);
-    open_failed                : utf16_deinit(utf16_filename);
+    open_failed                : utf16_free(utf16_filename);
     utf16_conv_failed          : return -1;
 }
 
@@ -172,7 +173,7 @@ mfile_map_mem(struct mfile* mf, int size)
     if (mapping == NULL)
     {
         log_err(
-            "Failed to create file mapping of size {emph:%d}: {win32error}\n",
+            "Failed to create file mapping of size %d: {win32error}\n",
             size);
         goto create_file_mapping_failed;
     }
@@ -185,7 +186,7 @@ mfile_map_mem(struct mfile* mf, int size)
     if (mf->address == NULL)
     {
         log_err(
-            "Failed to map memory of size {emph:%d}: {win32error}\n",
+            "Failed to map memory of size %d: {win32error}\n",
             size);
         goto map_view_failed;
     }

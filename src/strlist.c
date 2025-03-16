@@ -90,13 +90,13 @@ int strlist_add(struct strlist** l, struct strview str)
 
 int strlist_add_cstr(struct strlist** l, const char* cstr)
 {
-    return strlist_add(l, strview(cstr, 0, strlen(cstr)));
+    return strlist_add(l, strview(cstr, 0, (int)strlen(cstr)));
 }
 
 int strlist_insert(struct strlist** l, int insert, const char* cstr)
 {
     struct strspan* slotspan;
-    struct strview  str = strview(cstr, 0, strlen(cstr));
+    struct strview  str = strview(cstr, 0, (int)strlen(cstr));
 
     if (grow(l, str.len) < 0)
         return -1;

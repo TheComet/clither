@@ -9,6 +9,7 @@ VEC_DECLARE(str_impl, char, 16)
 void str_init(struct str** str);
 void str_deinit(struct str* str);
 int  str_set_cstr(struct str** str, const char* cstr);
+int  str_set_path_cstr(struct str** str, const char* path);
 int  str_join_path(struct str** str, struct strview path);
 int  str_join_path_cstr(struct str** str, const char* path);
 

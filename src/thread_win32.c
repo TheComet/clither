@@ -1,8 +1,8 @@
+#include "clither/log.h"
+#include "clither/thread.h"
+
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-
-#include "odb-util/log.h"
-#include "odb-util/thread.h"
 
 struct thread*
 thread_start(void* (*func)(const void*), const void* args)

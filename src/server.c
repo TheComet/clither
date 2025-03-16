@@ -786,7 +786,6 @@ int server_recv(
     /* We may need to read more than one UDP packet */
     while (1)
     {
-        struct server_client* client;
         int                   udp_len;
 
         udp_len = net_recvfrom(
@@ -807,15 +806,11 @@ int server_recv(
          * If we received a packet from a potentially malicious client,
          * increase their timeout
          */
+        timeout = net_addr_hm_find(server->malicious_clients, &client_addr);
+        if (timeout != NULL)
         {
-            int* timeout =
-                net_addr_hm_find(server->malicious_clients, &client_addr);
-            if (timeout != NULL)
-            {
-                *timeout +=
-                    settings->malicious_timeout * settings->net_tick_rate;
-                continue;
-            }
+            *timeout += settings->malicious_timeout * settings->net_tick_rate;
+            continue;
         }
 
         /*

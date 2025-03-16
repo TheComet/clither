@@ -1,8 +1,8 @@
+#include "clither/mem.h"
+#include "clither/mutex.h"
+
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-
-#include "odb-util/mem.h"
-#include "odb-util/mutex.h"
 
 struct mutex
 {

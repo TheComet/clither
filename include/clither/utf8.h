@@ -12,5 +12,3 @@ FILE*
 utf8_fopen_wb(const char* utf8_filename, int utf8_filename_bytes);
 FILE*
 utf8_fopen_rb(const char* utf8_filename, int utf8_filename_bytes);
-int
-utf8_remove(const char* utf8_filename, int utf8_filename_bytes);

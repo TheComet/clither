@@ -1,10 +1,10 @@
-#include "cstructures/backtrace.h"
+#include "clither/backtrace.h"
 #include <process.h>
 #include <Windows.h>
 #include <DbgHelp.h>
 #include <stdio.h>
 
-#define CSTRUCTURES_BACKTRACE_FUNC_LEN 1024
+#define BACKTRACE_FUNC_LEN 1024
 
 static HANDLE hProcess;
 
@@ -33,18 +33,18 @@ backtrace_get(int* size)
     char** result;
     char** current_ptr;
     char* current_str;
-    void* stack[CSTRUCTURES_BACKTRACE_SIZE];
-    char sym_buf[sizeof(SYMBOL_INFO) + (CSTRUCTURES_BACKTRACE_FUNC_LEN - 1) * sizeof(TCHAR)];
-    WORD frames_traced = CaptureStackBackTrace(0, CSTRUCTURES_BACKTRACE_SIZE, stack, NULL);
+    void* stack[CLITHER_BACKTRACE_SIZE];
+    char sym_buf[sizeof(SYMBOL_INFO) + (BACKTRACE_FUNC_LEN - 1) * sizeof(TCHAR)];
+    WORD frames_traced = CaptureStackBackTrace(0, CLITHER_BACKTRACE_SIZE, stack, NULL);
 
     result = malloc(
         sizeof(char*) * frames_traced +  /* String table */
-        sizeof(char)  * frames_traced * CSTRUCTURES_BACKTRACE_FUNC_LEN);
+        sizeof(char)  * frames_traced * BACKTRACE_FUNC_LEN);
     current_ptr = result;
     current_str = (char*)(result + frames_traced);
 
     SYMBOL_INFO* sym = (SYMBOL_INFO*)sym_buf;
-    sym->MaxNameLen = CSTRUCTURES_BACKTRACE_FUNC_LEN;
+    sym->MaxNameLen = BACKTRACE_FUNC_LEN;
     sym->SizeOfStruct = sizeof(SYMBOL_INFO);
 
     DWORD displacement;
@@ -56,7 +56,7 @@ backtrace_get(int* size)
         *current_ptr = current_str;
         current_ptr++;
         if (SymGetLineFromAddr64(hProcess, address, &displacement, &line) == TRUE)
-            current_str += snprintf(current_str, CSTRUCTURES_BACKTRACE_FUNC_LEN, "%d: (0x%llx+0x%x) %s:%d", i, sym->Address, displacement, sym->Name, line.LineNumber) + 1;
+            current_str += snprintf(current_str, BACKTRACE_FUNC_LEN, "%d: (0x%llx+0x%x) %s:%d", i, sym->Address, displacement, sym->Name, line.LineNumber) + 1;
         else
             current_str += sprintf(current_str, "%d: (0x%llx) SymGetLineFromAddr64() failed: %d", i, address, GetLastError()) + 1;
 

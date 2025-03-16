@@ -288,7 +288,7 @@ target_compile_definitions (clither
         $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>)
 target_compile_options (clither
     PRIVATE
-        $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244>
+        $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244 /wd4505>
         $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic -Wno-unused-function -Wno-overlength-strings>
         $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>)
 target_link_options (clither
@@ -319,7 +319,9 @@ endif ()
 
 target_link_libraries (clither
     PRIVATE
-        $<$<PLATFORM_ID:Windows>:ws2_32>
+        $<$<PLATFORM_ID:Windows>:
+            ws2_32
+            $<$<BOOL:${CLITHER_BACKTRACE}>:Dbghelp>>
         $<$<PLATFORM_ID:Linux>:m>
         $<$<PLATFORM_ID:Darwin>:m>
         $<$<PLATFORM_ID:Emscripten>:websocket.js>)

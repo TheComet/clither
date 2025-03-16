@@ -1,4 +1,5 @@
 #include <gmock/gmock.h>
+#include <unordered_map>
 
 extern "C" {
 #include "clither/hm.h"
@@ -379,6 +380,6 @@ TEST_F(NAME, foreach)
 
     EXPECT_THAT(hm_count(hm), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));
-    for (const auto& [k, v] : expected_values)
-        EXPECT_THAT(v, Eq(1)) << k;
+    for (auto it = expected_values.begin(); it != expected_values.end(); ++it)
+        EXPECT_THAT(it->second, Eq(1)) << it->first;
 }
