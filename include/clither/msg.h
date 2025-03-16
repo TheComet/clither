@@ -109,16 +109,21 @@ union parsed_payload
     {
         struct qwpos pos;
         uint16_t     frame_number;
-        uint16_t     snake_id;
         qa           angle;
         uint8_t      speed;
     } snake_head;
 
     struct
     {
-        uint16_t snake_id;
-        int16_t  rb_read;
-        int16_t  rb_write;
+        struct qwpos pos;
+        uint16_t     snake_id;
+        uint16_t     frame_number;
+        int16_t      rb_read;
+        int16_t      rb_write;
+        qa           angle;
+        uint8_t      speed;
+        uint8_t      head_len_backwards;
+        uint8_t      second_len_forwards;
     } bezier;
 
     struct
@@ -182,11 +187,25 @@ struct msg* msg_snake_username_ack(uint16_t snake_id);
 struct msg* msg_snake_destroy(uint16_t snake_id);
 struct msg* msg_snake_destroy_ack(uint16_t snake_id);
 struct msg* msg_snake_head(
-    uint16_t snake_id, uint16_t frame_number, const struct snake_head* head);
+    uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed);
 
-struct msg* msg_bezier(uint16_t snake_id, int16_t rb_read, int16_t rb_write);
-struct msg*
-msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot);
+struct msg* msg_bezier(
+    uint16_t     snake_id,
+    uint16_t     frame_number,
+    int16_t      rb_read,
+    int16_t      rb_write,
+    struct qwpos head_pos,
+    qa           head_angle,
+    uint8_t      head_speed,
+    uint8_t      head_len_backwards,
+    uint8_t      second_len_forwards);
+struct msg* msg_knot(
+    uint16_t     snake_id,
+    uint16_t     knot_idx,
+    struct qwpos pos,
+    qa           angle,
+    uint8_t      len_backwards,
+    uint8_t      len_forwards);
 struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx);
 
 struct msg*

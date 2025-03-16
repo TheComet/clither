@@ -67,6 +67,7 @@ struct snake
     struct snake_data  data;
     struct snake_head  head;
     struct snake_head  head_ack;
+    uint16_t           head_ack_frame;
 
     unsigned hold : 1;
 };
@@ -176,12 +177,20 @@ int snake_create_or_update_knot(
  * \note This function will calculate AABBs and points for rendering.
  */
 int snake_update_bezier_extents(
-    struct snake_data*        data,
-    const struct snake_param* param,
-    int16_t                   rb_read,
-    int16_t                   rb_write);
+    struct snake_data* data,
+    int16_t            rb_read,
+    int16_t            rb_write,
+    uint8_t            head_len_backwards,
+    uint8_t            second_len_forwards);
 
-void snake_update_head(
+void snake_unextrapolate(
+    struct snake_data*       data,
+    struct snake_head*       head,
+    const struct snake_head* head_ack);
+void snake_extrapolate(
     struct snake_data*        data,
+    struct snake_head*        head,
     const struct snake_param* param,
-    const struct snake_head*  head);
+    uint16_t                  head_ack_frame,
+    uint16_t                  frame_number,
+    uint8_t                   sim_tick_rate);

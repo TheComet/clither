@@ -84,7 +84,7 @@ void* server_instance_run(const void* args)
 
         if (net_update)
         {
-            if (server_update_snakes_in_range(&server, &world, make_qw(10)) !=
+            if (server_update_snakes_in_range(&server, &world, make_qw(2)) !=
                 0)
                 break;
             if (server_queue_snake_data(&server, &world, frame_number) != 0)

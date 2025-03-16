@@ -134,16 +134,16 @@ static struct qwpos bezier_xy(const qw Ax[4], const qw Ay[4], const qw t)
 
 /* ------------------------------------------------------------------------- */
 void bezier_knot_init(
-    struct bezier_knot* bh,
+    struct bezier_knot* knot,
     struct qwpos        pos,
     qa                  angle,
     uint8_t             len_backwards,
     uint8_t             len_forwards)
 {
-    bh->pos = pos;
-    bh->angle = angle;
-    bh->len_backwards = len_backwards;
-    bh->len_forwards = len_forwards;
+    knot->pos = pos;
+    knot->angle = angle;
+    knot->len_backwards = len_backwards;
+    knot->len_forwards = len_forwards;
 }
 
 /* ------------------------------------------------------------------------- */

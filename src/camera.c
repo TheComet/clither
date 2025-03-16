@@ -32,5 +32,5 @@ camera_update(
     camera->pos.x = qw_add(camera->pos.x, dx);
     camera->pos.y = qw_add(camera->pos.y, dy);
 
-    camera->scale = qw_div(make_qw(1), snake_scale(param));
+    camera->scale = qw_div(make_qw(0.5), snake_scale(param));
 }

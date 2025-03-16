@@ -1,5 +1,6 @@
 #include "clither/args.h"
 #include "clither/bezier_knot_rb.h"
+#include "clither/bmap.h"
 #include "clither/camera.h"
 #include "clither/cli_colors.h"
 #include "clither/client.h"
@@ -388,36 +389,24 @@ static struct client_recv_result process_message(
         case MSG_SNAKE_DESTROY_ACK: break;
 
         case MSG_SNAKE_HEAD: {
-            struct snake_head auth_head;
+            struct snake_head head_auth;
             struct snake*     snake =
-                snake_bmap_find(world->snakes, pp.snake_head.snake_id);
-            if (snake == NULL)
-                return client_recv_ok();
+                snake_bmap_find(world->snakes, client->snake_id);
+            CLITHER_DEBUG_ASSERT(snake != NULL);
 
-            auth_head.pos = pp.snake_head.pos;
-            auth_head.angle = pp.snake_head.angle;
-            auth_head.speed = pp.snake_head.speed;
+            head_auth.pos = pp.snake_head.pos;
+            head_auth.angle = pp.snake_head.angle;
+            head_auth.speed = pp.snake_head.speed;
 
-            if (pp.snake_head.snake_id == client->snake_id)
-            {
-                snake_ack_frame(
-                    &snake->data,
-                    &snake->head_ack,
-                    &snake->head,
-                    &auth_head,
-                    &snake->param,
-                    &snake->cmdq,
-                    pp.snake_head.frame_number,
-                    client->sim_tick_rate);
-            }
-            else
-            {
-                snake_update_head(&snake->data, &snake->param, &auth_head);
-
-                /* SDL will draw the head and ack'd head */
-                snake->head = auth_head;
-                snake->head_ack = auth_head;
-            }
+            snake_ack_frame(
+                &snake->data,
+                &snake->head_ack,
+                &snake->head,
+                &head_auth,
+                &snake->param,
+                &snake->cmdq,
+                pp.snake_head.frame_number,
+                client->sim_tick_rate);
 
             return client_recv_ok();
         }
@@ -430,11 +419,19 @@ static struct client_recv_result process_message(
             if (snake == NULL)
                 return client_recv_ok();
 
+            snake->head_ack.pos = pp.bezier.pos;
+            snake->head_ack.angle = pp.bezier.angle;
+            snake->head_ack.speed = pp.bezier.speed;
+            snake->head_ack_frame = pp.bezier.frame_number;
+
+            snake_unextrapolate(&snake->data, &snake->head, &snake->head_ack);
             snake_update_bezier_extents(
                 &snake->data,
-                &snake->param,
                 pp.bezier.rb_read,
-                pp.bezier.rb_write);
+                pp.bezier.rb_write,
+                pp.bezier.head_len_backwards,
+                pp.bezier.second_len_forwards);
+
             return client_recv_ok();
         }
 
@@ -523,32 +520,45 @@ static struct client_recv_result unpack_packet(
 struct client_recv_result
 client_recv(struct client* client, struct world* world)
 {
-    struct net_udp_packet packet;
+    struct net_udp_packet     packet;
+    struct client_recv_result result = client_recv_ok();
 
     CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
-retry_recv:
-    packet.len = net_recv(
-        *vec_last(client->udp_sockfds), packet.data, sizeof(packet.data));
-    if (packet.len < 0)
+    /* We may need to read more than one UDP packet */
+    while (1)
     {
-        if (vec_count(client->udp_sockfds) == 1)
-            return client_recv_error();
-        net_close(*sockfd_vec_pop(client->udp_sockfds));
-        log_info("Attempting to use next socket\n");
-        goto retry_recv;
+    retry_recv:
+        packet.len = net_recv(
+            *vec_last(client->udp_sockfds), packet.data, sizeof(packet.data));
+        if (packet.len < 0)
+        {
+            if (vec_count(client->udp_sockfds) == 1)
+                return client_recv_error();
+            net_close(*sockfd_vec_pop(client->udp_sockfds));
+            log_info("Attempting to use next socket\n");
+            goto retry_recv;
+        }
+
+        if (packet.len == 0)
+            break;
+
+        /* Don't let client time out */
+        client->timeout_counter = 0;
+
+        log_net("Received UDP packet, size=%d\n", packet.len);
+        result = client_recv_result_combine(
+            result, unpack_packet(client, world, &packet));
+
+        /* Want to stop processing messages if an error occurred, or if the
+         * client disconnected. */
+        if (result.error || result.disconnected)
+            break;
     }
 
-    if (packet.len == 0)
-        return client_recv_ok();
-
-    /* Don't let client time out */
-    client->timeout_counter = 0;
-
-    log_net("Received UDP packet, size=%d\n", packet.len);
-    return unpack_packet(client, world, &packet);
+    return result;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -720,6 +730,8 @@ void* client_run(const struct args* a)
         /* sim_update */
         if (client.state == CLIENT_CONNECTED)
         {
+            int16_t       snake_idx;
+            uint16_t      snake_id;
             struct snake* snake =
                 snake_bmap_find(world.snakes, client.snake_id);
 
@@ -767,6 +779,23 @@ void* client_run(const struct args* a)
             {
                 /* Send all unconfirmed commands (unreliable) */
                 msg_commands(&client.pending_msgs, &snake->cmdq);
+            }
+
+            /* Simulate other snakes */
+            bmap_for_each (world.snakes, snake_idx, snake_id, snake)
+            {
+                if (snake_id == client.snake_id)
+                    continue;
+
+                snake_unextrapolate(
+                    &snake->data, &snake->head, &snake->head_ack);
+                snake_extrapolate(
+                    &snake->data,
+                    &snake->head,
+                    &snake->param,
+                    snake->head_ack_frame,
+                    client.frame_number,
+                    client.sim_tick_rate);
             }
         }
 

@@ -294,52 +294,72 @@ int msg_parse_payload(
         }
 
         case MSG_SNAKE_HEAD: {
-            if (payload_len < 13)
+            if (payload_len < 11)
             {
                 log_warn("MSG_SNAKE_HEAD payload is too small\n");
                 return -1;
             }
 
-            pp->snake_head.snake_id = (payload[0] << 8) | (payload[1] << 0);
-            pp->snake_head.frame_number = (payload[2] << 8) | (payload[3] << 0);
+            pp->snake_head.frame_number = (payload[0] << 8) | (payload[1] << 0);
             pp->snake_head.pos.x =
-                (payload[4] & 0x80
+                (payload[2] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[4] << 16) |
-                (payload[5] << 8) | (payload[6] << 0);
+                (payload[2] << 16) |
+                (payload[3] << 8) | (payload[4] << 0);
             pp->snake_head.pos.y =
-                (payload[7] & 0x80
+                (payload[5] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[7] << 16) |
-                (payload[8] << 8) | (payload[9] << 0);
-            pp->snake_head.angle = (payload[10] << 8) | (payload[11] << 0);
-            pp->snake_head.speed = payload[12];
+                (payload[5] << 16) |
+                (payload[6] << 8) | (payload[7] << 0);
+            pp->snake_head.angle = (payload[8] << 8) | (payload[9] << 0);
+            pp->snake_head.speed = payload[10];
+
             return type;
         }
 
         case MSG_BEZIER: {
-            if (payload_len < 6)
+            if (payload_len < 19)
             {
-                log_warn("MSG_SNAKE_BEZIER: Payload is too small\n");
+                log_warn("MSG_BEZIER: Payload is too small\n");
                 return -1;
             }
 
             pp->bezier.snake_id = (payload[0] << 8) | (payload[1] << 0);
-            pp->bezier.rb_read = (payload[2] << 8) | (payload[3] << 0);
-            pp->bezier.rb_write = (payload[4] << 8) | (payload[5] << 0);
+            pp->bezier.frame_number = (payload[2] << 8) | (payload[3] << 0);
 
+            pp->bezier.rb_read = (payload[4] << 8) | (payload[5] << 0);
+            pp->bezier.rb_write = (payload[6] << 8) | (payload[7] << 0);
             if (pp->bezier.rb_read < 0)
             {
-                log_warn("MSG_SNAKE_BEZIER: rb_read cannot be negative!\n");
+                log_warn("MSG_BEZIER: rb_read cannot be negative!\n");
                 return -2;
             }
             if (pp->bezier.rb_write < 0)
             {
-                log_warn("MSG_SNAKE_BEZIER: rb_write cannot be negative!\n");
-                return -2;
+                log_warn("MSG_BEZIER: rb_write cannot be negative!\n");
+                return -3;
             }
+
+            pp->bezier.pos.x =
+                (payload[8] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[8] << 16) |
+                (payload[9] << 8) | (payload[10] << 0);
+            pp->bezier.pos.y =
+                (payload[11] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[11] << 16) |
+                (payload[12] << 8) | (payload[13] << 0);
+
+            pp->bezier.angle = (payload[14] << 8) | (payload[15] << 0);
+            pp->bezier.speed = payload[16];
+
+            pp->bezier.head_len_backwards = payload[17];
+            pp->bezier.second_len_forwards = payload[18];
 
             return type;
         }
@@ -859,77 +879,110 @@ struct msg* msg_snake_destroy_ack(uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_snake_head(
-    uint16_t snake_id, uint16_t frame_number, const struct snake_head* head)
+struct msg*
+msg_snake_head(uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed)
 {
     struct msg* m = msg_alloc(
         MSG_SNAKE_HEAD,
         0,
-        2 +     /* snake id */
-            2 + /* frame number */
+        2 +     /* frame number */
             6 + /* world position (2x 24-bit qwpos) */
             2 + /* angle (16-bit) */
             1); /* speed (uint8_t) */
 
-    m->payload[0] = (snake_id >> 8) & 0xFF;
-    m->payload[1] = (snake_id & 0xFF);
+    m->payload[0] = (frame_number >> 8) & 0xFF;
+    m->payload[1] = (frame_number & 0xFF);
 
-    m->payload[2] = (frame_number >> 8) & 0xFF;
-    m->payload[3] = (frame_number & 0xFF);
+    m->payload[2] = (pos.x >> 16) & 0xFF;
+    m->payload[3] = (pos.x >> 8) & 0xFF;
+    m->payload[4] = pos.x & 0xFF;
 
-    m->payload[4] = (head->pos.x >> 16) & 0xFF;
-    m->payload[5] = (head->pos.x >> 8) & 0xFF;
-    m->payload[6] = head->pos.x & 0xFF;
+    m->payload[5] = (pos.y >> 16) & 0xFF;
+    m->payload[6] = (pos.y >> 8) & 0xFF;
+    m->payload[7] = pos.y & 0xFF;
 
-    m->payload[7] = (head->pos.y >> 16) & 0xFF;
-    m->payload[8] = (head->pos.y >> 8) & 0xFF;
-    m->payload[9] = head->pos.y & 0xFF;
+    m->payload[8] = (angle >> 8) & 0xFF;
+    m->payload[9] = angle & 0xFF;
 
-    m->payload[10] = (head->angle >> 8) & 0xFF;
-    m->payload[11] = head->angle & 0xFF;
-
-    m->payload[12] = head->speed;
+    m->payload[10] = speed;
 
     log_net(
-        "MSG_SNAKE_HEAD: snake_id=%d, frame=%d, pos=%d,%d, angle=%d, "
-        "speed=%d\n",
-        snake_id,
+        "MSG_SNAKE_HEAD: frame=%d, pos=[%.2f,%.2f], angle=%.2f, speed=%d\n",
         frame_number,
-        head->pos.x,
-        head->pos.y,
-        head->angle,
-        head->speed);
+        qw_to_float(pos.x),
+        qw_to_float(pos.y),
+        qa_to_float(angle),
+        speed);
 
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_bezier(uint16_t snake_id, int16_t rb_read, int16_t rb_write)
+struct msg* msg_bezier(
+    uint16_t     snake_id,
+    uint16_t     frame_number,
+    int16_t      rb_read,
+    int16_t      rb_write,
+    struct qwpos head_pos,
+    qa           head_angle,
+    uint8_t      head_speed,
+    uint8_t      head_len_backwards,
+    uint8_t      second_len_forwards)
 {
     struct msg* m = msg_alloc(
         MSG_BEZIER,
         0,
         2 +     /* snake_id */
+            2 + /* frame_number */
             2 + /* rb_read */
-            2); /* rb_write */
+            2 + /* rb_write */
+            6 + /* World position (2x 24-bit qwpos) */
+            2 + /* Angle */
+            1 + /* Speed */
+            1 + /* len_backwards of head */
+            1); /* len_forwards of previous knot */
     if (m == NULL)
         return NULL;
 
     m->payload[0] = snake_id >> 8;
     m->payload[1] = snake_id & 0xFF;
 
-    m->payload[2] = rb_read >> 8;
-    m->payload[3] = rb_read & 0xFF;
+    m->payload[2] = frame_number >> 8;
+    m->payload[3] = frame_number & 0xFF;
 
-    m->payload[4] = rb_write >> 8;
-    m->payload[5] = rb_write & 0xFF;
+    m->payload[4] = rb_read >> 8;
+    m->payload[5] = rb_read & 0xFF;
+
+    m->payload[6] = rb_write >> 8;
+    m->payload[7] = rb_write & 0xFF;
+
+    m->payload[8] = (head_pos.x >> 16) & 0xFF;
+    m->payload[9] = (head_pos.x >> 8) & 0xFF;
+    m->payload[10] = head_pos.x & 0xFF;
+
+    m->payload[11] = (head_pos.y >> 16) & 0xFF;
+    m->payload[12] = (head_pos.y >> 8) & 0xFF;
+    m->payload[13] = head_pos.y & 0xFF;
+
+    m->payload[14] = (head_angle >> 8) & 0xFF;
+    m->payload[15] = head_angle & 0xFF;
+
+    m->payload[16] = head_speed;
+
+    m->payload[17] = head_len_backwards;
+    m->payload[18] = second_len_forwards;
 
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg*
-msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot)
+struct msg* msg_knot(
+    uint16_t     snake_id,
+    uint16_t     knot_idx,
+    struct qwpos pos,
+    qa           angle,
+    uint8_t      len_backwards,
+    uint8_t      len_forwards)
 {
     struct msg* m = msg_alloc(
         MSG_KNOT,
@@ -949,28 +1002,28 @@ msg_knot(uint16_t snake_id, uint16_t knot_idx, const struct bezier_knot* knot)
     m->payload[2] = knot_idx >> 8;
     m->payload[3] = knot_idx & 0xFF;
 
-    m->payload[4] = (knot->pos.x >> 16) & 0xFF;
-    m->payload[5] = (knot->pos.x >> 8) & 0xFF;
-    m->payload[6] = knot->pos.x & 0xFF;
+    m->payload[4] = (pos.x >> 16) & 0xFF;
+    m->payload[5] = (pos.x >> 8) & 0xFF;
+    m->payload[6] = pos.x & 0xFF;
 
-    m->payload[7] = (knot->pos.y >> 16) & 0xFF;
-    m->payload[8] = (knot->pos.y >> 8) & 0xFF;
-    m->payload[9] = knot->pos.y & 0xFF;
+    m->payload[7] = (pos.y >> 16) & 0xFF;
+    m->payload[8] = (pos.y >> 8) & 0xFF;
+    m->payload[9] = pos.y & 0xFF;
 
-    m->payload[10] = (knot->angle >> 8) & 0xFF;
-    m->payload[11] = knot->angle & 0xFF;
+    m->payload[10] = (angle >> 8) & 0xFF;
+    m->payload[11] = angle & 0xFF;
 
-    m->payload[12] = knot->len_backwards;
-    m->payload[13] = knot->len_forwards;
+    m->payload[12] = len_backwards;
+    m->payload[13] = len_forwards;
 
     log_net(
-        "MSG_KNOT: pos=[%f, %f], angle=%f, len_backwards=%d, "
+        "MSG_KNOT: pos=[%.2f,%.2f], angle=%.2f, len_backwards=%d, "
         "len_forwards=%d\n",
-        qw_to_float(knot->pos.x),
-        qw_to_float(knot->pos.y),
-        qa_to_float(knot->angle),
-        knot->len_backwards,
-        knot->len_forwards);
+        qw_to_float(pos.x),
+        qw_to_float(pos.y),
+        qa_to_float(angle),
+        len_backwards,
+        len_forwards);
 
     return m;
 }

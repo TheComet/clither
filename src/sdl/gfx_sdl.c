@@ -372,11 +372,11 @@ static struct cmd gfx_sdl_input_to_command(
 
 /* ------------------------------------------------------------------------- */
 static void draw_bezier(
-    const struct gfx*           gfx,
-    const struct camera*        camera,
+    const struct gfx*         gfx,
+    const struct camera*      camera,
     const struct bezier_knot* head,
     const struct bezier_knot* tail,
-    int                         num_points)
+    int                       num_points)
 {
     SDL_Point* points;
     SDL_Point  point_buf[64];
@@ -449,21 +449,29 @@ static void draw_snake(
     struct bezier_point* bp;
     struct qwaabb*       bb;
 
-    SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
+/*VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
+    pos = gfx_world_to_screen(*wpos, gfx, camera);
+    draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 5);
+VECTOR_END_EACH*/
 
-    /*VECTOR_FOR_EACH(&snake->points, struct qwpos2, wpos)
-        pos = gfx_world_to_screen(*wpos, gfx, camera);
-        draw_circle(gfx->renderer, (SDL_Point) { pos.x, pos.y }, 5);
-    VECTOR_END_EACH*/
-
+/* Equidistant points along the bezier curve */
+#if 0
     vec_for_each (snake->data.bezier_points, bp)
     {
         pos = gfx_world_to_screen(bp->pos, gfx, camera);
         draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
     }
+#endif
 
+    /* Draw head */
+    SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
     pos = gfx_world_to_screen(snake->head.pos, gfx, camera);
     draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 10);
+
+    /* Head ack */
+    SDL_SetRenderDrawColor(gfx->renderer, 255, 128, 0, 255);
+    pos = gfx_world_to_screen(snake->head_ack.pos, gfx, camera);
+    draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
 
     /* Debug: Draw how the "command" structure interpreted the mouse position */
     if (cmd_queue_count(&snake->cmdq) > 0)
@@ -488,12 +496,6 @@ static void draw_snake(
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
-    {
-        SDL_SetRenderDrawColor(gfx->renderer, 255, 128, 0, 255);
-        pos = gfx_world_to_screen(snake->head_ack.pos, gfx, camera);
-        draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
-    }
-
     for (i = 0; i < rb_count(snake->data.bezier_knots) - 1; ++i)
     {
         const struct bezier_knot* tail =
@@ -507,6 +509,8 @@ static void draw_snake(
         draw_bezier((const struct gfx*)gfx, camera, head, tail, 50);
     }
 
+    /* bezier segment AABBs */
+#if 0 
     SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
     rb_for_each (snake->data.bezier_aabbs, i, bb)
     {
@@ -519,7 +523,11 @@ static void draw_snake(
             make_SDL_Point(s1.x, s1.y),
             make_SDL_Point(s2.x, s2.y));
     }
+#endif
 
+    /* snake AABB */
+#if 0
+    SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
     {
         struct qwpos q1 =
             make_qwposqw(snake->data.aabb.x1, snake->data.aabb.y1);
@@ -532,6 +540,7 @@ static void draw_snake(
             make_SDL_Point(s1.x, s1.y),
             make_SDL_Point(s2.x, s2.y));
     }
+#endif
 }
 
 /* ------------------------------------------------------------------------- */

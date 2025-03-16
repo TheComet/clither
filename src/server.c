@@ -318,7 +318,11 @@ int server_queue_snake_data(
             continue;
         server_queue(
             client,
-            msg_snake_head(client->snake_id, frame_number, &snake->head));
+            msg_snake_head(
+                frame_number,
+                snake->head.pos,
+                snake->head.angle,
+                snake->head.speed));
     }
 
     /* Queue bezier knots of all snakes in proximity */
@@ -330,22 +334,31 @@ int server_queue_snake_data(
         bmap_for_each (client->snakes_in_proximity, prox_idx, snake_id, prox)
         {
             int16_t             knot_idx;
-            struct bezier_knot* handle;
+            struct bezier_knot* knot;
             struct snake* snake = snake_bmap_find(world->snakes, snake_id);
             CLITHER_DEBUG_ASSERT(snake != NULL);
-            rb_for_each (snake->data.bezier_knots, knot_idx, handle)
+            rb_for_each (snake->data.bezier_knots, knot_idx, knot)
             {
                 char* ackd;
                 switch (bezier_knot_acks_bmap_emplace_or_get(
                     &prox->bezier_knot_acks, knot_idx, &ackd))
                 {
                     case BMAP_OOM: return -1;
+                    case BMAP_NEW: *ackd = 0;
                     case BMAP_EXISTS: break;
-                    case BMAP_NEW: *ackd = 0; break;
                 }
-                if (*ackd == 0 &&
-                    server_queue(
-                        client, msg_knot(snake_id, knot_idx, handle)) != 0)
+                if (*ackd)
+                    continue;
+
+                if (server_queue(
+                        client,
+                        msg_knot(
+                            snake_id,
+                            knot_idx,
+                            knot->pos,
+                            knot->angle,
+                            knot->len_backwards,
+                            knot->len_forwards)) != 0)
                 {
                     return -1;
                 }
@@ -357,8 +370,31 @@ int server_queue_snake_data(
             bezier_knot_acks_bmap_remove_stale_knots(
                 prox->bezier_knot_acks, snake->data.bezier_knots);
 
-            server_queue(
-                client, msg_snake_head(snake_id, frame_number, &snake->head));
+            /* The "len_forwards" property of the second knot (the one that
+             * follows the head) and the "len_backwards" property of the head
+             * knot are constantly updated as the head moves. We have to send
+             * this to the client as well. */
+            if (rb_count(snake->data.bezier_knots) > 1)
+            {
+                const struct bezier_knot* head_knot =
+                    rb_peek_write(snake->data.bezier_knots);
+                const struct bezier_knot* second_knot = rb_peek(
+                    snake->data.bezier_knots,
+                    rb_count(snake->data.bezier_knots) - 2);
+
+                server_queue(
+                    client,
+                    msg_bezier(
+                        snake_id,
+                        frame_number,
+                        rb_read_idx(snake->data.bezier_knots),
+                        rb_write_idx(snake->data.bezier_knots),
+                        snake->head.pos,
+                        snake->head.angle,
+                        snake->head.speed,
+                        head_knot->len_backwards,
+                        second_knot->len_forwards));
+            }
         }
     }
 
@@ -614,13 +650,6 @@ static enum process_message_result process_message(
                 return PROCESS_MESSAGE_OK;
             *ackd = 1;
 
-            /* Send ring-buffer extents */
-            server_queue(
-                client,
-                msg_bezier(
-                    pp.knot_ack.snake_id,
-                    rb_read_idx(other_snake->data.bezier_knots),
-                    rb_write_idx(other_snake->data.bezier_knots)));
             return PROCESS_MESSAGE_OK;
         }
     }

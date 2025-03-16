@@ -120,7 +120,9 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     snake_head_init(&snake->head, spawn_pos);
     snake_head_init(&snake->head_ack, spawn_pos);
 
+    snake->head_ack_frame = 0;
     snake->hold = 0;
+
     return 0;
 }
 
@@ -582,10 +584,11 @@ int snake_create_or_update_knot(
 
 /* ------------------------------------------------------------------------- */
 int snake_update_bezier_extents(
-    struct snake_data*        data,
-    const struct snake_param* param,
-    int16_t                   rb_read,
-    int16_t                   rb_write)
+    struct snake_data* data,
+    int16_t            rb_read,
+    int16_t            rb_write,
+    uint8_t            head_len_backwards,
+    uint8_t            second_len_forwards)
 {
     int16_t i;
     CLITHER_DEBUG_ASSERT(rb_read >= 0);
@@ -593,11 +596,23 @@ int snake_update_bezier_extents(
     if (rb_read >= rb_capacity(data->bezier_knots) ||
         rb_write >= rb_capacity(data->bezier_knots))
     {
-        return -1;
+        return 0;
     }
 
     data->bezier_knots->read = rb_read;
     data->bezier_knots->write = rb_write;
+
+    /* The "len_forwards" property of the second knot (the one that
+     * follows the head) and the "len_backwards" property of the head knot are
+     * constantly changing. */
+    if (rb_count(data->bezier_knots) > 1)
+    {
+        struct bezier_knot* head_knot = rb_peek_write(data->bezier_knots);
+        struct bezier_knot* second_knot =
+            rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+        head_knot->len_backwards = head_len_backwards;
+        second_knot->len_forwards = second_len_forwards;
+    }
 
     /* Create individual bounding boxes for all segments we've collected. There
      * will be one less bounding box than there are segments. */
@@ -612,37 +627,66 @@ int snake_update_bezier_extents(
         bezier_calc_aabb(bb, knot1, knot2);
     }
 
-    /* Calculate overall bounding box of entire snake */
-    snake_update_aabb(data);
-
-    /* Calculate equidistant points along the curve for rendering */
-    bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
-
     return 0;
 }
 
-void snake_update_head(
+/* ------------------------------------------------------------------------- */
+void snake_unextrapolate(
+    struct snake_data*       data,
+    struct snake_head*       head,
+    const struct snake_head* head_ack)
+{
+    struct bezier_knot* head_knot;
+
+    *head = *head_ack;
+
+    head_knot = rb_peek_write(data->bezier_knots);
+    head_knot->pos = head->pos;
+    head_knot->angle = qa_add(head->angle, QA_PI);
+}
+
+/* ------------------------------------------------------------------------- */
+void snake_extrapolate(
     struct snake_data*        data,
+    struct snake_head*        head,
     const struct snake_param* param,
-    const struct snake_head*  auth_head)
+    uint16_t                  head_ack_frame,
+    uint16_t                  frame_number,
+    uint8_t                   sim_tick_rate)
 {
     struct bezier_knot* head_knot;
     struct bezier_knot* prev_knot;
     struct qwaabb*      segment_bb;
+    qw                  dx, dy;
 
     if (rb_count(data->bezier_knots) < 2)
         return;
+
+    log_dbg("extrapolating by %d frames\n", frame_number - head_ack_frame);
+
+    /* We do simple linear extrapolation for now. Could add higher orders if
+     * this doesn't suffice, or maybe even a prediction model */
+
+    dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    dx = qw_rescale(dx, head->speed, 255);
+    dx = qw_add(dx, snake_min_speed(param));
+    dx = qw_mul(qa_cos(head->angle), dx);
+    dx = qw_mul(dx, make_qw(frame_number - head_ack_frame));
+    head->pos.x = qw_add(head->pos.x, dx);
+
+    dy = qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    dy = qw_rescale(dy, head->speed, 255);
+    dy = qw_add(dy, snake_min_speed(param));
+    dy = qw_mul(qa_sin(head->angle), dy);
+    dy = qw_mul(dy, make_qw(frame_number - head_ack_frame));
+    head->pos.y = qw_add(head->pos.y, dy);
 
     head_knot = rb_peek_write(data->bezier_knots);
     prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
     segment_bb = rb_peek_write(data->bezier_aabbs);
 
-    head_knot->pos = auth_head->pos;
-    head_knot->angle = qa_add(auth_head->angle, QA_PI);
+    head_knot->pos = head->pos;
+    head_knot->angle = qa_add(head->angle, QA_PI);
 
     bezier_calc_aabb(segment_bb, prev_knot, head_knot);
     snake_update_aabb(data);
