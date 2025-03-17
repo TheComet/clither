@@ -34,7 +34,7 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
     /* Make sure to send it immediately first */
     msg->resend_period_counter = 1;
     /* How many times to retry before dropping the connection */
-    msg->resend_retry_counter = 20;
+    msg->resend_retry_counter = 60;
 
     return msg;
 }
@@ -562,7 +562,7 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
         m = msg_alloc(
             MSG_COMMANDS,
             0,
-            sizeof(first_frame_number) + /* frame number */
+            2 + /* frame number */
                 3 +
                 (12 * send_count + 8) / 8); /* upper bound for all commands */
 
@@ -574,6 +574,7 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
 
         m->payload[0] = first_frame_number >> 8;
         m->payload[1] = first_frame_number & 0xFF;
+
         m->payload[2] = (uint8_t)(send_count - 1);
 
         /* First command structure */
@@ -697,7 +698,7 @@ int msg_commands_unpack_into(
     int        i, bit, byte, mouse_data_offset;
     uint8_t    command_count;
     uint16_t   first_frame_number;
-    struct cmd command;
+    struct cmd c;
 
     first_frame_number = (payload[0] << 8) | (payload[1] & 0xFF);
     command_count = payload[2];
@@ -711,16 +712,16 @@ int msg_commands_unpack_into(
     *last_frame = first_frame_number + command_count;
 
     /* Read first command structure */
-    command.angle = payload[3];
-    command.speed = payload[4];
-    command.action = (payload[5] & 0x07);
+    c.angle = payload[3];
+    c.speed = payload[4];
+    c.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
-        cmd_queue_put(cmdq, command, first_frame_number);
+        cmd_queue_put(cmdq, c, first_frame_number);
     log_net(
         "  angle=%x, speed=%x, action=%x\n",
-        command.angle,
-        command.speed,
-        command.action);
+        c.angle,
+        c.speed,
+        c.action);
 
     if (command_count == 0)
         return 0;
@@ -780,30 +781,30 @@ int msg_commands_unpack_into(
         READ_NEXT_BIT_INTO(b);
         if (b)
         {
-            command.action = 0;
+            c.action = 0;
             READ_NEXT_BIT_INTO(b);
             if (b)
-                command.action |= 0x01;
+                c.action |= 0x01;
             READ_NEXT_BIT_INTO(b);
             if (b)
-                command.action |= 0x02;
+                c.action |= 0x02;
             READ_NEXT_BIT_INTO(b);
             if (b)
-                command.action |= 0x04;
+                c.action |= 0x04;
         }
 
         da = payload[mouse_data_offset + i] & 0x07;
         dv = (payload[mouse_data_offset + i] >> 3) & 0x1F;
-        command.angle += da - 3;
-        command.speed += dv - 15;
+        c.angle += da - 3;
+        c.speed += dv - 15;
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
-            cmd_queue_put(cmdq, command, first_frame_number + i + 1);
+            cmd_queue_put(cmdq, c, first_frame_number + i + 1);
         log_net(
             "  angle=%x, speed=%x, action=%x\n",
-            command.angle,
-            command.speed,
-            command.action);
+            c.angle,
+            c.speed,
+            c.action);
     }
 
     return 0;

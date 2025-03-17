@@ -350,8 +350,7 @@ static struct client_recv_result process_message(
         case MSG_COMMANDS: break;
 
         case MSG_FEEDBACK: {
-            if (client->warp == 0)
-                client->warp = pp.feedback.diff * 10;
+            client->warp = pp.feedback.diff;
             return client_recv_ok();
         }
 
@@ -814,6 +813,7 @@ void* client_run(const struct args* a)
          */
         tick_lag =
             tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
+        client.warp = 0;
         if (tick_lag == 0)
             gfx_iface->draw_world(gfx, &world, &camera);
         else
@@ -825,11 +825,6 @@ void* client_run(const struct args* a)
                 break;
             }
         }
-
-        if (client.warp > 0)
-            client.warp--;
-        if (client.warp < 0)
-            client.warp++;
 
         client.frame_number++;
     }

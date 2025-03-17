@@ -118,7 +118,7 @@ static void cbf_add(struct server_client* client, int value)
 }
 
 /* ------------------------------------------------------------------------- */
-static int cbf_lower_bound(struct server_client* client)
+static int cbf_min(struct server_client* client)
 {
     int i;
     int lower = INT32_MAX;
@@ -522,7 +522,7 @@ static enum process_message_result process_message(
 
         case MSG_COMMANDS: {
             uint16_t      first_frame, last_frame;
-            int           lower, granularity, client_commands_queued;
+            int           lower, granularity, cmd_buf_fullness;
             struct snake* snake =
                 snake_bmap_find(world->snakes, client->snake_id);
             if (snake == NULL)
@@ -544,7 +544,7 @@ static enum process_message_result process_message(
              * Depending on how stable the connection is, the client
              * will be instructed to shrink the buffer.
              */
-            client_commands_queued =
+            cmd_buf_fullness =
                 u16_sub_wrap(cmd_queue_frame_end(&snake->cmdq), frame_number);
 
             /* Returns the first and last frame numbers that were
@@ -576,9 +576,9 @@ static enum process_message_result process_message(
              * the command buffer size needs to be increased or
              * decreased.
              */
-            cbf_add(client, client_commands_queued);
-            lower = cbf_lower_bound(client);
-            if (client_commands_queued < 0)
+            cbf_add(client, cmd_buf_fullness);
+            lower = cbf_min(client);
+            if (cmd_buf_fullness < 0)
             {
                 /*
                  * Means we do NOT have the command of the current frame
@@ -586,13 +586,12 @@ static enum process_message_result process_message(
                  *  -> will probably lead to a client-side roll back
                  * The client needs to warp forwards in time.
                  */
-                int8_t diff =
-                    client_commands_queued < -10 ? -10 : client_commands_queued;
+                int8_t diff = cmd_buf_fullness < -10 ? -10 : cmd_buf_fullness;
                 server_queue(client, msg_feedback(diff, frame_number));
             }
-            else if (lower - granularity * 2 > 0)
+            else if (lower - granularity > 0)
             {
-                int8_t diff = lower - granularity * 2;
+                int8_t diff = lower - granularity;
                 diff = diff > 10 ? 10 : diff;
                 server_queue(client, msg_feedback(diff, frame_number));
             }
@@ -786,7 +785,7 @@ int server_recv(
     /* We may need to read more than one UDP packet */
     while (1)
     {
-        int                   udp_len;
+        int udp_len;
 
         udp_len = net_recvfrom(
             server->udp_sock, udp_buf, sizeof(udp_buf), &client_addr);

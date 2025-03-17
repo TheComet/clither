@@ -9,19 +9,18 @@
 
 \coordinate (E) at ($(A)!.1!(B)$);
 \coordinate (F) at ($(C)!.25!(D)$);
-\coordinate (G) at ($(C)!.54!(D)$);
-\coordinate (H) at ($(C)!.75!(D)$);
-\coordinate (I) at ($(A)!.9!(B)$);
+\coordinate (G) at ($(A)!.39!(B)$);
+\coordinate (H) at ($(C)!.35!(D)$);
+\coordinate (I) at ($(A)!.6!(B)$);
 \draw[->] (E) -- (F) node[midway,sloped,above]{\verb$COMMANDS$};
-\draw[->] (H) -- (I) node[midway,sloped,above]{\verb$FEEDBACK$};
-\draw (G) node[right]{
+\draw[->] (H) -- (I) node[midway,sloped,above]{\verb$SNAKE_HEAD$};
+\draw (G) node[left]{
     \begin{bytefield}[bitwidth=4em]{1}
         \bitbox{1}{$\text{cmd}_n$} \\
         \bitbox{1}{\ldots} \\
         \bitbox{1}{$\text{cmd}_2$} \\
         \bitbox{1}{$\text{cmd}_1$} \\
     \end{bytefield}};
-\draw[|<->|] ([xshift=-10]E) -- ([xshift=-10]I) node[midway,left]{Client latency};
-\draw[|<->|] ([xshift=55]F) -- ([xshift=55]H) node[midway,right]{Command buffer};
+\draw[|<->|] ([xshift=-50]E) -- ([xshift=-50]I) node[midway,left]{Command buffer};
 \end{tikzpicture}
 

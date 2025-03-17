@@ -1,0 +1,15 @@
+\verb$MSG_KNOT_ACK$
+\vspace{.25em}\\
+
+\begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
+    \bitheader{0-3} \\
+    \bitbox{2}{snake ID}
+    \bitbox{2}{knot idx}
+\end{bytefield}
+
+\begin{itemize}
+    \item\textbf{snake ID:} Unique snake identifier.
+    \item\textbf{knot idx:} Handle position in the ring buffer.
+\end{itemize}
+
+

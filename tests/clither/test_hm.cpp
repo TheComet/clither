@@ -1,5 +1,6 @@
-#include <gmock/gmock.h>
 #include <unordered_map>
+
+#include <gmock/gmock.h>
 
 extern "C" {
 #include "clither/hm.h"
@@ -153,9 +154,7 @@ TEST_F(NAME, foreach_empty)
     float*    value;
     int       counter = 0;
     hm_for_each (hm_test, slot, key, value)
-    {
-        counter++;
-    }
+        (void)slot, (void)key, counter++;
     EXPECT_THAT(counter, Eq(0));
 }
 
@@ -195,9 +194,7 @@ TEST_F(NAME, foreach)
     uintptr_t key;
     float*    value;
     hm_for_each (hm_test, slot, key, value)
-    {
-        expected_values[*value] += 1;
-    }
+        (void)slot, (void)key, expected_values[*value] += 1;
 
     EXPECT_THAT(hm_count(hm_test), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));

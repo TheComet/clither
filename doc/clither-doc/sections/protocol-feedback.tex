@@ -2,7 +2,9 @@
 
 Feedback is the mechanism for controlling  the size of the server-side command
 buffer. The  client  will  slightly adjust its simulation speed depending on a
-feedback value sent  by  the  server.  This  is  known  as  ``warping  time''.
+feedback value sent by the server,  effectively  changing  how  far  ahead  the
+client  is  currently  simulating,  relative  to the server. This is  known  as
+``warping time''.
 
 \begin{center}
 \input{images/seq-feedback}
@@ -12,17 +14,72 @@ The server would like to keep this buffer  as  small as possible to reduce the
 client's latency. However, this increases the risk  of  the  server  having to
 predict  the  next frame, because the server  may  not  receive  the  client's
 command in time for stepping the simulation. If  this happens, the server will
-extrapolate the  client's  next  command.  If the extrapolated command differs
-from  the client's actual command, then a misprediction has occurred  and  the
-client  will have to rollback and reconcile  once  it  receives  the  server's
-authoritative state.
+predict  the client's next command. If the predicted command differs  from  the
+client's actual command, then a misprediction  will  occur  and the client will
+have to rollback and  reconcile  once  it  receives  the server's authoritative
+state.
 
 If  the  buffer  size  is  larger,  then  it  is  more  resillient  to network
-fluctuations and packet loss.
+fluctuations and packet loss, but the client will have a higher latency.
+
+The feedback value is known as  ``CBF'',  and  is  calculated  on the server as
+follows: First, every time the  client  sends  its list of command inputs, they
+are unpacked into  the  server-side  command  buffer -- discarding any commands
+older  than the current frame number -- and the ``command buffer fullness''  or
+CBF of the buffer is measured:
+
+\begin{equation}
+    \text{CBF} = \text{cmd}_n - t_{\text{server}}
+    \label{eq:cbf}
+\end{equation}
+
+The server's current simulation time $t_{\text{server}}$ is subtracted from the
+timestamp of the last received command $\text{cmd}_n$. Units are in  simulation
+ticks. You can see in equation \ref{eq:cbf} that if the buffer contained e.g. 4
+commands,  then  $\text{CBF}=4$.  However, if the command buffer were empty and
+the server had to make a prediction, then $\text{CBF}<0$.
+
+In principle, negative values indicate an  unstable  connection  and the client
+will  have to warp forwards in time to compensate. Positive values  indicate  a
+healthy connection and the client can warp backwards in time to reduce the size
+of the command buffer.
+
+In  practice,  it's  critical  to  react  quickly  to  negative values, but for
+positive values it's  better to ease oneself towards a value that doesn't fully
+reduce the buffer size to  0.  Instead, it is reduced to some offset. Remember,
+no connection is 100\% stable and there will always be some jitter.
+
+The offset is calculated based on a ``granularity'' $g$:
+
+\begin{align}
+    g &= \frac{f_{sim}}{f_{net}} \\
+    \label{eq:granularity}
+\end{align}
+
+One  can  imagine  for  example  if  $f_{sim}=60$  and  $f_{net}=20$, then  our
+granularity $g=3$. Assuming a perfect connection: In the worst case, the server
+will process its network messages immediately before the client sends  them. To
+avoid server predictions, we want our CBF to contain at least 3 commands at all
+times  for  these  tick rates. If the network tick rate is increased, then  $g$
+will of course decrease, allowing for a smaller buffer.
+
+Thus, the final difference sent back through \verb$MSG_FEEDBACK$ is:
+
+\begin{equation}
+    \text{diff} = \begin{cases}
+        \text{CBF} &\text{CBF}<0 \\
+        \min\left(\text{CBF}_{1-N}\right) - g & \min\left(\text{CBF}_{1-N}\right) > g \\
+        0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+The  CBF  values  are  filtered  by  inserting  them  into  a  sliding  window,
+$\text{CBF}_{1-N}$. This means that $\min\left(\text{CBF}_{1-N}\right)$  is the
+smallest value found in the CBF sliding window.
 
 \vspace{1.5em}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \input{images/msg-feedback}
 \end{figure}
 

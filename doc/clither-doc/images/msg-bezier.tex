@@ -1,0 +1,31 @@
+\verb$MSG_BEZIER$
+\vspace{.25em}\\
+
+\begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
+    \bitheader{0-7} \\
+    \bitbox{2}{snake ID}
+    \bitbox{2}{frame}
+    \bitbox{2}{read}
+    \bitbox{2}{write} \\
+    \bitbox{3}{pos x}
+    \bitbox{3}{pos y}
+    \bitbox{2}{angle} \\
+    \bitbox{1}{speed}
+    \bitbox{1}{lenb}
+    \bitbox{1}{lenf}
+\end{bytefield}
+
+\begin{itemize}
+    \item\textbf{snake ID:} Unique snake identifier.
+    \item\textbf{frame:} Server frame number of when the message was created.
+    \item\textbf{read:}  Read pointer of the bezier knot  ring-buffer.  The  server
+    makes sure to only  send  read/write pointers that encompass acknowledged knots.
+    \item\textbf{write:} Write pointer of  the  bezier  knot  ring-buffer. The server
+    makes sure to only  send  read/write pointers that encompass acknowledged knots.
+    \item\textbf{pos x:} Q19.5 x coordinate of the snake's head position in world space.
+    \item\textbf{pos y:} Q19.5 y coordinate of the snake's head position in world space.
+    \item\textbf{angle:} Q4.12 angle of the snake's head.
+    \item\textbf{speed:} Current speed of the snake's head.
+    \item\textbf{lenb:} Length of the ``backwards facing'' bezier handle of the head knot.
+    \item\textbf{lenf:} Length of the ``forwards facing'' bezier handle of the second knot.
+\end{itemize}

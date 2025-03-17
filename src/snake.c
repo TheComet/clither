@@ -662,8 +662,6 @@ void snake_extrapolate(
     if (rb_count(data->bezier_knots) < 2)
         return;
 
-    log_dbg("extrapolating by %d frames\n", frame_number - head_ack_frame);
-
     /* We do simple linear extrapolation for now. Could add higher orders if
      * this doesn't suffice, or maybe even a prediction model */
 

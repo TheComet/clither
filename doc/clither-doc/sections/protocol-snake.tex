@@ -3,15 +3,54 @@
 If another player is in  proximity  of  the  client,  the server begins sending
 information of that player's snake to the client.
 
-The snake's ring-buffer of bezier knots  is  split  up  into  multiple packets.
-\verb$MSG_BEZIER$  is sent whenever new knots are appended  or  old  knots  are
-removed on the server side. This happens naturally as the snake moves forwards.
-This message contains the ``read'' and ``write'' pointers of  the  ring buffer.
-The  client  can   use   this   to   resize   its   ring-buffer  appropriately.
+The  bezier  curve  can  become quite large. Each knot is sent separately  with
+\verb$MSG_KNOT$. These can arrive out of order,  and  are  resent periodically.
+The client  collects  the  knots and stores them into a ring-buffer. The server
+keeps track of which knots have been acknowledged with \verb$MSG_KNOT_ACK$, and
+sends  \verb$MSG_BEZIER$ in response. This message contains the read and  write
+pointers of the ring-buffer. This protocol ensures that the  client's  read and
+write  pointers  will  always  span  a  range  of  valid,   initialized  knots.
 
-Each bezier knot is sent separately via the \verb$MSG_KNOT$ message. The client
-must acknowledge each knot with \verb$MSG_KNOT_ACK$. The server keeps track  of
-which  knots  have  not  been  acknowledged and will resend them  periodically.
+Parallel  to  snake  creation, the server will send some snake metadata such as
+\verb$MSG_SNAKE_USERNAME$ which needs to be acknowledged by the client.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.48\linewidth}
+        \centering
+        \input{images/seq-snake-create1}
+        \caption{Bezier curve synchronization}
+    \end{subfigure}
+    \begin{subfigure}{.48\linewidth}
+        \centering
+        \input{images/seq-snake-create2}
+        \caption{Snake metadata}
+    \end{subfigure}
+\end{figure}
+
+\verb$MSG_BEZIER$  also  sent every network tick to update the snake's head
+position.  This  message contains the position of the head knot as well as  the
+handle of the second knot  (because  it,  too,  changes  as  the  snake moves).
+
+\verb$MSG_SNAKE_PARAM$ is sent whenever the parameters  change.  These  contain
+status effects and the length of the  snake.
+
+These messages  are  lossy  and  the  client  only  needs  the most recent head
+position/snake parameters.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{.48\linewidth}
+        \centering
+        \input{images/seq-snake-update}
+        \caption{Update protocol as the snake moves}
+    \end{subfigure}
+    \begin{subfigure}[t]{.48\linewidth}
+        \centering
+        \input{images/seq-snake-destroy}
+        \caption{Destroy protocol when the snake goes out of proximity}
+    \end{subfigure}
+\end{figure}
 
 When  the  snake goes out of range of the client, the server will stop  sending
 updates to the client and send \verb$MSG_SNAKE_DESTROY$ (must be acknowledged).
@@ -19,45 +58,36 @@ If the snake comes  into  proximity  again,  the  server will always assume the
 client has destroyed the snake and send everything again.
 
 \begin{figure}[H]
-    \centering
-    \begin{subfigure}{.48\linewidth}
-        \centering
-        \input{images/seq-snake-create}
-        \caption{Snake creation}
-    \end{subfigure}
-    \begin{subfigure}{.48\linewidth}
-        \centering
-        \input{images/seq-snake-destroy}
-        \caption{Snake destruction}
-    \end{subfigure}
+\input{images/msg-knot}
 \end{figure}
 
-Parallel  to  snake  creation,  the server will send \verb$MSG_SNAKE_HEAD$  and
-\verb$MSG_SNAKE_PARAM$ updates whenever the snake moves forwards. These packets
-are  lossy  and  the  client  only  needs  the  most recent head position/snake
-parameters. The snake  parameters  contain status effects as well as the length
-of the snake, which allows the  client  to  remove  stale bezier knots from the
-tail end of the snake.
+\vspace{1.5em}
 
 \begin{figure}[H]
-    \centering
-    \input{images/seq-snake-update}
-    \caption{Snake updates}
+\input{images/msg-knot-ack}
 \end{figure}
 
-\begin{figure}[h]
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-bezier}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
 \input{images/msg-snake-username}
 \end{figure}
 
 \vspace{1.5em}
 
-\begin{figure}[h]
-\input{images/msg-snake-bezier}
+\begin{figure}[H]
+\input{images/msg-snake-param}
 \end{figure}
 
 \vspace{1.5em}
 
-\begin{figure}[h]
-\input{images/msg-snake-bezier-ack}
+\begin{figure}[H]
+\input{images/msg-snake-destroy}
 \end{figure}
 

@@ -1,0 +1,27 @@
+\begin{tikzpicture}[>=latex]
+\coordinate (A) at (2,5);
+\coordinate (B) at (2,0);
+\coordinate (C) at (6,5);
+\coordinate (D) at (6,0);
+\draw[thick] (A)--(B) (C)--(D);
+\draw (A) node[above]{\Large Client};
+\draw (C) node[above]{\Large Server};
+
+\coordinate (E) at ($(C)!.1!(D)$);
+\coordinate (F) at ($(A)!.25!(B)$);
+\coordinate (G) at ($(C)!.2!(D)$);
+\coordinate (H) at ($(A)!.35!(B)$);
+\coordinate (I) at ($(A)!.45!(B)$);
+\coordinate (J) at ($(C)!.6!(D)$);
+\coordinate (K) at ($(A)!.55!(B)$);
+\coordinate (L) at ($(C)!.7!(D)$);
+\coordinate (M) at ($(C)!.8!(D)$);
+\coordinate (N) at ($(A)!.95!(B)$);
+\draw[->] (E) -- (F) node[midway,sloped,above]{\verb$KNOT 1$};
+\draw[->] (G) -- (H) node[midway,sloped,above]{\verb$KNOT 2$};
+\draw[->] (I) -- (J) node[midway,sloped,above]{\verb$KNOT_ACK 1$};
+\draw[->] (K) -- (L) node[midway,sloped,above]{\verb$KNOT_ACK 2$};
+\draw[->] (M) -- (N) node[midway,sloped,above]{\verb$BEZIER$};
+\draw (E) node[right]{Proximity?};
+\end{tikzpicture}
+

@@ -1276,7 +1276,7 @@ static void gfx_gles2_draw_world(
     }
 
     draw_background(gfx, camera, &ar);
-    // draw_0_0(gfx, camera, &ar);
+    /* draw_0_0(gfx, camera, &ar); */
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
     {

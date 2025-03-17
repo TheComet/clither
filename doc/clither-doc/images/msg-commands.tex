@@ -1,0 +1,23 @@
+\verb$MSG_COMMANDS$
+\vspace{.25em}\\
+
+\begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
+    \bitheader{0-6} \\
+    \bitbox{2}{frame}
+    \bitbox{1}{num}
+    \bitbox{1}{angle}
+    \bitbox{1}{speed}
+    \bitbox{1}{action}
+    \bitbox{4}{...}
+\end{bytefield}
+
+\begin{itemize}
+    \item\textbf{frame:} Frame number of the first command in the message.
+    \item\textbf{num:} Number of additional commands in the buffer. Can be 0.
+    \item\textbf{angle:} 8-bit angle of the snake's  head. Needs to be converted to
+    Q4.12 before it can be processed by simulation.
+    \item\textbf{speed:} Speed of snake.
+    \item\textbf{action:} Action bit-field. For example, if the snake is currently boosting or not.
+    \item\textbf{...} \textbf{num} additional commands are delta-compressed and stored here.
+\end{itemize}
+

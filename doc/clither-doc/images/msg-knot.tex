@@ -1,10 +1,10 @@
-\verb$MSG_BEZIER$
+\verb$MSG_KNOT$
 \vspace{.25em}\\
 
 \begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
     \bitheader{0-13} \\
     \bitbox{2}{snake ID}
-    \bitbox{2}{handle ID}
+    \bitbox{2}{knot idx}
     \bitbox{3}{pos x}
     \bitbox{3}{pos y}
     \bitbox{2}{angle}
@@ -14,10 +14,11 @@
 
 \begin{itemize}
     \item\textbf{snake ID:} Unique snake identifier.
-    \item\textbf{handle ID:} Handle position in the ring buffer.
+    \item\textbf{knot idx:} Handle position in the ring buffer.
     \item\textbf{pos x:} Q19.5 x coordinate of the bezier knot in world space.
     \item\textbf{pos y:} Q19.5 y coordinate of the bezier knot in world space.
     \item\textbf{angle:} Q4.12 angle of the bezier knot.
     \item\textbf{lenf:} Length of the ``forward facing'' bezier handle.
-    \item\textbf{lenb:} Length of the ``backwards facing'' bezier handle..
+    \item\textbf{lenb:} Length of the ``backwards facing'' bezier handle.
 \end{itemize}
+

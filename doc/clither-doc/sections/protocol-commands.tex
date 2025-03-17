@@ -1,0 +1,40 @@
+\subsection{Commands}
+
+The  head  position  of   the   client's   own   snake  exists  in  two  states
+simultaneously: An \emph{acknowledged head}  and  a \emph{predicted head}.
+
+Every  simulation update, a \emph{command} is generated from the current  mouse
+and  keyboard  state.  This  command  contains information such as the  snake's
+direction and speed.  The  snake's  \emph{predicted head} is stepped using this
+command, and the command is then added to the client's ring-buffer. The snake's
+\emph{acknowledged head} remains unchanged.
+
+Every  network  update, the entire ring-buffer of commands is  compresssed  and
+sent to the server via \verb$MSG_COMMANDS$. This is so that if any commands are
+lost, they can be filled in by the next packet again.
+
+The server will  run  its own simulation using the same commands, and send back
+an authoritative head position with \verb$MSG_SNAKE_HEAD$.  The client compares
+the server's head with its own \emph{acknowledged head}. The  majority  of  the
+time, the heads will agree. If  they  differ, then the client rolls its snake's
+state back to the frame of the authoritative head, corrects its head so that it
+is  identical to the authoritative head, and then replays all commands  in  the
+command buffer to step the snake back to the predicated frame.
+
+Visually, when this happens, you will see a slight jitter.
+
+\begin{center}
+\input{images/seq-commands}
+\end{center}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-commands}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-snake-head}
+\end{figure}
