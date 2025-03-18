@@ -50,6 +50,7 @@ TEST(NAME, roll_back_over_frame_boundary)
     struct snake client, server;
     snake_init(&client, make_qwposi(2, 2), "client");
     snake_init(&server, make_qwposi(2, 2), "server");
+    snake_head_init(&client.remote.ack.head, make_qwposi(2, 2));
 
     struct snake_param param;
     snake_param_init(&param);
@@ -161,6 +162,7 @@ TEST(NAME, roll_back_with_server_packet_loss)
     struct snake client, server;
     snake_init(&client, make_qwposi(2, 2), "client");
     snake_init(&server, make_qwposi(2, 2), "server");
+    snake_head_init(&client.remote.ack.head, make_qwposi(2, 2));
 
     struct snake_param param;
     snake_param_init(&param);
@@ -285,6 +287,7 @@ TEST(NAME, roll_back_to_first_frame)
     struct snake client, server;
     snake_init(&client, make_qwposi(2, 2), "client");
     snake_init(&server, make_qwposi(2, 2), "server");
+    snake_head_init(&client.remote.ack.head, make_qwposi(2, 2));
 
     struct snake_param param;
     snake_param_init(&param);
@@ -345,6 +348,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     struct snake client, server;
     snake_init(&client, make_qwposi(1, 1), "client");
     snake_init(&server, make_qwposi(1, 1), "server");
+    snake_head_init(&client.remote.ack.head, make_qwposi(2, 2));
 
     struct snake_param param;
     snake_param_init(&param);

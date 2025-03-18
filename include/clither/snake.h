@@ -39,8 +39,8 @@ struct snake_ack
 /* Server response state for other snakes */
 struct snake_replica
 {
-    struct snake_head head_history[3];
-    uint16_t          head_frame_numbers[3];
+    struct snake_head head_history[4];
+    uint16_t          head_frame_numbers[4];
 };
 
 struct snake_data

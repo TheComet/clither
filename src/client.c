@@ -17,6 +17,7 @@
 #include "clither/str.h"
 #include "clither/tick.h"
 #include "clither/world.h"
+#include "clither/wrap.h"
 #include <string.h> /* memcpy */
 #if defined(CLITHER_MCD)
 #    include "clither/mcd_wifi.h"
@@ -258,7 +259,8 @@ static struct client_recv_result process_message(
         case MSG_JOIN_REQUEST: break;
 
         case MSG_JOIN_ACCEPT: {
-            uint16_t rtt;
+            struct snake* snake;
+            uint16_t      rtt;
 
             if (client->state != CLIENT_JOINING)
                 return client_recv_ok();
@@ -308,14 +310,14 @@ static struct client_recv_result process_message(
                 5 * client->sim_tick_rate / client->net_tick_rate;
 
             client->snake_id = pp.join_accept.snake_id;
-            if (world_create_snake(
-                    world,
-                    client->snake_id,
-                    pp.join_accept.spawn,
-                    str_cstr(client->username)) == NULL)
-            {
+            snake = world_create_snake(
+                world,
+                client->snake_id,
+                pp.join_accept.spawn,
+                str_cstr(client->username));
+            if (snake == NULL)
                 return client_recv_error();
-            }
+            snake_head_init(&snake->remote.ack.head, pp.join_accept.spawn);
 
             log_net(
                 "MSG_JOIN_ACCEPT:\n"
@@ -420,12 +422,20 @@ static struct client_recv_result process_message(
             if (snake == NULL)
                 return client_recv_ok();
 
+            if (u16_le_wrap(
+                    pp.bezier.frame_number,
+                    snake->remote.replica.head_frame_numbers[0]))
+            {
+                log_dbg("Received outdated MSG_BEZIER, ignoring\n");
+                return client_recv_ok();
+            }
+
             snake_unextrapolate(
                 &snake->data, &snake->head, &snake->remote.replica);
 
-            for (i = 1; i != sizeof(snake->remote.replica.head_history) /
-                                 sizeof(snake->remote.replica.head_history[0]);
-                 ++i)
+            for (i = CLITHER_ARRAY_SIZE(snake->remote.replica.head_history) - 1;
+                 i != 0;
+                 --i)
             {
                 snake->remote.replica.head_history[i] =
                     snake->remote.replica.head_history[i - 1];
@@ -438,6 +448,13 @@ static struct client_recv_result process_message(
             snake->remote.replica.head_history[0].speed = pp.bezier.speed;
             snake->remote.replica.head_frame_numbers[0] =
                 pp.bezier.frame_number;
+
+            log_dbg(
+                "MSG_BEZIER: frame_numbers: %d, %d, %d, %d\n",
+                snake->remote.replica.head_frame_numbers[0],
+                snake->remote.replica.head_frame_numbers[1],
+                snake->remote.replica.head_frame_numbers[2],
+                snake->remote.replica.head_frame_numbers[3]);
 
             snake_update_bezier_extents(
                 &snake->data,
@@ -460,10 +477,20 @@ static struct client_recv_result process_message(
             snake = snake_bmap_find(world->snakes, pp.knot.snake_id);
             if (snake == NULL)
             {
+                int i;
                 snake = world_create_snake(
                     world, pp.knot.snake_id, make_qwposi(0, 0), "");
                 if (snake == NULL)
                     return client_recv_error();
+                for (i = 0; i != CLITHER_ARRAY_SIZE(
+                                     snake->remote.replica.head_history);
+                     ++i)
+                {
+                    snake_head_init(
+                        &snake->remote.replica.head_history[i],
+                        make_qwposi(0, 0));
+                    snake->remote.replica.head_frame_numbers[i] = 0;
+                }
             }
 
             if (snake_create_or_update_knot(

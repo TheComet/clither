@@ -21,3 +21,4 @@ TEST(NAME, q16_16_to_qw)
     q16_16 b = q16_16_to_qw(a);
     EXPECT_THAT(b, Eq(36550));
 }
+

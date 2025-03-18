@@ -643,6 +643,100 @@ void snake_unextrapolate(
 }
 
 /* ------------------------------------------------------------------------- */
+static int calc_T_inv_4x4(float T[4][4], float t1, float t2, float t3)
+{
+    int   i, j;
+    float t1p2 = t1 * t1;
+    float t1p3 = t1 * t1p2;
+    float t2p2 = t2 * t2;
+    float t2p3 = t2 * t2p2;
+    float t3p2 = t3 * t3;
+    float t3p3 = t3 * t3p2;
+
+    /* clang-format off */
+    float T_det = -t1p3*t2p2*t3 + t1p3*t2*t3p2 + t1p2*t2p3*t3 - t1p2*t2*t3p3 - t1*t2p3*t3p2 + t1*t2p2*t3p3;
+    if (T_det == 0.0)
+        return -1;
+
+    T[0][0] = -t1p3*t2p2*t3 + t1p3*t2*t3p2 + t1p2*t2p3*t3 - t1p2*t2*t3p3 - t1*t2p3*t3p2 + t1*t2p2*t3p3;
+    T[0][1] = 0;
+    T[0][2] = 0;
+    T[0][3] = 0;
+
+    T[1][0] = t1p3*t2p2 - t1p3*t3p2 - t1p2*t2p3 + t1p2*t3p3 + t2p3*t3p2 - t2p2*t3p3;
+    T[1][1] = -t2p3*t3p2 + t2p2*t3p3;
+    T[1][2] = t1p3*t3p2 - t1p2*t3p3;
+    T[1][3] = -t1p3*t2p2 + t1p2*t2p3;
+
+    T[2][0] = -t1p3*t2 + t1p3*t3 + t1*t2p3 - t1*t3p3 - t2p3*t3 + t2*t3p3;
+    T[2][1] = t2p3*t3 - t2*t3p3;
+    T[2][2] = -t1p3*t3 + t1*t3p3;
+    T[2][3] = t1p3*t2 - t1*t2p3;
+
+    T[3][0] = t1p2*t2 - t1p2*t3 - t1*t2p2 + t1*t3p2 + t2p2*t3 - t2*t3p2;
+    T[3][1] = -t2p2*t3 + t2*t3p2;
+    T[3][2] = t1p2*t3 - t1*t3p2;
+    T[3][3] = -t1p2*t2 + t1*t2p2;
+    /* clang-format on */
+
+    T_det = 1.0 / T_det;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            T[i][j] = T[i][j] * T_det;
+
+    return 0;
+}
+static int calc_T_inv_3x3(float T[3][3], float t1, float t2)
+{
+    int   i, j;
+    float t1p2 = t1 * t1;
+    float t2p2 = t2 * t2;
+
+    float T_det = t1 * t2p2 - t1p2 * t2;
+    if (T_det == 0.0)
+        return -1;
+
+    T[0][0] = -t1 * t1 * t2 + t1 * t2 * t2;
+    T[0][1] = 0;
+    T[0][2] = 0;
+
+    T[1][0] = t1p2 - t2p2;
+    T[1][1] = t2p2;
+    T[1][2] = -t1p2;
+
+    T[2][0] = t2 - t1;
+    T[2][1] = -t2;
+    T[2][2] = t1;
+
+    T_det = 1.0 / T_det;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 3; j++)
+            T[i][j] = T[i][j] * T_det;
+
+    return 0;
+}
+static int calc_T_inv_2x2(float T[2][2], float t1)
+{
+    int   i, j;
+    float T_det = t1;
+    if (T_det == 0.0)
+        return -1;
+
+    T[0][0] = t1;
+    T[0][1] = 0;
+
+    T[1][0] = -1;
+    T[1][1] = 1;
+
+    T_det = 1.0 / T_det;
+    for (i = 0; i < 2; i++)
+        for (j = 0; j < 2; j++)
+            T[i][j] = T[i][j] * T_det;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
 void snake_extrapolate(
     struct snake_data*          data,
     struct snake_head*          head,
@@ -651,20 +745,47 @@ void snake_extrapolate(
     uint16_t                    frame_number,
     uint8_t                     sim_tick_rate)
 {
-    q16_16              T[3][3];
-    q16_16              T_inv[3][3];
-    q16_16              a[3];
+#define O4   4
+#define O3   3
+#define O2   2
+#define O1   1
+#define ORDER O3
+    qw                  dx, dy;
+    float               T[ORDER][ORDER];
+    float               a[ORDER];
+    float               x[ORDER];
+    float               t;
+    float               t0, t1, t2, t3;
     struct bezier_knot* head_knot;
     struct bezier_knot* prev_knot;
     struct qwaabb*      segment_bb;
-    qw                  dx, dy;
 
     if (rb_count(data->bezier_knots) < 2)
         return;
 
-    /* We do simple linear extrapolation for now. Could add higher orders if
-     * this doesn't suffice, or maybe even a prediction model */
+#if ORDER == O4
+    t0 = replica->head_frame_numbers[3];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[2] - t0);
+    t2 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
+    t3 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_4x4(T, t1, t2, t3) != 0)
+        return;
+#endif
+#if ORDER == O3
+    t0 = replica->head_frame_numbers[2];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
+    t2 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_3x3(T, t1, t2) != 0)
+        return;
+#endif
+#if ORDER == O2
+    t0 = replica->head_frame_numbers[1];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_2x2(T, t1) != 0)
+        return;
+#endif
 
+#if ORDER == O1
     dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dx = qw_rescale(dx, head->speed, 255);
     dx = qw_add(dx, snake_min_speed(param));
@@ -678,6 +799,61 @@ void snake_extrapolate(
     dy = qw_mul(qa_sin(head->angle), dy);
     dy = qw_mul(dy, make_qw(frame_number - replica->head_frame_numbers[0]));
     head->pos.y = qw_add(head->pos.y, dy);
+#endif
+#if ORDER == O2
+    t = (float)(uint16_t)(frame_number - t0);
+    x[0] = qw_to_float(replica->head_history[1].pos.x);
+    x[1] = qw_to_float(replica->head_history[0].pos.x);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1];
+    head->pos.x = make_qw(a[0] + a[1] * t);
+
+    x[0] = qw_to_float(replica->head_history[1].pos.y);
+    x[1] = qw_to_float(replica->head_history[0].pos.y);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1];
+    head->pos.y = make_qw(a[0] + a[1] * t);
+#endif
+#if ORDER == O3
+    t = (float)(uint16_t)(frame_number - t0);
+    x[0] = qw_to_float(replica->head_history[2].pos.x);
+    x[1] = qw_to_float(replica->head_history[1].pos.x);
+    x[2] = qw_to_float(replica->head_history[0].pos.x);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1] + T[0][2] * x[2];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1] + T[1][2] * x[2];
+    a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2];
+    head->pos.x = make_qw(a[0] + a[1] * t + a[2] * t * t);
+
+    x[0] = qw_to_float(replica->head_history[2].pos.y);
+    x[1] = qw_to_float(replica->head_history[1].pos.y);
+    x[2] = qw_to_float(replica->head_history[0].pos.y);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1] + T[0][2] * x[2];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1] + T[1][2] * x[2];
+    a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2];
+    head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t);
+#endif
+#if ORDER == O4
+    t = (float)(uint16_t)(frame_number - t0);
+    x[0] = qw_to_float(replica->head_history[3].pos.x);
+    x[1] = qw_to_float(replica->head_history[2].pos.x);
+    x[2] = qw_to_float(replica->head_history[1].pos.x);
+    x[3] = qw_to_float(replica->head_history[0].pos.x);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1] + T[0][2] * x[2] + T[0][3] * x[3];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1] + T[1][2] * x[2] + T[1][3] * x[3];
+    a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2] + T[2][3] * x[3];
+    a[3] = T[3][0] * x[0] + T[3][1] * x[1] + T[3][2] * x[2] + T[3][3] * x[3];
+    head->pos.x = make_qw(a[0] + a[1] * t + a[2] * t * t + a[3] * t * t * t);
+
+    x[0] = qw_to_float(replica->head_history[3].pos.y);
+    x[1] = qw_to_float(replica->head_history[2].pos.y);
+    x[2] = qw_to_float(replica->head_history[1].pos.y);
+    x[3] = qw_to_float(replica->head_history[0].pos.y);
+    a[0] = T[0][0] * x[0] + T[0][1] * x[1] + T[0][2] * x[2] + T[0][3] * x[3];
+    a[1] = T[1][0] * x[0] + T[1][1] * x[1] + T[1][2] * x[2] + T[1][3] * x[3];
+    a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2] + T[2][3] * x[3];
+    a[3] = T[3][0] * x[0] + T[3][1] * x[1] + T[3][2] * x[2] + T[3][3] * x[3];
+    head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t + a[3] * t * t * t);
+#endif
 
     head_knot = rb_peek_write(data->bezier_knots);
     prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
