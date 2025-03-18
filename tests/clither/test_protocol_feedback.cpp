@@ -54,7 +54,7 @@ public:
         cmd_queue_put(&snake->cmdq, cl_cmd, cl.frame_number);
         snake_remove_stale_segments_with_rollback_constraint(
             &snake->data,
-            &snake->head_ack,
+            &snake->remote.ack,
             snake_step(
                 &snake->data,
                 &snake->head,

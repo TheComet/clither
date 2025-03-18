@@ -118,9 +118,7 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     cmd_queue_init(&snake->cmdq);
     snake_param_init(&snake->param);
     snake_head_init(&snake->head, spawn_pos);
-    snake_head_init(&snake->head_ack, spawn_pos);
 
-    snake->head_ack_frame = 0;
     snake->hold = 0;
 
     return 0;
@@ -353,9 +351,7 @@ void snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 
 /* ------------------------------------------------------------------------- */
 void snake_remove_stale_segments_with_rollback_constraint(
-    struct snake_data*       data,
-    const struct snake_head* head_ack,
-    int                      stale_segments)
+    struct snake_data* data, const struct snake_ack* ack, int stale_segments)
 {
     CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
 
@@ -366,7 +362,7 @@ void snake_remove_stale_segments_with_rollback_constraint(
          * that we want to remove, abort, because this curve segment is still
          * required for rollback.
          */
-        if (qwaabb_test_qwpos(*rb_peek_read(data->bezier_aabbs), head_ack->pos))
+        if (qwaabb_test_qwpos(*rb_peek_read(data->bezier_aabbs), ack->head.pos))
             break;
 
         qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
@@ -380,7 +376,7 @@ void snake_remove_stale_segments_with_rollback_constraint(
 /* ------------------------------------------------------------------------- */
 void snake_ack_frame(
     struct snake_data*        data,
-    struct snake_head*        acknowledged_head,
+    struct snake_ack*         ack,
     struct snake_head*        predicted_head,
     const struct snake_head*  authoritative_head,
     const struct snake_param* param,
@@ -426,7 +422,7 @@ void snake_ack_frame(
         /* "last_ackd_frame" refers to the next frame to simulate on the ack'd
          * head */
         struct cmd command = cmd_queue_take_or_predict(cmdq, last_ackd_frame);
-        snake_step_head(acknowledged_head, param, command, sim_tick_rate);
+        snake_step_head(&ack->head, param, command, sim_tick_rate);
         last_ackd_frame++;
     }
 
@@ -435,7 +431,7 @@ void snake_ack_frame(
      * server's head position. This means the predicted head position is also
      * incorrect.
      */
-    if (snake_heads_are_equal(acknowledged_head, authoritative_head) == 0)
+    if (snake_heads_are_equal(&ack->head, authoritative_head) == 0)
     {
         int               knots_to_squeeze;
         struct qwpos_vec* trail;
@@ -449,10 +445,10 @@ void snake_ack_frame(
             "  auth head: pos=%d,%d, angle=%d, speed=%d\n",
             predicted_frame,
             frame_number,
-            acknowledged_head->pos.x,
-            acknowledged_head->pos.y,
-            acknowledged_head->angle,
-            acknowledged_head->speed,
+            ack->head.pos.x,
+            ack->head.pos.y,
+            ack->head.angle,
+            ack->head.speed,
             authoritative_head->pos.x,
             authoritative_head->pos.y,
             authoritative_head->angle,
@@ -491,7 +487,7 @@ void snake_ack_frame(
          * Restore head positions to authoritative state, which counts as the
          * first "step" forwards
          */
-        *acknowledged_head = *authoritative_head;
+        ack->head = *authoritative_head;
         *predicted_head = *authoritative_head;
         knots_to_squeeze = 0;
         if (snake_update_curve_from_head(data, predicted_head))
@@ -632,27 +628,28 @@ int snake_update_bezier_extents(
 
 /* ------------------------------------------------------------------------- */
 void snake_unextrapolate(
-    struct snake_data*       data,
-    struct snake_head*       head,
-    const struct snake_head* head_ack)
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica)
 {
-    struct bezier_knot* head_knot;
+    *head = replica->head_history[0];
 
-    *head = *head_ack;
-
-    head_knot = rb_peek_write(data->bezier_knots);
-    head_knot->pos = head->pos;
-    head_knot->angle = qa_add(head->angle, QA_PI);
+    if (rb_count(data->bezier_knots) > 1)
+    {
+        struct bezier_knot* head_knot = rb_peek_write(data->bezier_knots);
+        head_knot->pos = head->pos;
+        head_knot->angle = qa_add(head->angle, QA_PI);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
 void snake_extrapolate(
-    struct snake_data*        data,
-    struct snake_head*        head,
-    const struct snake_param* param,
-    uint16_t                  head_ack_frame,
-    uint16_t                  frame_number,
-    uint8_t                   sim_tick_rate)
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica,
+    const struct snake_param*   param,
+    uint16_t                    frame_number,
+    uint8_t                     sim_tick_rate)
 {
     q16_16              T[3][3];
     q16_16              T_inv[3][3];
@@ -665,9 +662,6 @@ void snake_extrapolate(
     if (rb_count(data->bezier_knots) < 2)
         return;
 
-    T[0][0] = make_q16_16(head_ack_frame);
-    T[0][1] = make_q16_16(head_ack_frame - 1);
-
     /* We do simple linear extrapolation for now. Could add higher orders if
      * this doesn't suffice, or maybe even a prediction model */
 
@@ -675,14 +669,14 @@ void snake_extrapolate(
     dx = qw_rescale(dx, head->speed, 255);
     dx = qw_add(dx, snake_min_speed(param));
     dx = qw_mul(qa_cos(head->angle), dx);
-    dx = qw_mul(dx, make_qw(frame_number - head_ack_frame));
+    dx = qw_mul(dx, make_qw(frame_number - replica->head_frame_numbers[0]));
     head->pos.x = qw_add(head->pos.x, dx);
 
     dy = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dy = qw_rescale(dy, head->speed, 255);
     dy = qw_add(dy, snake_min_speed(param));
     dy = qw_mul(qa_sin(head->angle), dy);
-    dy = qw_mul(dy, make_qw(frame_number - head_ack_frame));
+    dy = qw_mul(dy, make_qw(frame_number - replica->head_frame_numbers[0]));
     head->pos.y = qw_add(head->pos.y, dy);
 
     head_knot = rb_peek_write(data->bezier_knots);

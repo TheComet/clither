@@ -399,7 +399,7 @@ static struct client_recv_result process_message(
 
             snake_ack_frame(
                 &snake->data,
-                &snake->head_ack,
+                &snake->remote.ack,
                 &snake->head,
                 &head_auth,
                 &snake->param,
@@ -411,19 +411,34 @@ static struct client_recv_result process_message(
         }
 
         case MSG_BEZIER: {
-            struct snake* snake =
-                snake_bmap_find(world->snakes, pp.bezier.snake_id);
+            struct snake* snake;
+            int           i;
+
+            snake = snake_bmap_find(world->snakes, pp.bezier.snake_id);
             /* The message should have arrived after MSG_KNOT. Ignore until
              * then. */
             if (snake == NULL)
                 return client_recv_ok();
 
-            snake->head_ack.pos = pp.bezier.pos;
-            snake->head_ack.angle = pp.bezier.angle;
-            snake->head_ack.speed = pp.bezier.speed;
-            snake->head_ack_frame = pp.bezier.frame_number;
+            snake_unextrapolate(
+                &snake->data, &snake->head, &snake->remote.replica);
 
-            snake_unextrapolate(&snake->data, &snake->head, &snake->head_ack);
+            for (i = 1; i != sizeof(snake->remote.replica.head_history) /
+                                 sizeof(snake->remote.replica.head_history[0]);
+                 ++i)
+            {
+                snake->remote.replica.head_history[i] =
+                    snake->remote.replica.head_history[i - 1];
+                snake->remote.replica.head_frame_numbers[i] =
+                    snake->remote.replica.head_frame_numbers[i - 1];
+            }
+
+            snake->remote.replica.head_history[0].pos = pp.bezier.pos;
+            snake->remote.replica.head_history[0].angle = pp.bezier.angle;
+            snake->remote.replica.head_history[0].speed = pp.bezier.speed;
+            snake->remote.replica.head_frame_numbers[0] =
+                pp.bezier.frame_number;
+
             snake_update_bezier_extents(
                 &snake->data,
                 pp.bezier.rb_read,
@@ -435,8 +450,14 @@ static struct client_recv_result process_message(
         }
 
         case MSG_KNOT: {
-            struct snake* snake =
-                snake_bmap_find(world->snakes, pp.knot.snake_id);
+            struct snake* snake;
+            if (pp.knot.snake_id == client->snake_id)
+            {
+                log_warn("Received MSG_KNOT for own snake, ignoring\n");
+                return client_recv_ok();
+            }
+
+            snake = snake_bmap_find(world->snakes, pp.knot.snake_id);
             if (snake == NULL)
             {
                 snake = world_create_snake(
@@ -762,7 +783,7 @@ void* client_run(const struct args* a)
                    snake->param.food_eaten + 1);*/
             snake_remove_stale_segments_with_rollback_constraint(
                 &snake->data,
-                &snake->head_ack,
+                &snake->remote.ack,
                 snake_step(
                     &snake->data,
                     &snake->head,
@@ -789,12 +810,12 @@ void* client_run(const struct args* a)
                     continue;
 
                 snake_unextrapolate(
-                    &snake->data, &snake->head, &snake->head_ack);
+                    &snake->data, &snake->head, &snake->remote.replica);
                 snake_extrapolate(
                     &snake->data,
                     &snake->head,
+                    &snake->remote.replica,
                     &snake->param,
-                    snake->head_ack_frame,
                     client.frame_number,
                     client.sim_tick_rate);
             }

@@ -470,7 +470,7 @@ VECTOR_END_EACH*/
 
     /* Head ack */
     SDL_SetRenderDrawColor(gfx->renderer, 255, 128, 0, 255);
-    pos = gfx_world_to_screen(snake->head_ack.pos, gfx, camera);
+    pos = gfx_world_to_screen(snake->remote.ack.head.pos, gfx, camera);
     draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
 
     /* Debug: Draw how the "command" structure interpreted the mouse position */

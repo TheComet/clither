@@ -110,7 +110,7 @@ TEST(NAME, roll_back_over_frame_boundary)
      * mispredict_frame+1 will cause a roll back */
     snake_ack_frame(
         &client.data,
-        &client.head_ack,
+        &client.remote.ack,
         &client.head,
         &server.head,
         &param,
@@ -229,7 +229,7 @@ TEST(NAME, roll_back_with_server_packet_loss)
      * mispredict_frame+1 will cause a roll back */
     snake_ack_frame(
         &client.data,
-        &client.head_ack,
+        &client.remote.ack,
         &client.head,
         &server.head,
         &param,
@@ -328,7 +328,7 @@ TEST(NAME, roll_back_to_first_frame)
      * mispredict_frame+1 will cause a roll back */
     snake_ack_frame(
         &client.data,
-        &client.head_ack,
+        &client.remote.ack,
         &client.head,
         &server.head,
         &param,
@@ -384,7 +384,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         snake_step(&server.data, &server.head, &param, c, 60);
         snake_ack_frame(
             &client.data,
-            &client.head_ack,
+            &client.remote.ack,
             &client.head,
             &server.head,
             &param,
@@ -400,13 +400,14 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
+                *rb_peek(client.data.bezier_aabbs, 0),
+                client.remote.ack.head.pos),
             IsTrue());
     }
     // Trying to remove the segment should fail, because the ack'd head is still
     // within the bounding box
     snake_remove_stale_segments_with_rollback_constraint(
-        &client.data, &client.head_ack, 1);
+        &client.data, &client.remote.ack, 1);
     ASSERT_THAT(rb_count(client.data.head_trails), Eq(3));
     ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(4));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
@@ -416,7 +417,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     snake_step(&server.data, &server.head, &param, c, 60);
     snake_ack_frame(
         &client.data,
-        &client.head_ack,
+        &client.remote.ack,
         &client.head,
         &server.head,
         &param,
@@ -430,10 +431,10 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
     ASSERT_THAT(
         qwaabb_test_qwpos(
-            *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
+            *rb_peek(client.data.bezier_aabbs, 0), client.remote.ack.head.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
-        &client.data, &client.head_ack, 1);
+        &client.data, &client.remote.ack, 1);
     ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
     ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
@@ -446,7 +447,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         snake_step(&server.data, &server.head, &param, c, 60);
         snake_ack_frame(
             &client.data,
-            &client.head_ack,
+            &client.remote.ack,
             &client.head,
             &server.head,
             &param,
@@ -462,13 +463,14 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
+                *rb_peek(client.data.bezier_aabbs, 0),
+                client.remote.ack.head.pos),
             IsTrue());
     }
     // Trying to remove the segment should fail, because the ack'd head is still
     // within the bounding box
     snake_remove_stale_segments_with_rollback_constraint(
-        &client.data, &client.head_ack, 1);
+        &client.data, &client.remote.ack, 1);
     ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
     ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
@@ -478,7 +480,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     snake_step(&server.data, &server.head, &param, c, 60);
     snake_ack_frame(
         &client.data,
-        &client.head_ack,
+        &client.remote.ack,
         &client.head,
         &server.head,
         &param,
@@ -492,10 +494,10 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
     ASSERT_THAT(
         qwaabb_test_qwpos(
-            *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
+            *rb_peek(client.data.bezier_aabbs, 0), client.remote.ack.head.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
-        &client.data, &client.head_ack, 1);
+        &client.data, &client.remote.ack, 1);
     ASSERT_THAT(rb_count(client.data.head_trails), Eq(1));
     ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(2));
     ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(1));
@@ -508,7 +510,7 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         snake_step(&server.data, &server.head, &param, c, 60);
         snake_ack_frame(
             &client.data,
-            &client.head_ack,
+            &client.remote.ack,
             &client.head,
             &server.head,
             &param,
@@ -521,7 +523,8 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(1));
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0), client.head_ack.pos),
+                *rb_peek(client.data.bezier_aabbs, 0),
+                client.remote.ack.head.pos),
             IsTrue());
     }
 

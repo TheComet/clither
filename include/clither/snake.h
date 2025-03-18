@@ -11,6 +11,14 @@ struct snake_head
     uint8_t      speed;
 };
 
+struct snake_head_frame
+{
+    struct qwpos pos;
+    qa           angle;
+    uint8_t      speed;
+    uint16_t     frame_number;
+};
+
 struct snake_split
 {
     struct qwpos split_knot; /* Set to equal the position of a bezier knot
@@ -20,6 +28,19 @@ struct snake_split
     struct qwpos axis; /* Snake is mirrored across this normalized vector */
     unsigned ack : 1; /* Server acknowledged this split. Predicted splits can be
                          removed during resimulation */
+};
+
+/* Server response state for own snakes */
+struct snake_ack
+{
+    struct snake_head head;
+};
+
+/* Server response state for other snakes */
+struct snake_replica
+{
+    struct snake_head head_history[3];
+    uint16_t          head_frame_numbers[3];
 };
 
 struct snake_data
@@ -66,8 +87,12 @@ struct snake
     struct snake_param param;
     struct snake_data  data;
     struct snake_head  head;
-    struct snake_head  head_ack;
-    uint16_t           head_ack_frame;
+
+    union
+    {
+        struct snake_ack     ack;
+        struct snake_replica replica;
+    } remote;
 
     unsigned hold : 1;
 };
@@ -140,13 +165,13 @@ int snake_step(
 void snake_remove_stale_segments(struct snake_data* data, int stale_segments);
 
 void snake_remove_stale_segments_with_rollback_constraint(
-    struct snake_data*       data,
-    const struct snake_head* head_ack,
-    int                      stale_segments);
+    struct snake_data*      data,
+    const struct snake_ack* head_ack,
+    int                     stale_segments);
 
 void snake_ack_frame(
     struct snake_data*        data,
-    struct snake_head*        acknowledged_head,
+    struct snake_ack*         ack,
     struct snake_head*        predicted_head,
     const struct snake_head*  authoritative_head,
     const struct snake_param* param,
@@ -184,13 +209,14 @@ int snake_update_bezier_extents(
     uint8_t            second_len_forwards);
 
 void snake_unextrapolate(
-    struct snake_data*       data,
-    struct snake_head*       head,
-    const struct snake_head* head_ack);
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica);
+
 void snake_extrapolate(
-    struct snake_data*        data,
-    struct snake_head*        head,
-    const struct snake_param* param,
-    uint16_t                  head_ack_frame,
-    uint16_t                  frame_number,
-    uint8_t                   sim_tick_rate);
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica,
+    const struct snake_param*   param,
+    uint16_t                    frame_number,
+    uint8_t                     sim_tick_rate);
