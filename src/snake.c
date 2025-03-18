@@ -654,6 +654,9 @@ void snake_extrapolate(
     uint16_t                  frame_number,
     uint8_t                   sim_tick_rate)
 {
+    q16_16              T[3][3];
+    q16_16              T_inv[3][3];
+    q16_16              a[3];
     struct bezier_knot* head_knot;
     struct bezier_knot* prev_knot;
     struct qwaabb*      segment_bb;
@@ -661,6 +664,9 @@ void snake_extrapolate(
 
     if (rb_count(data->bezier_knots) < 2)
         return;
+
+    T[0][0] = make_q16_16(head_ack_frame);
+    T[0][1] = make_q16_16(head_ack_frame - 1);
 
     /* We do simple linear extrapolation for now. Could add higher orders if
      * this doesn't suffice, or maybe even a prediction model */

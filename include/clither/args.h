@@ -11,27 +11,33 @@ enum mode
 #if defined(CLITHER_BENCHMARKS)
     MODE_BENCHMARKS,
 #endif
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT)
     MODE_CLIENT,
 #endif
-#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
-    MODE_CLIENT_AND_SERVER,
+#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
+    MODE_HOST,
 #endif
 #if defined(CLITHER_SERVER)
-    MODE_HEADLESS
+    MODE_SERVER,
 #endif
+    MODE_NONE
 };
 
 struct args
 {
+    const char* config_file;
+#if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
+    const char* ip;
+    const char* port;
+#endif
+#if defined(CLITHER_CLIENT)
+    const char* username;
+#endif
 #if defined(CLITHER_LOGGING)
     const char* log_file;
     const char* netlog_file;
     const char* prefix;
 #endif
-    const char* config_file;
-    const char* ip;
-    const char* port;
 #if defined(CLITHER_MCD)
     const char* mcd_port;
     int         mcd_latency, mcd_loss, mcd_dup, mcd_reorder;

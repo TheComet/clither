@@ -1,0 +1,29 @@
+\section{Snake Extrapolation}
+
+\begin{equation}
+    x(t) = a_0 + a_1t + \ldots + a_nt^n
+\end{equation}
+
+\begin{align*}
+    x(t_0) &= x_0 = a_0 + a_1t_0 + \ldots + a_nt_0^n \\
+    x(t_1) &= x_1 = a_0 + a_1t_1 + \ldots + a_nt_1^n \\
+    \vdots & \\
+    x(t_n) &= x_n = a_0 + a_1t_n + \ldots + a_nt_n^n
+\end{align*}
+
+\begin{align}
+    \begin{bmatrix}
+        x_0 \\ x_1 \\ \vdots \\ x_n
+    \end{bmatrix}
+    &=
+    \begin{bmatrix}
+        1      & t_0     & t_0^2     & \ldots & t_1^n \\
+        1      & t_1     & t_1^2     & \ldots & t_2^n \\
+        \vdots & \vdots  & \vdots    & \ddots & \vdots \\
+        1      & t_n     & t_n^2     & \ldots & t_n^n
+    \end{bmatrix}
+    \begin{bmatrix}
+        a_0 \\ a_1 \\ \vdots \\ a_n
+    \end{bmatrix}
+\end{align}
+

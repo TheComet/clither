@@ -3,8 +3,8 @@
 /* Config ------------------------------------------------------------------- */
 
 #cmakedefine CLITHER_BENCHMARKS
+#cmakedefine CLITHER_CLIENT
 #cmakedefine CLITHER_DEBUG
-#cmakedefine CLITHER_GFX
 #cmakedefine CLITHER_LOGGING
 #cmakedefine CLITHER_MCD
 #cmakedefine CLITHER_MEMORY_DEBUGGING
@@ -14,14 +14,18 @@
 
 #define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
 
-#if defined(CLITHER_DEBUG)
-#   define CLITHER_DEBUG_ASSERT
+#if defined(CLITHER_CLIENT)
+#   cmakedefine CLITHER_BOT_API
+#   cmakedefine CLITHER_GFX
+#   if defined(CLITHER_GFX)
+#      cmakedefine CLITHER_GFX_SDL
+#      cmakedefine CLITHER_GFX_GLES2
+#      cmakedefine CLITHER_GFX_VULKAN
+#   endif
 #endif
 
-#if defined(CLITHER_GFX)
-#   cmakedefine CLITHER_GFX_SDL
-#   cmakedefine CLITHER_GFX_GLES2
-#   cmakedefine CLITHER_GFX_VULKAN
+#if defined(CLITHER_DEBUG)
+#   define CLITHER_DEBUG_ASSERT
 #endif
 
 #if defined(CLITHER_MEMORY_DEBUGGING)

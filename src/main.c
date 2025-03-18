@@ -55,6 +55,7 @@ int main(int argc, char* argv[])
     retval = 0;
     switch (args.mode)
     {
+        case MODE_NONE: retval = -1; break;
 #if defined(CLITHER_TESTS)
         case MODE_TESTS: {
             retval = tests_run(argc, argv);
@@ -68,7 +69,7 @@ int main(int argc, char* argv[])
         }
 #endif
 #if defined(CLITHER_SERVER)
-        case MODE_HEADLESS: {
+        case MODE_SERVER: {
             struct thread* server_thread;
 
             log_dbg("Starting server in background thread\n");
@@ -84,7 +85,7 @@ int main(int argc, char* argv[])
             break;
         }
 #endif
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT)
         case MODE_CLIENT: {
             /* NOTE: client_run() is the only function that expects to be run
              * in the main thread. It does not call any threadlocal init
@@ -93,8 +94,8 @@ int main(int argc, char* argv[])
             break;
         }
 #endif
-#if defined(CLITHER_GFX) && defined(CLITHER_SERVER)
-        case MODE_CLIENT_AND_SERVER: {
+#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
+        case MODE_HOST: {
             struct thread* server_thread;
             struct args    server_args = args;
 

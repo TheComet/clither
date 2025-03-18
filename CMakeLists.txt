@@ -19,10 +19,12 @@ cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every
 set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
 cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_MEMORY_DEBUGGING" OFF)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
+cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
+option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 option (CLITHER_DEBUG "Enable debug checks" ON)
 cmake_dependent_option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON "CLITHER_DEBUG" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-option (CLITHER_GFX "Set to OFF if you only want to build a server (headless) application." ON)
+cmake_dependent_option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." OFF "CLITHER_CLIENT" ON)
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
@@ -191,16 +193,18 @@ add_executable (clither
     $<$<BOOL:${CLITHER_MCD}>:
         src/mcd_wifi.c>
 
+    $<$<BOOL:${CLITHER_CLIENT}>:
+        src/client.c>
+
     $<$<BOOL:${CLITHER_GFX}>:
-        src/client.c
-        src/gfx.c>
-    $<$<BOOL:${CLITHER_GFX_SDL}>:
-        src/sdl/gfx_sdl.c>
-    $<$<BOOL:${CLITHER_GFX_GLES2}>:
-        src/gles2/gfx_gles2.c
-        src/gles2/glad/src/gles2.c>
-    $<$<BOOL:${CLITHER_GFX_VULKAN}>:
-        src/vulkan/gfx_vulkan.c>
+        src/gfx.c
+        $<$<BOOL:${CLITHER_GFX_SDL}>:
+            src/sdl/gfx_sdl.c>
+        $<$<BOOL:${CLITHER_GFX_GLES2}>:
+            src/gles2/gfx_gles2.c
+            src/gles2/glad/src/gles2.c>
+        $<$<BOOL:${CLITHER_GFX_VULKAN}>:
+            src/vulkan/gfx_vulkan.c>>
 
     $<$<BOOL:${CLITHER_MEMORY_DEBUGGING}>:
         src/mem.c>
@@ -263,7 +267,7 @@ add_executable (clither
         tests/clither/test_wrap.cpp
         tests/clither/test_bmap.cpp
         tests/clither/test_bset.cpp
-        $<$<BOOL:${CLITHER_GFX}>:
+        $<$<AND:$<BOOL:${CLITHER_CLIENT}>,$<BOOL:${CLITHER_SERVER}>>:
             tests/clither/test_protocol_feedback.cpp
             tests/clither/test_protocol_join.cpp>>
 

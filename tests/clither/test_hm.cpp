@@ -154,7 +154,7 @@ TEST_F(NAME, foreach_empty)
     float*    value;
     int       counter = 0;
     hm_for_each (hm_test, slot, key, value)
-        (void)slot, (void)key, counter++;
+        (void)slot, (void)key, (void)value, counter++;
     EXPECT_THAT(counter, Eq(0));
 }
 

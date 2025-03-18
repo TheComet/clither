@@ -245,6 +245,8 @@ void log_net(const char* fmt, ...)
         va_end(va);
         fflush(g_net);
     }
+#else
+    (void)fmt;
 #endif
 }
 

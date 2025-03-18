@@ -561,7 +561,7 @@ client_recv(struct client* client, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT)
 void* client_run(const struct args* a)
 {
 #    if defined(CLITHER_MCD)
@@ -579,8 +579,10 @@ void* client_run(const struct args* a)
     struct tick                 net_tick;
     int                         tick_lag;
 
-    /* Change log prefix and color for server log messages */
+/* Change log prefix and color for server log messages */
+#    if defined(CLITHER_LOGGING)
     log_set_prefix(a->prefix);
+#    endif
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     /* If McDonald's WiFi is enabled, start that */
@@ -601,7 +603,7 @@ void* client_run(const struct args* a)
          * TODO: In the future the GUI will take care of connecting. Here we do
          * it immediately because there is no menu.
          */
-        if (client_connect(&client, a->ip, a->port, "username") < 0)
+        if (client_connect(&client, a->ip, a->port, a->username) < 0)
             goto client_connect_failed;
     }
 

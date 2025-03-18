@@ -1,7 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT)
 
 #    include <stdint.h>
 
@@ -122,4 +122,4 @@ client_recv(struct client* client, struct world* world);
 struct args;
 void* client_run(const struct args* a);
 
-#endif /* CLITHER_GFX */
+#endif
