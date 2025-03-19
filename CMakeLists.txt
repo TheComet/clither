@@ -125,12 +125,12 @@ add_executable (clither
     "include/clither/resource_pack.h"
     "include/clither/resource_snake_part_vec.h"
     "include/clither/resource_sprite_vec.h"
+    "include/clither/settings.h"
     "include/clither/server.h"
     "include/clither/server_client.h"
     "include/clither/server_client_hm.h"
     "include/clither/server_instance.h"
     "include/clither/server_instance_bmap.h"
-    "include/clither/server_settings.h"
     "include/clither/signals.h"
     "include/clither/snake.h"
     "include/clither/snake_bmap.h"
@@ -173,6 +173,7 @@ add_executable (clither
     "src/resource_pack.c"
     "src/resource_snake_part_vec.c"
     "src/resource_sprite_vec.c"
+    "src/settings.c"
     "src/snake.c"
     "src/snake_bmap.c"
     "src/snake_param.c"
@@ -187,8 +188,7 @@ add_executable (clither
         src/server_client.c
         src/server_client_hm.c
         src/server_instance.c
-        src/server_instance_bmap.c
-        src/server_settings.c>
+        src/server_instance_bmap.c>
 
     $<$<BOOL:${CLITHER_MCD}>:
         src/mcd_wifi.c>

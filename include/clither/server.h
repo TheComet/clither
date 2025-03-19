@@ -3,10 +3,11 @@
 #include "clither/q.h"
 
 struct net_addr;
-struct server_settings;
+struct settings;
 struct server_client;
 struct world;
 struct server_client_hm;
+struct settings_server;
 struct net_addr_hm;
 
 struct server
@@ -26,8 +27,6 @@ struct server
  * \param[in] port The port to bind to. If you specify an empty string then the
  * value from the config file will be used (and if that doesn't exist then the
  * default port will be used).
- * \param[in] config_filename The name of the config.ini file to load settings
- * from. Note that if you pass in
  * \return Returns 0 if successful, -1 if unsuccessful.
  */
 int server_init(
@@ -36,8 +35,6 @@ int server_init(
 /*!
  * \brief Closes all sockets and frees all data.
  * \param[in] server The server to free.
- * \param[in] config_filename The name of the config.ini file to save settings
- * to.
  */
 void server_deinit(struct server* server);
 
@@ -57,7 +54,7 @@ int server_send_pending_data(struct server* server, struct world* world);
  */
 int server_recv(
     struct server*                server,
-    const struct server_settings* settings,
+    const struct settings_server* settings,
     struct world*                 world,
     uint16_t                      frame_number);
 

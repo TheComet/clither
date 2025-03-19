@@ -25,9 +25,9 @@ enum mode
 
 struct args
 {
-    const char* config_file;
+    const char* settings_file;
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
-    const char* ip;
+    const char* addr;
     const char* port;
 #endif
 #if defined(CLITHER_CLIENT)

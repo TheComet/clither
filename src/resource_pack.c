@@ -684,12 +684,12 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
 
     str_init(&str);
     if (str_set_cstr(&str, pack_path) != 0)
-        goto open_config_ini_failed;
-    if (str_join_path_cstr(&str, "config.ini") != 0)
-        goto open_config_ini_failed;
+        goto open_pack_ini_failed;
+    if (str_join_path_cstr(&str, "pack.ini") != 0)
+        goto open_pack_ini_failed;
     log_dbg("Reading file \"%s\"\n", str_cstr(str));
     if (mfile_map_read(&mf, str_cstr(str), 1))
-        goto open_config_ini_failed;
+        goto open_pack_ini_failed;
 
     pack = mem_alloc(sizeof *pack);
     if (pack == NULL)
@@ -710,7 +710,7 @@ parse_error:
     mem_free(pack);
 alloc_pack_failed:
     mfile_unmap(&mf);
-open_config_ini_failed:
+open_pack_ini_failed:
     str_deinit(str);
     return NULL;
 }

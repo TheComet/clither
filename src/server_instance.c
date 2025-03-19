@@ -5,7 +5,7 @@
 #include "clither/net.h"
 #include "clither/server.h"
 #include "clither/server_instance.h"
-#include "clither/server_settings.h"
+#include "clither/settings.h"
 #include "clither/signals.h"
 #include "clither/snake_bmap.h"
 #include "clither/tick.h"
@@ -36,7 +36,7 @@ void* server_instance_run(const void* args)
 
     world_init(&world);
 
-    if (server_init(&server, instance->ip, instance->port) < 0)
+    if (server_init(&server, instance->addr, instance->port) < 0)
         goto server_init_failed;
     net_log_host_ips();
 
@@ -84,8 +84,7 @@ void* server_instance_run(const void* args)
 
         if (net_update)
         {
-            if (server_update_snakes_in_range(&server, &world, make_qw(2)) !=
-                0)
+            if (server_update_snakes_in_range(&server, &world, make_qw(2)) != 0)
                 break;
             if (server_queue_snake_data(&server, &world, frame_number) != 0)
                 break;

@@ -6,7 +6,7 @@ extern "C" {
 #include "clither/net.h"
 #include "clither/server.h"
 #include "clither/server_client_hm.h"
-#include "clither/server_settings.h"
+#include "clither/settings.h"
 #include "clither/snake_bmap.h"
 #include "clither/world.h"
 }
@@ -29,7 +29,7 @@ public:
     {
         ASSERT_THAT(net_init(), Eq(0));
         ASSERT_THAT(server_init(&sv, "", "5555"), Eq(0));
-        server_settings_set_defaults(&sv_settings);
+        settings_set_defaults(&settings);
         client_init(&cl);
         world_init(&cl_world);
         world_init(&sv_world);
@@ -83,17 +83,17 @@ public:
                     &snake->head,
                     &snake->param,
                     cmd,
-                    sv_settings.sim_tick_rate));
+                    settings.server.sim_tick_rate));
         }
     }
 
 protected:
-    struct server          sv;
-    struct server_settings sv_settings;
-    struct client          cl;
-    struct world           sv_world;
-    struct world           cl_world;
-    struct cmd             cl_cmd;
+    struct settings settings;
+    struct server   sv;
+    struct client   cl;
+    struct world    sv_world;
+    struct world    cl_world;
+    struct cmd      cl_cmd;
 };
 
 TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
@@ -102,7 +102,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     uint16_t sv_frame = 32;
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, sv_frame), Eq(0));
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, sv_frame), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
@@ -125,7 +125,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
         msg_commands(&cl.pending_msgs, &cl_snake->cmdq);
         client_send_pending_data(&cl);
 
-        server_recv(&sv, &sv_settings, &sv_world, sv_frame);
+        server_recv(&sv, &settings.server, &sv_world, sv_frame);
         SimServer(sv_frame++);
         SimServer(sv_frame++);
         SimServer(sv_frame);

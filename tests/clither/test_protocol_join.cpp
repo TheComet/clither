@@ -6,7 +6,7 @@ extern "C" {
 #include "clither/net.h"
 #include "clither/server.h"
 #include "clither/server_client_hm.h"
-#include "clither/server_settings.h"
+#include "clither/settings.h"
 #include "clither/snake_bmap.h"
 #include "clither/world.h"
 }
@@ -29,7 +29,7 @@ public:
     {
         ASSERT_THAT(net_init(), Eq(0));
         ASSERT_THAT(server_init(&sv, "", "5555"), Eq(0));
-        server_settings_set_defaults(&sv_settings);
+        settings_set_defaults(&settings);
         client_init(&cl);
         world_init(&cl_world);
         world_init(&sv_world);
@@ -46,11 +46,11 @@ public:
     }
 
 protected:
-    struct server          sv;
-    struct server_settings sv_settings;
-    struct client          cl;
-    struct world           sv_world;
-    struct world           cl_world;
+    struct settings settings;
+    struct server   sv;
+    struct client   cl;
+    struct world    sv_world;
+    struct world    cl_world;
 };
 
 TEST_F(NAME, client_resends_join_request)
@@ -73,7 +73,7 @@ TEST_F(NAME, server_resends_join_accept)
     int             slot;
     const net_addr* addr;
     server_client*  svc;
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, 1), Eq(0));
     server_client_hm_for_each (sv.clients, slot, addr, svc)
     {
         (void)addr;
@@ -90,8 +90,8 @@ TEST_F(NAME, server_denies_join_full_server)
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
-    sv_settings.max_players = 0;
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    settings.server.max_players = 0;
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, 1), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
@@ -104,8 +104,8 @@ TEST_F(NAME, server_denies_join_username_too_long)
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
-    sv_settings.max_username_len = 1;
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    settings.server.max_username_len = 1;
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, 1), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
@@ -118,7 +118,7 @@ TEST_F(NAME, server_accepts_join)
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 1), Eq(0));
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, 1), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
@@ -140,7 +140,7 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(
-        server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
+        server_recv(&sv, &settings.server, &sv_world, sv_frame_number), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
@@ -151,24 +151,24 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
     uint16_t expected_cl_frame_number = sv_frame_number + rtt;
     // Client adds some buffer initially
     expected_cl_frame_number +=
-        5 * sv_settings.sim_tick_rate / sv_settings.net_tick_rate;
+        5 * settings.server.sim_tick_rate / settings.server.net_tick_rate;
     ASSERT_THAT(cl.frame_number, Eq(expected_cl_frame_number));
 }
 
 TEST_F(NAME, client_updates_tick_rates_from_server)
 {
-    sv_settings.sim_tick_rate = 120;
-    sv_settings.net_tick_rate = 80;
+    settings.server.sim_tick_rate = 120;
+    settings.server.net_tick_rate = 80;
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &sv_settings, &sv_world, 32), Eq(0));
+    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, 32), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     ASSERT_THAT(
         client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
-    ASSERT_THAT(cl.sim_tick_rate, Eq(sv_settings.sim_tick_rate));
-    ASSERT_THAT(cl.net_tick_rate, Eq(sv_settings.net_tick_rate));
+    ASSERT_THAT(cl.sim_tick_rate, Eq(settings.server.sim_tick_rate));
+    ASSERT_THAT(cl.net_tick_rate, Eq(settings.server.net_tick_rate));
 }
 
 TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
@@ -181,7 +181,7 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(
-        server_recv(&sv, &sv_settings, &sv_world, sv_frame_number), Eq(0));
+        server_recv(&sv, &settings.server, &sv_world, sv_frame_number), Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
@@ -192,6 +192,6 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
     uint16_t expected_cl_frame_number = sv_frame_number + rtt;
     // Client adds some buffer initially
     expected_cl_frame_number +=
-        5 * sv_settings.sim_tick_rate / sv_settings.net_tick_rate;
+        5 * settings.server.sim_tick_rate / settings.server.net_tick_rate;
     ASSERT_THAT(cl.frame_number, Eq(expected_cl_frame_number));
 }

@@ -1,14 +1,14 @@
 #pragma once
 
-struct server_settings;
+struct settings;
 struct thread;
 
 struct server_instance
 {
-    const struct server_settings* settings;
+    const struct settings_server* settings;
     struct thread*                thread;
-    const char*                   ip;
-    char                          port[6];
+    const char*                   addr;
+    const char*                   port;
 };
 
 void* server_instance_run(const void* args);

@@ -1,5 +1,3 @@
-#include "clither/args.h"
-#include "clither/bezier_knot_rb.h"
 #include "clither/bmap.h"
 #include "clither/camera.h"
 #include "clither/cli_colors.h"
@@ -11,6 +9,7 @@
 #include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/resource_pack.h"
+#include "clither/settings.h"
 #include "clither/signals.h"
 #include "clither/snake.h"
 #include "clither/snake_bmap.h"
@@ -19,10 +18,6 @@
 #include "clither/world.h"
 #include "clither/wrap.h"
 #include <string.h> /* memcpy */
-#if defined(CLITHER_MCD)
-#    include "clither/mcd_wifi.h"
-#    include "clither/thread.h"
-#endif
 
 /* ------------------------------------------------------------------------- */
 void client_init(struct client* client)
@@ -62,19 +57,21 @@ int client_connect(
     CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) == 0);
     CLITHER_DEBUG_ASSERT(str_len(client->username) == 0);
 
-    if (!*server_address)
-        server_address = NET_DEFAULT_ADDRESS;
-    if (!*server_address)
+    if (server_address == NULL || !*server_address)
     {
+        log_err("No server address was specified! Can't init client socket\n");
         log_err(
-            "No server IP address was specified! Can't init client socket\n");
-        log_err(
-            "You can use --ip <address> to specify an address to connect to\n");
+            "You can use --addr <address> to specify an address to connect "
+            "to\n");
         return -1;
     }
 
-    if (!*port)
-        port = NET_DEFAULT_PORT;
+    if (port == NULL || !*port)
+    {
+        log_err("No server port was specified! Can't init client socket\n");
+        log_err("You can use --port <port> to specify a port to connect to\n");
+        return -1;
+    }
 
     if (str_set_cstr(&client->username, username) != 0)
         return -1;
@@ -610,11 +607,10 @@ client_recv(struct client* client, struct world* world)
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
-void* client_run(const struct args* a)
+void* client_run(
+    const struct settings_client* settings,
+    const struct settings_gfx*    settings_gfx)
 {
-#    if defined(CLITHER_MCD)
-    struct thread* mcd_thread;
-#    endif
     struct world                world;
     struct input                input;
     struct cmd                  cmd;
@@ -629,38 +625,30 @@ void* client_run(const struct args* a)
 
 /* Change log prefix and color for server log messages */
 #    if defined(CLITHER_LOGGING)
-    log_set_prefix(a->prefix);
+    log_set_prefix(settings->log_prefix);
 #    endif
     log_set_colors(COL_B_GREEN, COL_RESET);
 
-    /* If McDonald's WiFi is enabled, start that */
     client_init(&client);
-#    if defined(CLITHER_MCD)
-    if (a->mcd_latency > 0)
+    /*
+     * TODO: In the future the GUI will take care of connecting. Here we do
+     * it immediately because there is no menu.
+     */
+    if (client_connect(
+            &client,
+            settings->connect_addr,
+            settings->connect_port,
+            settings->username) < 0)
     {
-        mcd_thread = thread_start(run_mcd_wifi, a);
-        if (mcd_thread == NULL)
-            goto start_mcd_failed;
-        if (client_connect(&client, a->ip, a->mcd_port, "username") < 0)
-            goto client_connect_failed;
-    }
-    else
-#    endif
-    {
-        /*
-         * TODO: In the future the GUI will take care of connecting. Here we do
-         * it immediately because there is no menu.
-         */
-        if (client_connect(&client, a->ip, a->port, a->username) < 0)
-            goto client_connect_failed;
+        goto client_connect_failed;
     }
 
     /* Init all graphics and create window */
-    gfx_iface = gfx_backends[a->gfx_backend];
+    gfx_iface = gfx_backends[settings_gfx->backend];
     log_info("Using graphics backend: %s\n", gfx_iface->name);
     if (gfx_iface->global_init() < 0)
         goto init_gfx_failed;
-    gfx = gfx_iface->create(800, 600);
+    gfx = gfx_iface->create(settings_gfx->width, settings_gfx->height);
     if (gfx == NULL)
         goto create_gfx_failed;
 
@@ -896,15 +884,6 @@ init_gfx_failed:
     if (client.state != CLIENT_DISCONNECTED)
         client_disconnect(&client);
 client_connect_failed:
-    /* Stop McDonald's WiFi if necessary */
-#    if defined(CLITHER_MCD)
-    if (a->mcd_latency > 0)
-    {
-        thread_join(mcd_thread);
-        log_dbg("Joined McDonald's WiFi thread\n");
-    }
-start_mcd_failed:
-#    endif
     client_deinit(&client);
     log_set_colors("", "");
     log_set_prefix("");

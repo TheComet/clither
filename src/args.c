@@ -21,11 +21,6 @@
 #define VERSION_NUMBER COL_B_CYAN
 #define RESET          COL_RESET
 
-#define DEFAULT_LOG_FILE    "clither.txt"
-#define DEFAULT_NETLOG_FILE "net.txt"
-#define DEFAULT_CONFIG_FILE "config.ini"
-#define DEFAULT_PREFIX      "Client: "
-
 /* ------------------------------------------------------------------------- */
 /*!
  * \brief Prints all help text and examples.
@@ -69,7 +64,7 @@ static int print_help(const char* prog_name)
 
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER)
     fprintf(stderr,
-        "  " ARG2 "-a" RESET "," ARG1 " --ip " RESET "<" ARG2 "address" RESET ">    Server  address to  connect to. Can  be a URL  or an IP\n"
+        "  " ARG2 "-a" RESET "," ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server  address to  connect to. Can  be a URL  or an IP\n"
         "                        address. If --host or --server is used,  then this sets\n"
         "                        the bind address rather than  the address to connect to\n"
         "                        The client  will always  use localhost or  127.0.0.1 in\n"
@@ -80,11 +75,11 @@ static int print_help(const char* prog_name)
         "                        than the port to connect to.\n");
 #elif defined(CLITHER_CLIENT)
     fprintf(stderr,
-        "  "      "  "       " " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">    Server address to connect to. Can be a URL or an IP address.\n"
+        "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server address to connect to. Can be a URL or an IP address.\n"
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port number of the server to connec to.\n");
 #elif defined(CLITHER_SERVER)
     fprintf(stderr,
-        "  "      "  "       " " ARG1 " --ip " RESET "<" ARG2 "address" RESET ">    Address to bind server to.\n"
+        "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Address to bind server to.\n"
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port to bind server to.\n");
 #endif
 
@@ -101,7 +96,7 @@ static int print_help(const char* prog_name)
 #if defined(CLITHER_GFX)
     fprintf(stderr,
         "     " ARG1 " --gfx" RESET " <" ARG2 "index" RESET ">     Open a window for rendering the game.\n"
-        "                        Currently available:\n");
+        "                        Currently available backends:\n");
     {
         int i;
         for (i = 0; gfx_backends[i]; ++i)
@@ -165,8 +160,8 @@ static int print_help(const char* prog_name)
 #if defined(CLITHER_GFX)
     fprintf(stderr,
         TEXT "  Join a server\n" RESET
-        "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --ip" RESET " 192.168.1.2\n"
-        "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --ip" RESET " 192.168.1.2" ARG1 " --port" RESET " 4200\n" RESET
+        "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2\n"
+        "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2" ARG1 " --port" RESET " 4200\n" RESET
         "\n",
         prog_name, prog_name
     );
@@ -174,7 +169,7 @@ static int print_help(const char* prog_name)
         TEXT "  Create a server and join it as a client. The server will stop when the\n"
         "  client stops, since it is a child process.\n" RESET
         "    %s" ARG1 " --host\n" RESET
-        "    %s" ARG1 " --host --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind address\n" RESET
+        "    %s" ARG1 " --host --addr" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind address\n" RESET
         "\n",
         prog_name, prog_name
     );
@@ -182,7 +177,7 @@ static int print_help(const char* prog_name)
     fprintf(stderr,
         TEXT "  Start a dedicated server (headless mode):\n" RESET
         "    %s " ARG1 "--server\n" RESET
-        "    %s " ARG1 "--server --ip" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "    # change bind address\n" RESET
+        "    %s " ARG1 "--server --addr" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "    # change bind address\n" RESET
         "\n",
         prog_name, prog_name
     );
@@ -205,18 +200,18 @@ int args_parse(struct args* a, int argc, char* argv[])
 #endif
 
     /* Set defaults */
-    a->config_file = DEFAULT_CONFIG_FILE;
+    a->settings_file = "settings.ini";
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
-    a->ip = "";
-    a->port = "";
+    a->addr = NULL;
+    a->port = NULL;
 #endif
 #if defined(CLITHER_CLIENT)
-    a->username = "Snek :D";
+    a->username = NULL;
 #endif
 #if defined(CLITHER_LOGGING)
-    a->log_file = DEFAULT_LOG_FILE;
-    a->netlog_file = DEFAULT_NETLOG_FILE;
-    a->prefix = DEFAULT_PREFIX;
+    a->log_file = "clither.txt";
+    a->netlog_file = "net.txt";
+    a->prefix = NULL;
 #endif
 #if defined(CLITHER_CLIENT)
     a->mode = MODE_CLIENT;
@@ -226,14 +221,14 @@ int args_parse(struct args* a, int argc, char* argv[])
     a->mode = MODE_NONE;
 #endif
 #if defined(CLITHER_GFX)
-    a->gfx_backend = 0;
+    a->gfx_backend = -1;
 #endif
 #if defined(CLITHER_MCD)
-    a->mcd_port = "5554";
-    a->mcd_latency = 0;
-    a->mcd_dup = 0;
-    a->mcd_loss = 0;
-    a->mcd_reorder = 0;
+    a->mcd_port = NULL;
+    a->mcd_latency = -1;
+    a->mcd_dup = -1;
+    a->mcd_loss = -1;
+    a->mcd_reorder = -1;
 #endif
 
     if (argc == 1)
@@ -289,15 +284,15 @@ int args_parse(struct args* a, int argc, char* argv[])
                     host_flag = 1;
 #endif
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
-                else if (strcmp(arg, "ip") == 0)
+                else if (strcmp(arg, "addr") == 0)
                 {
                     ++i;
                     if (i >= argc || !*argv[i])
                     {
-                        log_err("Missing argument for --ip <address>\n");
+                        log_err("Missing argument for --addr <address>\n");
                         return -1;
                     }
-                    a->ip = argv[i];
+                    a->addr = argv[i];
                 }
                 else if (strcmp(arg, "port") == 0)
                 {

@@ -16,9 +16,6 @@
 #define NET_MAX_ADDRLEN    32
 #define NET_MAX_ADDRSTRLEN 65
 
-#define NET_DEFAULT_PORT    "5555"
-#define NET_DEFAULT_ADDRESS "ws://127.0.0.1:8080"
-
 VEC_DECLARE(sockfd_vec, int, 8)
 
 struct net_addr

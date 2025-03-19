@@ -12,7 +12,7 @@
 #include "clither/server_client_hm.h"
 #include "clither/server_instance.h"
 #include "clither/server_instance_bmap.h"
-#include "clither/server_settings.h"
+#include "clither/settings.h"
 #include "clither/snake.h"
 #include "clither/snake_bmap.h"
 #include "clither/thread.h"
@@ -410,7 +410,7 @@ enum process_message_result
 };
 static enum process_message_result process_message(
     struct server*                server,
-    const struct server_settings* settings,
+    const struct settings_server* settings,
     struct server_client*         client,
     const struct net_addr*        addr,
     struct world*                 world,
@@ -661,7 +661,7 @@ static enum process_message_result process_message(
 /* ------------------------------------------------------------------------- */
 static int unpack_packet(
     struct server*                server,
-    const struct server_settings* settings,
+    const struct settings_server* settings,
     struct server_client*         client,
     const struct net_addr*        client_addr,
     struct world*                 world,
@@ -741,7 +741,7 @@ static int unpack_packet(
 /* ------------------------------------------------------------------------- */
 int server_recv(
     struct server*                server,
-    const struct server_settings* settings,
+    const struct settings_server* settings,
     struct world*                 world,
     uint16_t                      frame_number)
 {
@@ -838,37 +838,29 @@ int server_recv(
 }
 
 /* ------------------------------------------------------------------------- */
-void* server_run(const void* args)
+void* server_run(const void* p)
 {
-    struct server_instance_bmap* instances;
-    struct server_settings       settings;
-    const struct args*           a = args;
+    struct server_instance_bmap*  instances;
+    const struct settings_server* settings = p;
 
     /* Change log prefix and color for server log messages */
-    log_set_prefix("Server: ");
+    log_set_prefix(settings->log_prefix);
     log_set_colors(COL_B_CYAN, COL_RESET);
 
     mem_init_threadlocal();
-
     server_instance_bmap_init(&instances);
-
-    if (server_settings_load_or_set_defaults(&settings, a->config_file) < 0)
-        goto load_settings_failed;
 
     /*
      * Create the default server instance. This is always active, regardless of
      * how many players are connected.
      */
+    log_info(
+        "Creating default server instance: addr=%s, port=%s\n",
+        *settings->bind_addr ? settings->bind_addr : "*",
+        settings->bind_port);
     {
-        /*
-         * The port passed in over the command line has precedence over the port
-         * specified in the config file. Note that the port obtained from the
-         * settings structure is always initialized, regardless of whether the
-         * config file existed or not.
-         */
         struct server_instance* instance;
-        const char*             port = *a->port ? a->port : settings.port;
-        uint16_t                key = atoi(port);
+        uint16_t                key = atoi(settings->bind_port);
         CLITHER_DEBUG_ASSERT(key != 0);
 
         if (server_instance_bmap_emplace_new(&instances, key, &instance) !=
@@ -876,11 +868,11 @@ void* server_run(const void* args)
         {
             goto start_default_instance_failed;
         }
-        instance->settings = &settings;
-        instance->ip = a->ip;
-        strcpy(instance->port, port);
 
-        log_info("Starting default server instance\n");
+        instance->settings = settings;
+        instance->addr = settings->bind_addr;
+        instance->port = settings->bind_port;
+
         instance->thread = thread_start(server_instance_run, instance);
         if (instance->thread == NULL)
         {
@@ -904,8 +896,6 @@ void* server_run(const void* args)
         log_info("Joined all server instances\n");
     }
 
-    server_settings_save(&settings, a->config_file);
-
     server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");
@@ -914,7 +904,6 @@ void* server_run(const void* args)
     return (void*)0;
 
 start_default_instance_failed:
-load_settings_failed:
     server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
     log_set_colors("", "");

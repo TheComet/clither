@@ -4,6 +4,7 @@
 #include "clither/mcd_wifi.h"
 #include "clither/mem.h"
 #include "clither/net.h"
+#include "clither/settings.h"
 #include "clither/signals.h"
 #include "clither/tick.h"
 #include <stdlib.h>
@@ -50,18 +51,18 @@ static int send_pending_server_msgs(uint8_t** pmsg, void* user)
 }
 
 /* ------------------------------------------------------------------------- */
-void* run_mcd_wifi(const void* args)
+void* run_mcd_wifi(const void* p)
 {
-    struct ctx         ctx;
-    char               buf[NET_MAX_UDP_PACKET_SIZE];
-    int                bytes_received;
-    uint8_t**          pmsg;
-    uint8_t*           msg;
-    int*               pfd;
-    struct msg_buf*    client_buf;
-    struct msg_buf*    server_buf;
-    struct tick        tick;
-    const struct args* a = args;
+    struct ctx                 ctx;
+    char                       buf[NET_MAX_UDP_PACKET_SIZE];
+    int                        bytes_received;
+    uint8_t**                  pmsg;
+    uint8_t*                   msg;
+    int*                       pfd;
+    struct msg_buf*            client_buf;
+    struct msg_buf*            server_buf;
+    struct tick                tick;
+    const struct settings_mcd* settings = p;
 
     /* Change log prefix and color for server log messages */
     log_set_prefix("McD WiFi: ");
@@ -70,17 +71,18 @@ void* run_mcd_wifi(const void* args)
     mem_init_threadlocal();
 
     /* Client will connect to this socket */
-    ctx.client_fd = net_bind("", a->mcd_port);
+    ctx.client_fd = net_bind(settings->bind_addr, settings->bind_port);
     if (ctx.client_fd < 0)
         goto bind_client_fd_failed;
 
     /* We connect as a proxy to the server */
     sockfd_vec_init(&ctx.server_fds);
     if (net_connect(
-            &ctx.server_fds,
-            "localhost",
-            *a->port ? a->port : NET_DEFAULT_PORT) < 0)
+            &ctx.server_fds, settings->connect_addr, settings->connect_port) <
+        0)
+    {
         goto connect_server_failed;
+    }
 
     msg_buf_init(&client_buf);
     msg_buf_init(&server_buf);
@@ -90,9 +92,12 @@ void* run_mcd_wifi(const void* args)
 
     ctx.client_active = 0;
     log_info(
-        "McDonald's WiFi hosted with %dms ping, %d%% packet loss\n",
-        a->mcd_latency,
-        a->mcd_loss);
+        "McDonald's WiFi hosted with %dms ping, %d%% packet loss, %d%% "
+        "duplication, %d%% reorder\n",
+        settings->latency_ms,
+        settings->loss_percent,
+        settings->dup_percent,
+        settings->reorder_percent);
     while (signals_exit_requested() == 0)
     {
         /* Read packets from client */
@@ -106,20 +111,20 @@ void* run_mcd_wifi(const void* args)
                 break;
 
             /* Lose packet randomly */
-            if (rand() < (int64_t)a->mcd_loss * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->loss_percent * RAND_MAX / 100)
                 continue;
 
             /* Add packet to queue */
             msg = mem_alloc(bytes_received + 3);
             msg[0] = ((uint16_t)bytes_received) >> 8;
             msg[1] = ((uint16_t)bytes_received) & 0xFF;
-            msg[2] = TICK_RATE * a->mcd_latency / 1000;
+            msg[2] = TICK_RATE * settings->latency_ms / 1000;
             memcpy(msg + 3, buf, bytes_received);
             msg_buf_push(&client_buf, msg);
             ctx.client_active = 1;
 
             /* Duplicate packet randmoly */
-            if (rand() < (int64_t)a->mcd_dup * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->dup_percent * RAND_MAX / 100)
             {
                 uint8_t* dup_msg = mem_alloc(bytes_received + 3);
                 memcpy(dup_msg, msg, bytes_received + 3);
@@ -127,7 +132,7 @@ void* run_mcd_wifi(const void* args)
             }
 
             /* Reorder packet randomly */
-            if (rand() < (int64_t)a->mcd_reorder * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->reorder_percent * RAND_MAX / 100)
                 msg[2] += (int64_t)rand() * TICK_RATE / RAND_MAX;
         }
 
@@ -150,18 +155,18 @@ void* run_mcd_wifi(const void* args)
                 break;
 
             /* Lose packet randomly */
-            if (rand() < (int64_t)a->mcd_loss * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->loss_percent * RAND_MAX / 100)
                 continue;
 
             msg = mem_alloc(bytes_received + 3);
             msg[0] = ((uint16_t)bytes_received) >> 8;
             msg[1] = ((uint16_t)bytes_received) & 0xFF;
-            msg[2] = TICK_RATE * a->mcd_latency / 1000;
+            msg[2] = TICK_RATE * settings->latency_ms / 1000;
             memcpy(msg + 3, buf, bytes_received);
             msg_buf_push(&server_buf, msg);
 
             /* Duplicate packet randmoly */
-            if (rand() < (int64_t)a->mcd_dup * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->dup_percent * RAND_MAX / 100)
             {
                 uint8_t* dup_msg = mem_alloc(bytes_received + 3);
                 memcpy(dup_msg, msg, bytes_received + 3);
@@ -169,7 +174,7 @@ void* run_mcd_wifi(const void* args)
             }
 
             /* Reorder packet randomly */
-            if (rand() < (int64_t)a->mcd_reorder * RAND_MAX / 100)
+            if (rand() < (int64_t)settings->reorder_percent * RAND_MAX / 100)
                 msg[2] += (int64_t)rand() * TICK_RATE / RAND_MAX;
         }
 

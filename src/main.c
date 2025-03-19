@@ -1,8 +1,11 @@
 #include "clither/args.h"
+#include "clither/benchmarks.h"
 #include "clither/client.h"
 #include "clither/log.h"
+#include "clither/mcd_wifi.h"
 #include "clither/net.h"
 #include "clither/server.h"
+#include "clither/settings.h"
 #include "clither/signals.h"
 #include "clither/tests.h"
 #include "clither/thread.h"
@@ -11,17 +14,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(CLITHER_BENCHMARKS)
-#    include "clither/benchmarks.h"
-#endif
+static struct args     args;
+static struct settings settings;
 
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
-    struct args args;
-    int         retval;
+    int retval;
+#if defined(CLITHER_MCD)
+    struct thread* mcd_thread;
+#endif
 
-    /* Init threadlocal memory */
     mem_init_threadlocal();
 
     /*
@@ -36,15 +39,21 @@ int main(int argc, char* argv[])
         default: return -1;
     }
 
+    log_info("Reading settings from file \"%s\"\n", args.settings_file);
+    if (settings_load(&settings, args.settings_file) != 0)
+        return -1;
+    if (settings_apply_args(&settings, &args) != 0)
+        return -1;
+
     /* Install signal handlers for CTRL+C and (on windows) console close events
      */
     signals_install();
 
     /* Open log file */
 #if defined(CLITHER_LOGGING)
-    if (*args.log_file)
+    if (args.log_file)
         log_file_open(args.log_file);
-    if (*args.netlog_file)
+    if (args.netlog_file)
         log_net_open(args.netlog_file);
 #endif
 
@@ -52,7 +61,20 @@ int main(int argc, char* argv[])
     if (net_init() < 0)
         goto net_init_failed;
 
+    /* If McDonald's WiFi is enabled, start that */
     retval = 0;
+#if defined(CLITHER_MCD)
+    if (settings.mcd.enable)
+    {
+        mcd_thread = thread_start(run_mcd_wifi, &settings.mcd);
+        if (mcd_thread == NULL)
+        {
+            retval = -1;
+            goto start_mcd_failed;
+        }
+    }
+#endif
+
     switch (args.mode)
     {
         case MODE_NONE: retval = -1; break;
@@ -73,7 +95,7 @@ int main(int argc, char* argv[])
             struct thread* server_thread;
 
             log_dbg("Starting server in background thread\n");
-            server_thread = thread_start(server_run, &args);
+            server_thread = thread_start(server_run, &settings.server);
             if (server_thread == NULL)
             {
                 retval = -1;
@@ -90,17 +112,16 @@ int main(int argc, char* argv[])
             /* NOTE: client_run() is the only function that expects to be run
              * in the main thread. It does not call any threadlocal init
              * functions. */
-            retval = (int)(intptr_t)client_run(&args);
+            retval = (int)(intptr_t)client_run(&settings.client, &settings.gfx);
             break;
         }
 #endif
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
         case MODE_HOST: {
             struct thread* server_thread;
-            struct args    server_args = args;
 
             log_dbg("Starting server in background thread\n");
-            server_thread = thread_start(server_run, &server_args);
+            server_thread = thread_start(server_run, &settings.server);
             if (server_thread == NULL)
             {
                 retval = -1;
@@ -108,8 +129,8 @@ int main(int argc, char* argv[])
             }
 
             /* The server should be running, so try to join as a client */
-            args.ip = "localhost";
-            retval += (int)(intptr_t)client_run(&args);
+            retval +=
+                (int)(intptr_t)client_run(&settings.client, &settings.gfx);
 
             if (!signals_exit_requested())
             {
@@ -124,6 +145,15 @@ int main(int argc, char* argv[])
 #endif
     }
 
+        /* Stop McDonald's WiFi if necessary */
+#if defined(CLITHER_MCD)
+    if (settings.mcd.enable)
+    {
+        thread_join(mcd_thread);
+        log_dbg("Joined McDonald's WiFi thread\n");
+    }
+start_mcd_failed:
+#endif
     net_deinit();
 #if defined(CLITHER_LOGGING)
     log_net_close();
