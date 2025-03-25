@@ -46,6 +46,8 @@ enum bset_status
                                                                                \
     void prefix##_compact(struct prefix** bset);                               \
                                                                                \
+    int##bits##_t prefix##_lower_bound(const struct prefix* bset, K key);      \
+                                                                               \
     /*!                                                                        \
      * @brief Inserts a key.                                                   \
      * @param[in] bset Pointer to an initialized bset.                         \
@@ -201,8 +203,7 @@ enum bset_status
      * 3) If there is no key who's value is less than the searched-for key,    \
      *    the returned index will be bset_count().                             \
      */                                                                        \
-    static int##bits##_t prefix##_lower_bound(                                 \
-        const struct prefix* bset, K key)                                      \
+    int##bits##_t prefix##_lower_bound(const struct prefix* bset, K key)       \
     {                                                                          \
         int##bits##_t len, half, middle, found;                                \
                                                                                \
@@ -303,6 +304,8 @@ enum bset_status
 
 #define bset_count(bset)    ((bset) ? (bset)->count : 0)
 #define bset_capacity(bset) ((bset) ? (bset)->capacity : 0)
+
+#define bset_get(bset, idx) ((bset)->keys[idx])
 
 #define bset_for_each(bset, idx, key)                                          \
     for (idx = 0; idx != bset_count(bset) && (key = (bset)->keys[idx], 1);     \

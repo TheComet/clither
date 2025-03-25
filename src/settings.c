@@ -213,8 +213,9 @@ int settings_apply_args(struct settings* s, const struct args* a)
 #endif
 #if defined(CLITHER_MCD)
     if (a->mcd_port)
-    {
         SAFE_COPY(s->mcd.bind_port, mcd_port);
+    if (a->mcd_latency > -1)
+    {
         s->mcd.latency_ms = a->mcd_latency;
         s->mcd.loss_percent = a->mcd_loss;
         s->mcd.dup_percent = a->mcd_dup;

@@ -7,6 +7,7 @@
 #include "clither/input.h"
 #include "clither/log.h"
 #include "clither/mem.h"
+#include "clither/morton.h"
 #include "clither/qwaabb_rb.h"
 #include "clither/rb.h"
 #include "clither/snake.h"
@@ -455,7 +456,7 @@ static void draw_snake(
 VECTOR_END_EACH*/
 
 /* Equidistant points along the bezier curve */
-#if 0
+#if 1
     vec_for_each (snake->data.bezier_points, bp)
     {
         pos = gfx_world_to_screen(bp->pos, gfx, camera);
@@ -481,6 +482,8 @@ VECTOR_END_EACH*/
         struct cmd* cmd = cmd_queue_peek(&snake->cmdq, 0);
         SDL_GetWindowSize(gfx->window, &screen_x, &screen_y);
         max_dist = screen_x > screen_y ? screen_y / 4 : screen_x / 4;
+        
+        pos = gfx_world_to_screen(snake->head.pos, gfx, camera);
 
         SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
         a = cmd->angle / 256.0 * 2 * M_PI;
@@ -510,7 +513,7 @@ VECTOR_END_EACH*/
     }
 
     /* bezier segment AABBs */
-#if 0 
+#if 0
     SDL_SetRenderDrawColor(gfx->renderer, 255, 255, 0, 255);
     rb_for_each (snake->data.bezier_aabbs, i, bb)
     {
@@ -611,6 +614,43 @@ static void gfx_sdl_step_anim(struct gfx* gfx, int sim_tick_rate)
 }
 
 /* ------------------------------------------------------------------------- */
+static void gfx_sdl_draw_food(
+    struct gfx* gfx, const struct world* world, const struct camera* camera)
+{
+    uint64_t lower_m, upper_m;
+    int32_t lower_i, upper_i;
+    int32_t i;
+    struct qwpos head_p;
+    struct qwpos lower_p, upper_p;
+    struct spos p1, p2;
+    int radius_screen;
+    float radius = 1.0;
+    
+    head_p = bmap_count(world->snakes) ?
+        world->snakes->values[0].head.pos :
+        make_qwposqw(0, 0);
+    lower_p = make_qwposqw(head_p.x - make_qw(radius), head_p.y - make_qw(radius));
+    upper_p = make_qwposqw(head_p.x + make_qw(radius), head_p.y + make_qw(radius));
+    lower_m = morton_encode_qwpos(lower_p);
+    upper_m = morton_encode_qwpos(upper_p);
+    lower_i = food_bset_lower_bound(world->food_grid.morton, lower_m);
+    upper_i = food_bset_lower_bound(world->food_grid.morton, upper_m);
+
+    p1 = gfx_world_to_screen(lower_p, gfx, camera);
+    p2 = gfx_world_to_screen(upper_p, gfx, camera);
+    draw_box(gfx->renderer, make_SDL_Point(p1.x, p1.y), make_SDL_Point(p2.x, p2.y));
+
+    SDL_SetRenderDrawColor(gfx->renderer, 0, 128, 255, 255);
+    for (i = lower_i; i < upper_i && lower_i < bset_count(world->food_grid.morton); ++i)
+    {
+        struct qwpos p = morton_decode_qwpos(bset_get(world->food_grid.morton, i));
+        struct spos sp = gfx_world_to_screen(p, gfx, camera);
+        draw_circle(gfx->renderer, make_SDL_Point(sp.x, sp.y), 3);
+        
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 static void gfx_sdl_draw_world(
     struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
@@ -634,21 +674,7 @@ static void gfx_sdl_draw_world(
         SDL_SetRenderDrawColor(gfx->renderer, 0, 255, 0, 255);
         draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 20);
     }
-
-    {
-        int    i;
-        hash32 h = 250;
-        for (i = 0; i != 255; ++i)
-        {
-            struct qwpos p;
-            struct spos  sp;
-            p.x = 0x8000 * i / 255;
-            h = hash32_jenkins_oaat(&h, sizeof(h));
-            p.y = h & 0x7F00;
-            sp = gfx_world_to_screen(p, gfx, camera);
-            draw_circle(gfx->renderer, make_SDL_Point(sp.x, sp.y), 3);
-        }
-    }
+    gfx_sdl_draw_food(gfx, world, camera);
 
     SDL_RenderPresent(gfx->renderer);
 }

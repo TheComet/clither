@@ -35,8 +35,10 @@ void* server_instance_run(const void* args)
     log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
     world_init(&world);
+    if (world_respawn_food(&world) != 0)
+        goto world_spawn_food_failed;
 
-    if (server_init(&server, instance->addr, instance->port) < 0)
+    if (server_init(&server, instance->addr, instance->port) != 0)
         goto server_init_failed;
     net_log_host_ips();
 
@@ -110,6 +112,7 @@ void* server_instance_run(const void* args)
     return (void*)0;
 
 server_init_failed:
+world_spawn_food_failed:
     world_deinit(&world);
     log_set_colors("", "");
     log_set_prefix("");

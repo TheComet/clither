@@ -60,14 +60,8 @@ snake_param_update(struct snake_param* param, struct snake_upgrades upgrades, ui
  * to remove curve segments from the ring buffer.
  */
 #define snake_length(param) ((param)->cached_stats.length)
-
 #define snake_turn_speed(param) ((param)->cached_stats.turn_speed)
-
 #define snake_boost_speed(param) ((param)->cached_stats.boost_speed)
-
 #define snake_min_speed(apram) ((param)->cached_stats.min_speed)
-
 #define snake_max_speed(param) ((param)->cached_stats.max_speed)
-
 #define snake_acceleration(param) ((param)->cached_stats.acceleration)
-

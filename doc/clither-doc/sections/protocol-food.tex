@@ -1,0 +1,39 @@
+\subsection{Food}
+
+If a food piece exists near the player, the server sends \verb$MSG_FOOD_CREATE$. If the food piece goes out of range, or if it is eaten, then the server sends \verb$MSG_FOOD_DESTROY$.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.48\linewidth}
+        \centering
+        \input{images/seq-food-create}
+        \caption{Food creation}
+    \end{subfigure}
+    \begin{subfigure}{.48\linewidth}
+        \centering
+        \input{images/seq-food-destroy}
+        \caption{Food destruction}
+    \end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\input{images/msg-food-create}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-food-create-ack}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-food-destroy}
+\end{figure}
+
+\vspace{1.5em}
+
+\begin{figure}[H]
+\input{images/msg-food-destroy-ack}
+\end{figure}

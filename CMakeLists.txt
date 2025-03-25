@@ -99,7 +99,7 @@ add_executable (clither
     "include/clither/cmd.h"
     "include/clither/cmd_queue.h"
     "include/clither/cmd_rb.h"
-    "include/clither/food_cluster.h"
+    "include/clither/food.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
     "include/clither/hash.h"
@@ -110,6 +110,7 @@ add_executable (clither
     "include/clither/mfile.h"
     "include/clither/msg.h"
     "include/clither/msg_vec.h"
+    "include/clither/morton.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
     "include/clither/net_addr_hm.h"
@@ -157,10 +158,11 @@ add_executable (clither
     "src/cmd.c"
     "src/cmd_queue.c"
     "src/cmd_rb.c"
-    "src/food_cluster.c"
+    "src/food.c"
     "src/hash.c"
     "src/input.c"
     "src/log.c"
+    "src/morton.c"
     "src/msg.c"
     "src/msg_vec.c"
     "src/net_addr_hm.c"
@@ -257,9 +259,9 @@ add_executable (clither
         tests/clither/test_hm.cpp
         tests/clither/test_hm_full.cpp
         tests/clither/test_mem.cpp
+        tests/clither/test_morton.cpp
         tests/clither/test_msg.cpp
         tests/clither/test_q.cpp
-        tests/clither/test_quadtree.cpp
         tests/clither/test_rb.cpp
         tests/clither/test_snake.cpp
         tests/clither/test_tick.cpp

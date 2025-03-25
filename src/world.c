@@ -1,3 +1,4 @@
+#include "clither/food.h"
 #include "clither/log.h"
 #include "clither/q.h"
 #include "clither/snake.h"
@@ -10,7 +11,10 @@
 void world_init(struct world* world)
 {
     snake_bmap_init(&world->snakes);
-
+    food_grid_init(&world->food_grid);
+    
+    world->food_count = 1000;
+    world->food_rng = 1;
     world->inner_radius = make_qw(20);
     world->ring_start = make_qw(40);
     world->ring_end = make_qw(64);
@@ -24,11 +28,9 @@ void world_deinit(struct world* world)
     uint16_t      uid;
     struct snake* snake;
     bmap_for_each (world->snakes, idx, uid, snake)
-    {
-        (void)uid;
-        snake_deinit(snake);
-    }
+        (void)uid, snake_deinit(snake);
     snake_bmap_deinit(world->snakes);
+    food_grid_deinit(&world->food_grid);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -88,7 +90,27 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-void world_step(
+int world_respawn_food(struct world* w)
+{
+    while (food_grid_food_count(&w->food_grid) < w->food_count)
+    {
+        qa a = (qa)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
+        qw r = (qw)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
+        r = qw_rescale(r, w->inner_radius, (1ULL<<32)-1);
+        if (food_grid_add_food(&w->food_grid, make_qwposqw(
+            qw_mul(qa_cos(a), r),
+            qw_mul(qa_sin(a), r))) != 0)
+        {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int world_step(
     struct world* world, uint16_t frame_number, uint8_t sim_tick_rate)
 {
+    return 0;
 }

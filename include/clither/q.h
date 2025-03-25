@@ -217,6 +217,14 @@ static qw qw_sqrt(qw q)
     return make_qw(sqrt(qw_to_float(q)));
 }
 
+static struct spos make_spos(int x, int y)
+{
+    struct spos p;
+    p.x = x;
+    p.y = y;
+    return p;
+}
+
 static struct qwpos make_qwposi(int x, int y)
 {
     struct qwpos p;

@@ -749,7 +749,7 @@ void snake_extrapolate(
 #define O3   3
 #define O2   2
 #define O1   1
-#define ORDER O3
+#define ORDER O1
     qw                  dx, dy;
     float               T[ORDER][ORDER];
     float               a[ORDER];
@@ -784,20 +784,20 @@ void snake_extrapolate(
     if (calc_T_inv_2x2(T, t1) != 0)
         return;
 #endif
-
 #if ORDER == O1
     dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dx = qw_rescale(dx, head->speed, 255);
     dx = qw_add(dx, snake_min_speed(param));
-    dx = qw_mul(qa_cos(head->angle), dx);
     dx = qw_mul(dx, make_qw(frame_number - replica->head_frame_numbers[0]));
+    // TODO: Clamp extrapolation distance here?
+    dx = qw_mul(qa_cos(head->angle), dx);
     head->pos.x = qw_add(head->pos.x, dx);
 
     dy = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dy = qw_rescale(dy, head->speed, 255);
     dy = qw_add(dy, snake_min_speed(param));
-    dy = qw_mul(qa_sin(head->angle), dy);
     dy = qw_mul(dy, make_qw(frame_number - replica->head_frame_numbers[0]));
+    dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
 #endif
 #if ORDER == O2

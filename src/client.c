@@ -662,6 +662,7 @@ void* client_run(
     camera_init(&camera);
     cmd = cmd_default();
     world_init(&world);
+    world_respawn_food(&world);
 
     log_info("Client started\n");
 

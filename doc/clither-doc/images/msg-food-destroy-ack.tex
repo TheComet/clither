@@ -1,0 +1,15 @@
+\verb$MSG_FOOD_DESTROY_ACK$
+\vspace{.25em}\\
+
+\begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
+    \bitheader{0-5} \\
+    \bitbox{3}{pos x}
+    \bitbox{3}{pos y}
+\end{bytefield}
+
+\begin{itemize}
+    \item\textbf{pos x:} Q19.5 x coordinate of the food's position in world space.
+    \item\textbf{pos y:} Q19.5 y coordinate of the food's position in world space.
+\end{itemize}
+
+
