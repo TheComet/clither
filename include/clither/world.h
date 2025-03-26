@@ -1,24 +1,25 @@
 #pragma once
 
-#include "clither/q.h"
 #include "clither/food.h"
+#include "clither/q.h"
 
 struct snake_bmap;
 struct food_grid;
+struct settings_world;
 
 struct world
 {
     struct snake_bmap* snakes;
     struct food_grid   food_grid;
+    uint64_t           food_rng;
     int                food_count;
-    uint32_t           food_rng;
     qw                 inner_radius;
     qw                 ring_start;
     qw                 ring_end;
     uint16_t           next_free_snake_id;
 };
 
-void world_init(struct world* world);
+void world_init(struct world* world, const struct settings_world* settings);
 
 void world_deinit(struct world* world);
 
@@ -46,3 +47,4 @@ void world_remove_snake(struct world* world, uint16_t snake_id);
 int world_respawn_food(struct world* w);
 
 int world_step(struct world* w, uint16_t frame_number, uint8_t sim_tick_rate);
+

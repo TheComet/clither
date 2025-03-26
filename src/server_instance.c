@@ -34,7 +34,7 @@ void* server_instance_run(const void* args)
     log_set_prefix(log_prefix);
     log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
-    world_init(&world);
+    world_init(&world, instance->settings_world);
     if (world_respawn_food(&world) != 0)
         goto world_spawn_food_failed;
 
@@ -43,8 +43,8 @@ void* server_instance_run(const void* args)
     net_log_host_ips();
 
     log_dbg("Started server instance\n");
-    tick_cfg(&sim_tick, instance->settings->sim_tick_rate);
-    tick_cfg(&net_tick, instance->settings->net_tick_rate);
+    tick_cfg(&sim_tick, instance->settings_server->sim_tick_rate);
+    tick_cfg(&net_tick, instance->settings_server->net_tick_rate);
     frame_number = 0;
     while (signals_exit_requested() == 0)
     {
@@ -57,7 +57,8 @@ void* server_instance_run(const void* args)
         if (net_update)
         {
             if (server_recv(
-                    &server, instance->settings, &world, frame_number) != 0)
+                    &server, instance->settings_server, &world, frame_number) !=
+                0)
                 break;
         }
 
@@ -80,9 +81,10 @@ void* server_instance_run(const void* args)
                     &snake->head,
                     &snake->param,
                     cmd,
-                    instance->settings->sim_tick_rate));
+                    instance->settings_server->sim_tick_rate));
         }
-        world_step(&world, frame_number, instance->settings->sim_tick_rate);
+        world_step(
+            &world, frame_number, instance->settings_server->sim_tick_rate);
 
         if (net_update)
         {

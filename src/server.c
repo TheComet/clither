@@ -840,11 +840,11 @@ int server_recv(
 /* ------------------------------------------------------------------------- */
 void* server_run(const void* p)
 {
-    struct server_instance_bmap*  instances;
-    const struct settings_server* settings = p;
+    struct server_instance_bmap* instances;
+    const struct settings*       settings = p;
 
     /* Change log prefix and color for server log messages */
-    log_set_prefix(settings->log_prefix);
+    log_set_prefix(settings->server.log_prefix);
     log_set_colors(COL_B_CYAN, COL_RESET);
 
     mem_init_threadlocal();
@@ -856,11 +856,11 @@ void* server_run(const void* p)
      */
     log_info(
         "Creating default server instance: addr=%s, port=%s\n",
-        *settings->bind_addr ? settings->bind_addr : "*",
-        settings->bind_port);
+        *settings->server.bind_addr ? settings->server.bind_addr : "*",
+        settings->server.bind_port);
     {
         struct server_instance* instance;
-        uint16_t                key = atoi(settings->bind_port);
+        uint16_t                key = atoi(settings->server.bind_port);
         CLITHER_DEBUG_ASSERT(key != 0);
 
         if (server_instance_bmap_emplace_new(&instances, key, &instance) !=
@@ -869,9 +869,10 @@ void* server_run(const void* p)
             goto start_default_instance_failed;
         }
 
-        instance->settings = settings;
-        instance->addr = settings->bind_addr;
-        instance->port = settings->bind_port;
+        instance->settings_server = &settings->server;
+        instance->settings_world = &settings->world;
+        instance->addr = settings->server.bind_addr;
+        instance->port = settings->server.bind_port;
 
         instance->thread = thread_start(server_instance_run, instance);
         if (instance->thread == NULL)

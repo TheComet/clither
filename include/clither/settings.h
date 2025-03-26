@@ -17,6 +17,14 @@ struct settings_server
     char     log_prefix[32];
 };
 
+struct settings_world
+{
+    uint32_t food_count;
+    uint8_t  inner_radius;
+    uint8_t  ring_start;
+    uint8_t  ring_end;
+};
+
 struct settings_client
 {
     char username[256];
@@ -49,6 +57,7 @@ struct settings_mcd
 struct settings
 {
     struct settings_server server;
+    struct settings_world  world;
     struct settings_client client;
     struct settings_gfx    gfx;
     struct settings_mcd    mcd;

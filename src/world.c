@@ -1,6 +1,8 @@
 #include "clither/food.h"
+#include "clither/hash.h"
 #include "clither/log.h"
 #include "clither/q.h"
+#include "clither/settings.h"
 #include "clither/snake.h"
 #include "clither/snake_bmap.h"
 #include "clither/str.h"
@@ -8,16 +10,16 @@
 #include <stddef.h>
 
 /* ------------------------------------------------------------------------- */
-void world_init(struct world* world)
+void world_init(struct world* world, const struct settings_world* settings)
 {
     snake_bmap_init(&world->snakes);
     food_grid_init(&world->food_grid);
-    
-    world->food_count = 10000;
+
+    world->food_count = settings->food_count;
     world->food_rng = 1;
-    world->inner_radius = make_qw(20);
-    world->ring_start = make_qw(40);
-    world->ring_end = make_qw(64);
+    world->inner_radius = make_qw(settings->inner_radius);
+    world->ring_start = make_qw(settings->ring_start);
+    world->ring_end = make_qw(settings->ring_end);
     world->next_free_snake_id = 1;
 }
 
@@ -90,18 +92,23 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
+static uint64_t food_rng(struct world* w)
+{
+    return w->food_rng +=
+           hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng));
+}
 int world_respawn_food(struct world* w)
 {
     while (food_grid_food_count(&w->food_grid) < w->food_count)
     {
-        qa a = (qa)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
-        qw r = (qw)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
-        if (food_grid_add_food(&w->food_grid, make_qwposqw(
-            qw_mul(qa_cos(a), r),
-            qw_mul(qa_sin(a), r))) != 0)
-        {
+        struct qwpos pos;
+        qa           dir = (qa)(food_rng(w));
+        qa           phi = (qa)(food_rng(w));
+        qw           r = (qw)(food_rng(w) & 0x7FFFFFFF);
+        r = qw_rescale(r, w->inner_radius, 1 << 31);
+        pos = make_qwposqw(qw_mul(qa_cos(phi), r), qw_mul(qa_sin(phi), r));
+        if (food_grid_add_food(&w->food_grid, pos, dir) != 0)
             return -1;
-        }
     }
 
     return 0;

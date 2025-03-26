@@ -9,6 +9,7 @@ struct msg;
 struct msg_vec;
 struct settings_client;
 struct settings_gfx;
+struct settings_world;
 struct world;
 
 /*
@@ -117,5 +118,6 @@ client_recv(struct client* client, struct world* world);
  */
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx);
+    const struct settings_gfx*    settings_gfx,
+    const struct settings_world*  settings_world);
 #endif

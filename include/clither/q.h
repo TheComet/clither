@@ -8,7 +8,7 @@ typedef int32_t q16_16;
 #define Q16_16_K (1 << (Q16_16_Q - 1))
 
 /*
- * Since the world size is fixed, we use a Q19.5 (24-bit) fixed point representation
+ * Since the world size is fixed, we use a Q10.14 (24-bit) fixed point representation
  * for world position.
  */
 typedef int32_t qw;

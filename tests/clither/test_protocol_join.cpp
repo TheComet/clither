@@ -31,8 +31,8 @@ public:
         ASSERT_THAT(server_init(&sv, "", "5555"), Eq(0));
         settings_set_defaults(&settings);
         client_init(&cl);
-        world_init(&cl_world);
-        world_init(&sv_world);
+        world_init(&cl_world, &settings.world);
+        world_init(&sv_world, &settings.world);
     }
     void TearDown() override
     {

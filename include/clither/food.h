@@ -1,28 +1,28 @@
 #pragma once
 
-#include "clither/hm.h"
+#include "clither/bmap.h"
 #include "clither/q.h"
-#include "clither/bset.h"
 
 struct food
 {
-    struct qwpos pos;
+    /* Direction vector (normalized). Used for rotating the sprite */
+    struct qwpos dir;
 };
 
-BSET_DECLARE(food_bset, uint64_t, 32)
+BMAP_DECLARE(food_bmap, uint64_t, struct food, 32)
 
 struct food_grid
 {
-    struct food_bset* morton;
+    struct food_bmap* morton;
 };
 
 void food_grid_init(struct food_grid* grid);
 void food_grid_deinit(struct food_grid* grid);
 
-int food_grid_add_food(struct food_grid* grid, struct qwpos pos);
+int food_grid_add_food(struct food_grid* grid, struct qwpos pos, qa angle);
 int food_grid_remove_food(struct food_grid* grid, struct qwpos pos);
 
 static int food_grid_food_count(const struct food_grid* grid)
 {
-    return bset_count(grid->morton);
+    return bmap_count(grid->morton);
 }

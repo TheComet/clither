@@ -609,7 +609,9 @@ client_recv(struct client* client, struct world* world)
 #if defined(CLITHER_CLIENT)
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx)
+    const struct settings_gfx*    settings_gfx,
+    const struct settings_world* settings_world) /* TODO: Remove once networking
+                                                    for food is implemented */
 {
     struct world                world;
     struct input                input;
@@ -661,7 +663,7 @@ void* client_run(
     input_init(&input);
     camera_init(&camera);
     cmd = cmd_default();
-    world_init(&world);
+    world_init(&world, settings_world);
     world_respawn_food(&world);
 
     log_info("Client started\n");
@@ -683,8 +685,7 @@ void* client_run(
             int idx, new_idx;
 
             for (count = 0; gfx_backends[count]; ++count)
-            {
-            }
+                ;
             for (idx = 0; gfx_backends[idx]; ++idx)
                 if (gfx_iface == gfx_backends[idx])
                     break;
@@ -812,6 +813,11 @@ void* client_run(
 
             camera_update(
                 &camera, &snake->head, &snake->param, client.sim_tick_rate);
+            camera.scale += input.scroll * camera.scale * 0.05;
+            log_dbg(
+                "pos: [%.2f, %.2f]\n",
+                qw_to_float(snake->head.pos.x),
+                qw_to_float(snake->head.pos.y));
 
             if (net_update)
             {

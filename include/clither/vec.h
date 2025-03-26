@@ -401,12 +401,14 @@
  *   }
  */
 #define vec_for_each(v, var) for (var = vec_begin(v); var != vec_end(v); var++)
-
 #define vec_for_each_r(v, var)                                                 \
     for (var = vec_begin_r(v); var != vec_end_r(v); var--)
 
 #define vec_enumerate(v, i, var)                                               \
     for (i = 0; (v) && i != (v)->count && ((var = &(v)->data[i]), 1); ++i)
+#define vec_enumerate_r(v, i, var)                                             \
+    for (i = (v) ? (v)->count - 1 : -1; i >= 0 && ((var = &(v)->data[i]), 1);  \
+         --i)
 
 #if defined(CLITHER_MEM_DEBUGGING)
 #    define mem_own_vec(prefix, v)                                             \

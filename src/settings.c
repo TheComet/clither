@@ -157,6 +157,12 @@ void settings_set_defaults(struct settings* s)
     strcpy(s->server.bind_port, "5555");
     strcpy(s->server.log_prefix, "Server: ");
 
+    /* [world] */
+    s->world.food_count = 10000;
+    s->world.inner_radius = 120;
+    s->world.ring_start = 190;
+    s->world.ring_end = 255;
+
     /* [client] */
     strcpy(s->client.log_prefix, "Client: ");
     strcpy(s->client.username, "Snek :D");
@@ -357,8 +363,6 @@ static int parse_server_log_prefix(struct parser* p, struct settings_server* s)
     s->log_prefix[value.len] = '\0';
     return 0;
 }
-
-/* ------------------------------------------------------------------------- */
 static int parse_server_key_values(struct parser* p, struct settings_server* s)
 {
     enum token     tok;
@@ -392,6 +396,94 @@ static int parse_server_key_values(struct parser* p, struct settings_server* s)
                 HANDLE_KEY(bind_addr)
                 HANDLE_KEY(bind_port)
                 HANDLE_KEY(log_prefix)
+#undef HANDLE_KEY
+                else
+                {
+                    return parser_error(
+                        p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+                }
+                /* clang-format on */
+                break;
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static int parse_world_food_count(struct parser* p, struct settings_world* s)
+{
+    if (scan_next_token(p) != TOK_INTEGER)
+        return parser_error(p, "Expected an integer value\n");
+
+    if (p->value.integer_literal < 0 || p->value.integer_literal > 100000000)
+        return parser_error(p, "\"food_count\" must be 0-100000000\n");
+
+    s->food_count = (uint32_t)p->value.integer_literal;
+    return 0;
+}
+static int parse_world_inner_radius(struct parser* p, struct settings_world* s)
+{
+    if (scan_next_token(p) != TOK_INTEGER)
+        return parser_error(p, "Expected an integer value\n");
+
+    if (p->value.integer_literal < 5 || p->value.integer_literal > 255)
+        return parser_error(p, "\"inner_radius\" must be 5-255\n");
+
+    s->inner_radius = (uint8_t)p->value.integer_literal;
+    return 0;
+}
+static int parse_world_ring_start(struct parser* p, struct settings_world* s)
+{
+    if (scan_next_token(p) != TOK_INTEGER)
+        return parser_error(p, "Expected an integer value\n");
+
+    if (p->value.integer_literal < 5 || p->value.integer_literal > 255)
+        return parser_error(p, "\"ring_start\" must be 5-255\n");
+
+    s->ring_start = (uint8_t)p->value.integer_literal;
+    return 0;
+}
+static int parse_world_ring_end(struct parser* p, struct settings_world* s)
+{
+    if (scan_next_token(p) != TOK_INTEGER)
+        return parser_error(p, "Expected an integer value\n");
+
+    if (p->value.integer_literal < 5 || p->value.integer_literal > 255)
+        return parser_error(p, "\"ring_end\" must be 5-255\n");
+
+    s->ring_end = (uint8_t)p->value.integer_literal;
+    return 0;
+}
+static int parse_world_key_values(struct parser* p, struct settings_world* s)
+{
+    enum token     tok;
+    struct strview key;
+
+    while (1)
+    {
+        switch ((tok = scan_next_token(p)))
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                key = p->value.string;
+                /* clang-format off */
+                if (0) {}
+#define HANDLE_KEY(kname)                                                      \
+                else if (strview_eq_cstr(key, #kname))                         \
+                {                                                              \
+                    if (scan_next_token(p) != '=')                             \
+                        return parser_error(p, "Expected \"=\" after key\n");  \
+                    if (parse_world_##kname(p, s) != 0)                        \
+                        return -1;                                             \
+                }
+                HANDLE_KEY(food_count)
+                HANDLE_KEY(inner_radius)
+                HANDLE_KEY(ring_start)
+                HANDLE_KEY(ring_end)
 #undef HANDLE_KEY
                 else
                 {
@@ -787,6 +879,7 @@ static int parse_ini(struct parser* p, struct settings* s)
     enum section
     {
         SEC_SERVER,
+        SEC_WORLD,
         SEC_CLIENT,
         SEC_GFX,
         SEC_MCD
@@ -811,6 +904,8 @@ static int parse_ini(struct parser* p, struct settings* s)
 
                 if (strview_eq_cstr(p->value.string, "server"))
                     sec = SEC_SERVER;
+                else if (strview_eq_cstr(p->value.string, "world"))
+                    sec = SEC_WORLD;
                 else if (strview_eq_cstr(p->value.string, "client"))
                     sec = SEC_CLIENT;
                 else if (strview_eq_cstr(p->value.string, "gfx"))
@@ -831,6 +926,9 @@ static int parse_ini(struct parser* p, struct settings* s)
                 {
                     case SEC_SERVER:
                         tok = parse_server_key_values(p, &s->server);
+                        break;
+                    case SEC_WORLD:
+                        tok = parse_world_key_values(p, &s->world);
                         break;
                     case SEC_CLIENT:
                         tok = parse_client_key_values(p, &s->client);
@@ -854,11 +952,12 @@ int settings_load(struct settings* s, const char* filepath)
     struct mfile  mf;
     struct parser p;
 
+    settings_set_defaults(s);
+
     if (mfile_map_read(&mf, filepath, 1) != 0)
     {
         log_warn(
             "Using default settings and saving them to \"%s\"\n", filepath);
-        settings_set_defaults(s);
         settings_save(s, filepath);
         return 0;
     }
@@ -880,6 +979,7 @@ void settings_save(const struct settings* s, const char* filename)
 {
     FILE*                         fp;
     const struct settings_server* sv = &s->server;
+    const struct settings_world*  w = &s->world;
     const struct settings_client* cl = &s->client;
     const struct settings_gfx*    gfx = &s->gfx;
     const struct settings_mcd*    mcd = &s->mcd;
@@ -917,6 +1017,11 @@ void settings_save(const struct settings* s, const char* filename)
     WRITE_STR(fp, sv, bind_addr, "Address to bind server to");
     WRITE_STR_AS_INT(fp, sv, bind_port, "Port to bind server to");
     WRITE_STR(fp, sv, log_prefix, "Prefix for log messages");
+
+    fprintf(fp, "\n[world]\n");
+    WRITE_INT(fp, w, inner_radius, "Inner radius of the world");
+    WRITE_INT(fp, w, ring_start, "Distance to the start of the outer ring");
+    WRITE_INT(fp, w, ring_end, "Distance to the end of the outer ring");
 
     fprintf(fp, "\n[client]\n");
     WRITE_STR(fp, cl, username, "Default username");

@@ -24,8 +24,6 @@
 struct bg
 {
     GLuint program;
-    GLuint vbo;
-    GLuint ibo;
     GLuint fbo;
     GLuint texShadow;
     GLuint texCol;
@@ -33,18 +31,19 @@ struct bg
     GLuint uAspectRatio;
     GLuint uCamera;
     GLuint uShadowInvRes;
+    GLuint uWorldBorder;
     GLuint sShadow;
     GLuint sCol;
     GLuint sNM;
 };
 
-struct sprite_mesh
+struct quad_mesh
 {
     GLuint vbo;
     GLuint ibo;
 };
 
-struct sprite_shadow
+struct sprite_shadow_mat
 {
     GLuint program;
     GLuint uAspectRatio;
@@ -69,10 +68,10 @@ struct sprite_mat
 
 struct sprite_tex
 {
-    GLuint texDiffuse;
-    GLuint texNM;
+    GLuint  texDiffuse;
+    GLuint  texNM;
     GLfloat scale;
-    int8_t tile_x, tile_y, tile_count, frame;
+    int8_t  tile_x, tile_y, tile_count, frame;
 };
 
 struct gfx
@@ -82,15 +81,15 @@ struct gfx
 
     struct input input_buffer;
 
-    struct bg            bg;
-    struct sprite_mesh   sprite_mesh;
-    struct sprite_mat    sprite_mat;
-    struct sprite_shadow sprite_shadow;
-    struct sprite_tex    food;
-    struct sprite_tex    head0_base;
-    struct sprite_tex    head0_gather;
-    struct sprite_tex    body0_base;
-    struct sprite_tex    tail0_base;
+    struct bg                bg;
+    struct quad_mesh         quad_mesh;
+    struct sprite_mat        sprite_mat;
+    struct sprite_shadow_mat sprite_shadow_mat;
+    struct sprite_tex        food;
+    struct sprite_tex        head0_base;
+    struct sprite_tex        head0_gather;
+    struct sprite_tex        body0_base;
+    struct sprite_tex        tail0_base;
 };
 
 struct aspect_ratio
@@ -105,16 +104,16 @@ struct vertex
     GLfloat uv[2];
 };
 
-static const struct vertex sprite_vertices[4] = {
-    {{-0.125, -0.125}, {0, 1}},
-    {{-0.125, 0.125}, {0, 0}},
-    {{0.125, -0.125}, {1, 1}},
-    {{0.125, 0.125}, {1, 0}}};
-static const GLushort      sprite_indices[6] = {0, 2, 1, 1, 3, 2};
-static const struct vertex bg_vertices[4] = {
-    {{-1, -1}, {0, 0}}, {{-1, 1}, {0, 1}}, {{1, -1}, {1, 0}}, {{1, 1}, {1, 1}}};
-static const GLushort bg_indices[6] = {0, 2, 1, 1, 3, 2};
-static const char*    attr_bindings[] = {"vPosition", "vTexCoord", NULL};
+/* clang-format off */
+static const struct vertex quad_vertices[4] = {
+    {{-1, -1}, {0, 1}},
+    {{-1,  1}, {0, 0}},
+    {{ 1, -1}, {1, 1}},
+    {{ 1,  1}, {1, 0}}};
+static const GLushort quad_indices[6] = {0, 2, 1, 1, 3, 2};
+/* clang-format on */
+
+static const char* attr_bindings[] = {"vPosition", "vTexCoord", NULL};
 
 /* ------------------------------------------------------------------------- */
 static void error_callback(int error_code, const char* error_msg)
@@ -341,22 +340,6 @@ static int bg_init(struct bg* bg, int fbwidth, int fbheight)
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    /* Set up quad mesh */
-    glGenBuffers(1, &bg->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, bg->vbo);
-    glBufferData(
-        GL_ARRAY_BUFFER, sizeof(bg_vertices), bg_vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glGenBuffers(1, &bg->ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bg->ibo);
-    glBufferData(
-        GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(bg_indices),
-        bg_indices,
-        GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
     /* Prepare background textures */
     glGenTextures(1, &bg->texCol);
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
@@ -381,6 +364,7 @@ static int bg_init(struct bg* bg, int fbwidth, int fbheight)
     bg->uAspectRatio = (GLuint)-1;
     bg->uCamera = (GLuint)-1;
     bg->uShadowInvRes = (GLuint)-1;
+    bg->uWorldBorder = (GLuint)-1;
     bg->sShadow = (GLuint)-1;
     bg->sCol = (GLuint)-1;
     bg->sNM = (GLuint)-1;
@@ -400,8 +384,6 @@ static void bg_deinit(struct bg* bg)
 {
     glDeleteTextures(1, &bg->texNor);
     glDeleteTextures(1, &bg->texCol);
-    glDeleteBuffers(1, &bg->ibo);
-    glDeleteBuffers(1, &bg->vbo);
     glDeleteFramebuffers(1, &bg->fbo);
     glDeleteTextures(1, &bg->texShadow);
     if (bg->program != 0)
@@ -449,6 +431,8 @@ static int bg_load(struct bg* bg, const struct resource_pack* pack)
     bg->uCamera = get_uniform_location_and_warn(bg->program, "uCamera");
     bg->uShadowInvRes =
         get_uniform_location_and_warn(bg->program, "uShadowInvRes");
+    bg->uWorldBorder =
+        get_uniform_location_and_warn(bg->program, "uWorldBorder");
     bg->sShadow = get_uniform_location_and_warn(bg->program, "sShadow");
     bg->sCol = get_uniform_location_and_warn(bg->program, "sCol");
     bg->sNM = get_uniform_location_and_warn(bg->program, "sNM");
@@ -513,36 +497,33 @@ static int bg_load(struct bg* bg, const struct resource_pack* pack)
 }
 
 /* ------------------------------------------------------------------------- */
-static void sprite_mesh_init(struct sprite_mesh* sm)
+static void sprite_mesh_init(struct quad_mesh* sm)
 {
     glGenBuffers(1, &sm->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, sm->vbo);
     glBufferData(
-        GL_ARRAY_BUFFER,
-        sizeof(sprite_vertices),
-        sprite_vertices,
-        GL_STATIC_DRAW);
+        GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenBuffers(1, &sm->ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sm->ibo);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(sprite_indices),
-        sprite_indices,
+        sizeof(quad_indices),
+        quad_indices,
         GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 /* ------------------------------------------------------------------------- */
-static void sprite_mesh_deinit(struct sprite_mesh* sm)
+static void sprite_mesh_deinit(struct quad_mesh* sm)
 {
     glDeleteBuffers(1, &sm->ibo);
     glDeleteBuffers(1, &sm->vbo);
 }
 
 /* ------------------------------------------------------------------------- */
-static void sprite_shadow_init(struct sprite_shadow* ss)
+static void sprite_shadow_init(struct sprite_shadow_mat* ss)
 {
     ss->program = 0;
     ss->uAspectRatio = (GLuint)-1;
@@ -554,14 +535,14 @@ static void sprite_shadow_init(struct sprite_shadow* ss)
 }
 
 /* ------------------------------------------------------------------------- */
-static void sprite_shadow_deinit(struct sprite_shadow* ss)
+static void sprite_shadow_deinit(struct sprite_shadow_mat* ss)
 {
     if (ss->program != 0)
         glDeleteProgram(ss->program);
 }
 
 /* ------------------------------------------------------------------------- */
-static void sprite_shadow_unload(struct sprite_shadow* ss)
+static void sprite_shadow_unload(struct sprite_shadow_mat* ss)
 {
     if (ss->program != 0)
         glDeleteProgram(ss->program);
@@ -569,8 +550,8 @@ static void sprite_shadow_unload(struct sprite_shadow* ss)
 }
 
 /* ------------------------------------------------------------------------- */
-static int
-sprite_shadow_load(struct sprite_shadow* ss, const struct resource_pack* pack)
+static int sprite_shadow_load(
+    struct sprite_shadow_mat* ss, const struct resource_pack* pack)
 {
     assert(ss->program == 0);
     ss->program = load_shader(pack->shaders.glsl.shadow, attr_bindings);
@@ -754,7 +735,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     if (bg_load(&gfx->bg, pack) < 0)
         goto bg_load_failed;
-    if (sprite_shadow_load(&gfx->sprite_shadow, pack) < 0)
+    if (sprite_shadow_load(&gfx->sprite_shadow_mat, pack) < 0)
         goto sprite_shadow_load_failed;
     if (sprite_mat_load(&gfx->sprite_mat, pack) < 0)
         goto sprite_mat_load_failed;
@@ -777,7 +758,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     return 0;
 
 sprite_mat_load_failed:
-    sprite_shadow_unload(&gfx->sprite_shadow);
+    sprite_shadow_unload(&gfx->sprite_shadow_mat);
 sprite_shadow_load_failed:
     bg_unload(&gfx->bg);
 bg_load_failed:
@@ -839,8 +820,8 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glViewport(0, 0, fbwidth, fbheight);
 
     bg_init(&gfx->bg, fbwidth, fbheight);
-    sprite_mesh_init(&gfx->sprite_mesh);
-    sprite_shadow_init(&gfx->sprite_shadow);
+    sprite_mesh_init(&gfx->quad_mesh);
+    sprite_shadow_init(&gfx->sprite_shadow_mat);
     sprite_mat_init(&gfx->sprite_mat);
     sprite_tex_init(&gfx->food);
     sprite_tex_init(&gfx->head0_base);
@@ -876,8 +857,8 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     sprite_tex_deinit(&gfx->body0_base);
 
     sprite_mat_deinit(&gfx->sprite_mat);
-    sprite_shadow_deinit(&gfx->sprite_shadow);
-    sprite_mesh_deinit(&gfx->sprite_mesh);
+    sprite_shadow_deinit(&gfx->sprite_shadow_mat);
+    sprite_mesh_deinit(&gfx->quad_mesh);
     bg_deinit(&gfx->bg);
 
     glfwDestroyWindow(gfx->window);
@@ -956,11 +937,12 @@ static struct cmd gfx_gles2_input_to_cmd(
 
 /* ------------------------------------------------------------------------- */
 static void draw_background(
+    const struct world*        world,
     const struct gfx*          gfx,
     const struct camera*       camera,
     const struct aspect_ratio* ar)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->bg.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, gfx->quad_mesh.vbo);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(
         0,
@@ -969,15 +951,7 @@ static void draw_background(
         GL_FALSE,
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->bg.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->quad_mesh.ibo);
 
     glUseProgram(gfx->bg.program);
     glBindTexture(GL_TEXTURE_2D, gfx->bg.texShadow);
@@ -997,6 +971,11 @@ static void draw_background(
         gfx->bg.uShadowInvRes,
         (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->width,
         (GLfloat)SHADOW_MAP_SIZE_FACTOR / gfx->height);
+    glUniform3f(
+        gfx->bg.uWorldBorder,
+        qw_to_float(world->inner_radius),
+        qw_to_float(world->ring_start),
+        qw_to_float(world->ring_end));
     glUniform1i(gfx->bg.sCol, 1);
     glUniform1i(gfx->bg.sNM, 2);
 
@@ -1013,17 +992,17 @@ static void draw_background(
 }
 
 /* ------------------------------------------------------------------------- */
-static void draw_food(
-    const struct food_grid*    food_grid,
-    const struct gfx*          gfx,
-    const struct camera*       camera,
-    const struct aspect_ratio* ar,
-    char shadow_pass)
+static void sprite_shadow_prepare_draw(
+    const struct bg*                bg,
+    const struct quad_mesh*         mesh,
+    const struct sprite_shadow_mat* mat,
+    const struct aspect_ratio*      ar,
+    GLint                           gfx_width,
+    GLint                           gfx_height)
 {
-    int32_t idx;
-    uint64_t morton;
+    const GLint nmUnits[4] = {0, 1, 2, 3};
 
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(
         0,
@@ -1040,50 +1019,109 @@ static void draw_food(
         GL_FALSE,
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->sprite_mesh.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
 
-    glUseProgram(gfx->sprite_mat.program);
-    glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
-    glUniform1f(gfx->sprite_mat.uSize, gfx->food.scale);
-    glUniform1i(gfx->sprite_mat.sCol, 0);
-    glUniform1i(gfx->sprite_mat.sNM, 1);
+    glUseProgram(mat->program);
+    glUniform2f(mat->uAspectRatio, ar->scale_x, ar->scale_y);
+    glUniform1iv(mat->sNM, 4, nmUnits);
 
+    glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
+    glViewport(
+        0,
+        0,
+        gfx_width / SHADOW_MAP_SIZE_FACTOR,
+        gfx_height / SHADOW_MAP_SIZE_FACTOR);
+}
+static void sprite_shadow_end_draw(GLint gfx_width, GLint gfx_height)
+{
+    glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gfx->food.texDiffuse);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, gfx->food.texNM);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    bset_for_each(food_grid->morton, idx, morton)
-    {
-        int                  tile_x, tile_y;
-        struct qwpos         pos_cameraSpace;
-        struct qwpos         pos_worldSpace = morton_decode_qwpos(morton);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, gfx_width, gfx_height);
+}
+static void sprite_shadow_bind_textures(const struct sprite_tex* tex)
+{
+    glBindTexture(GL_TEXTURE_2D, tex->texNM);
+}
+static void sprite_shadow_update_uniforms(
+    const struct sprite_shadow_mat* mat,
+    const struct sprite_tex*        tex,
+    struct qwpos                    pos,
+    struct qwpos                    dir,
+    qw                              scale,
+    const struct camera*            camera)
+{
+    int          tile_x, tile_y;
+    struct qwpos pos_cameraSpace;
 
-        /* world -> camera space */
-        pos_cameraSpace.x =
-            qw_mul(qw_sub(pos_worldSpace.x, camera->pos.x), camera->scale);
-        pos_cameraSpace.y =
-            qw_mul(qw_sub(pos_worldSpace.y, camera->pos.y), camera->scale);
+    pos_cameraSpace.x = qw_mul(qw_sub(pos.x, camera->pos.x), camera->scale);
+    pos_cameraSpace.y = qw_mul(qw_sub(pos.y, camera->pos.y), camera->scale);
 
-        tile_x = gfx->food.frame % gfx->food.tile_x;
-        tile_y = (gfx->food.frame / gfx->food.tile_x) % gfx->food.tile_y;
+    /* Drop shadow */
+    pos_cameraSpace.x =
+        qw_sub(pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
+    pos_cameraSpace.y =
+        qw_sub(pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
 
-        glUniform3f(
-            gfx->sprite_mat.uPosCameraSpace,
-            qw_to_float(pos_cameraSpace.x),
-            qw_to_float(pos_cameraSpace.y),
-            qw_to_float(camera->scale));
-        glUniform2f(gfx->sprite_mat.uDir, 1.0, 0.0);
-        glUniform4f(
-            gfx->sprite_mat.uAnim,
-            1.0 / gfx->food.tile_x,
-            1.0 / gfx->food.tile_y,
-            (GLfloat)tile_x / gfx->food.tile_x,
-            (GLfloat)tile_y / gfx->food.tile_y);
+    tile_x = tex->frame % tex->tile_x;
+    tile_y = (tex->frame / tex->tile_x) % tex->tile_y;
 
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
-    }
+    glUniform1f(mat->uSize, tex->scale * qw_to_float(scale));
+    glUniform3f(
+        mat->uPosCameraSpace,
+        qw_to_float(pos_cameraSpace.x),
+        qw_to_float(pos_cameraSpace.y),
+        qw_to_float(camera->scale));
+    glUniform2f(mat->uDir, qw_to_float(dir.x), qw_to_float(dir.y));
+    glUniform4f(
+        mat->uAnim,
+        1.0 / tex->tile_x,
+        1.0 / tex->tile_y,
+        (GLfloat)tile_x / tex->tile_x,
+        (GLfloat)tile_y / tex->tile_y);
+}
+static void sprite_shadow_draw(void)
+{
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+}
 
+/* ------------------------------------------------------------------------- */
+static void sprite_prepare_draw(
+    const struct quad_mesh*    mesh,
+    const struct sprite_mat*   mat,
+    const struct aspect_ratio* ar)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, uv));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
+
+    glUseProgram(mat->program);
+    glUniform2f(mat->uAspectRatio, ar->scale_x, ar->scale_y);
+    glUniform1i(mat->sCol, 0);
+    glUniform1i(mat->sNM, 1);
+}
+static void sprite_end_draw(void)
+{
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -1091,232 +1129,211 @@ static void draw_food(
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
+static void sprite_bind_textures(const struct sprite_tex* tex)
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, tex->texNM);
+}
+static void sprite_update_uniforms(
+    const struct sprite_mat* mat,
+    const struct sprite_tex* tex,
+    struct qwpos             pos,
+    struct qwpos             dir,
+    qw                       scale,
+    const struct camera*     camera)
+{
+    int          tile_x, tile_y;
+    struct qwpos pos_cameraSpace;
+
+    pos_cameraSpace.x = qw_mul(qw_sub(pos.x, camera->pos.x), camera->scale);
+    pos_cameraSpace.y = qw_mul(qw_sub(pos.y, camera->pos.y), camera->scale);
+
+    tile_x = tex->frame % tex->tile_x;
+    tile_y = (tex->frame / tex->tile_x) % tex->tile_y;
+
+    glUniform1f(mat->uSize, tex->scale * qw_to_float(scale));
+    glUniform3f(
+        mat->uPosCameraSpace,
+        qw_to_float(pos_cameraSpace.x),
+        qw_to_float(pos_cameraSpace.y),
+        qw_to_float(camera->scale));
+    glUniform2f(mat->uDir, qw_to_float(dir.x), qw_to_float(dir.y));
+    glUniform4f(
+        mat->uAnim,
+        1.0 / tex->tile_x,
+        1.0 / tex->tile_y,
+        (GLfloat)tile_x / tex->tile_x,
+        (GLfloat)tile_y / tex->tile_y);
+}
+static void sprite_draw(void)
+{
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+}
 
 /* ------------------------------------------------------------------------- */
-static void draw_snake(
+static void draw_food_shadows(
+    const struct food_grid*    food_grid,
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar)
+{
+    int32_t            idx;
+    uint64_t           morton;
+    const struct food* food;
+
+    sprite_shadow_prepare_draw(
+        &gfx->bg,
+        &gfx->quad_mesh,
+        &gfx->sprite_shadow_mat,
+        ar,
+        gfx->width,
+        gfx->height);
+    sprite_shadow_bind_textures(&gfx->food);
+    bmap_for_each (food_grid->morton, idx, morton, food)
+    {
+        sprite_shadow_update_uniforms(
+            &gfx->sprite_shadow_mat,
+            &gfx->food,
+            morton_decode_qwpos(morton),
+            food->dir,
+            make_qw(1),
+            camera);
+        sprite_shadow_draw();
+    }
+
+    sprite_shadow_end_draw(gfx->width, gfx->height);
+}
+static void draw_food(
+    const struct food_grid*    food_grid,
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar)
+{
+    int32_t            idx;
+    uint64_t           morton;
+    const struct food* food;
+
+    sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
+    sprite_bind_textures(&gfx->food);
+    bmap_for_each (food_grid->morton, idx, morton, food)
+    {
+        sprite_update_uniforms(
+            &gfx->sprite_mat,
+            &gfx->food,
+            morton_decode_qwpos(morton),
+            food->dir,
+            make_qw(1),
+            camera);
+        sprite_draw();
+    }
+
+    sprite_end_draw();
+}
+
+/* ------------------------------------------------------------------------- */
+static void draw_snake_shadow(
     const struct snake*        snake,
     const struct gfx*          gfx,
     const struct camera*       camera,
-    const struct aspect_ratio* ar,
-    char                       shadow_pass)
+    const struct aspect_ratio* ar)
 {
-    int i;
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->sprite_mesh.ibo);
+    int32_t              i;
+    struct bezier_point* bp;
 
-    if (shadow_pass)
-    {
-        const GLint nmUnits[4] = {0, 1, 2, 3};
-        glUseProgram(gfx->sprite_shadow.program);
-        glUniform2f(gfx->sprite_shadow.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(
-            gfx->sprite_shadow.uSize, gfx->body0_base.scale * qw_to_float(snake_scale(&snake->param)));
-        glUniform1iv(gfx->sprite_shadow.sNM, 4, nmUnits);
-
-        glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texNM);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
-        glViewport(
-            0,
-            0,
-            gfx->width / SHADOW_MAP_SIZE_FACTOR,
-            gfx->height / SHADOW_MAP_SIZE_FACTOR);
-        glClearColor(0.0, 0.0, 0.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
-    else
-    {
-        glUseProgram(gfx->sprite_mat.program);
-        glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
-        glUniform1f(
-            gfx->sprite_mat.uSize, gfx->body0_base.scale * qw_to_float(snake_scale(&snake->param)));
-        glUniform1i(gfx->sprite_mat.sCol, 0);
-        glUniform1i(gfx->sprite_mat.sNM, 1);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texDiffuse);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texNM);
-    }
+    sprite_shadow_prepare_draw(
+        &gfx->bg,
+        &gfx->quad_mesh,
+        &gfx->sprite_shadow_mat,
+        ar,
+        gfx->width,
+        gfx->height);
 
     /* body parts */
-    for (i = vec_count(snake->data.bezier_points) - 1; i >= 1; --i)
+    sprite_shadow_bind_textures(&gfx->body0_base);
+    vec_enumerate_r(snake->data.bezier_points, i, bp)
     {
-        int                  tile_x, tile_y;
-        struct qwpos         pos_cameraSpace;
-        struct bezier_point* bp = vec_get(snake->data.bezier_points, i);
-
-        /* world -> camera space */
-        pos_cameraSpace.x =
-            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale);
-        pos_cameraSpace.y =
-            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale);
-
-        tile_x = (gfx->body0_base.frame + i * 3) % gfx->body0_base.tile_x;
-        tile_y = ((gfx->body0_base.frame + i * 3) / gfx->body0_base.tile_x) %
-                 gfx->body0_base.tile_y;
-
-        if (shadow_pass)
-        {
-            pos_cameraSpace.x = qw_sub(
-                pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
-            pos_cameraSpace.y = qw_sub(
-                pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
-
-            glUniform3f(
-                gfx->sprite_shadow.uPosCameraSpace,
-                qw_to_float(pos_cameraSpace.x),
-                qw_to_float(pos_cameraSpace.y),
-                qw_to_float(camera->scale));
-            glUniform2f(
-                gfx->sprite_shadow.uDir,
-                qw_to_float(bp->dir.x),
-                qw_to_float(bp->dir.y));
-            glUniform4f(
-                gfx->sprite_shadow.uAnim,
-                1.0 / gfx->body0_base.tile_x,
-                1.0 / gfx->body0_base.tile_y,
-                (GLfloat)tile_x / gfx->body0_base.tile_x,
-                (GLfloat)tile_y / gfx->body0_base.tile_y);
-        }
-        else
-        {
-            glUniform3f(
-                gfx->sprite_mat.uPosCameraSpace,
-                qw_to_float(pos_cameraSpace.x),
-                qw_to_float(pos_cameraSpace.y),
-                qw_to_float(camera->scale));
-            glUniform2f(
-                gfx->sprite_mat.uDir,
-                qw_to_float(bp->dir.x),
-                qw_to_float(bp->dir.y));
-            glUniform4f(
-                gfx->sprite_mat.uAnim,
-                1.0 / gfx->body0_base.tile_x,
-                1.0 / gfx->body0_base.tile_y,
-                (GLfloat)tile_x / gfx->body0_base.tile_x,
-                (GLfloat)tile_y / gfx->body0_base.tile_y);
-        }
-
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+        /* Skip body part at head position */
+        if (i == 0)
+            break;
+        sprite_shadow_update_uniforms(
+            &gfx->sprite_shadow_mat,
+            &gfx->body0_base,
+            bp->pos,
+            bp->dir,
+            snake_scale(&snake->param),
+            camera);
+        sprite_shadow_draw();
     }
 
     /* head */
     if (vec_count(snake->data.bezier_points) > 0)
     {
-        int                  tile_x, tile_y;
-        struct qwpos         pos_cameraSpace;
-        struct bezier_point* bp = vec_first(snake->data.bezier_points);
+        bp = vec_first(snake->data.bezier_points);
+        sprite_shadow_bind_textures(&gfx->head0_base);
+        sprite_shadow_update_uniforms(
+            &gfx->sprite_shadow_mat,
+            &gfx->head0_base,
+            bp->pos,
+            bp->dir,
+            snake_scale(&snake->param),
+            camera);
+        sprite_shadow_draw();
 
-        /* world -> camera space */
-        pos_cameraSpace.x =
-            qw_mul(qw_sub(bp->pos.x, camera->pos.x), camera->scale);
-        pos_cameraSpace.y =
-            qw_mul(qw_sub(bp->pos.y, camera->pos.y), camera->scale);
-
-        tile_x = gfx->head0_base.frame % gfx->head0_base.tile_x;
-        tile_y = gfx->head0_base.frame / gfx->head0_base.tile_x;
-
-        if (shadow_pass)
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_base.texNM);
-        else
-        {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_base.texDiffuse);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_base.texNM);
-        }
-
-        if (shadow_pass)
-        {
-            pos_cameraSpace.x = qw_sub(
-                pos_cameraSpace.x, qw_mul(make_qw2(1, 128), camera->scale));
-            pos_cameraSpace.y = qw_sub(
-                pos_cameraSpace.y, qw_mul(make_qw2(1, 64), camera->scale));
-
-            glUniform1f(
-                gfx->sprite_shadow.uSize,
-                gfx->head0_base.scale * qw_to_float(snake_scale(&snake->param)));
-            glUniform3f(
-                gfx->sprite_shadow.uPosCameraSpace,
-                qw_to_float(pos_cameraSpace.x),
-                qw_to_float(pos_cameraSpace.y),
-                qw_to_float(camera->scale));
-            glUniform2f(
-                gfx->sprite_shadow.uDir,
-                qw_to_float(bp->dir.x),
-                qw_to_float(bp->dir.y));
-            glUniform4f(
-                gfx->sprite_shadow.uAnim,
-                1.0 / gfx->head0_base.tile_x,
-                1.0 / gfx->head0_base.tile_y,
-                (GLfloat)tile_x / gfx->head0_base.tile_x,
-                (GLfloat)tile_y / gfx->head0_base.tile_y);
-        }
-        else
-        {
-            glUniform1f(
-                gfx->sprite_mat.uSize,
-                gfx->head0_base.scale * qw_to_float(snake_scale(&snake->param)));
-            glUniform3f(
-                gfx->sprite_mat.uPosCameraSpace,
-                qw_to_float(pos_cameraSpace.x),
-                qw_to_float(pos_cameraSpace.y),
-                qw_to_float(camera->scale));
-            glUniform2f(
-                gfx->sprite_mat.uDir,
-                qw_to_float(bp->dir.x),
-                qw_to_float(bp->dir.y));
-            glUniform4f(
-                gfx->sprite_mat.uAnim,
-                1.0 / gfx->head0_base.tile_x,
-                1.0 / gfx->head0_base.tile_y,
-                (GLfloat)tile_x / gfx->head0_base.tile_x,
-                (GLfloat)tile_y / gfx->head0_base.tile_y);
-        }
-
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
-
-        if (shadow_pass)
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_gather.texNM);
-        else
-        {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_gather.texDiffuse);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, gfx->head0_gather.texNM);
-        }
-
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+        sprite_shadow_bind_textures(&gfx->head0_gather);
+        sprite_shadow_draw();
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    if (shadow_pass)
+    sprite_shadow_end_draw(gfx->width, gfx->height);
+}
+static void draw_snake(
+    const struct snake*        snake,
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar)
+{
+    int32_t              i;
+    struct bezier_point* bp;
+
+    sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
+
+    /* body parts */
+    sprite_bind_textures(&gfx->body0_base);
+    vec_enumerate_r(snake->data.bezier_points, i, bp)
     {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, gfx->width, gfx->height);
+        /* Skip body part at head position */
+        if (i == 0)
+            break;
+        sprite_update_uniforms(
+            &gfx->sprite_mat,
+            &gfx->body0_base,
+            bp->pos,
+            bp->dir,
+            snake_scale(&snake->param),
+            camera);
+        sprite_draw();
     }
+
+    /* head */
+    if (vec_count(snake->data.bezier_points) > 0)
+    {
+        bp = vec_first(snake->data.bezier_points);
+        sprite_bind_textures(&gfx->head0_base);
+        sprite_update_uniforms(
+            &gfx->sprite_mat,
+            &gfx->head0_base,
+            bp->pos,
+            bp->dir,
+            snake_scale(&snake->param),
+            camera);
+        sprite_draw();
+
+        sprite_bind_textures(&gfx->head0_gather);
+        sprite_draw();
+    }
+
+    sprite_end_draw();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1361,21 +1378,20 @@ static void gfx_gles2_draw_world(
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
     }
 
-    bmap_for_each (world->snakes, idx, snake_id, snake)
-    {
-        (void)snake_id;
-        draw_snake(snake, gfx, camera, &ar, 1);
-    }
-
-    draw_background(gfx, camera, &ar);
-    draw_food(&world->food_grid, gfx, camera, &ar, 0);
-    /* draw_0_0(gfx, camera, &ar); */
+    glBindFramebuffer(GL_FRAMEBUFFER, gfx->bg.fbo);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
-    {
-        (void)snake_id;
-        draw_snake(snake, gfx, camera, &ar, 0);
-    }
+        (void)snake_id, draw_snake_shadow(snake, gfx, camera, &ar);
+    draw_food_shadows(&world->food_grid, gfx, camera, &ar);
+
+    draw_background(world, gfx, camera, &ar);
+    draw_food(&world->food_grid, gfx, camera, &ar);
+
+    bmap_for_each (world->snakes, idx, snake_id, snake)
+        (void)snake_id, draw_snake(snake, gfx, camera, &ar);
 
     glfwSwapBuffers(gfx->window);
 }
