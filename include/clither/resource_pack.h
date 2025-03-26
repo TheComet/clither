@@ -56,6 +56,8 @@ struct resource_pack
          * layers of textures with different grid spacings. The details of how
          * they're pieced together is all part of the background shader */
         struct resource_sprite_vec* background;
+        /*! Food texture */
+        struct resource_sprite* food;
         /*! List of head parts. */
         struct resource_snake_part_vec* heads;
         /*! List of body parts. */

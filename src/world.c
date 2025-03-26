@@ -13,7 +13,7 @@ void world_init(struct world* world)
     snake_bmap_init(&world->snakes);
     food_grid_init(&world->food_grid);
     
-    world->food_count = 1000;
+    world->food_count = 10000;
     world->food_rng = 1;
     world->inner_radius = make_qw(20);
     world->ring_start = make_qw(40);
@@ -96,7 +96,6 @@ int world_respawn_food(struct world* w)
     {
         qa a = (qa)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
         qw r = (qw)(w->food_rng = hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng)));
-        r = qw_rescale(r, w->inner_radius, (1ULL<<32)-1);
         if (food_grid_add_food(&w->food_grid, make_qwposqw(
             qw_mul(qa_cos(a), r),
             qw_mul(qa_sin(a), r))) != 0)

@@ -70,6 +70,7 @@ static void resource_pack_init(struct resource_pack* pack)
     strlist_init(&pack->shaders.glsl.shadow);
     strlist_init(&pack->shaders.glsl.sprite);
     resource_sprite_vec_init(&pack->sprites.background);
+    pack->sprites.food = NULL;
     resource_snake_part_vec_init(&pack->sprites.heads);
     resource_snake_part_vec_init(&pack->sprites.bodies);
     resource_snake_part_vec_init(&pack->sprites.tails);
@@ -92,6 +93,9 @@ static void resource_pack_deinit(struct resource_pack* pack)
     vec_for_each (pack->sprites.heads, snake_part)
         resource_snake_part_deinit(snake_part);
     resource_snake_part_vec_deinit(pack->sprites.heads);
+
+    if (pack->sprites.food)
+        resource_sprite_destroy(pack->sprites.food);
 
     vec_for_each (pack->sprites.background, sprite)
         if (*sprite)
@@ -536,6 +540,22 @@ static int parse_section(
                 return -1;
         }
         return parse_section_sprite(p, *bg, path_prefix);
+    }
+
+    if (strview_eq_cstr(s->section, "food"))
+    {
+        if (pack->sprites.food != NULL)
+            return print_error(
+                p->filename,
+                p->source,
+                strspan(s->section.off, s->section.len),
+                "Section 'food' already defined!\n");
+
+        pack->sprites.food = resource_sprite_create();
+        if (pack->sprites.food == NULL)
+            return -1;
+
+        return parse_section_sprite(p, pack->sprites.food, path_prefix);
     }
 
     if (strview_eq_cstr(s->section, "snake"))

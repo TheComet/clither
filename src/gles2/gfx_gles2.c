@@ -5,6 +5,7 @@
 #include "clither/input.h"
 #include "clither/log.h"
 #include "clither/mfile.h"
+#include "clither/morton.h"
 #include "clither/resource_pack.h"
 #include "clither/resource_snake_part_vec.h"
 #include "clither/resource_sprite_vec.h"
@@ -70,6 +71,7 @@ struct sprite_tex
 {
     GLuint texDiffuse;
     GLuint texNM;
+    GLfloat scale;
     int8_t tile_x, tile_y, tile_count, frame;
 };
 
@@ -84,6 +86,7 @@ struct gfx
     struct sprite_mesh   sprite_mesh;
     struct sprite_mat    sprite_mat;
     struct sprite_shadow sprite_shadow;
+    struct sprite_tex    food;
     struct sprite_tex    head0_base;
     struct sprite_tex    head0_gather;
     struct sprite_tex    body0_base;
@@ -741,6 +744,7 @@ sprite_tex_load(struct sprite_tex* tex, const struct resource_sprite* res)
     tex->tile_x = res->tile_x;
     tex->tile_y = res->tile_y;
     tex->tile_count = res->num_frames;
+    tex->scale = res->scale;
     tex->frame = 0;
 }
 
@@ -754,6 +758,9 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         goto sprite_shadow_load_failed;
     if (sprite_mat_load(&gfx->sprite_mat, pack) < 0)
         goto sprite_mat_load_failed;
+
+    if (pack->sprites.food)
+        sprite_tex_load(&gfx->food, pack->sprites.food);
 
     if (vec_count(pack->sprites.heads) > 0)
     {
@@ -835,6 +842,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     sprite_mesh_init(&gfx->sprite_mesh);
     sprite_shadow_init(&gfx->sprite_shadow);
     sprite_mat_init(&gfx->sprite_mat);
+    sprite_tex_init(&gfx->food);
     sprite_tex_init(&gfx->head0_base);
     sprite_tex_init(&gfx->head0_gather);
     sprite_tex_init(&gfx->body0_base);
@@ -1005,6 +1013,86 @@ static void draw_background(
 }
 
 /* ------------------------------------------------------------------------- */
+static void draw_food(
+    const struct food_grid*    food_grid,
+    const struct gfx*          gfx,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar,
+    char shadow_pass)
+{
+    int32_t idx;
+    uint64_t morton;
+
+    glBindBuffer(GL_ARRAY_BUFFER, gfx->sprite_mesh.vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, uv));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->sprite_mesh.ibo);
+
+    glUseProgram(gfx->sprite_mat.program);
+    glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
+    glUniform1f(gfx->sprite_mat.uSize, gfx->food.scale);
+    glUniform1i(gfx->sprite_mat.sCol, 0);
+    glUniform1i(gfx->sprite_mat.sNM, 1);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gfx->food.texDiffuse);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, gfx->food.texNM);
+
+    bset_for_each(food_grid->morton, idx, morton)
+    {
+        int                  tile_x, tile_y;
+        struct qwpos         pos_cameraSpace;
+        struct qwpos         pos_worldSpace = morton_decode_qwpos(morton);
+
+        /* world -> camera space */
+        pos_cameraSpace.x =
+            qw_mul(qw_sub(pos_worldSpace.x, camera->pos.x), camera->scale);
+        pos_cameraSpace.y =
+            qw_mul(qw_sub(pos_worldSpace.y, camera->pos.y), camera->scale);
+
+        tile_x = gfx->food.frame % gfx->food.tile_x;
+        tile_y = (gfx->food.frame / gfx->food.tile_x) % gfx->food.tile_y;
+
+        glUniform3f(
+            gfx->sprite_mat.uPosCameraSpace,
+            qw_to_float(pos_cameraSpace.x),
+            qw_to_float(pos_cameraSpace.y),
+            qw_to_float(camera->scale));
+        glUniform2f(gfx->sprite_mat.uDir, 1.0, 0.0);
+        glUniform4f(
+            gfx->sprite_mat.uAnim,
+            1.0 / gfx->food.tile_x,
+            1.0 / gfx->food.tile_y,
+            (GLfloat)tile_x / gfx->food.tile_x,
+            (GLfloat)tile_y / gfx->food.tile_y);
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+/* ------------------------------------------------------------------------- */
 static void draw_snake(
     const struct snake*        snake,
     const struct gfx*          gfx,
@@ -1038,7 +1126,7 @@ static void draw_snake(
         glUseProgram(gfx->sprite_shadow.program);
         glUniform2f(gfx->sprite_shadow.uAspectRatio, ar->scale_x, ar->scale_y);
         glUniform1f(
-            gfx->sprite_shadow.uSize, qw_to_float(snake_scale(&snake->param)));
+            gfx->sprite_shadow.uSize, gfx->body0_base.scale * qw_to_float(snake_scale(&snake->param)));
         glUniform1iv(gfx->sprite_shadow.sNM, 4, nmUnits);
 
         glBindTexture(GL_TEXTURE_2D, gfx->body0_base.texNM);
@@ -1057,7 +1145,7 @@ static void draw_snake(
         glUseProgram(gfx->sprite_mat.program);
         glUniform2f(gfx->sprite_mat.uAspectRatio, ar->scale_x, ar->scale_y);
         glUniform1f(
-            gfx->sprite_mat.uSize, qw_to_float(snake_scale(&snake->param)));
+            gfx->sprite_mat.uSize, gfx->body0_base.scale * qw_to_float(snake_scale(&snake->param)));
         glUniform1i(gfx->sprite_mat.sCol, 0);
         glUniform1i(gfx->sprite_mat.sNM, 1);
 
@@ -1164,7 +1252,7 @@ static void draw_snake(
 
             glUniform1f(
                 gfx->sprite_shadow.uSize,
-                2 * qw_to_float(snake_scale(&snake->param)));
+                gfx->head0_base.scale * qw_to_float(snake_scale(&snake->param)));
             glUniform3f(
                 gfx->sprite_shadow.uPosCameraSpace,
                 qw_to_float(pos_cameraSpace.x),
@@ -1185,7 +1273,7 @@ static void draw_snake(
         {
             glUniform1f(
                 gfx->sprite_mat.uSize,
-                2 * qw_to_float(snake_scale(&snake->param)));
+                gfx->head0_base.scale * qw_to_float(snake_scale(&snake->param)));
             glUniform3f(
                 gfx->sprite_mat.uPosCameraSpace,
                 qw_to_float(pos_cameraSpace.x),
@@ -1239,6 +1327,10 @@ static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
     {
         frame_update = 3;
 
+        gfx->food.frame++;
+        if (gfx->food.frame >= gfx->food.tile_count)
+            gfx->food.frame = 0;
+
         gfx->head0_base.frame++;
         if (gfx->head0_base.frame >= gfx->head0_base.tile_count)
             gfx->head0_base.frame = 0;
@@ -1276,6 +1368,7 @@ static void gfx_gles2_draw_world(
     }
 
     draw_background(gfx, camera, &ar);
+    draw_food(&world->food_grid, gfx, camera, &ar, 0);
     /* draw_0_0(gfx, camera, &ar); */
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
