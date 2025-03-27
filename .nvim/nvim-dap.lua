@@ -33,7 +33,7 @@ dap.configurations.cpp = {
     request = "launch",
     program = "${workspaceFolder}/build-Debug/bin/clither",
     cwd = "${workspaceFolder}/build-Debug/bin/",
-    args = { "--ip", "localhost" },
+    args = { "--addr", "localhost" },
     stopOnEntry = false,
   },
   {

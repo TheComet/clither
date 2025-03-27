@@ -144,42 +144,58 @@ static enum token scan_next_token(struct parser* p)
 }
 
 /* ------------------------------------------------------------------------- */
-void settings_set_defaults(struct settings* s)
+void settings_server_set_defaults(struct settings_server* s)
 {
     /* [server] */
-    s->server.max_players = 600;
-    s->server.client_timeout = 5;
-    s->server.malicious_timeout = 60;
-    s->server.max_username_len = 32;
-    s->server.sim_tick_rate = 60;
-    s->server.net_tick_rate = 20;
-    strcpy(s->server.bind_addr, "");
-    strcpy(s->server.bind_port, "5555");
-    strcpy(s->server.log_prefix, "Server: ");
-
+    s->max_players = 600;
+    s->client_timeout = 5;
+    s->malicious_timeout = 60;
+    s->max_username_len = 32;
+    s->sim_tick_rate = 60;
+    s->net_tick_rate = 20;
+    strcpy(s->bind_addr, "");
+    strcpy(s->bind_port, "5555");
+    strcpy(s->log_prefix, "Server: ");
+}
+void settings_world_set_defaults(struct settings_world* s)
+{
     /* [world] */
-    s->world.food_count = 10000;
-    s->world.inner_radius = 120;
-    s->world.ring_start = 190;
-    s->world.ring_end = 255;
-
+    s->food_count = 10000;
+    s->inner_radius = 120;
+    s->ring_start = 190;
+    s->ring_end = 255;
+}
+void settings_client_set_defaults(struct settings_client* s)
+{
     /* [client] */
-    strcpy(s->client.log_prefix, "Client: ");
-    strcpy(s->client.username, "Snek :D");
-    strcpy(s->client.connect_addr, "localhost");
-    strcpy(s->client.connect_port, "5555");
-
+    strcpy(s->log_prefix, "Client: ");
+    strcpy(s->username, "Snek :D");
+    strcpy(s->connect_addr, "localhost");
+    strcpy(s->connect_port, "5555");
+}
+void settings_gfx_set_defaults(struct settings_gfx* s)
+{
     /* [gfx] */
-    s->gfx.width = 1280;
-    s->gfx.height = 960;
-    s->gfx.backend = 0;
-    s->gfx.enable = 0;
-
+    s->width = 1280;
+    s->height = 960;
+    s->backend = 0;
+    s->enable = 0;
+}
+void settings_mcd_set_defaults(struct settings_mcd* s)
+{
     /* [mcd] */
-    strcpy(s->mcd.bind_addr, "");
-    strcpy(s->mcd.bind_port, "5554");
-    strcpy(s->mcd.connect_addr, "localhost");
-    strcpy(s->mcd.connect_port, "5555");
+    strcpy(s->bind_addr, "");
+    strcpy(s->bind_port, "5554");
+    strcpy(s->connect_addr, "localhost");
+    strcpy(s->connect_port, "5555");
+}
+void settings_set_defaults(struct settings* s)
+{
+    settings_server_set_defaults(&s->server);
+    settings_world_set_defaults(&s->world);
+    settings_client_set_defaults(&s->client);
+    settings_gfx_set_defaults(&s->gfx);
+    settings_mcd_set_defaults(&s->mcd);
 }
 
 /* ------------------------------------------------------------------------- */

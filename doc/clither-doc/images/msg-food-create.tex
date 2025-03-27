@@ -5,11 +5,15 @@
     \bitheader{0-5} \\
     \bitbox{3}{pos x}
     \bitbox{3}{pos y}
+    \bitbox{1}{angle}
 \end{bytefield}
 
 \begin{itemize}
-    \item\textbf{pos x:} Q19.5 x coordinate of the food's position in world space.
-    \item\textbf{pos y:} Q19.5 y coordinate of the food's position in world space.
+    \item\textbf{pos x:} Q10.14 x coordinate of the food's position in world space.
+    \item\textbf{pos y:} Q10.14 y coordinate of the food's position in world space.
+    \item\textbf{angle:}  8-bit  angle  of  the  food.  Food angles have  a  higher
+    resolution, but since they're  only  used  for rendering, it can be transmitted
+    with less precision.
 \end{itemize}
 
 

@@ -63,6 +63,10 @@ struct settings
     struct settings_mcd    mcd;
 };
 
+void settings_server_set_defaults(struct settings_server* s);
+void settings_world_set_defaults(struct settings_world* s);
+void settings_client_set_defaults(struct settings_client* s);
+void settings_gfx_set_defaults(struct settings_gfx* s);
 void settings_set_defaults(struct settings* s);
 int  settings_apply_args(struct settings* s, const struct args* a);
 int  settings_load(struct settings* s, const char* filename);

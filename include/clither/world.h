@@ -19,9 +19,12 @@ struct world
     uint16_t           next_free_snake_id;
 };
 
-void world_init(struct world* world, const struct settings_world* settings);
+void world_init(struct world* world);
 
 void world_deinit(struct world* world);
+
+void world_update_settings(
+    struct world* world, const struct settings_world* settings);
 
 /*
  * \brief Spawn a new snake in the world at a random location and return the
@@ -47,4 +50,3 @@ void world_remove_snake(struct world* world, uint16_t snake_id);
 int world_respawn_food(struct world* w);
 
 int world_step(struct world* w, uint16_t frame_number, uint8_t sim_tick_rate);
-

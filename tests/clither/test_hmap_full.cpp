@@ -3,10 +3,10 @@
 #include <gmock/gmock.h>
 
 extern "C" {
-#include "clither/hm.h"
+#include "clither/hmap.h"
 }
 
-#define NAME         hm_full
+#define NAME         hmap_full
 #define MIN_CAPACITY 64
 
 using namespace ::testing;
@@ -24,7 +24,7 @@ enum hash_mode
     COLLIDE_WITH_SHITTY_HASH_SECOND_PROBE
 } hash_mode;
 
-struct hm_test_kvs
+struct hmap_test_kvs
 {
     char*  keys;
     float* values;
@@ -44,28 +44,29 @@ static hash32 test_hash(const char* key)
     return hash32_jenkins_oaat(key, 4);
 }
 static int test_storage_alloc(
-    struct hm_test_kvs* kvs, struct hm_test_kvs* old_kvs, int32_t capacity)
+    struct hmap_test_kvs* kvs, struct hmap_test_kvs* old_kvs, int32_t capacity)
 {
     (void)old_kvs;
     kvs->keys = (char*)mem_alloc(sizeof(char) * capacity * 16);
     kvs->values = (float*)mem_alloc(sizeof(*kvs->values) * capacity);
     return 0;
 }
-static void test_storage_free_old(struct hm_test_kvs* kvs)
+static void test_storage_free_old(struct hmap_test_kvs* kvs)
 {
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
-static void test_storage_free(struct hm_test_kvs* kvs)
+static void test_storage_free(struct hmap_test_kvs* kvs)
 {
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
-static const char* test_get_key(const struct hm_test_kvs* kvs, int32_t slot)
+static const char* test_get_key(const struct hmap_test_kvs* kvs, int32_t slot)
 {
     return &kvs->keys[slot * 16];
 }
-static void test_set_key(struct hm_test_kvs* kvs, int32_t slot, const char* key)
+static void
+test_set_key(struct hmap_test_kvs* kvs, int32_t slot, const char* key)
 {
     memcpy(&kvs->keys[slot * 16], key, 16);
 }
@@ -73,19 +74,20 @@ static int test_keys_equal(const char* k1, const char* k2)
 {
     return memcmp(k1, k2, 16) == 0;
 }
-static float* test_get_value(const struct hm_test_kvs* kvs, int32_t slot)
+static float* test_get_value(const struct hmap_test_kvs* kvs, int32_t slot)
 {
     return &kvs->values[slot];
 }
 static void
-test_set_value(struct hm_test_kvs* kvs, int32_t slot, const float* value)
+test_set_value(struct hmap_test_kvs* kvs, int32_t slot, const float* value)
 {
     kvs->values[slot] = *value;
 }
 
-HM_DECLARE_FULL(hm_test, hash32, const char*, float, 32, struct hm_test_kvs)
-HM_DEFINE_FULL(
-    hm_test,
+HMAP_DECLARE_FULL(
+    hmap_test, hash32, const char*, float, 32, struct hmap_test_kvs)
+HMAP_DEFINE_FULL(
+    hmap_test,
     hash32,
     const char*,
     float,
@@ -108,163 +110,163 @@ struct NAME : Test
     virtual void SetUp()
     {
         hash_mode = NORMAL;
-        hm_test_init(&hm);
+        hmap_test_init(&hm);
     }
 
-    virtual void TearDown() { hm_test_deinit(hm); }
+    virtual void TearDown() { hmap_test_deinit(hm); }
 
-    struct hm_test* hm;
+    struct hmap_test* hm;
 };
 
-TEST_F(NAME, null_hm_is_set)
+TEST_F(NAME, null_hmap_is_set)
 {
     EXPECT_THAT(hm, IsNull());
-    EXPECT_THAT(hm_count(hm), Eq(0));
-    EXPECT_THAT(hm_capacity(hm), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
+    EXPECT_THAT(hmap_capacity(hm), Eq(0));
 }
 
-TEST_F(NAME, deinit_null_hm_works)
+TEST_F(NAME, deinit_null_hmap_works)
 {
-    hm_test_deinit(hm);
+    hmap_test_deinit(hm);
 }
 
 TEST_F(NAME, insert_increases_slots_used)
 {
-    EXPECT_THAT(hm_count(hm), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_count(hm), Eq(1));
-    EXPECT_THAT(hm_capacity(hm), Eq(MIN_CAPACITY));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(1));
+    EXPECT_THAT(hmap_capacity(hm), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, erase_decreases_slots_used)
 {
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_count(hm), Eq(0));
-    EXPECT_THAT(hm_capacity(hm), Eq(MIN_CAPACITY));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
+    EXPECT_THAT(hmap_capacity(hm), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, insert_same_key_twice_only_works_once)
 {
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 7.6f), Eq(-1));
-    EXPECT_THAT(hm_count(hm), Eq(1));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 7.6f), Eq(-1));
+    EXPECT_THAT(hmap_count(hm), Eq(1));
 }
 
 TEST_F(NAME, insert_or_get_returns_inserted_value)
 {
     float  f = 0.0f;
     float* p = &f;
-    EXPECT_THAT(hm_test_emplace_or_get(&hm, KEY1, &p), HM_NEW);
+    EXPECT_THAT(hmap_test_emplace_or_get(&hm, KEY1, &p), HMAP_NEW);
     *p = 5.6f;
     p = &f;
-    EXPECT_THAT(hm_test_emplace_or_get(&hm, KEY1, &p), HM_EXISTS);
+    EXPECT_THAT(hmap_test_emplace_or_get(&hm, KEY1, &p), HMAP_EXISTS);
     EXPECT_THAT(f, Eq(0.0f));
     EXPECT_THAT(p, Pointee(5.6f));
-    EXPECT_THAT(hm_count(hm), Eq(1));
+    EXPECT_THAT(hmap_count(hm), Eq(1));
 }
 
 TEST_F(NAME, erasing_same_key_twice_only_works_once)
 {
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), IsNull());
-    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), IsNull());
+    EXPECT_THAT(hmap_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_ba)
 {
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_count(hm), Eq(2));
-    EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(2));
+    EXPECT_THAT(hmap_test_erase(hm, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_ab)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_count(hm), Eq(2));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(2));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_test_erase(hm, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_find_ab)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_find(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_find(hm, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_test_find(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_test_find(hm, KEY2), Pointee(3.4f));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_a_find_b)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), NotNull());
-    EXPECT_THAT(hm_test_find(hm, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), NotNull());
+    EXPECT_THAT(hmap_test_find(hm, KEY2), Pointee(3.4f));
 }
 
 TEST_F(NAME, hash_collision_insert_ab_erase_b_find_a)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_test_erase(hm, KEY2), NotNull());
-    EXPECT_THAT(hm_test_find(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_test_erase(hm, KEY2), NotNull());
+    EXPECT_THAT(hmap_test_find(hm, KEY1), Pointee(5.6f));
 }
 
 TEST_F(NAME, hash_collision_insert_at_tombstone)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_count(hm), Eq(2));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
-    EXPECT_THAT(hm_count(hm), Eq(1));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(2));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
+    EXPECT_THAT(hmap_count(hm), Eq(1));
     EXPECT_THAT(
-        hm_test_insert_new(&hm, KEY1, 5.6f),
+        hmap_test_insert_new(&hm, KEY1, 5.6f),
         Eq(0)); // should insert at tombstone location
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hm_count(hm), Eq(0));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_test_erase(hm, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_count(hm), Eq(0));
 }
 
 TEST_F(NAME, hash_collision_insert_at_tombstone_with_existing_key)
 {
     hash_mode = SHITTY;
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hm_count(hm), Eq(2));
-    EXPECT_THAT(hm_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
-    EXPECT_THAT(hm_count(hm), Eq(1));
-    EXPECT_THAT(hm_test_insert_new(&hm, KEY2, 5.6f), Eq(-1));
-    EXPECT_THAT(hm_count(hm), Eq(1));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hm), Eq(2));
+    EXPECT_THAT(hmap_test_erase(hm, KEY1), Pointee(5.6f)); // creates tombstone
+    EXPECT_THAT(hmap_count(hm), Eq(1));
+    EXPECT_THAT(hmap_test_insert_new(&hm, KEY2, 5.6f), Eq(-1));
+    EXPECT_THAT(hmap_count(hm), Eq(1));
 }
 
 TEST_F(NAME, remove_probing_sequence_scenario_1)
 {
     // Creates a tombstone in the probing sequence to KEY2
     hash_mode = SHITTY;
-    hm_test_insert_new(&hm, KEY1, 5.6f);
-    hm_test_insert_new(&hm, KEY2, 3.4f);
-    hm_test_erase(hm, KEY1);
+    hmap_test_insert_new(&hm, KEY1, 5.6f);
+    hmap_test_insert_new(&hm, KEY2, 3.4f);
+    hmap_test_erase(hm, KEY1);
 
     // Inserts a different hash into where the tombstone is
     hash_mode = COLLIDE_WITH_SHITTY_HASH;
-    hm_test_insert_new(&hm, KEY1, 5.6f);
+    hmap_test_insert_new(&hm, KEY1, 5.6f);
     hash_mode = SHITTY;
 
     // Does this cut off access to KEY2?
-    /*ASSERT_THAT(hm_test_find(hm, KEY2), NotNull());
-    EXPECT_THAT(hm_test_find(hm, KEY2), Pointee(3.4f));*/
-    EXPECT_THAT(hm_test_erase(hm, KEY2), Pointee(3.4f));
+    /*ASSERT_THAT(hmap_test_find(hm, KEY2), NotNull());
+    EXPECT_THAT(hmap_test_find(hm, KEY2), Pointee(3.4f));*/
+    EXPECT_THAT(hmap_test_erase(hm, KEY2), Pointee(3.4f));
 }
 
 TEST_F(NAME, remove_probing_sequence_scenario_2)
@@ -272,21 +274,21 @@ TEST_F(NAME, remove_probing_sequence_scenario_2)
     // First key is inserted directly, next 2 collide and are inserted along the
     // probing sequence
     hash_mode = SHITTY;
-    hm_test_insert_new(&hm, KEY1, 5.6f);
-    hm_test_insert_new(&hm, KEY2, 3.4f);
-    hm_test_insert_new(&hm, KEY3, 1.8f);
+    hmap_test_insert_new(&hm, KEY1, 5.6f);
+    hmap_test_insert_new(&hm, KEY2, 3.4f);
+    hmap_test_insert_new(&hm, KEY3, 1.8f);
 
     // Insert a key with a different hash that collides with the slot of KEY3
     hash_mode = COLLIDE_WITH_SHITTY_HASH_SECOND_PROBE;
-    hm_test_insert_new(&hm, KEY4, 8.7f);
+    hmap_test_insert_new(&hm, KEY4, 8.7f);
 
     // Erase KEY3
     hash_mode = SHITTY; // restore shitty hash
-    hm_test_erase(hm, KEY3);
+    hmap_test_erase(hm, KEY3);
 
     // Does this cut off access to KEY4?
     hash_mode = COLLIDE_WITH_SHITTY_HASH_SECOND_PROBE;
-    EXPECT_THAT(hm_test_erase(hm, KEY4), Pointee(8.7f));
+    EXPECT_THAT(hmap_test_erase(hm, KEY4), Pointee(8.7f));
 }
 
 TEST_F(NAME, rehash_test)
@@ -297,7 +299,7 @@ TEST_F(NAME, rehash_test)
     {
         memset(key, 0, sizeof key);
         sprintf(key, "%d", i);
-        ASSERT_THAT(hm_test_insert_new(&hm, key, value), Eq(0));
+        ASSERT_THAT(hmap_test_insert_new(&hm, key, value), Eq(0));
     }
 
     value = 0;
@@ -305,7 +307,7 @@ TEST_F(NAME, rehash_test)
     {
         memset(key, 0, sizeof key);
         sprintf(key, "%d", i);
-        EXPECT_THAT(hm_test_erase(hm, key), Pointee(value));
+        EXPECT_THAT(hmap_test_erase(hm, key), Pointee(value));
     }
 }
 
@@ -315,8 +317,8 @@ TEST_F(NAME, foreach_empty)
     float*    value;
     int       counter = 0;
     int       slot;
-    hm_for_each (hm, slot, key, value)
-        (void)slot, (void)key, (void)value, counter++;
+    hmap_for_each(hm, slot, key, value)(void) slot, (void)key, (void)value,
+        counter++;
     EXPECT_THAT(counter, Eq(0));
 }
 
@@ -327,14 +329,14 @@ TEST_F(NAME, foreach)
     {
         memset(key, 0, sizeof key);
         sprintf(key, "%d", i);
-        ASSERT_THAT(hm_test_insert_new(&hm, key, float(i)), Eq(0));
+        ASSERT_THAT(hmap_test_insert_new(&hm, key, float(i)), Eq(0));
     }
 
-    auto erase_key = [&key](struct hm_test* hm, const char* k)
+    auto erase_key = [&key](struct hmap_test* hm, const char* k)
     {
         memset(key, 0, sizeof(key));
         memcpy(key, k, strlen(k));
-        return hm_test_erase(hm, key);
+        return hmap_test_erase(hm, key);
     };
 
     ASSERT_THAT(erase_key(hm, "5"), NotNull());
@@ -348,7 +350,7 @@ TEST_F(NAME, foreach)
     {
         memset(key, 0, sizeof key);
         sprintf(key, "%d", i);
-        ASSERT_THAT(hm_test_insert_new(&hm, key, float(i)), Eq(0));
+        ASSERT_THAT(hmap_test_insert_new(&hm, key, float(i)), Eq(0));
     }
 
     std::unordered_map<float, int> expected_values = {
@@ -371,13 +373,13 @@ TEST_F(NAME, foreach)
     const char* k;
     float*      value;
     int         slot;
-    hm_for_each_full (hm, slot, k, value, test_get_key, test_get_value)
+    hmap_for_each_full(hm, slot, k, value, test_get_key, test_get_value)
     {
         (void)k;
         expected_values[*value] += 1;
     }
 
-    EXPECT_THAT(hm_count(hm), Eq(14));
+    EXPECT_THAT(hmap_count(hm), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));
     for (auto it = expected_values.begin(); it != expected_values.end(); ++it)
         EXPECT_THAT(it->second, Eq(1)) << it->first;

@@ -5,11 +5,11 @@
 #include "clither/log.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
-#include "clither/net_addr_hm.h"
+#include "clither/net_addr_hmap.h"
 #include "clither/proximity_state_bmap.h"
 #include "clither/server.h"
 #include "clither/server_client.h"
-#include "clither/server_client_hm.h"
+#include "clither/server_client_hmap.h"
 #include "clither/server_instance.h"
 #include "clither/server_instance_bmap.h"
 #include "clither/settings.h"
@@ -41,7 +41,7 @@ static void server_client_remove(
     /* Other clients might still have this client in their proximity list. If
      * so, we need to remove this client and also send MSG_SNAKE_DESTROY so all
      * other clients destroy the snake. */
-    hm_for_each (server->clients, idx, other_addr, other_client)
+    hmap_for_each(server->clients, idx, other_addr, other_client)
     {
         struct proximity_state* prox;
         (void)idx, (void)other_addr;
@@ -60,7 +60,7 @@ static void server_client_remove(
 
     world_remove_snake(world, client->snake_id);
     server_client_deinit(client);
-    server_client_hm_erase(server->clients, addr);
+    server_client_hmap_erase(server->clients, addr);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -71,7 +71,7 @@ static void mark_client_as_malicious_and_drop(
     struct world*          world,
     int                    timeout)
 {
-    net_addr_hm_insert_update(&server->malicious_clients, addr, timeout);
+    net_addr_hmap_insert_update(&server->malicious_clients, addr, timeout);
     server_client_remove(server, world, addr, client);
 }
 
@@ -83,9 +83,9 @@ int server_init(
     if (server->udp_sock < 0)
         return -1;
 
-    server_client_hm_init(&server->clients);
-    net_addr_hm_init(&server->malicious_clients);
-    net_addr_hm_init(&server->banned_clients);
+    server_client_hmap_init(&server->clients);
+    net_addr_hmap_init(&server->malicious_clients);
+    net_addr_hmap_init(&server->banned_clients);
 
     return 0;
 }
@@ -99,12 +99,12 @@ void server_deinit(struct server* server)
 
     net_close(server->udp_sock);
 
-    net_addr_hm_deinit(server->banned_clients);
-    net_addr_hm_deinit(server->malicious_clients);
+    net_addr_hmap_deinit(server->banned_clients);
+    net_addr_hmap_deinit(server->malicious_clients);
 
-    server_client_hm_for_each (server->clients, slot, addr, client)
-        (void)addr, server_client_deinit(client);
-    server_client_hm_deinit(server->clients);
+    server_client_hmap_for_each(server->clients, slot, addr, client)(void) addr,
+        server_client_deinit(client);
+    server_client_hmap_deinit(server->clients);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -198,7 +198,7 @@ int server_send_pending_data(struct server* server, struct world* world)
     struct server_client*  client;
     struct append_msgs_ctx ctx;
 
-    server_client_hm_for_each (server->clients, slot, addr, client)
+    server_client_hmap_for_each(server->clients, slot, addr, client)
     {
         /* Append unreliable messages first */
         ctx.len = 0;
@@ -236,9 +236,9 @@ int server_update_snakes_in_range(
     struct server_client*  other_client;
 
     /* TODO: O(n^2) */
-    server_client_hm_for_each (server->clients, slot, addr, client)
+    server_client_hmap_for_each(server->clients, slot, addr, client)
     {
-        server_client_hm_for_each (
+        server_client_hmap_for_each(
             server->clients, other_slot, other_addr, other_client)
         {
             struct snake* snake;
@@ -310,7 +310,7 @@ int server_queue_snake_data(
     struct server_client*  client;
 
     /* Send back real position of client snake's head */
-    server_client_hm_for_each (server->clients, slot, addr, client)
+    server_client_hmap_for_each(server->clients, slot, addr, client)
     {
         struct snake* snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL), (void)addr;
@@ -326,7 +326,7 @@ int server_queue_snake_data(
     }
 
     /* Queue bezier knots of all snakes in proximity */
-    server_client_hm_for_each (server->clients, slot, addr, client)
+    server_client_hmap_for_each(server->clients, slot, addr, client)
     {
         int16_t                 prox_idx;
         uint16_t                snake_id;
@@ -410,10 +410,11 @@ enum process_message_result
 };
 static enum process_message_result process_message(
     struct server*                server,
-    const struct settings_server* settings,
+    const struct settings_server* settings_server,
+    struct world*                 world,
+    const struct settings_world*  settings_world,
     struct server_client*         client,
     const struct net_addr*        addr,
-    struct world*                 world,
     enum msg_type                 msg_type,
     const uint8_t*                msg_data,
     uint8_t                       msg_len,
@@ -429,7 +430,7 @@ static enum process_message_result process_message(
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
         case MSG_JOIN_REQUEST: {
-            if (hm_count(server->clients) + 1 > settings->max_players)
+            if (hmap_count(server->clients) + 1 > settings_server->max_players)
             {
                 struct net_udp_packet pkt;
                 struct msg* msg = msg_join_deny_server_full("Server full");
@@ -442,7 +443,8 @@ static enum process_message_result process_message(
                 return PROCESS_MESSAGE_OK;
             }
 
-            if (pp.join_request.username_len > settings->max_username_len)
+            if (pp.join_request.username_len >
+                settings_server->max_username_len)
             {
                 struct net_udp_packet pkt;
                 struct msg*           msg =
@@ -463,14 +465,14 @@ static enum process_message_result process_message(
                 uint16_t      snake_id;
                 log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
-                client = server_client_hm_emplace_new(&server->clients, addr);
+                client = server_client_hmap_emplace_new(&server->clients, addr);
                 if (client == NULL)
                     return PROCESS_MESSAGE_OOM;
 
                 snake_id = world_spawn_snake(world, pp.join_request.username);
                 if (snake_id == 0)
                 {
-                    server_client_hm_erase(server->clients, addr);
+                    server_client_hmap_erase(server->clients, addr);
                     return PROCESS_MESSAGE_OOM;
                 }
 
@@ -484,8 +486,8 @@ static enum process_message_result process_message(
                     client,
                     snake_id,
                     frame_number,
-                    settings->sim_tick_rate,
-                    settings->net_tick_rate);
+                    settings_server->sim_tick_rate,
+                    settings_server->net_tick_rate);
             }
 
             /* (Re-)send join accept response */
@@ -495,10 +497,13 @@ static enum process_message_result process_message(
                 snake = snake_bmap_find(world->snakes, client->snake_id);
                 CLITHER_DEBUG_ASSERT(snake != NULL);
                 response = msg_join_accept(
-                    settings->sim_tick_rate,
-                    settings->net_tick_rate,
                     pp.join_request.frame,
                     frame_number,
+                    settings_server->sim_tick_rate,
+                    settings_server->net_tick_rate,
+                    settings_world->inner_radius,
+                    settings_world->ring_start,
+                    settings_world->ring_end,
                     client->snake_id,
                     &snake->head.pos);
                 if (msg_vec_push(&client->pending_msgs, response) != 0)
@@ -531,7 +536,8 @@ static enum process_message_result process_message(
                 break;
             }
 
-            granularity = settings->sim_tick_rate / settings->net_tick_rate;
+            granularity =
+                settings_server->sim_tick_rate / settings_server->net_tick_rate;
 
             /*
              * Measure how many frames are in the client's command
@@ -654,17 +660,18 @@ static enum process_message_result process_message(
     }
 
     mark_client_as_malicious_and_drop(
-        server, addr, client, world, settings->malicious_timeout);
+        server, addr, client, world, settings_server->malicious_timeout);
     return PROCESS_MESSAGE_CLIENT_DROPPED;
 }
 
 /* ------------------------------------------------------------------------- */
 static int unpack_packet(
     struct server*                server,
-    const struct settings_server* settings,
+    const struct settings_server* settings_server,
+    struct world*                 world,
+    const struct settings_world*  settings_world,
     struct server_client*         client,
     const struct net_addr*        client_addr,
-    struct world*                 world,
     const uint8_t*                udp_buf,
     int                           udp_len,
     uint16_t                      frame_number)
@@ -698,7 +705,7 @@ static int unpack_packet(
                 client_addr,
                 client,
                 world,
-                settings->malicious_timeout);
+                settings_server->malicious_timeout);
             break;
         }
 
@@ -718,10 +725,11 @@ static int unpack_packet(
 
         switch (process_message(
             server,
-            settings,
+            settings_server,
+            world,
+            settings_world,
             client,
             client_addr,
-            world,
             type,
             msg,
             msg_len,
@@ -741,8 +749,9 @@ static int unpack_packet(
 /* ------------------------------------------------------------------------- */
 int server_recv(
     struct server*                server,
-    const struct settings_server* settings,
+    const struct settings_server* settings_server,
     struct world*                 world,
+    const struct settings_world*  settings_world,
     uint16_t                      frame_number)
 {
     uint8_t                udp_buf[NET_MAX_UDP_PACKET_SIZE];
@@ -755,12 +764,12 @@ int server_recv(
     log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
-    server_client_hm_for_each (server->clients, slot, server_addr, client)
+    server_client_hmap_for_each(server->clients, slot, server_addr, client)
     {
         client->timeout_counter++;
 
         if (client->timeout_counter >
-            settings->client_timeout * settings->net_tick_rate)
+            settings_server->client_timeout * settings_server->net_tick_rate)
         {
             struct net_addr_str ipstr;
             net_addr_to_str(&ipstr, server_addr);
@@ -770,7 +779,8 @@ int server_recv(
     }
 
     /* Update malicious client timeouts */
-    net_addr_hm_for_each (server->malicious_clients, slot, server_addr, timeout)
+    net_addr_hmap_for_each(
+        server->malicious_clients, slot, server_addr, timeout)
     {
         struct net_addr_str ipstr;
 
@@ -779,7 +789,7 @@ int server_recv(
 
         net_addr_to_str(&ipstr, server_addr);
         log_info("Client %s removed from malicious list\n", ipstr.cstr);
-        net_addr_hm_erase(server->malicious_clients, server_addr);
+        net_addr_hmap_erase(server->malicious_clients, server_addr);
     }
 
     /* We may need to read more than one UDP packet */
@@ -798,17 +808,18 @@ int server_recv(
         /*
          * If we received a packet from a banned client, ignore packet
          */
-        if (net_addr_hm_find(server->banned_clients, &client_addr))
+        if (net_addr_hmap_find(server->banned_clients, &client_addr))
             continue;
 
         /*
          * If we received a packet from a potentially malicious client,
          * increase their timeout
          */
-        timeout = net_addr_hm_find(server->malicious_clients, &client_addr);
+        timeout = net_addr_hmap_find(server->malicious_clients, &client_addr);
         if (timeout != NULL)
         {
-            *timeout += settings->malicious_timeout * settings->net_tick_rate;
+            *timeout += settings_server->malicious_timeout *
+                        settings_server->net_tick_rate;
             continue;
         }
 
@@ -816,16 +827,17 @@ int server_recv(
          * If we received a packet from a registered client, reset their timeout
          * counter
          */
-        client = server_client_hm_find(server->clients, &client_addr);
+        client = server_client_hmap_find(server->clients, &client_addr);
         if (client != NULL)
             client->timeout_counter = 0;
 
         if (unpack_packet(
                 server,
-                settings,
+                settings_server,
+                world,
+                settings_world,
                 client,
                 &client_addr,
-                world,
                 udp_buf,
                 udp_len,
                 frame_number) != 0)

@@ -10,16 +10,16 @@
 #include <stddef.h>
 
 /* ------------------------------------------------------------------------- */
-void world_init(struct world* world, const struct settings_world* settings)
+void world_init(struct world* world)
 {
     snake_bmap_init(&world->snakes);
     food_grid_init(&world->food_grid);
 
-    world->food_count = settings->food_count;
+    world->food_count = 0;
     world->food_rng = 1;
-    world->inner_radius = make_qw(settings->inner_radius);
-    world->ring_start = make_qw(settings->ring_start);
-    world->ring_end = make_qw(settings->ring_end);
+    world->inner_radius = 0;
+    world->ring_start = 0;
+    world->ring_end = 0;
     world->next_free_snake_id = 1;
 }
 
@@ -33,6 +33,16 @@ void world_deinit(struct world* world)
         (void)uid, snake_deinit(snake);
     snake_bmap_deinit(world->snakes);
     food_grid_deinit(&world->food_grid);
+}
+
+/* ------------------------------------------------------------------------- */
+void world_update_settings(
+    struct world* world, const struct settings_world* settings)
+{
+    world->food_count = settings->food_count;
+    world->inner_radius = make_qw(settings->inner_radius);
+    world->ring_start = make_qw(settings->ring_start);
+    world->ring_end = make_qw(settings->ring_end);
 }
 
 /* ------------------------------------------------------------------------- */

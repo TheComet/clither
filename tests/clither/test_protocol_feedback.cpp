@@ -5,7 +5,7 @@ extern "C" {
 #include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/server.h"
-#include "clither/server_client_hm.h"
+#include "clither/server_client_hmap.h"
 #include "clither/settings.h"
 #include "clither/snake_bmap.h"
 #include "clither/world.h"
@@ -31,8 +31,8 @@ public:
         ASSERT_THAT(server_init(&sv, "", "5555"), Eq(0));
         settings_set_defaults(&settings);
         client_init(&cl);
-        world_init(&cl_world, &settings.world);
-        world_init(&sv_world, &settings.world);
+        world_init(&cl_world);
+        world_init(&sv_world);
         cl_cmd = cmd_default();
     }
 
@@ -102,7 +102,10 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     uint16_t sv_frame = 32;
     ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
-    ASSERT_THAT(server_recv(&sv, &settings.server, &sv_world, sv_frame), Eq(0));
+    ASSERT_THAT(
+        server_recv(
+            &sv, &settings.server, &sv_world, &settings.world, sv_frame),
+        Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
@@ -125,7 +128,8 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
         msg_commands(&cl.pending_msgs, &cl_snake->cmdq);
         client_send_pending_data(&cl);
 
-        server_recv(&sv, &settings.server, &sv_world, sv_frame);
+        server_recv(
+            &sv, &settings.server, &sv_world, &settings.world, sv_frame);
         SimServer(sv_frame++);
         SimServer(sv_frame++);
         SimServer(sv_frame);
@@ -137,7 +141,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     int16_t                slot;
     const struct net_addr* addr;
     struct server_client*  sv_client;
-    server_client_hm_for_each (sv.clients, slot, addr, sv_client)
+    server_client_hmap_for_each (sv.clients, slot, addr, sv_client)
     {
         (void)slot;
         (void)addr;
@@ -149,7 +153,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     while (sv_frame <= sv_hold_until)
         RunServerClient();
 
-    server_client_hm_for_each (sv.clients, slot, addr, sv_client)
+    server_client_hmap_for_each (sv.clients, slot, addr, sv_client)
     {
         (void)slot;
         (void)addr;

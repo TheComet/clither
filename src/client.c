@@ -256,8 +256,9 @@ static struct client_recv_result process_message(
         case MSG_JOIN_REQUEST: break;
 
         case MSG_JOIN_ACCEPT: {
-            struct snake* snake;
-            uint16_t      rtt;
+            struct settings_world settings_world;
+            struct snake*         snake;
+            uint16_t              rtt;
 
             if (client->state != CLIENT_JOINING)
                 return client_recv_ok();
@@ -325,6 +326,13 @@ static struct client_recv_result process_message(
                 rtt,
                 pp.join_accept.spawn.x,
                 pp.join_accept.spawn.y);
+
+            /* Apply world settings from server */
+            settings_world_set_defaults(&settings_world);
+            settings_world.inner_radius = pp.join_accept.world_inner_radius;
+            settings_world.ring_start = pp.join_accept.world_ring_start;
+            settings_world.ring_end = pp.join_accept.world_ring_end;
+            world_update_settings(world, &settings_world);
 
             /* Server may also be running on a different tick rate */
             client->sim_tick_rate = pp.join_accept.sim_tick_rate;
@@ -609,9 +617,7 @@ client_recv(struct client* client, struct world* world)
 #if defined(CLITHER_CLIENT)
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx,
-    const struct settings_world* settings_world) /* TODO: Remove once networking
-                                                    for food is implemented */
+    const struct settings_gfx*    settings_gfx)
 {
     struct world                world;
     struct input                input;
@@ -663,8 +669,7 @@ void* client_run(
     input_init(&input);
     camera_init(&camera);
     cmd = cmd_default();
-    world_init(&world, settings_world);
-    world_respawn_food(&world);
+    world_init(&world);
 
     log_info("Client started\n");
 

@@ -34,7 +34,8 @@ void* server_instance_run(const void* args)
     log_set_prefix(log_prefix);
     log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
-    world_init(&world, instance->settings_world);
+    world_init(&world);
+    world_update_settings(&world, instance->settings_world);
     if (world_respawn_food(&world) != 0)
         goto world_spawn_food_failed;
 
@@ -57,8 +58,11 @@ void* server_instance_run(const void* args)
         if (net_update)
         {
             if (server_recv(
-                    &server, instance->settings_server, &world, frame_number) !=
-                0)
+                    &server,
+                    instance->settings_server,
+                    &world,
+                    instance->settings_world,
+                    frame_number) != 0)
                 break;
         }
 

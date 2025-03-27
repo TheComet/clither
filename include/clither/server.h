@@ -3,18 +3,19 @@
 #include "clither/q.h"
 
 struct net_addr;
+struct net_addr_hmap;
+struct server_client_hmap;
 struct settings;
+struct settings_server;
+struct settings_world;
 struct server_client;
 struct world;
-struct server_client_hm;
-struct settings_server;
-struct net_addr_hm;
 
 struct server
 {
-    struct server_client_hm* clients;
-    struct net_addr_hm*      malicious_clients;
-    struct net_addr_hm*      banned_clients;
+    struct server_client_hmap* clients;
+    struct net_addr_hmap*      malicious_clients;
+    struct net_addr_hmap*      banned_clients;
 
     int udp_sock;
 };
@@ -54,8 +55,9 @@ int server_send_pending_data(struct server* server, struct world* world);
  */
 int server_recv(
     struct server*                server,
-    const struct settings_server* settings,
+    const struct settings_server* settings_server,
     struct world*                 world,
+    const struct settings_world*  settings_world,
     uint16_t                      frame_number);
 
 void* server_run(const void* args);

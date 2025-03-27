@@ -1,10 +1,10 @@
 #pragma once
 
+#include "clither/cmd_queue.h"
 #include "clither/q.h"
-#include "clither/snake.h"
 #include <stdint.h>
 
-struct food_cluster;
+struct food;
 struct snake;
 struct msg_vec;
 
@@ -64,6 +64,9 @@ union parsed_payload
         uint16_t     server_frame;
         uint8_t      sim_tick_rate;
         uint8_t      net_tick_rate;
+        uint8_t      world_inner_radius;
+        uint8_t      world_ring_start;
+        uint8_t      world_ring_end;
     } join_accept;
 
     struct
@@ -139,6 +142,27 @@ union parsed_payload
         uint16_t snake_id;
         int16_t  knot_idx;
     } knot_ack;
+
+    struct
+    {
+        struct qwpos pos;
+        struct qwpos dir;
+    } food_create;
+
+    struct
+    {
+        struct qwpos pos;
+    } food_create_ack;
+
+    struct
+    {
+        struct qwpos pos;
+    } food_destroy;
+
+    struct
+    {
+        struct qwpos pos;
+    } food_destroy_ack;
 };
 
 int msg_parse_payload(
@@ -158,10 +182,13 @@ struct msg* msg_join_request(
     uint16_t protocol_version, uint16_t frame_number, const char* username);
 
 struct msg* msg_join_accept(
+    uint16_t      client_frame,
+    uint16_t      server_frame,
     uint8_t       sim_tick_rate,
     uint8_t       net_tick_rate,
-    uint16_t      client_frame_number,
-    uint16_t      server_frame_number,
+    uint8_t       world_inner_radius,
+    uint8_t       world_ring_start,
+    uint8_t       world_ring_end,
     uint16_t      snake_id,
     struct qwpos* spawn_pos);
 
@@ -206,5 +233,7 @@ struct msg* msg_knot(
     uint8_t      len_forwards);
 struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx);
 
-struct msg*
-msg_food_cluster_create(const struct food_cluster* fc, uint16_t frame_number);
+struct msg* msg_food_create(struct qwpos pos, struct qwpos dir);
+struct msg* msg_food_create_ack(struct qwpos pos);
+struct msg* msg_food_destroy(struct qwpos pos);
+struct msg* msg_food_destroy_ack(struct qwpos pos);

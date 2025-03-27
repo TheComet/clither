@@ -84,7 +84,9 @@ enum bset_status
      * function.                                                               \
      */                                                                        \
     int prefix##_retain(                                                       \
-        struct prefix* v, int (*on_element)(K key, void* user), void* user);   \
+        struct prefix* bset,                                                   \
+        int (*on_element)(K key, void* user),                                  \
+        void* user);                                                           \
                                                                                \
     /*!                                                                        \
      * @brief Finds the specified key.                                         \

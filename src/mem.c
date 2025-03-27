@@ -1,7 +1,7 @@
 #include "clither/backtrace.h"
 #include "clither/cli_colors.h"
 #include "clither/hash.h"
-#include "clither/hm.h"
+#include "clither/hmap.h"
 #include "clither/log.h"
 #include "clither/mem.h"
 #include <assert.h>
@@ -22,15 +22,16 @@ struct report_info
 #endif
 };
 
-HM_DECLARE_HASH(report_hm, hash32, uintptr_t, struct report_info, 32)
-HM_DEFINE_HASH(report_hm, hash32, uintptr_t, struct report_info, 32, hash32_aligned_ptr)
+HMAP_DECLARE_HASH(report_hmap, hash32, uintptr_t, struct report_info, 32)
+HMAP_DEFINE_HASH(
+    report_hmap, hash32, uintptr_t, struct report_info, 32, hash32_aligned_ptr)
 
 struct state
 {
-    struct report_hm* report;
-    int               allocations;
-    int               deallocations;
-    unsigned          ignore_malloc : 1;
+    struct report_hmap* report;
+    int                 allocations;
+    int                 deallocations;
+    unsigned            ignore_malloc : 1;
 };
 
 static CLITHER_THREADLOCAL struct state state;
@@ -40,7 +41,7 @@ void mem_init_threadlocal(void)
     state.allocations = 0;
     state.deallocations = 0;
 
-    report_hm_init(&state.report);
+    report_hmap_init(&state.report);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -90,7 +91,7 @@ static void track_allocation(uintptr_t addr, int size)
 
     /* insert info into hashmap */
     state.ignore_malloc = 1;
-    info = report_hm_emplace_new(&state.report, addr);
+    info = report_hmap_emplace_new(&state.report, addr);
     state.ignore_malloc = 0;
     if (info == NULL)
     {
@@ -132,7 +133,7 @@ static void track_deallocation(uintptr_t addr, const char* free_type)
         return;
 
     /* find matching allocation and remove from hashmap */
-    info = report_hm_erase(state.report, addr);
+    info = report_hmap_erase(state.report, addr);
     if (info)
     {
 #if defined(CLITHER_BACKTRACE)
@@ -164,7 +165,7 @@ static void acquire(uintptr_t addr, int size)
 
     /* insert info into hashmap */
     state.ignore_malloc = 1;
-    info = report_hm_emplace_new(&state.report, addr);
+    info = report_hmap_emplace_new(&state.report, addr);
     state.ignore_malloc = 0;
     if (info == NULL)
     {
@@ -199,7 +200,7 @@ static int release(uintptr_t addr)
     state.deallocations++;
 
     /* find matching allocation and remove from hashmap */
-    info = report_hm_erase(state.report, addr);
+    info = report_hmap_erase(state.report, addr);
     if (info)
     {
 #if defined(CLITHER_BACKTRACE)
@@ -311,7 +312,7 @@ int mem_deinit_threadlocal(void)
     uintptr_t           addr;
     struct report_info* info;
     int32_t             slot;
-    hm_for_each (state.report, slot, addr, info)
+    hmap_for_each(state.report, slot, addr, info)
     {
         (void)addr;
         fprintf(
@@ -342,7 +343,7 @@ int mem_deinit_threadlocal(void)
     }
 
     state.ignore_malloc = 1;
-    report_hm_deinit(state.report);
+    report_hmap_deinit(state.report);
     state.ignore_malloc = 0;
 
     /* overall report */

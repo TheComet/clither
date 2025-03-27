@@ -1,11 +1,8 @@
-#include "clither/bezier.h"
-#include "clither/bezier_knot_rb.h"
 #include "clither/cmd.h"
 #include "clither/log.h"
 #include "clither/mem.h"
 #include "clither/msg.h"
 #include "clither/msg_vec.h"
-#include "clither/snake.h"
 #include "clither/wrap.h"
 #include <assert.h>
 #include <stddef.h>
@@ -131,7 +128,7 @@ int msg_parse_payload(
         }
 
         case MSG_JOIN_ACCEPT: {
-            if (payload_len < 14)
+            if (payload_len < 17)
             {
                 log_warn("MSG_JOIN_ACCEPT payload is too small\n");
                 return -1;
@@ -139,23 +136,28 @@ int msg_parse_payload(
 
             pp->join_accept.sim_tick_rate = payload[0];
             pp->join_accept.net_tick_rate = payload[1];
+
+            pp->join_accept.world_inner_radius = payload[2];
+            pp->join_accept.world_ring_start = payload[3];
+            pp->join_accept.world_ring_end = payload[4];
+
             pp->join_accept.client_frame =
-                (payload[2] << 8) | (payload[3] << 0);
+                (payload[5] << 8) | (payload[6] << 0);
             pp->join_accept.server_frame =
-                (payload[4] << 8) | (payload[5] << 0);
-            pp->join_accept.snake_id = (payload[6] << 8) | (payload[7] << 0);
+                (payload[7] << 8) | (payload[8] << 0);
+            pp->join_accept.snake_id = (payload[9] << 8) | (payload[10] << 0);
             pp->join_accept.spawn.x =
-                (payload[8] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[8] << 16) |
-                (payload[9] << 8) | (payload[10] << 0);
-            pp->join_accept.spawn.y =
                 (payload[11] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[11] << 16) |
                 (payload[12] << 8) | (payload[13] << 0);
+            pp->join_accept.spawn.y =
+                (payload[14] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[14] << 16) |
+                (payload[15] << 8) | (payload[16] << 0);
             return type;
         }
 
@@ -410,10 +412,102 @@ int msg_parse_payload(
             return type;
         }
 
-        case MSG_FOOD_CREATE: break;
-        case MSG_FOOD_CREATE_ACK: break;
-        case MSG_FOOD_DESTROY: break;
-        case MSG_FOOD_DESTROY_ACK: break;
+        case MSG_FOOD_CREATE: {
+            qa a;
+            if (payload_len < 7)
+            {
+                log_warn("MSG_FOOD_CREATE: Payload is too small\n");
+                return -1;
+            }
+
+            pp->food_create.pos.x =
+                (payload[0] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[0] << 16) |
+                (payload[1] << 8) | (payload[2] << 0);
+            pp->food_create.pos.y =
+                (payload[3] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[3] << 16) |
+                (payload[4] << 8) | (payload[5] << 0);
+
+            a = u8_to_qa(payload[6]);
+            pp->food_create.dir.x = qa_cos(a);
+            pp->food_create.dir.y = qa_sin(a);
+
+            return type;
+        }
+
+        case MSG_FOOD_CREATE_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn("MSG_FOOD_CREATE_ACK: Payload is too small\n");
+                return -1;
+            }
+
+            pp->food_create_ack.pos.x =
+                (payload[0] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[0] << 16) |
+                (payload[1] << 8) | (payload[2] << 0);
+            pp->food_create_ack.pos.y =
+                (payload[3] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[3] << 16) |
+                (payload[4] << 8) | (payload[5] << 0);
+
+            return type;
+        }
+
+        case MSG_FOOD_DESTROY: {
+            if (payload_len < 2)
+            {
+                log_warn("MSG_FOOD_DESTROY: Payload is too small\n");
+                return -1;
+            }
+
+            pp->food_create_ack.pos.x =
+                (payload[0] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[0] << 16) |
+                (payload[1] << 8) | (payload[2] << 0);
+            pp->food_create_ack.pos.y =
+                (payload[3] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[3] << 16) |
+                (payload[4] << 8) | (payload[5] << 0);
+
+            return type;
+        }
+
+        case MSG_FOOD_DESTROY_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn("MSG_FOOD_DESTROY_ACK: Payload is too small\n");
+                return -1;
+            }
+
+            pp->food_create_ack.pos.x =
+                (payload[0] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[0] << 16) |
+                (payload[1] << 8) | (payload[2] << 0);
+            pp->food_create_ack.pos.y =
+                (payload[3] & 0x80
+                     ? 0xFF << 24
+                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+                (payload[3] << 16) |
+                (payload[4] << 8) | (payload[5] << 0);
+
+            return type;
+        }
     }
 
     return -1;
@@ -429,7 +523,9 @@ struct msg* msg_join_request(
     struct msg* m = msg_alloc(
         MSG_JOIN_REQUEST,
         1,
-        sizeof(protocol_version) + sizeof(frame_number) + sizeof(name_len) +
+        2 +              /* protocol version */
+            2 +          /* frame number */
+            1 +          /* name length */
             name_len + 1 /* we need to include the null terminator */
     );
     m->payload[0] = protocol_version >> 8;
@@ -444,39 +540,52 @@ struct msg* msg_join_request(
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_join_accept(
-    uint8_t       sim_tick_rate,
-    uint8_t       net_tick_rate,
     uint16_t      client_frame,
     uint16_t      server_frame,
+    uint8_t       sim_tick_rate,
+    uint8_t       net_tick_rate,
+    uint8_t       world_inner_radius,
+    uint8_t       world_ring_start,
+    uint8_t       world_ring_end,
     uint16_t      snake_id,
     struct qwpos* spawn_pos)
 {
     struct msg* m = msg_alloc(
         MSG_JOIN_ACCEPT,
         0,
-        sizeof(sim_tick_rate) + sizeof(net_tick_rate) + sizeof(client_frame) +
-            sizeof(server_frame) + sizeof(snake_id) +
-            6 /* qwpos is 2x q10.14 (24 bits) = 48 bits */
+        1 +     /* sim_tick_rate */
+            1 + /* net_tick_rate */
+            1 + /* world_inner_radius */
+            1 + /* world_ring_start */
+            1 + /* world_ring_end */
+            2 + /* client_frame */
+            2 + /* server_frame */
+            2 + /* snake_id */
+            6   /* spawn pos: 2x q10.14 (24 bits) = 48 bits */
     );
 
     m->payload[0] = sim_tick_rate;
     m->payload[1] = net_tick_rate;
 
-    m->payload[2] = client_frame >> 8;
-    m->payload[3] = client_frame & 0xFF;
+    m->payload[2] = world_inner_radius;
+    m->payload[3] = world_ring_start;
+    m->payload[4] = world_ring_end;
 
-    m->payload[4] = server_frame >> 8;
-    m->payload[5] = server_frame & 0xFF;
+    m->payload[5] = client_frame >> 8;
+    m->payload[6] = client_frame & 0xFF;
 
-    m->payload[6] = snake_id >> 8;
-    m->payload[7] = snake_id & 0xFF;
+    m->payload[7] = server_frame >> 8;
+    m->payload[8] = server_frame & 0xFF;
 
-    m->payload[8] = spawn_pos->x >> 16;
-    m->payload[9] = spawn_pos->x >> 8;
-    m->payload[10] = spawn_pos->x & 0xFF;
-    m->payload[11] = spawn_pos->y >> 16;
-    m->payload[12] = spawn_pos->y >> 8;
-    m->payload[13] = spawn_pos->y & 0xFF;
+    m->payload[9] = snake_id >> 8;
+    m->payload[10] = snake_id & 0xFF;
+
+    m->payload[11] = spawn_pos->x >> 16;
+    m->payload[12] = spawn_pos->x >> 8;
+    m->payload[13] = spawn_pos->x & 0xFF;
+    m->payload[14] = spawn_pos->y >> 16;
+    m->payload[15] = spawn_pos->y >> 8;
+    m->payload[16] = spawn_pos->y & 0xFF;
 
     return m;
 }
@@ -712,11 +821,7 @@ int msg_commands_unpack_into(
     c.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
         cmd_queue_put(cmdq, c, first_frame_number);
-    log_net(
-        "  angle=%x, speed=%x, action=%x\n",
-        c.angle,
-        c.speed,
-        c.action);
+    log_net("  angle=%x, speed=%x, action=%x\n", c.angle, c.speed, c.action);
 
     if (command_count == 0)
         return 0;
@@ -796,10 +901,7 @@ int msg_commands_unpack_into(
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
             cmd_queue_put(cmdq, c, first_frame_number + i + 1);
         log_net(
-            "  angle=%x, speed=%x, action=%x\n",
-            c.angle,
-            c.speed,
-            c.action);
+            "  angle=%x, speed=%x, action=%x\n", c.angle, c.speed, c.action);
     }
 
     return 0;
@@ -1040,6 +1142,89 @@ struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx)
 
     m->payload[2] = (knot_idx >> 8) & 0xFF;
     m->payload[3] = knot_idx & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_food_create(struct qwpos pos, struct qwpos dir)
+{
+    qa          a;
+    struct msg* m = msg_alloc(
+        MSG_FOOD_CREATE,
+        0,
+        6 +     /* world position (2x 24-bit qwpos) */
+            1); /* angle */
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (pos.x >> 16) & 0xFF;
+    m->payload[1] = (pos.x >> 8) & 0xFF;
+    m->payload[2] = pos.x & 0xFF;
+
+    m->payload[3] = (pos.y >> 16) & 0xFF;
+    m->payload[4] = (pos.y >> 8) & 0xFF;
+    m->payload[5] = pos.y & 0xFF;
+
+    a = make_qa(atan2(qw_to_float(dir.y), qw_to_float(dir.x)));
+    m->payload[6] = qa_to_u8(a);
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_food_create_ack(struct qwpos pos)
+{
+    struct msg* m = msg_alloc(
+        MSG_FOOD_CREATE_ACK, 0, 6); /* world position (2x 24-bit qwpos) */
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (pos.x >> 16) & 0xFF;
+    m->payload[1] = (pos.x >> 8) & 0xFF;
+    m->payload[2] = pos.x & 0xFF;
+
+    m->payload[3] = (pos.y >> 16) & 0xFF;
+    m->payload[4] = (pos.y >> 8) & 0xFF;
+    m->payload[5] = pos.y & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_food_destroy(struct qwpos pos)
+{
+    struct msg* m = msg_alloc(
+        MSG_FOOD_DESTROY, 0, 6); /* world position (2x 24-bit qwpos) */
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (pos.x >> 16) & 0xFF;
+    m->payload[1] = (pos.x >> 8) & 0xFF;
+    m->payload[2] = pos.x & 0xFF;
+
+    m->payload[3] = (pos.y >> 16) & 0xFF;
+    m->payload[4] = (pos.y >> 8) & 0xFF;
+    m->payload[5] = pos.y & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_food_destroy_ack(struct qwpos pos)
+{
+    struct msg* m = msg_alloc(
+        MSG_FOOD_DESTROY_ACK, 0, 6); /* world position (2x 24-bit qwpos) */
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (pos.x >> 16) & 0xFF;
+    m->payload[1] = (pos.x >> 8) & 0xFF;
+    m->payload[2] = pos.x & 0xFF;
+
+    m->payload[3] = (pos.y >> 16) & 0xFF;
+    m->payload[4] = (pos.y >> 8) & 0xFF;
+    m->payload[5] = pos.y & 0xFF;
 
     return m;
 }

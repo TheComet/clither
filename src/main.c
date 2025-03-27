@@ -112,8 +112,7 @@ int main(int argc, char* argv[])
             /* NOTE: client_run() is the only function that expects to be run
              * in the main thread. It does not call any threadlocal init
              * functions. */
-            retval = (int)(intptr_t)client_run(
-                &settings.client, &settings.gfx, &settings.world);
+            retval = (int)(intptr_t)client_run(&settings.client, &settings.gfx);
             break;
         }
 #endif
@@ -130,8 +129,8 @@ int main(int argc, char* argv[])
             }
 
             /* The server should be running, so try to join as a client */
-            retval += (int)(intptr_t)client_run(
-                &settings.client, &settings.gfx, &settings.world);
+            retval +=
+                (int)(intptr_t)client_run(&settings.client, &settings.gfx);
 
             if (!signals_exit_requested())
             {

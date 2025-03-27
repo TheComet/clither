@@ -37,16 +37,18 @@ BreakStringLiterals: true
 ColumnLimit: 80
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ForEachMacros: [
-    command_queue_for_each,
+    cmd_queue_for_each,
     bmap_for_each,
     bmap_for_each_full,
     bset_for_each,
     bset_for_each_full,
-    hm_for_each,
-    hm_for_each_full,
-    net_addr_hm_for_each,
+    hmap_for_each,
+    hmap_for_each_full,
+    hset_for_each,
+    hset_for_each_full,
+    net_addr_hmap_for_each,
     rb_for_each,
-    server_client_hm_for_each,
+    server_client_hmap_for_each,
     strlist_for_each,
     vec_for_each,
     vec_for_each_r,

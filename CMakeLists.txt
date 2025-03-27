@@ -100,10 +100,12 @@ add_executable (clither
     "include/clither/cmd_queue.h"
     "include/clither/cmd_rb.h"
     "include/clither/food.h"
+    "include/clither/food_acks_hset.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
     "include/clither/hash.h"
-    "include/clither/hm.h"
+    "include/clither/hmap.h"
+    "include/clither/hset.h"
     "include/clither/input.h"
     "include/clither/log.h"
     "include/clither/mcd_wifi.h"
@@ -113,7 +115,7 @@ add_executable (clither
     "include/clither/morton.h"
     "include/clither/mutex.h"
     "include/clither/net.h"
-    "include/clither/net_addr_hm.h"
+    "include/clither/net_addr_hmap.h"
     "include/clither/popcount.h"
     "include/clither/proximity_state.h"
     "include/clither/proximity_state_bmap.h"
@@ -129,7 +131,7 @@ add_executable (clither
     "include/clither/settings.h"
     "include/clither/server.h"
     "include/clither/server_client.h"
-    "include/clither/server_client_hm.h"
+    "include/clither/server_client_hmap.h"
     "include/clither/server_instance.h"
     "include/clither/server_instance_bmap.h"
     "include/clither/signals.h"
@@ -152,7 +154,6 @@ add_executable (clither
     "src/args.c"
     "src/bezier.c"
     "src/bezier_knot_rb.c"
-    "src/bezier_knot_acks_bmap.c"
     "src/bezier_point_vec.c"
     "src/camera.c"
     "src/cmd.c"
@@ -165,7 +166,7 @@ add_executable (clither
     "src/morton.c"
     "src/msg.c"
     "src/msg_vec.c"
-    "src/net_addr_hm.c"
+    "src/net_addr_hmap.c"
     "src/proximity_state.c"
     "src/proximity_state_bmap.c"
     "src/quadtree.c"
@@ -186,9 +187,11 @@ add_executable (clither
     "src/world.c"
 
     $<$<BOOL:${CLITHER_SERVER}>:
+        src/bezier_knot_acks_bmap.c
+        src/food_acks_hset.c
         src/server.c
         src/server_client.c
-        src/server_client_hm.c
+        src/server_client_hmap.c
         src/server_instance.c
         src/server_instance_bmap.c>
 
@@ -256,8 +259,9 @@ add_executable (clither
         tests/clither/test_bezier_fit.cpp
         tests/clither/test_bezier_point.cpp
         tests/clither/test_cmd.cpp
-        tests/clither/test_hm.cpp
-        tests/clither/test_hm_full.cpp
+        tests/clither/test_hmap.cpp
+        tests/clither/test_hmap_full.cpp
+        tests/clither/test_hset.cpp
         tests/clither/test_mem.cpp
         tests/clither/test_morton.cpp
         tests/clither/test_msg.cpp
