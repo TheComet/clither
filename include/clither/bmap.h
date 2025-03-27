@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include "clither/log.h" /* log_oom */
 #include "clither/mem.h" /* mem_realloc, mem_free */
@@ -46,6 +47,8 @@ enum bmap_status
     }                                                                          \
                                                                                \
     void prefix##_compact(struct prefix** bmap);                               \
+                                                                               \
+    int##bits##_t prefix##_lower_bound(const struct prefix* bmap, K key);      \
                                                                                \
     /*!                                                                        \
      * @brief If the key does not exist, inserts the key and allocates space   \
@@ -299,8 +302,7 @@ enum bmap_status
      * 3) If there is no key who's value is less than the searched-for key,    \
      *    the returned index will be bmap_count().                             \
      */                                                                        \
-    static int##bits##_t prefix##_lower_bound(                                 \
-        const struct prefix* bmap, K key)                                      \
+    int##bits##_t prefix##_lower_bound(const struct prefix* bmap, K key)       \
     {                                                                          \
         int##bits##_t len, half, middle, found;                                \
                                                                                \
@@ -429,6 +431,8 @@ enum bmap_status
 
 #define bmap_count(bmap)    ((bmap) ? (bmap)->count : 0)
 #define bmap_capacity(bmap) ((bmap) ? (bmap)->capacity : 0)
+
+#define bmap_get(bset, idx) ((bset)->keys[idx])
 
 #define bmap_for_each(bmap, idx, key, value)                                   \
     for (idx = 0; idx != bmap_count(bmap) && (key = (bmap)->keys[idx], 1) &&   \

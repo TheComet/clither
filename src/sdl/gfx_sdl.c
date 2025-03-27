@@ -633,17 +633,17 @@ static void gfx_sdl_draw_food(
     upper_p = make_qwposqw(head_p.x + make_qw(radius), head_p.y + make_qw(radius));
     lower_m = morton_encode_qwpos(lower_p);
     upper_m = morton_encode_qwpos(upper_p);
-    lower_i = food_bset_lower_bound(world->food_grid.morton, lower_m);
-    upper_i = food_bset_lower_bound(world->food_grid.morton, upper_m);
+    lower_i = food_bmap_lower_bound(world->food_grid.morton, lower_m);
+    upper_i = food_bmap_lower_bound(world->food_grid.morton, upper_m);
 
     p1 = gfx_world_to_screen(lower_p, gfx, camera);
     p2 = gfx_world_to_screen(upper_p, gfx, camera);
     draw_box(gfx->renderer, make_SDL_Point(p1.x, p1.y), make_SDL_Point(p2.x, p2.y));
 
     SDL_SetRenderDrawColor(gfx->renderer, 0, 128, 255, 255);
-    for (i = lower_i; i < upper_i && lower_i < bset_count(world->food_grid.morton); ++i)
+    for (i = lower_i; i < upper_i && lower_i < bmap_count(world->food_grid.morton); ++i)
     {
-        struct qwpos p = morton_decode_qwpos(bset_get(world->food_grid.morton, i));
+        struct qwpos p = morton_decode_qwpos(bmap_get(world->food_grid.morton, i));
         struct spos sp = gfx_world_to_screen(p, gfx, camera);
         draw_circle(gfx->renderer, make_SDL_Point(sp.x, sp.y), 3);
         

@@ -1035,6 +1035,7 @@ void settings_save(const struct settings* s, const char* filename)
     WRITE_STR(fp, sv, log_prefix, "Prefix for log messages");
 
     fprintf(fp, "\n[world]\n");
+    WRITE_INT(fp, w, food_count, "Number of pieces of food to maintain within the world (server-only)");
     WRITE_INT(fp, w, inner_radius, "Inner radius of the world");
     WRITE_INT(fp, w, ring_start, "Distance to the start of the outer ring");
     WRITE_INT(fp, w, ring_end, "Distance to the end of the outer ring");

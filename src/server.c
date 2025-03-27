@@ -2,10 +2,12 @@
 #include "clither/bezier_knot_acks_bmap.h"
 #include "clither/bezier_knot_rb.h"
 #include "clither/cli_colors.h"
+#include "clither/food_acks_hset.h"
 #include "clither/log.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/net_addr_hmap.h"
+#include "clither/morton.h"
 #include "clither/proximity_state_bmap.h"
 #include "clither/server.h"
 #include "clither/server_client.h"
@@ -225,6 +227,52 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
+int server_update_food_in_range(
+struct server* server, const struct world* world, qw proximity_range)
+{
+    int                    slot;
+    const struct net_addr* addr;
+    struct server_client*  client;
+
+    server_client_hmap_for_each(server->clients, slot, addr, client)
+    {
+        const struct snake* snake;
+        const struct food* food;
+        struct qwpos lower_pos, upper_pos;
+        uint64_t lower_morton, upper_morton, morton;
+        int32_t lower_idx, upper_idx, idx;
+
+        snake = snake_bmap_find(world->snakes, client->snake_id);
+        CLITHER_DEBUG_ASSERT(snake != NULL);
+
+        lower_pos = make_qwposqw(snake->head.pos.x - proximity_range, snake->head.pos.y - proximity_range);
+        upper_pos = make_qwposqw(snake->head.pos.x + proximity_range, snake->head.pos.y + proximity_range);
+        lower_morton = morton_encode_qwpos(lower_pos);
+        upper_morton = morton_encode_qwpos(upper_pos);
+        lower_idx = food_bmap_lower_bound(world->food_grid.morton, lower_morton);
+        upper_idx = food_bmap_lower_bound(world->food_grid.morton, upper_morton);
+
+        bmap_for_each(world->food_grid.morton, idx, morton, food)
+        {
+            struct qwpos pos = morton_decode_qwpos(morton);
+            char* ackd;
+            switch (food_acks_hmap_emplace_or_get(&client->food_in_proximity, pos, &ackd))
+            {
+                case HMAP_OOM: return -1;
+                case HMAP_NEW: *ackd = 0;
+                case HMAP_EXISTS: break;
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+int server_queue_food_data(
+struct server* server, const struct world* world, qw proximity_range)
+{
+}
+
+/* ------------------------------------------------------------------------- */
 int server_update_snakes_in_range(
     struct server* server, const struct world* world, qw proximity_range)
 {
@@ -252,6 +300,9 @@ int server_update_snakes_in_range(
             snake = snake_bmap_find(world->snakes, client->snake_id);
             other_snake =
                 snake_bmap_find(world->snakes, other_client->snake_id);
+            CLITHER_DEBUG_ASSERT(snake != NULL);
+            CLITHER_DEBUG_ASSERT(other_snake != NULL);
+
             other_aabb = other_snake->data.aabb;
             other_aabb.x1 = qw_sub(other_aabb.x1, proximity_range);
             other_aabb.y1 = qw_sub(other_aabb.y1, proximity_range);

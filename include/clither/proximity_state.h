@@ -6,7 +6,6 @@ struct food_acks_hm;
 struct proximity_state
 {
     struct bezier_knot_acks_bmap* bezier_knot_acks;
-    struct food_acks_hm*          food_acks;
 };
 
 void proximity_state_init(struct proximity_state* ps);

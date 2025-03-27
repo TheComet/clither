@@ -100,7 +100,7 @@ add_executable (clither
     "include/clither/cmd_queue.h"
     "include/clither/cmd_rb.h"
     "include/clither/food.h"
-    "include/clither/food_acks_hset.h"
+    "include/clither/food_acks_hmap.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
     "include/clither/hash.h"
@@ -188,7 +188,7 @@ add_executable (clither
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/bezier_knot_acks_bmap.c
-        src/food_acks_hset.c
+        src/food_acks_hmap.c
         src/server.c
         src/server_client.c
         src/server_client_hmap.c
