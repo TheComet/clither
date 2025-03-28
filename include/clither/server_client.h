@@ -4,16 +4,16 @@
 
 #include <stdint.h> /* uint16_t */
 
-struct food_acks_hmap;
+struct food_in_proximity_hset;
 struct msg_vec;
-struct proximity_state_bmap;
+struct snakes_in_proximity_bmap;
 
 struct server_client
 {
-    struct msg_vec*              pending_msgs;
-    struct proximity_state_bmap* snakes_in_proximity;
-    struct food_acks_hmap*       food_in_proximity;
-    int                          timeout_counter;
+    struct msg_vec*                  pending_msgs;
+    struct snakes_in_proximity_bmap* snakes_in_proximity;
+    struct food_in_proximity_hset*   food_in_proximity;
+    int                              timeout_counter;
     int      cbf_window[CBF_WINDOW_SIZE]; /* "Command Buffer Fullness" window */
     uint16_t snake_id;
     uint16_t last_command_msg_frame;

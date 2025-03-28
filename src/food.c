@@ -13,16 +13,15 @@ void food_grid_deinit(struct food_grid* grid)
     food_bmap_deinit(grid->morton);
 }
 
-int food_grid_add_food(struct food_grid* grid, struct qwpos pos, qa angle)
+int food_grid_add_food(
+    struct food_grid* grid, struct qwpos pos, struct qwpos dir)
 {
     uint64_t     m = morton_encode_qwpos(pos);
     struct food* new_food;
     switch (food_bmap_emplace_new(&grid->morton, m, &new_food))
     {
         case BMAP_OOM: return -1;
-        case BMAP_NEW:
-            new_food->dir.x = qa_cos(angle);
-            new_food->dir.y = qa_sin(angle);
+        case BMAP_NEW: new_food->dir = dir;
         case BMAP_EXISTS: break;
     }
     return 0;

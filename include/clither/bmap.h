@@ -258,11 +258,6 @@ enum bmap_status
     {                                                                          \
         return &bmap->values[idx];                                             \
     }                                                                          \
-    static void prefix##_kvs_set_value(                                        \
-        struct prefix* bmap, int##bits##_t idx, const V* value)                \
-    {                                                                          \
-        bmap->values[idx] = *value;                                            \
-    }                                                                          \
     BMAP_DEFINE_FULL(                                                          \
         prefix,                                                                \
         K,                                                                     \
@@ -432,11 +427,18 @@ enum bmap_status
 #define bmap_count(bmap)    ((bmap) ? (bmap)->count : 0)
 #define bmap_capacity(bmap) ((bmap) ? (bmap)->capacity : 0)
 
-#define bmap_get(bset, idx) ((bset)->keys[idx])
+#define bmap_get_key(bset, idx)   ((bset)->keys[idx])
+#define bmap_get_value(bset, idx) ((bset)->values[idx])
 
 #define bmap_for_each(bmap, idx, key, value)                                   \
     for (idx = 0; idx != bmap_count(bmap) && (key = (bmap)->keys[idx], 1) &&   \
                   (value = &(bmap)->values[idx], 1);                           \
+         ++idx)
+
+#define bmap_for_each_range(bmap, idx, key, value, begin, end)                 \
+    for (idx = begin;                                                          \
+         idx < end && idx < bmap_count(bmap) &&                                \
+         (key = (bmap)->keys[idx], 1) && (value = &(bmap)->values[idx], 1);    \
          ++idx)
 
 #define bmap_for_each_full(bmap, idx, key, value, kvs_get_key, kvs_get_value)  \

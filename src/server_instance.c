@@ -92,9 +92,13 @@ void* server_instance_run(const void* args)
 
         if (net_update)
         {
-            if (server_update_snakes_in_range(&server, &world, make_qw(2)) != 0)
+            qw proximity_range = make_qw(2);
+            if (server_update_snakes_in_range(
+                    &server, &world, proximity_range) != 0)
                 break;
             if (server_queue_snake_data(&server, &world, frame_number) != 0)
+                break;
+            if (server_queue_food_data(&server, &world, proximity_range) != 0)
                 break;
             if (server_send_pending_data(&server, &world) != 0)
                 break;

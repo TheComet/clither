@@ -111,12 +111,13 @@ int world_respawn_food(struct world* w)
 {
     while (food_grid_food_count(&w->food_grid) < w->food_count)
     {
-        struct qwpos pos;
-        qa           dir = (qa)(food_rng(w));
+        struct qwpos pos, dir;
+        qa           a = (qa)(food_rng(w));
         qa           phi = (qa)(food_rng(w));
         qw           r = (qw)(food_rng(w) & 0x7FFFFFFF);
         r = qw_rescale(r, w->inner_radius, 1 << 31);
         pos = make_qwposqw(qw_mul(qa_cos(phi), r), qw_mul(qa_sin(phi), r));
+        dir = make_qwposqw(qa_cos(a), qa_sin(a));
         if (food_grid_add_food(&w->food_grid, pos, dir) != 0)
             return -1;
     }

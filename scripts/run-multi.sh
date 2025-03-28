@@ -15,7 +15,7 @@ trap cleanup SIGINT
 PIDS+=($!)
 
 for i in {1..2}; do
-  ./clither --ip localhost --username "Client $i" --prefix "Client $i: " --log "client$i.txt" --netlog "client$i-net.txt" &
+  ./clither --addr localhost --username "Client $i" --prefix "Client $i: " --log "client$i.txt" --netlog "client$i-net.txt" &
   PIDS+=($!)
 done
 

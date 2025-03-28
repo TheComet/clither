@@ -231,7 +231,7 @@ int settings_apply_args(struct settings* s, const struct args* a)
 #endif
 #if defined(CLITHER_LOGGING)
     if (a->prefix)
-        SAFE_COPY(s->client.log_prefix, netlog_file);
+        SAFE_COPY(s->client.log_prefix, prefix);
 #endif
 #if defined(CLITHER_MCD)
     if (a->mcd_port)

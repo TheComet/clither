@@ -2,13 +2,12 @@
 #include "clither/bezier_knot_acks_bmap.h"
 #include "clither/bezier_knot_rb.h"
 #include "clither/cli_colors.h"
-#include "clither/food_acks_hset.h"
+#include "clither/food_in_proximity_hset.h"
 #include "clither/log.h"
+#include "clither/morton.h"
 #include "clither/msg_vec.h"
 #include "clither/net.h"
 #include "clither/net_addr_hmap.h"
-#include "clither/morton.h"
-#include "clither/proximity_state_bmap.h"
 #include "clither/server.h"
 #include "clither/server_client.h"
 #include "clither/server_client_hmap.h"
@@ -17,6 +16,7 @@
 #include "clither/settings.h"
 #include "clither/snake.h"
 #include "clither/snake_bmap.h"
+#include "clither/snakes_in_proximity_bmap.h"
 #include "clither/thread.h"
 #include "clither/world.h"
 #include "clither/wrap.h"
@@ -43,17 +43,17 @@ static void server_client_remove(
     /* Other clients might still have this client in their proximity list. If
      * so, we need to remove this client and also send MSG_SNAKE_DESTROY so all
      * other clients destroy the snake. */
-    hmap_for_each(server->clients, idx, other_addr, other_client)
+    hmap_for_each (server->clients, idx, other_addr, other_client)
     {
-        struct proximity_state* prox;
+        struct bezier_knot_acks_bmap** knot_acks;
         (void)idx, (void)other_addr;
 
-        prox = proximity_state_bmap_find(
+        knot_acks = snakes_in_proximity_bmap_find(
             other_client->snakes_in_proximity, client->snake_id);
-        if (prox == NULL)
+        if (knot_acks == NULL)
             continue;
-        proximity_state_deinit(prox);
-        proximity_state_bmap_erase(
+        bezier_knot_acks_bmap_deinit(*knot_acks);
+        snakes_in_proximity_bmap_erase(
             other_client->snakes_in_proximity, client->snake_id);
 
         if (other_client != client)
@@ -104,8 +104,8 @@ void server_deinit(struct server* server)
     net_addr_hmap_deinit(server->banned_clients);
     net_addr_hmap_deinit(server->malicious_clients);
 
-    server_client_hmap_for_each(server->clients, slot, addr, client)(void) addr,
-        server_client_deinit(client);
+    server_client_hmap_for_each (server->clients, slot, addr, client)
+        (void)addr, server_client_deinit(client);
     server_client_hmap_deinit(server->clients);
 }
 
@@ -200,7 +200,7 @@ int server_send_pending_data(struct server* server, struct world* world)
     struct server_client*  client;
     struct append_msgs_ctx ctx;
 
-    server_client_hmap_for_each(server->clients, slot, addr, client)
+    server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         /* Append unreliable messages first */
         ctx.len = 0;
@@ -227,49 +227,75 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
-int server_update_food_in_range(
-struct server* server, const struct world* world, qw proximity_range)
+int server_queue_food_data(
+    struct server* server, const struct world* world, qw proximity_range)
 {
     int                    slot;
     const struct net_addr* addr;
     struct server_client*  client;
 
-    server_client_hmap_for_each(server->clients, slot, addr, client)
+    server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         const struct snake* snake;
-        const struct food* food;
-        struct qwpos lower_pos, upper_pos;
-        uint64_t lower_morton, upper_morton, morton;
-        int32_t lower_idx, upper_idx, idx;
+        const struct food*  food;
+        struct qwpos        pos;
+        struct qwaabb       bb;
+        struct qwpos        lower_pos, upper_pos;
+        uint64_t            lower_morton, upper_morton, morton;
+        int32_t             lower_idx, upper_idx, idx;
+        (void)addr;
 
         snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL);
 
-        lower_pos = make_qwposqw(snake->head.pos.x - proximity_range, snake->head.pos.y - proximity_range);
-        upper_pos = make_qwposqw(snake->head.pos.x + proximity_range, snake->head.pos.y + proximity_range);
+        lower_pos = make_qwposqw(
+            snake->head.pos.x - proximity_range,
+            snake->head.pos.y - proximity_range);
+        upper_pos = make_qwposqw(
+            snake->head.pos.x + proximity_range,
+            snake->head.pos.y + proximity_range);
         lower_morton = morton_encode_qwpos(lower_pos);
         upper_morton = morton_encode_qwpos(upper_pos);
-        lower_idx = food_bmap_lower_bound(world->food_grid.morton, lower_morton);
-        upper_idx = food_bmap_lower_bound(world->food_grid.morton, upper_morton);
+        lower_idx =
+            food_bmap_lower_bound(world->food_grid.morton, lower_morton);
+        upper_idx =
+            food_bmap_lower_bound(world->food_grid.morton, upper_morton);
+        bb = make_qwaabbqw(lower_pos.x, lower_pos.y, upper_pos.x, upper_pos.y);
 
-        bmap_for_each(world->food_grid.morton, idx, morton, food)
+        /* Add all food pieces within range to the "ack" list */
+        bmap_for_each_range (
+            world->food_grid.morton, idx, morton, food, lower_idx, upper_idx)
         {
-            struct qwpos pos = morton_decode_qwpos(morton);
-            char* ackd;
-            switch (food_acks_hmap_emplace_or_get(&client->food_in_proximity, pos, &ackd))
+            (void)food;
+            pos = morton_decode_qwpos(morton);
+            if (!qwaabb_test_qwpos(bb, pos))
+                continue;
+            switch (food_in_proximity_hset_insert(
+                &client->food_in_proximity, morton))
             {
                 case HMAP_OOM: return -1;
-                case HMAP_NEW: *ackd = 0;
+                case HMAP_NEW:
+                    server_queue(
+                        client,
+                        msg_food_create(
+                            morton_decode_qwpos(morton), food->dir));
                 case HMAP_EXISTS: break;
             }
         }
-    }
-}
 
-/* ------------------------------------------------------------------------- */
-int server_queue_food_data(
-struct server* server, const struct world* world, qw proximity_range)
-{
+        hset_for_each (client->food_in_proximity, idx, morton)
+        {
+            pos = morton_decode_qwpos(morton);
+            if (qwaabb_test_qwpos(bb, pos))
+                continue;
+            if (food_in_proximity_hset_erase(client->food_in_proximity, morton))
+            {
+                server_queue(client, msg_food_destroy(pos));
+            }
+        }
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -284,9 +310,9 @@ int server_update_snakes_in_range(
     struct server_client*  other_client;
 
     /* TODO: O(n^2) */
-    server_client_hmap_for_each(server->clients, slot, addr, client)
+    server_client_hmap_for_each (server->clients, slot, addr, client)
     {
-        server_client_hmap_for_each(
+        server_client_hmap_for_each (
             server->clients, other_slot, other_addr, other_client)
         {
             struct snake* snake;
@@ -310,40 +336,42 @@ int server_update_snakes_in_range(
             other_aabb.y2 = qw_add(other_aabb.y2, proximity_range);
             if (qwaabb_test_qwpos(other_aabb, snake->head.pos))
             {
-                int32_t                   knot_idx;
-                const struct bezier_knot* knot;
-                struct proximity_state*   prox;
-                enum bmap_status status = proximity_state_bmap_emplace_or_get(
-                    &client->snakes_in_proximity,
-                    other_client->snake_id,
-                    &prox);
+                int32_t                        knot_idx;
+                const struct bezier_knot*      knot;
+                struct bezier_knot_acks_bmap** knot_acks;
+                enum bmap_status               status =
+                    snakes_in_proximity_bmap_emplace_or_get(
+                        &client->snakes_in_proximity,
+                        other_client->snake_id,
+                        &knot_acks);
                 switch (status)
                 {
                     case BMAP_OOM: return -1;
-                    case BMAP_EXISTS: continue;
-                    case BMAP_NEW: break;
-                }
+                    case BMAP_NEW:
+                        bezier_knot_acks_bmap_init(knot_acks);
 
-                proximity_state_init(prox);
-
-                /* Add all snake bezier knots to the list to send. */
-                rb_for_each (other_snake->data.bezier_knots, knot_idx, knot)
-                {
-                    if (bezier_knot_acks_bmap_insert_new(
-                            &prox->bezier_knot_acks, knot_idx, 0) == BMAP_OOM)
-                        return -1;
+                        /* Add all snake bezier knots to the list to send. */
+                        rb_for_each (
+                            other_snake->data.bezier_knots, knot_idx, knot)
+                        {
+                            if (bezier_knot_acks_bmap_insert_new(
+                                    knot_acks, knot_idx, 0) == BMAP_OOM)
+                                return -1;
+                        }
+                    case BMAP_EXISTS: break;
                 }
             }
             else
             {
-                struct proximity_state* prox = proximity_state_bmap_find(
-                    client->snakes_in_proximity, other_client->snake_id);
-                if (prox == NULL)
+                struct bezier_knot_acks_bmap** knot_acks =
+                    snakes_in_proximity_bmap_find(
+                        client->snakes_in_proximity, other_client->snake_id);
+                if (knot_acks == NULL)
                     continue;
 
                 server_queue(client, msg_snake_destroy(other_client->snake_id));
-                proximity_state_deinit(prox);
-                proximity_state_bmap_erase(
+                bezier_knot_acks_bmap_deinit(*knot_acks);
+                snakes_in_proximity_bmap_erase(
                     client->snakes_in_proximity, other_client->snake_id);
             }
         }
@@ -361,7 +389,7 @@ int server_queue_snake_data(
     struct server_client*  client;
 
     /* Send back real position of client snake's head */
-    server_client_hmap_for_each(server->clients, slot, addr, client)
+    server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         struct snake* snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL), (void)addr;
@@ -377,12 +405,13 @@ int server_queue_snake_data(
     }
 
     /* Queue bezier knots of all snakes in proximity */
-    server_client_hmap_for_each(server->clients, slot, addr, client)
+    server_client_hmap_for_each (server->clients, slot, addr, client)
     {
-        int16_t                 prox_idx;
-        uint16_t                snake_id;
-        struct proximity_state* prox;
-        bmap_for_each (client->snakes_in_proximity, prox_idx, snake_id, prox)
+        int16_t                        prox_idx;
+        uint16_t                       snake_id;
+        struct bezier_knot_acks_bmap** knot_acks;
+        bmap_for_each (
+            client->snakes_in_proximity, prox_idx, snake_id, knot_acks)
         {
             int16_t             knot_idx;
             struct bezier_knot* knot;
@@ -392,7 +421,7 @@ int server_queue_snake_data(
             {
                 char* ackd;
                 switch (bezier_knot_acks_bmap_emplace_or_get(
-                    &prox->bezier_knot_acks, knot_idx, &ackd))
+                    knot_acks, knot_idx, &ackd))
                 {
                     case BMAP_OOM: return -1;
                     case BMAP_NEW: *ackd = 0;
@@ -419,7 +448,7 @@ int server_queue_snake_data(
              * acknowledgement list explicitly. Otherwise, if the client doesn't
              * ack them, then they'd remain in the list forever. */
             bezier_knot_acks_bmap_remove_stale_knots(
-                prox->bezier_knot_acks, snake->data.bezier_knots);
+                *knot_acks, snake->data.bezier_knots);
 
             /* The "len_forwards" property of the second knot (the one that
              * follows the head) and the "len_backwards" property of the head
@@ -684,9 +713,9 @@ static enum process_message_result process_message(
         }
 
         case MSG_KNOT_ACK: {
-            struct proximity_state* prox;
-            struct snake*           other_snake;
-            char*                   ackd;
+            struct bezier_knot_acks_bmap** knot_acks;
+            struct snake*                  other_snake;
+            char*                          ackd;
 
             other_snake = snake_bmap_find(world->snakes, pp.knot_ack.snake_id);
             if (other_snake == NULL)
@@ -695,17 +724,40 @@ static enum process_message_result process_message(
                 return PROCESS_MESSAGE_OK;
             }
 
-            prox = proximity_state_bmap_find(
+            knot_acks = snakes_in_proximity_bmap_find(
                 client->snakes_in_proximity, pp.knot_ack.snake_id);
-            if (prox == NULL)
+            if (knot_acks == NULL)
                 return PROCESS_MESSAGE_OK;
 
-            ackd = bezier_knot_acks_bmap_find(
-                prox->bezier_knot_acks, pp.knot_ack.knot_idx);
+            ackd = bezier_knot_acks_bmap_find(*knot_acks, pp.knot_ack.knot_idx);
             if (ackd == NULL)
                 return PROCESS_MESSAGE_OK;
             *ackd = 1;
 
+            return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_FOOD_CREATE: break;
+        case MSG_FOOD_CREATE_ACK: {
+            uint64_t morton = morton_encode_qwpos(pp.food_create_ack.pos);
+            msg_vec_remove_food_create(
+                client->pending_msgs, pp.food_create_ack.pos);
+            /* Ensure the food exists in the ack'd list, just in case
+             * CREATE/DESTROY messages arrived out of order */
+            switch (food_in_proximity_hset_insert(
+                &client->food_in_proximity, morton))
+            {
+                case HSET_OOM: return PROCESS_MESSAGE_OOM;
+                case HSET_EXISTS:
+                case HSET_NEW: break;
+            }
+            return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_FOOD_DESTROY: break;
+        case MSG_FOOD_DESTROY_ACK: {
+            msg_vec_remove_food_destroy(
+                client->pending_msgs, pp.food_destroy_ack.pos);
             return PROCESS_MESSAGE_OK;
         }
     }
@@ -815,7 +867,7 @@ int server_recv(
     log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
-    server_client_hmap_for_each(server->clients, slot, server_addr, client)
+    server_client_hmap_for_each (server->clients, slot, server_addr, client)
     {
         client->timeout_counter++;
 
@@ -830,7 +882,7 @@ int server_recv(
     }
 
     /* Update malicious client timeouts */
-    net_addr_hmap_for_each(
+    net_addr_hmap_for_each (
         server->malicious_clients, slot, server_addr, timeout)
     {
         struct net_addr_str ipstr;

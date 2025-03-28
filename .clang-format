@@ -39,8 +39,10 @@ ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ForEachMacros: [
     cmd_queue_for_each,
     bmap_for_each,
+    bmap_for_each_range,
     bmap_for_each_full,
     bset_for_each,
+    bset_for_each_range,
     bset_for_each_full,
     hmap_for_each,
     hmap_for_each_full,

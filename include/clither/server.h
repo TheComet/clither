@@ -45,6 +45,9 @@ int server_update_snakes_in_range(
 int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number);
 
+int server_queue_food_data(
+    struct server* server, const struct world* world, qw proximity_range);
+
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.
  */

@@ -100,7 +100,7 @@ add_executable (clither
     "include/clither/cmd_queue.h"
     "include/clither/cmd_rb.h"
     "include/clither/food.h"
-    "include/clither/food_acks_hmap.h"
+    "include/clither/food_in_proximity_hset.h"
     "include/clither/fs.h"
     "include/clither/gfx.h"
     "include/clither/hash.h"
@@ -117,8 +117,7 @@ add_executable (clither
     "include/clither/net.h"
     "include/clither/net_addr_hmap.h"
     "include/clither/popcount.h"
-    "include/clither/proximity_state.h"
-    "include/clither/proximity_state_bmap.h"
+    "include/clither/snakes_in_proximity_bmap.h"
     "include/clither/q.h"
     "include/clither/quadtree.h"
     "include/clither/qwaabb_rb.h"
@@ -167,8 +166,6 @@ add_executable (clither
     "src/msg.c"
     "src/msg_vec.c"
     "src/net_addr_hmap.c"
-    "src/proximity_state.c"
-    "src/proximity_state_bmap.c"
     "src/quadtree.c"
     "src/qwaabb_rb.c"
     "src/qwpos_vec.c"
@@ -188,7 +185,8 @@ add_executable (clither
 
     $<$<BOOL:${CLITHER_SERVER}>:
         src/bezier_knot_acks_bmap.c
-        src/food_acks_hmap.c
+        src/snakes_in_proximity_bmap.c
+        src/food_in_proximity_hset.c
         src/server.c
         src/server_client.c
         src/server_client_hmap.c

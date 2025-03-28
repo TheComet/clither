@@ -454,13 +454,6 @@ static struct client_recv_result process_message(
             snake->remote.replica.head_frame_numbers[0] =
                 pp.bezier.frame_number;
 
-            log_dbg(
-                "MSG_BEZIER: frame_numbers: %d, %d, %d, %d\n",
-                snake->remote.replica.head_frame_numbers[0],
-                snake->remote.replica.head_frame_numbers[1],
-                snake->remote.replica.head_frame_numbers[2],
-                snake->remote.replica.head_frame_numbers[3]);
-
             snake_update_bezier_extents(
                 &snake->data,
                 pp.bezier.rb_read,
@@ -516,6 +509,21 @@ static struct client_recv_result process_message(
         }
 
         case MSG_KNOT_ACK: break;
+
+        case MSG_FOOD_CREATE: {
+            food_grid_add_food(
+                &world->food_grid, pp.food_create.pos, pp.food_create.dir);
+            client_queue(client, msg_food_create_ack(pp.food_create.pos));
+            return client_recv_ok();
+        }
+        case MSG_FOOD_CREATE_ACK: break;
+
+        case MSG_FOOD_DESTROY: {
+            food_grid_remove_food(&world->food_grid, pp.food_destroy.pos);
+            client_queue(client, msg_food_destroy_ack(pp.food_destroy.pos));
+            return client_recv_ok();
+        }
+        case MSG_FOOD_DESTROY_ACK: break;
     }
 
     log_warn(
@@ -819,10 +827,6 @@ void* client_run(
             camera_update(
                 &camera, &snake->head, &snake->param, client.sim_tick_rate);
             camera.scale += input.scroll * camera.scale * 0.05;
-            log_dbg(
-                "pos: [%.2f, %.2f]\n",
-                qw_to_float(snake->head.pos.x),
-                qw_to_float(snake->head.pos.y));
 
             if (net_update)
             {

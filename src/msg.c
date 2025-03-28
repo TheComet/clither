@@ -1152,7 +1152,7 @@ struct msg* msg_food_create(struct qwpos pos, struct qwpos dir)
     qa          a;
     struct msg* m = msg_alloc(
         MSG_FOOD_CREATE,
-        0,
+        10,
         6 +     /* world position (2x 24-bit qwpos) */
             1); /* angle */
     if (m == NULL)
@@ -1168,6 +1168,14 @@ struct msg* msg_food_create(struct qwpos pos, struct qwpos dir)
 
     a = make_qa(atan2(qw_to_float(dir.y), qw_to_float(dir.x)));
     m->payload[6] = qa_to_u8(a);
+
+    log_dbg(
+        "MSG_FOOD_CREATE: pos=[%.2f,%.2f], dir=[%.2f,%.2f], angle=%.2f\n",
+        qw_to_float(pos.x),
+        qw_to_float(pos.y),
+        qw_to_float(dir.x),
+        qw_to_float(dir.y),
+        qa_to_float(a));
 
     return m;
 }
@@ -1188,6 +1196,11 @@ struct msg* msg_food_create_ack(struct qwpos pos)
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
 
+    log_dbg(
+        "MSG_FOOD_CREATE_ACK: pos=[%.2f,%.2f]\n",
+        qw_to_float(pos.x),
+        qw_to_float(pos.y));
+
     return m;
 }
 
@@ -1195,7 +1208,7 @@ struct msg* msg_food_create_ack(struct qwpos pos)
 struct msg* msg_food_destroy(struct qwpos pos)
 {
     struct msg* m = msg_alloc(
-        MSG_FOOD_DESTROY, 0, 6); /* world position (2x 24-bit qwpos) */
+        MSG_FOOD_DESTROY, 10, 6); /* world position (2x 24-bit qwpos) */
     if (m == NULL)
         return NULL;
 
@@ -1206,6 +1219,11 @@ struct msg* msg_food_destroy(struct qwpos pos)
     m->payload[3] = (pos.y >> 16) & 0xFF;
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
+
+    log_dbg(
+        "MSG_FOOD_DESTROY: pos=[%.2f,%.2f]\n",
+        qw_to_float(pos.x),
+        qw_to_float(pos.y));
 
     return m;
 }
@@ -1225,6 +1243,11 @@ struct msg* msg_food_destroy_ack(struct qwpos pos)
     m->payload[3] = (pos.y >> 16) & 0xFF;
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
+
+    log_dbg(
+        "MSG_FOOD_DESTROY_ACK: pos=[%.2f,%.2f]\n",
+        qw_to_float(pos.x),
+        qw_to_float(pos.y));
 
     return m;
 }
