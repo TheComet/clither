@@ -119,7 +119,6 @@ add_executable (clither
     "include/clither/popcount.h"
     "include/clither/snakes_in_proximity_bmap.h"
     "include/clither/q.h"
-    "include/clither/quadtree.h"
     "include/clither/qwaabb_rb.h"
     "include/clither/qwpos_vec.h"
     "include/clither/qwpos_vec_rb.h"
@@ -166,7 +165,6 @@ add_executable (clither
     "src/msg.c"
     "src/msg_vec.c"
     "src/net_addr_hmap.c"
-    "src/quadtree.c"
     "src/qwaabb_rb.c"
     "src/qwpos_vec.c"
     "src/qwpos_vec_rb.c"
@@ -205,6 +203,14 @@ add_executable (clither
             src/sdl/gfx_sdl.c>
         $<$<BOOL:${CLITHER_GFX_GLES2}>:
             src/gles2/gfx_gles2.c
+            src/gles2/internal/background.c
+            src/gles2/internal/food.c
+            src/gles2/internal/quad.c
+            src/gles2/internal/shader.c
+            src/gles2/internal/snake.c
+            src/gles2/internal/sprite.c
+            src/gles2/internal/sprite_shadow.c
+            src/gles2/internal/text.c
             src/gles2/glad/src/gles2.c>
         $<$<BOOL:${CLITHER_GFX_VULKAN}>:
             src/vulkan/gfx_vulkan.c>>
@@ -336,6 +342,16 @@ target_link_libraries (clither
 
 find_package(Threads REQUIRED)
 target_link_libraries (clither PRIVATE Threads::Threads)
+
+if (CLITHER_GFX)
+    set (FT_DISABLE_HARFBUZZ ON CACHE STRING "")
+    add_subdirectory ("thirdparty/freetype-2.13.3")
+    target_link_libraries (clither PRIVATE freetype)
+
+    set (HB_BUILD_SUBSET ON CACHE STRING "")
+    add_subdirectory ("thirdparty/harfbuzz-11.0.0")
+    target_link_libraries (clither PRIVATE harfbuzz)
+endif ()
 
 if (CLITHER_GFX_SDL)
     set (SDL2_DISABLE_INSTALL ON CACHE STRING "")

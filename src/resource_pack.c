@@ -69,11 +69,13 @@ static void resource_pack_init(struct resource_pack* pack)
     strlist_init(&pack->shaders.glsl.background);
     strlist_init(&pack->shaders.glsl.shadow);
     strlist_init(&pack->shaders.glsl.sprite);
+    strlist_init(&pack->shaders.glsl.text);
     resource_sprite_vec_init(&pack->sprites.background);
     pack->sprites.food = NULL;
     resource_snake_part_vec_init(&pack->sprites.heads);
     resource_snake_part_vec_init(&pack->sprites.bodies);
     resource_snake_part_vec_init(&pack->sprites.tails);
+    str_init(&pack->text.font);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -81,6 +83,8 @@ static void resource_pack_deinit(struct resource_pack* pack)
 {
     struct resource_snake_part* snake_part;
     struct resource_sprite**    sprite;
+
+    str_deinit(pack->text.font);
 
     vec_for_each (pack->sprites.tails, snake_part)
         resource_snake_part_deinit(snake_part);
@@ -102,6 +106,7 @@ static void resource_pack_deinit(struct resource_pack* pack)
             resource_sprite_destroy(*sprite);
     resource_sprite_vec_deinit(pack->sprites.background);
 
+    strlist_deinit(pack->shaders.glsl.text);
     strlist_deinit(pack->shaders.glsl.sprite);
     strlist_deinit(pack->shaders.glsl.shadow);
     strlist_deinit(pack->shaders.glsl.background);
@@ -327,6 +332,8 @@ static int parse_section_glsl(
                     shaderlist = &pack->shaders.glsl.sprite;
                 else if (strview_eq_cstr(key, "background"))
                     shaderlist = &pack->shaders.glsl.background;
+                else if (strview_eq_cstr(key, "text"))
+                    shaderlist = &pack->shaders.glsl.text;
                 else
                     return parser_error(
                         p,
@@ -424,6 +431,44 @@ static int parse_section_sprite(
                             p,
                             "Expected a float value. Example: scale = 2.0\n");
                     sprite->scale = p->value.float_literal;
+                    break;
+                }
+
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+enum token parse_section_text(
+    struct parser* p, struct resource_text* text, const char* path_prefix)
+{
+    enum token tok;
+    while (1)
+    {
+        tok = scan_next_token(p);
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                struct strview key = p->value.string;
+
+                if (strview_eq_cstr(key, "font"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    if (str_set_cstr(&text->font, path_prefix) != 0)
+                        return -1;
+                    if (str_join_path(&text->font, p->value.string) != 0)
+                        return -1;
                     break;
                 }
 
@@ -541,6 +586,9 @@ static int parse_section(
         }
         return parse_section_sprite(p, *bg, path_prefix);
     }
+
+    if (strview_eq_cstr(s->section, "text"))
+        return parse_section_text(p, &pack->text, path_prefix);
 
     if (strview_eq_cstr(s->section, "food"))
     {
