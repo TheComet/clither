@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/strspan.h"
-#include "clither/strview.h"
+#include "clither/util/strspan.h"
+#include "clither/util/strview.h"
 #include <stddef.h> /* NULL */
 
 #define STRLIST_TABLE_PTR(l) ((struct strspan*)((l)->data + (l)->capacity) - 1)

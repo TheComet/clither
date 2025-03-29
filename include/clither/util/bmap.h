@@ -1,8 +1,8 @@
 #pragma once
 #pragma once
 
-#include "clither/log.h" /* log_oom */
-#include "clither/mem.h" /* mem_realloc, mem_free */
+#include "clither/util/log.h" /* log_oom */
+#include "clither/util/mem.h" /* mem_realloc, mem_free */
 #include <stddef.h>
 #include <stdint.h> /* NULL */
 #include <string.h> /* memmove */

@@ -1,8 +1,7 @@
 #include "./gfx.h"
 #include "./shader.h"
-#include "clither/camera.h"
-#include "clither/config.h"
-#include "clither/resource_pack.h"
+#include "clither/game/camera.h"
+#include "clither/game/resource_pack.h"
 
 void gfx_gles2_sprite_shadow_init(struct sprite_shadow_mat* ss)
 {

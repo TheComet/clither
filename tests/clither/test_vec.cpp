@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/vec.h"
+#include "clither/util/vec.h"
 }
 
 #define NAME          vec

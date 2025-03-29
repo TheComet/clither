@@ -1,7 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/strspan.h"
+#include "clither/util/strspan.h"
 #include <stdarg.h> /* va_list */
 
 void log_set_prefix(const char* prefix);

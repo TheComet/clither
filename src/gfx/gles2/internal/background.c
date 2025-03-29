@@ -1,10 +1,10 @@
 #include "./gfx.h"
 #include "./shader.h"
-#include "clither/camera.h"
-#include "clither/resource_pack.h"
-#include "clither/resource_sprite_vec.h"
-#include "clither/strlist.h"
-#include "clither/world.h"
+#include "clither/game/camera.h"
+#include "clither/game/resource_pack.h"
+#include "clither/game/resource_sprite_vec.h"
+#include "clither/game/world.h"
+#include "clither/util/strlist.h"
 #include "stb_image.h"
 
 int gfx_gles2_background_init(

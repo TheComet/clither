@@ -1,9 +1,9 @@
 #include "./shader.h"
-#include "clither/log.h"
-#include "clither/mem.h"
-#include "clither/mfile.h"
-#include "clither/str.h"
-#include "clither/strlist.h"
+#include "clither/platform/mfile.h"
+#include "clither/util/log.h"
+#include "clither/util/mem.h"
+#include "clither/util/str.h"
+#include "clither/util/strlist.h"
 
 GLuint gfx_gles2_load_shader_type(const char* code, GLint length, GLenum type)
 {

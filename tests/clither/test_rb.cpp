@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/rb.h"
+#include "clither/util/rb.h"
 }
 
 struct obj

@@ -2,14 +2,14 @@
 #include "./internal/gfx.h"
 #include "./internal/snake.h"
 #include "GLFW/glfw3.h"
-#include "clither/camera.h"
-#include "clither/gfx.h"
-#include "clither/log.h"
-#include "clither/resource_pack.h"
-#include "clither/resource_snake_part_vec.h"
-#include "clither/snake.h"
-#include "clither/snake_bmap.h"
-#include "clither/world.h"
+#include "clither/game/camera.h"
+#include "clither/game/resource_pack.h"
+#include "clither/game/resource_snake_part_vec.h"
+#include "clither/game/snake.h"
+#include "clither/game/snake_bmap.h"
+#include "clither/game/world.h"
+#include "clither/gfx/gfx.h"
+#include "clither/util/log.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -137,6 +137,26 @@ sprite_shadow_load_failed:
     gfx_gles2_background_unload(&gfx->background);
 bg_load_failed:
     return -1;
+}
+
+static void gfx_gles2_unload_resource_pack(
+    struct gfx* gfx, const struct resource_pack* pack)
+{
+    if (vec_count(pack->sprites.bodies) > 0)
+        gfx_gles2_sprite_tex_unload(&gfx->body0_base);
+
+    if (vec_count(pack->sprites.heads) > 0)
+    {
+        gfx_gles2_sprite_tex_unload(&gfx->head0_base);
+        gfx_gles2_sprite_tex_unload(&gfx->head0_gather);
+    }
+
+    if (pack->sprites.food)
+        gfx_gles2_sprite_tex_unload(&gfx->food);
+
+    gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
+    gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
+    gfx_gles2_background_unload(&gfx->background);
 }
 
 static int gfx_gles2_global_init(void)
@@ -372,6 +392,7 @@ struct gfx_interface gfx_gles2 = {
     &gfx_gles2_create,
     &gfx_gles2_destroy,
     &gfx_gles2_load_resource_pack,
+    &gfx_gles2_unload_resource_pack,
     &gfx_gles2_poll_input,
     &gfx_gles2_input_to_cmd,
     &gfx_gles2_step_anim,

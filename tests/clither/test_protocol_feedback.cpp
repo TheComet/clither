@@ -1,14 +1,14 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/client.h"
-#include "clither/msg_vec.h"
-#include "clither/net.h"
-#include "clither/server.h"
-#include "clither/server_client_hmap.h"
-#include "clither/settings.h"
-#include "clither/snake_bmap.h"
-#include "clither/world.h"
+#include "clither/client/client.h"
+#include "clither/game/msg_vec.h"
+#include "clither/game/settings.h"
+#include "clither/game/snake_bmap.h"
+#include "clither/game/world.h"
+#include "clither/platform/net.h"
+#include "clither/server/server.h"
+#include "clither/server/server_client_hmap.h"
 }
 
 #define NAME protocol_feedback

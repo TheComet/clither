@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/q.h"
+#include "clither/game/q.h"
 #include <stdint.h>
 
 struct snake_upgrades

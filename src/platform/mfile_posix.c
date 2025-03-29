@@ -1,8 +1,8 @@
 #define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
-#include "clither/log.h"
-#include "clither/mem.h"
-#include "clither/mfile.h"
+#include "clither/platform/mfile.h"
+#include "clither/util/log.h"
+#include "clither/util/mem.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/fcntl.h>

@@ -1,8 +1,8 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/cmd.h"
-#include "clither/snake.h"
+#include "clither/game/cmd.h"
+#include "clither/game/snake.h"
 }
 
 #define NAME command

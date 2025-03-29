@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/bezier.h"
-#include "clither/vec.h"
+#include "clither/game/bezier.h"
+#include "clither/util/vec.h"
 
 VEC_DECLARE(bezier_point_vec, struct bezier_point, 16)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/cmd_rb.h"
+#include "clither/game/cmd_rb.h"
 
 struct cmd_queue
 {

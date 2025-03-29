@@ -1,5 +1,5 @@
-#include "clither/log.h"
-#include "clither/thread.h"
+#include "clither/util/log.h"
+#include "clither/platform/thread.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

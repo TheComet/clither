@@ -1,6 +1,6 @@
 #define _GNU_SOURCE
-#include "clither/log.h"
-#include "clither/thread.h"
+#include "clither/util/log.h"
+#include "clither/platform/thread.h"
 #include <pthread.h>
 #include <signal.h>
 #include <string.h>

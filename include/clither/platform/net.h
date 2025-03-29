@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/vec.h"
+#include "clither/util/vec.h"
 
 /*
  * 576 = minimum maximum reassembly buffer size

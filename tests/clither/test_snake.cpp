@@ -1,14 +1,14 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/bezier_knot_rb.h"
-#include "clither/log.h"
-#include "clither/qwaabb_rb.h"
-#include "clither/qwpos_vec.h"
-#include "clither/qwpos_vec_rb.h"
-#include "clither/snake.h"
-#include "clither/vec.h"
-#include "clither/wrap.h"
+#include "clither/game/bezier_knot_rb.h"
+#include "clither/game/qwaabb_rb.h"
+#include "clither/game/qwpos_vec.h"
+#include "clither/game/qwpos_vec_rb.h"
+#include "clither/game/snake.h"
+#include "clither/game/wrap.h"
+#include "clither/util/log.h"
+#include "clither/util/vec.h"
 }
 
 #define NAME snake

@@ -1,4 +1,4 @@
-#include "clither/signals.h"
+#include "clither/platform/signals.h"
 
 void
 signals_install(void)

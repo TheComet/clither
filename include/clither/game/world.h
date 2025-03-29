@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/food.h"
-#include "clither/q.h"
+#include "clither/game/food.h"
+#include "clither/game/q.h"
 
 struct snake_bmap;
 struct food_grid;

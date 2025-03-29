@@ -1,6 +1,6 @@
-#include "clither/log.h"
-#include "clither/mem.h"
-#include "clither/net.h"
+#include "clither/util/log.h"
+#include "clither/util/mem.h"
+#include "clither/platform/net.h"
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>

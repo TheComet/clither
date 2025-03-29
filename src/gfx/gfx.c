@@ -1,4 +1,4 @@
-#include "clither/gfx.h"
+#include "clither/gfx/gfx.h"
 #include <stddef.h>
 
 #if defined(CLITHER_GFX_SDL)

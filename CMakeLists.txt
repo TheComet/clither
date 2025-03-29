@@ -84,177 +84,185 @@ add_executable (clither
     "templates/config.h.in"
     "${PROJECT_BINARY_DIR}/include/clither/config.h"
 
-    "include/clither/args.h"
-    "include/clither/backtrace.h"
     "include/clither/benchmarks.h"
-    "include/clither/bezier.h"
-    "include/clither/bezier_knot_rb.h"
-    "include/clither/bezier_knot_acks_bmap.h"
-    "include/clither/bezier_point_vec.h"
-    "include/clither/bmap.h"
-    "include/clither/bset.h"
-    "include/clither/camera.h"
-    "include/clither/cli_colors.h"
-    "include/clither/client.h"
-    "include/clither/cmd.h"
-    "include/clither/cmd_queue.h"
-    "include/clither/cmd_rb.h"
-    "include/clither/food.h"
-    "include/clither/food_in_proximity_hset.h"
-    "include/clither/fs.h"
-    "include/clither/gfx.h"
-    "include/clither/hash.h"
-    "include/clither/hmap.h"
-    "include/clither/hset.h"
-    "include/clither/input.h"
-    "include/clither/log.h"
-    "include/clither/mcd_wifi.h"
-    "include/clither/mfile.h"
-    "include/clither/msg.h"
-    "include/clither/msg_vec.h"
-    "include/clither/morton.h"
-    "include/clither/mutex.h"
-    "include/clither/net.h"
-    "include/clither/net_addr_hmap.h"
-    "include/clither/popcount.h"
-    "include/clither/snakes_in_proximity_bmap.h"
-    "include/clither/q.h"
-    "include/clither/qwaabb_rb.h"
-    "include/clither/qwpos_vec.h"
-    "include/clither/qwpos_vec_rb.h"
-    "include/clither/rb.h"
-    "include/clither/resource_pack.h"
-    "include/clither/resource_snake_part_vec.h"
-    "include/clither/resource_sprite_vec.h"
-    "include/clither/settings.h"
-    "include/clither/server.h"
-    "include/clither/server_client.h"
-    "include/clither/server_client_hmap.h"
-    "include/clither/server_instance.h"
-    "include/clither/server_instance_bmap.h"
-    "include/clither/signals.h"
-    "include/clither/snake.h"
-    "include/clither/snake_bmap.h"
-    "include/clither/snake_param.h"
-    "include/clither/snake_split_rb.h"
-    "include/clither/str.h"
-    "include/clither/strspan.h"
-    "include/clither/strview.h"
-    "include/clither/strlist.h"
-    "include/clither/system.h"
     "include/clither/tests.h"
-    "include/clither/thread.h"
-    "include/clither/tick.h"
-    "include/clither/utf8.h"
-    "include/clither/world.h"
-    "include/clither/wrap.h"
 
-    "src/args.c"
-    "src/bezier.c"
-    "src/bezier_knot_rb.c"
-    "src/bezier_point_vec.c"
-    "src/camera.c"
-    "src/cmd.c"
-    "src/cmd_queue.c"
-    "src/cmd_rb.c"
-    "src/food.c"
-    "src/hash.c"
-    "src/input.c"
-    "src/log.c"
-    "src/morton.c"
-    "src/msg.c"
-    "src/msg_vec.c"
-    "src/net_addr_hmap.c"
-    "src/qwaabb_rb.c"
-    "src/qwpos_vec.c"
-    "src/qwpos_vec_rb.c"
-    "src/resource_pack.c"
-    "src/resource_snake_part_vec.c"
-    "src/resource_sprite_vec.c"
-    "src/settings.c"
-    "src/snake.c"
-    "src/snake_bmap.c"
-    "src/snake_param.c"
-    "src/snake_split_rb.c"
-    "src/str.c"
-    "src/strview.c"
-    "src/strlist.c"
-    "src/world.c"
+    "include/clither/client/client.h"
+
+    "include/clither/game/args.h"
+    "include/clither/game/bezier.h"
+    "include/clither/game/bezier_knot_rb.h"
+    "include/clither/game/bezier_point_vec.h"
+    "include/clither/game/camera.h"
+    "include/clither/game/cmd.h"
+    "include/clither/game/cmd_queue.h"
+    "include/clither/game/cmd_rb.h"
+    "include/clither/game/food.h"
+    "include/clither/game/input.h"
+    "include/clither/game/mcd_wifi.h"
+    "include/clither/game/msg.h"
+    "include/clither/game/msg_vec.h"
+    "include/clither/game/q.h"
+    "include/clither/game/qwaabb_rb.h"
+    "include/clither/game/qwpos_vec.h"
+    "include/clither/game/qwpos_vec_rb.h"
+    "include/clither/game/resource_pack.h"
+    "include/clither/game/resource_snake_part_vec.h"
+    "include/clither/game/resource_sprite_vec.h"
+    "include/clither/game/settings.h"
+    "include/clither/game/snake.h"
+    "include/clither/game/snake_bmap.h"
+    "include/clither/game/snake_param.h"
+    "include/clither/game/snake_split_rb.h"
+    "include/clither/game/world.h"
+    "include/clither/game/wrap.h"
+
+    "include/clither/gfx/gfx.h"
+
+    "include/clither/platform/backtrace.h"
+    "include/clither/platform/fs.h"
+    "include/clither/platform/mfile.h"
+    "include/clither/platform/mutex.h"
+    "include/clither/platform/net.h"
+    "include/clither/platform/signals.h"
+    "include/clither/platform/system.h"
+    "include/clither/platform/thread.h"
+    "include/clither/platform/tick.h"
+    "include/clither/platform/utf8.h"
+
+    "include/clither/util/bmap.h"
+    "include/clither/util/bset.h"
+    "include/clither/util/cli_colors.h"
+    "include/clither/util/hash.h"
+    "include/clither/util/hmap.h"
+    "include/clither/util/hset.h"
+    "include/clither/util/log.h"
+    "include/clither/util/mem.h"
+    "include/clither/util/morton.h"
+    "include/clither/util/popcount.h"
+    "include/clither/util/rb.h"
+    "include/clither/util/str.h"
+    "include/clither/util/strspan.h"
+    "include/clither/util/strview.h"
+    "include/clither/util/strlist.h"
+
+    "include/clither/server/bezier_knot_acks_bmap.h"
+    "include/clither/server/food_in_proximity_hset.h"
+    "include/clither/server/net_addr_hmap.h"
+    "include/clither/server/snakes_in_proximity_bmap.h"
+    "include/clither/server/server.h"
+    "include/clither/server/server_client.h"
+    "include/clither/server/server_client_hmap.h"
+    "include/clither/server/server_instance.h"
+    "include/clither/server/server_instance_bmap.h"
+
+    "src/game/args.c"
+    "src/game/bezier.c"
+    "src/game/bezier_knot_rb.c"
+    "src/game/bezier_point_vec.c"
+    "src/game/camera.c"
+    "src/game/cmd.c"
+    "src/game/cmd_queue.c"
+    "src/game/cmd_rb.c"
+    "src/game/food.c"
+    "src/game/input.c"
+    "src/game/msg.c"
+    "src/game/msg_vec.c"
+    "src/game/qwaabb_rb.c"
+    "src/game/qwpos_vec.c"
+    "src/game/qwpos_vec_rb.c"
+    "src/game/resource_pack.c"
+    "src/game/resource_snake_part_vec.c"
+    "src/game/resource_sprite_vec.c"
+    "src/game/settings.c"
+    "src/game/snake.c"
+    "src/game/snake_bmap.c"
+    "src/game/snake_param.c"
+    "src/game/snake_split_rb.c"
+    "src/game/world.c"
+
+    "src/util/hash.c"
+    "src/util/log.c"
+    "src/util/morton.c"
+    "src/util/str.c"
+    "src/util/strview.c"
+    "src/util/strlist.c"
 
     $<$<BOOL:${CLITHER_SERVER}>:
-        src/bezier_knot_acks_bmap.c
-        src/snakes_in_proximity_bmap.c
-        src/food_in_proximity_hset.c
-        src/server.c
-        src/server_client.c
-        src/server_client_hmap.c
-        src/server_instance.c
-        src/server_instance_bmap.c>
+        src/server/bezier_knot_acks_bmap.c
+        src/server/snakes_in_proximity_bmap.c
+        src/server/food_in_proximity_hset.c
+        src/server/net_addr_hmap.c
+        src/server/server.c
+        src/server/server_client.c
+        src/server/server_client_hmap.c
+        src/server/server_instance.c
+        src/server/server_instance_bmap.c>
 
     $<$<BOOL:${CLITHER_MCD}>:
-        src/mcd_wifi.c>
+        src/game/mcd_wifi.c>
 
     $<$<BOOL:${CLITHER_CLIENT}>:
-        src/client.c>
+        src/client/client.c>
 
     $<$<BOOL:${CLITHER_GFX}>:
-        src/gfx.c
+        src/gfx/gfx.c
         $<$<BOOL:${CLITHER_GFX_SDL}>:
-            src/sdl/gfx_sdl.c>
+            src/gfx/sdl/gfx_sdl.c>
         $<$<BOOL:${CLITHER_GFX_GLES2}>:
-            src/gles2/gfx_gles2.c
-            src/gles2/internal/background.c
-            src/gles2/internal/food.c
-            src/gles2/internal/quad.c
-            src/gles2/internal/shader.c
-            src/gles2/internal/snake.c
-            src/gles2/internal/sprite.c
-            src/gles2/internal/sprite_shadow.c
-            src/gles2/internal/text.c
-            src/gles2/glad/src/gles2.c>
+            src/gfx/gles2/gfx_gles2.c
+            src/gfx/gles2/internal/background.c
+            src/gfx/gles2/internal/food.c
+            src/gfx/gles2/internal/quad.c
+            src/gfx/gles2/internal/shader.c
+            src/gfx/gles2/internal/snake.c
+            src/gfx/gles2/internal/sprite.c
+            src/gfx/gles2/internal/sprite_shadow.c
+            src/gfx/gles2/internal/text.c
+            src/gfx/gles2/glad/src/gles2.c>
         $<$<BOOL:${CLITHER_GFX_VULKAN}>:
-            src/vulkan/gfx_vulkan.c>>
+            src/gfx/vulkan/gfx_vulkan.c>>
 
     $<$<BOOL:${CLITHER_MEMORY_DEBUGGING}>:
-        src/mem.c>
+        src/util/mem.c>
 
     $<$<PLATFORM_ID:Windows>:
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_win32.c>
-        src/fs_win32.c
-        src/mfile_win32.c
-        src/mutex_win32.c
-        src/net_win32.c
-        src/signals_win32.c
-        src/system_win32.c
-        src/thread_win32.c
-        src/tick_win32.c
-        src/utf8_win32.c
+        src/platform/fs_win32.c
+        src/platform/mfile_win32.c
+        src/platform/mutex_win32.c
+        src/platform/net_win32.c
+        src/platform/signals_win32.c
+        src/platform/system_win32.c
+        src/platform/thread_win32.c
+        src/platform/tick_win32.c
+        src/platform/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_linux.c>
-        src/fs_linux.c
-        src/mfile_posix.c
-        src/mutex_pthread.c
-        src/net_posix.c
-        src/signals_posix.c
-        src/thread_pthread.c
-        src/tick_posix.c
-        src/utf8_posix.c>
+        src/platform/fs_linux.c
+        src/platform/mfile_posix.c
+        src/platform/mutex_pthread.c
+        src/platform/net_posix.c
+        src/platform/signals_posix.c
+        src/platform/thread_pthread.c
+        src/platform/tick_posix.c
+        src/platform/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
-        src/fs_linux.c
-        src/mfile_posix.c
-        src/mutex_pthread.c
-        src/net_posix.c
-        src/signals_posix.c
-        src/thread_pthread.c
-        src/tick_posix.c
-        src/utf8_posix.c>
+        src/platform/fs_linux.c
+        src/platform/mfile_posix.c
+        src/platform/mutex_pthread.c
+        src/platform/net_posix.c
+        src/platform/signals_posix.c
+        src/platform/thread_pthread.c
+        src/platform/tick_posix.c
+        src/platform/utf8_posix.c>
     $<$<PLATFORM_ID:Emscripten>:
-        src/fs_linux.c
-        src/net_em.c
-        src/signals_em.c
-        src/tick_em.c
-        src/utf8_posix.c>
+        src/platform/fs_linux.c
+        src/platform/net_em.c
+        src/platform/signals_em.c
+        src/platform/tick_em.c
+        src/platform/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
@@ -296,7 +304,7 @@ target_include_directories (clither
         $<INSTALL_INTERFACE:include>
 
         $<$<BOOL:${CLITHER_GFX_GLES2}>:
-            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gles2/glad/include>>)
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gfx/gles2/glad/include>>)
 target_compile_definitions (clither
     PRIVATE
         $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>)

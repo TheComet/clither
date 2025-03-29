@@ -1,5 +1,5 @@
 #include "clither/utf8.h"
-#include "clither/mem.h"
+#include "clither/util/mem.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

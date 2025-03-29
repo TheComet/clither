@@ -1,9 +1,9 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/bezier.h"
-#include "clither/q.h"
-#include "clither/qwpos_vec.h"
+#include "clither/game/bezier.h"
+#include "clither/game/q.h"
+#include "clither/game/qwpos_vec.h"
 }
 
 #define NAME bezier_fit

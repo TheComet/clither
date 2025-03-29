@@ -1,4 +1,4 @@
-#include "clither/signals.h"
+#include "clither/platform/signals.h"
 #include <signal.h>
 #include <stddef.h>
 

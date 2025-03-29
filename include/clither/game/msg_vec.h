@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/msg.h"
-#include "clither/vec.h"
+#include "clither/game/msg.h"
+#include "clither/util/vec.h"
 
 VEC_DECLARE(msg_vec, struct msg*, 16)
 

@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/bmap.h"
+#include "clither/util/bmap.h"
 }
 
 #define NAME              bmap

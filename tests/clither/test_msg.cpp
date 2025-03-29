@@ -1,9 +1,9 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/cmd.h"
-#include "clither/msg.h"
-#include "clither/msg_vec.h"
+#include "clither/game/cmd.h"
+#include "clither/game/msg.h"
+#include "clither/game/msg_vec.h"
 }
 
 #define NAME msg

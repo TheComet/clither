@@ -5,7 +5,7 @@
 #include "./sprite.h"
 #include "./sprite_shadow.h"
 #include "./text.h"
-#include "clither/input.h"
+#include "clither/game/input.h"
 
 struct gfx
 {

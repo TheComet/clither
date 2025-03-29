@@ -1,6 +1,6 @@
 #include "clither/config.h"
-#include "clither/hash.h"
-#include "clither/log.h"
+#include "clither/util/hash.h"
+#include "clither/util/log.h"
 #include <assert.h>
 
 /* ------------------------------------------------------------------------- */

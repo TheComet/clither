@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/bmap.h"
+#include "clither/util/bmap.h"
 
 struct bezier_knot_acks_bmap;
 

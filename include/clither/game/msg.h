@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/cmd_queue.h"
-#include "clither/q.h"
+#include "clither/game/cmd_queue.h"
+#include "clither/game/q.h"
 #include <stdint.h>
 
 struct food;

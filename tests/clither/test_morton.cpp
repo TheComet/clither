@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/morton.h"
+#include "clither/util/morton.h"
 }
 
 #define NAME morton

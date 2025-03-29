@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/strview.h"
-#include "clither/vec.h"
+#include "clither/util/strview.h"
+#include "clither/util/vec.h"
 
 struct str;
 VEC_DECLARE(str_impl, char, 16)

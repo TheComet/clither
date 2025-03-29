@@ -1,10 +1,10 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/bezier.h"
-#include "clither/bezier_knot_rb.h"
-#include "clither/bezier_point_vec.h"
-#include "clither/q.h"
+#include "clither/game/bezier.h"
+#include "clither/game/bezier_knot_rb.h"
+#include "clither/game/bezier_point_vec.h"
+#include "clither/game/q.h"
 }
 
 #define NAME bezier_point

@@ -1,9 +1,9 @@
-#include "clither/backtrace.h"
-#include "clither/cli_colors.h"
-#include "clither/hash.h"
-#include "clither/hmap.h"
-#include "clither/log.h"
-#include "clither/mem.h"
+#include "clither/platform/backtrace.h"
+#include "clither/util/cli_colors.h"
+#include "clither/util/hash.h"
+#include "clither/util/hmap.h"
+#include "clither/util/log.h"
+#include "clither/util/mem.h"
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -312,7 +312,7 @@ int mem_deinit_threadlocal(void)
     uintptr_t           addr;
     struct report_info* info;
     int32_t             slot;
-    hmap_for_each(state.report, slot, addr, info)
+    hmap_for_each (state.report, slot, addr, info)
     {
         (void)addr;
         fprintf(

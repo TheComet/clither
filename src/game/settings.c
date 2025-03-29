@@ -1,10 +1,9 @@
-#include "clither/args.h"
-#include "clither/log.h"
-#include "clither/mfile.h"
-#include "clither/net.h"
-#include "clither/settings.h"
-#include "clither/strview.h"
-#include "clither/utf8.h"
+#include "clither/game/args.h"
+#include "clither/game/settings.h"
+#include "clither/platform/mfile.h"
+#include "clither/platform/utf8.h"
+#include "clither/util/log.h"
+#include "clither/util/strview.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>

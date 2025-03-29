@@ -4,7 +4,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/tick.h"
+#include "clither/platform/tick.h"
 }
 
 #define NAME tick

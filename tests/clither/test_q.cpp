@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/q.h"
+#include "clither/game/q.h"
 }
 
 #define NAME q

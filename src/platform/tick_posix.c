@@ -1,5 +1,4 @@
-#include "clither/tick.h"
-#include <errno.h>
+#include "clither/platform/tick.h"
 #include <time.h>
 
 /* ------------------------------------------------------------------------- */

@@ -3,7 +3,7 @@
 #include "clither/config.h"
 #if defined(CLITHER_GFX)
 
-#    include "clither/q.h"
+#    include "clither/game/q.h"
 
 struct camera;
 struct command;
@@ -20,15 +20,15 @@ struct gfx_interface
     const char* name;
 
     /*!
-     * \brief Global init. Called once at program start.
+     * \brief Initialize global data here. Called once before create().
      * \return Returns 0 on success, or a negative value for failure.
      */
-    int (*global_init)(void);
+    int (*init)(void);
 
     /*!
-     * \brief Global de-init. Called once at program exit.
+     * \brief Clean up global data here. Called after destroy().
      */
-    void (*global_deinit)(void);
+    void (*deinit)(void);
 
     /*!
      * \brief Create a graphics contet. This will open the window,
@@ -46,16 +46,20 @@ struct gfx_interface
 
     /*!
      * \brief Load resources from a resource pack.
-     * \note This function can be called more than once. For example, when
-     * switching resource packs. \return Return 0 if successful, -1 if an error
-     * occurred.
+     * \return 0 if successful. -1 if an error occurred.
      */
     int (*load_resource_pack)(
         struct gfx* gfx, const struct resource_pack* pack);
 
     /*!
-     * \brief Poll for mouse and keyboard input. See struct input in input.h
-     * for more details.
+     * \brief Unload a previously loaded resource pack.
+     */
+    void (*unload_resource_pack)(
+        struct gfx* gfx, const struct resource_pack* pack);
+
+    /*!
+     * \brief Poll for mouse and keyboard input and fill in the "input"
+     * structure. See struct input in input.h for more details.
      */
     void (*poll_input)(struct gfx* gfx, struct input* input);
 
@@ -74,10 +78,12 @@ struct gfx_interface
      * limitation allows commands to be delta-compressed more efficiently.
      *
      * \param[in] command The previously calculated command from the previous
-     * frame. \param[in] input Raw user input. \param[in] gfx Graphics context.
+     * frame.
+     * \param[in] input Raw user input.
+     * \param[in] gfx Graphics context.
      * \param[in] cam Camera information required for transformation.
      * \param[in] snake_head Snake's head position in world space.
-     * \return The new command. Make sure to use @see command_make()
+     * \return The new command. Make sure to use @see cmd_make()
      */
     struct cmd (*input_to_cmd)(
         struct cmd           prev,

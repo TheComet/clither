@@ -1,8 +1,8 @@
 #pragma once
 
-#include "clither/bezier.h"
-#include "clither/cmd_queue.h"
-#include "clither/snake_param.h"
+#include "clither/game/bezier.h"
+#include "clither/game/cmd_queue.h"
+#include "clither/game/snake_param.h"
 
 struct snake_head
 {

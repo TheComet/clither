@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/hset.h"
+#include "clither/util/hset.h"
 }
 
 #define NAME         hset

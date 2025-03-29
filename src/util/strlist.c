@@ -1,6 +1,6 @@
-#include "clither/log.h"
-#include "clither/mem.h"
-#include "clither/strlist.h"
+#include "clither/util/log.h"
+#include "clither/util/mem.h"
+#include "clither/util/strlist.h"
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>

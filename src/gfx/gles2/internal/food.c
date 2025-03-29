@@ -1,7 +1,7 @@
 #include "./gfx.h"
-#include "clither/bmap.h"
-#include "clither/food.h"
-#include "clither/morton.h"
+#include "clither/util/bmap.h"
+#include "clither/game/food.h"
+#include "clither/util/morton.h"
 
 void gfx_gles2_draw_food_shadows(
     const struct food_grid*    food_grid,

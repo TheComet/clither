@@ -1,5 +1,5 @@
-#include "clither/cli_colors.h"
-#include "clither/log.h"
+#include "clither/util/cli_colors.h"
+#include "clither/util/log.h"
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>

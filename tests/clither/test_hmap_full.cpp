@@ -3,7 +3,7 @@
 #include <gmock/gmock.h>
 
 extern "C" {
-#include "clither/hmap.h"
+#include "clither/util/hmap.h"
 }
 
 #define NAME         hmap_full

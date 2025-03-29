@@ -1,7 +1,7 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/args.h"
+#include "clither/game/args.h"
 }
 
 #define NAME args

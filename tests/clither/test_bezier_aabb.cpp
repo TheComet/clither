@@ -1,8 +1,8 @@
 #include "gmock/gmock.h"
 
 extern "C" {
-#include "clither/bezier.h"
-#include "clither/q.h"
+#include "clither/game/bezier.h"
+#include "clither/game/q.h"
 }
 
 #define NAME bezier_aabb

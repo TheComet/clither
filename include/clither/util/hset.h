@@ -1,8 +1,8 @@
 #pragma once
 
-#include "clither/hash.h"
-#include "clither/log.h" /* log_oom */
-#include "clither/mem.h" /* mem_alloc, mem_free */
+#include "clither/util/hash.h"
+#include "clither/util/log.h" /* log_oom */
+#include "clither/util/mem.h" /* mem_alloc, mem_free */
 #include <stddef.h>      /* offsetof */
 #include <string.h>      /* memset */
 

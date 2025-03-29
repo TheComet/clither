@@ -1,5 +1,5 @@
-#include "clither/log.h"
-#include "clither/net.h"
+#include "clither/util/log.h"
+#include "clither/platform/net.h"
 
 #include "cstructures/vector.h"
 

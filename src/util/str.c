@@ -1,14 +1,11 @@
-#include "clither/config.h"
-#include "clither/log.h"
-#include "clither/mem.h"
-#include "clither/str.h"
+#include "clither/util/str.h"
 
 #if defined(_WIN32)
-#define SEP '\\'
-#define BAD_SEP '/'
+#    define SEP     '\\'
+#    define BAD_SEP '/'
 #else
-#define SEP '/'
-#define BAD_SEP '\\'
+#    define SEP     '/'
+#    define BAD_SEP '\\'
 #endif
 
 VEC_DEFINE(str_impl, char, 16)
@@ -42,7 +39,7 @@ int str_set_cstr(struct str** str, const char* cstr)
 
 int str_set_path_cstr(struct str** str, const char* path)
 {
-    int i;
+    int              i;
     struct str_impl* impl;
     int              len = (int)strlen(path);
 

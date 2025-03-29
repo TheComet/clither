@@ -1,7 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 
-#include "clither/log.h"
-#include "clither/net.h"
+#include "clither/util/log.h"
+#include "clither/platform/net.h"
 
 #include <windows.h>
 #include <winsock2.h>

@@ -2,9 +2,9 @@
 #include "./snake.h"
 #include "./sprite.h"
 #include "./sprite_shadow.h"
-#include "clither/bezier_point_vec.h"
-#include "clither/snake.h"
-#include "clither/vec.h"
+#include "clither/game/bezier_point_vec.h"
+#include "clither/game/snake.h"
+#include "clither/util/vec.h"
 
 void gfx_gles2_draw_snake_shadow(
     const struct snake*        snake,

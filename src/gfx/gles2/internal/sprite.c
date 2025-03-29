@@ -1,9 +1,8 @@
 #include "./gfx.h"
 #include "./shader.h"
-#include "clither/camera.h"
-#include "clither/config.h"
-#include "clither/resource_pack.h"
-#include "clither/strlist.h"
+#include "clither/game/camera.h"
+#include "clither/game/resource_pack.h"
+#include "clither/util/strlist.h"
 #include "stb_image.h"
 
 void gfx_gles2_sprite_mat_init(struct sprite_mat* mat)
@@ -85,6 +84,12 @@ void gfx_gles2_sprite_tex_load(
 {
     int      img_width, img_height, img_channels;
     stbi_uc* img_data;
+
+    if (res == NULL)
+    {
+        log_warn("Sprite texture resource is NULL\n");
+        return;
+    }
 
     img_data = stbi_load(
         strlist_cstr(res->textures, 0),

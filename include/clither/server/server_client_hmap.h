@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clither/hmap.h"
-#include "clither/server_client.h"
+#include "clither/server/server_client.h"
+#include "clither/util/hmap.h"
 
 struct net_addr;
 
@@ -26,7 +26,7 @@ struct server_client* server_client_hmap_kvs_get_value(
     const struct server_client_hmap_kvs* kvs, int16_t slot);
 
 #define server_client_hmap_for_each(server_clients, slot, addr, client)        \
-    hmap_for_each_full(                                                        \
+    hmap_for_each_full (                                                       \
         server_clients,                                                        \
         slot,                                                                  \
         addr,                                                                  \
