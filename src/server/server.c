@@ -1,6 +1,8 @@
 #include "clither/game/args.h"
 #include "clither/game/bezier_knot_rb.h"
+#include "clither/game/bezier_point_vec.h"
 #include "clither/game/msg_vec.h"
+#include "clither/game/qwaabb_rb.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_bmap.h"
@@ -171,7 +173,7 @@ static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
     if (--msg->resend_period_counter > 0)
         return VEC_RETAIN;
     msg->resend_period_counter = msg->resend_period;
-    if (--msg->resend_retry_counter == 0)
+    if (--msg->resend_retry_counter <= 0)
         return log_err(
             "Client did not acknowledge reliable message: type=%d\n",
             msg->type);
@@ -227,8 +229,7 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
-int server_queue_food_data(
-    struct server* server, const struct world* world, qw proximity_range)
+int server_queue_food_data(struct server* server, const struct world* world)
 {
     int                    slot;
     const struct net_addr* addr;
@@ -243,17 +244,19 @@ int server_queue_food_data(
         struct qwpos        lower_pos, upper_pos;
         uint64_t            lower_morton, upper_morton, morton;
         int32_t             lower_idx, upper_idx, idx;
+        struct qwpos        range;
         (void)addr;
 
         snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL);
+        range = snake_calculate_visible_range(snake);
 
         lower_pos = make_qwposqw(
-            snake->head.pos.x - proximity_range,
-            snake->head.pos.y - proximity_range);
+            qw_sub(snake->head.pos.x, range.x),
+            qw_sub(snake->head.pos.y, range.y));
         upper_pos = make_qwposqw(
-            snake->head.pos.x + proximity_range,
-            snake->head.pos.y + proximity_range);
+            qw_add(snake->head.pos.x, range.x),
+            qw_add(snake->head.pos.y, range.y));
         lower_morton = morton_encode_qwpos(lower_pos);
         upper_morton = morton_encode_qwpos(upper_pos);
         lower_idx =
@@ -283,14 +286,17 @@ int server_queue_food_data(
             }
         }
 
+        /* Remove food pieces that go out of range, or were removed from the
+         * world */
         hset_for_each (client->food_in_proximity, idx, morton)
         {
             pos = morton_decode_qwpos(morton);
-            if (qwaabb_test_qwpos(bb, pos))
-                continue;
-            if (food_in_proximity_hset_erase(client->food_in_proximity, morton))
+            if (!qwaabb_test_qwpos(bb, pos) ||
+                food_bmap_find(world->food_grid.morton, morton) == NULL)
             {
-                server_queue(client, msg_food_destroy(pos));
+                if (food_in_proximity_hset_erase(
+                        client->food_in_proximity, morton))
+                    server_queue(client, msg_food_destroy(pos));
             }
         }
     }
@@ -300,7 +306,7 @@ int server_queue_food_data(
 
 /* ------------------------------------------------------------------------- */
 int server_update_snakes_in_range(
-    struct server* server, const struct world* world, qw proximity_range)
+    struct server* server, const struct world* world)
 {
     int                    slot;
     int                    other_slot;
@@ -312,10 +318,16 @@ int server_update_snakes_in_range(
     /* TODO: O(n^2) */
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
+        struct qwpos  proximity_range;
+        struct snake* snake;
+
+        snake = snake_bmap_find(world->snakes, client->snake_id);
+        CLITHER_DEBUG_ASSERT(snake != NULL);
+        proximity_range = snake_calculate_visible_range(snake);
+
         server_client_hmap_for_each (
             server->clients, other_slot, other_addr, other_client)
         {
-            struct snake* snake;
             struct snake* other_snake;
             struct qwaabb other_aabb;
 
@@ -323,18 +335,20 @@ int server_update_snakes_in_range(
             if (addr == other_addr)
                 continue;
 
-            snake = snake_bmap_find(world->snakes, client->snake_id);
             other_snake =
                 snake_bmap_find(world->snakes, other_client->snake_id);
-            CLITHER_DEBUG_ASSERT(snake != NULL);
             CLITHER_DEBUG_ASSERT(other_snake != NULL);
 
-            other_aabb = other_snake->data.aabb;
-            other_aabb.x1 = qw_sub(other_aabb.x1, proximity_range);
-            other_aabb.y1 = qw_sub(other_aabb.y1, proximity_range);
-            other_aabb.x2 = qw_add(other_aabb.x2, proximity_range);
-            other_aabb.y2 = qw_add(other_aabb.y2, proximity_range);
-            if (qwaabb_test_qwpos(other_aabb, snake->head.pos))
+            other_aabb = other_snake->data.bb;
+            other_aabb.x1 = qw_sub(other_aabb.x1, proximity_range.x);
+            other_aabb.y1 = qw_sub(other_aabb.y1, proximity_range.y);
+            other_aabb.x2 = qw_add(other_aabb.x2, proximity_range.x);
+            other_aabb.y2 = qw_add(other_aabb.y2, proximity_range.y);
+
+            /* Want to make sure to remove snakes that died, or somehow ended up
+             * in the list even though they are held. */
+            if (!snake_is_held(other_snake) && !snake_is_dead(other_snake) &&
+                qwaabb_test_qwpos(other_aabb, snake->head.pos))
             {
                 int32_t                        knot_idx;
                 const struct bezier_knot*      knot;
@@ -381,6 +395,95 @@ int server_update_snakes_in_range(
 }
 
 /* ------------------------------------------------------------------------- */
+static struct server_client*
+find_client_for_snake_id(const struct server* server, uint16_t snake_id)
+{
+    int16_t                slot;
+    const struct net_addr* addr;
+    struct server_client*  client;
+
+    server_client_hmap_for_each (server->clients, slot, addr, client)
+        if (client->snake_id == snake_id)
+            return (void)slot, (void)addr, client;
+
+    return NULL;
+}
+static int
+snake_head_collided(struct qwpos victim_head_pos, const struct snake* attacker)
+{
+    int16_t        bb_idx;
+    struct qwaabb* bb;
+
+    if (qwaabb_test_qwpos(attacker->data.bb, victim_head_pos))
+        return 1;
+
+    rb_for_each (attacker->data.bezier_aabbs, bb_idx, bb)
+        if (qwaabb_test_qwpos(*bb, victim_head_pos))
+            return 1;
+
+    return 0;
+}
+int server_kill_snake_checks(struct server* server, struct world* world)
+{
+    int                    slot;
+    const struct net_addr* addr;
+    struct server_client*  victim_client;
+
+    server_client_hmap_for_each (server->clients, slot, addr, victim_client)
+    {
+        int16_t                        attacker_idx;
+        uint16_t                       attacker_snake_id;
+        struct bezier_knot_acks_bmap** attacker_knot_acks;
+        struct snake*                  victim_snake;
+
+        (void)addr;
+
+        victim_snake = snake_bmap_find(world->snakes, victim_client->snake_id);
+        CLITHER_DEBUG_ASSERT(victim_snake != NULL);
+
+        bmap_for_each (
+            victim_client->snakes_in_proximity,
+            attacker_idx,
+            attacker_snake_id,
+            attacker_knot_acks)
+        {
+            const struct snake* attacker_snake =
+                snake_bmap_find(world->snakes, attacker_snake_id);
+            CLITHER_DEBUG_ASSERT(attacker_snake != NULL);
+
+            if (snake_is_held(victim_snake) || snake_is_dead(victim_snake))
+                continue;
+
+            if (snake_head_collided(victim_snake->head.pos, attacker_snake))
+                goto kill_snake;
+        }
+        continue;
+
+    kill_snake:
+        world_spawn_food_corpse(
+            world, &victim_snake->data, &victim_snake->param);
+
+        snake_set_dead(victim_snake);
+        server_queue(victim_client, msg_snake_death());
+
+        bmap_for_each (
+            victim_client->snakes_in_proximity,
+            attacker_idx,
+            attacker_snake_id,
+            attacker_knot_acks)
+        {
+            struct server_client* attacker_client =
+                find_client_for_snake_id(server, attacker_snake_id);
+            server_queue(
+                attacker_client, msg_snake_destroy(victim_client->snake_id));
+            (void)attacker_knot_acks;
+        }
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
 int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number)
 {
@@ -393,7 +496,7 @@ int server_queue_snake_data(
     {
         struct snake* snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL), (void)addr;
-        if (snake_is_held(snake))
+        if (snake_is_held(snake) || snake_is_dead(snake))
             continue;
         server_queue(
             client,
@@ -401,7 +504,8 @@ int server_queue_snake_data(
                 frame_number,
                 snake->head.pos,
                 snake->head.angle,
-                snake->head.speed));
+                snake->head.speed,
+                snake->param.food_eaten));
     }
 
     /* Queue bezier knots of all snakes in proximity */
@@ -475,6 +579,9 @@ int server_queue_snake_data(
                         head_knot->len_backwards,
                         second_knot->len_forwards));
             }
+
+            server_queue(
+                client, msg_snake_param(snake_id, snake->param.food_eaten));
         }
     }
 
@@ -510,6 +617,7 @@ static enum process_message_result process_message(
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
         case MSG_JOIN_REQUEST: {
+            log_dbg("MSG_JOIN_REQUEST\n");
             if (hmap_count(server->clients) + 1 > settings_server->max_players)
             {
                 struct net_udp_packet pkt;
@@ -602,7 +710,7 @@ static enum process_message_result process_message(
 
         case MSG_LEAVE: {
             server_client_remove(server, world, addr, client);
-            return PROCESS_MESSAGE_OK;
+            return PROCESS_MESSAGE_CLIENT_DROPPED;
         }
 
         case MSG_COMMANDS: {
@@ -685,7 +793,8 @@ static enum process_message_result process_message(
         }
 
         case MSG_SNAKE_USERNAME: {
-            log_warn("Server received unexpected message type %d\n", msg_type);
+            log_warn(
+                "Server received unexpected message type MSG_SNAKE_USERNAME\n");
             break;
         }
 
@@ -696,7 +805,8 @@ static enum process_message_result process_message(
         }
 
         case MSG_SNAKE_DESTROY: {
-            log_warn("Server received unexpected message type %d\n", msg_type);
+            log_warn(
+                "Server received unexpected message type MSG_SNAKE_DESTROY\n");
             break;
         }
 
@@ -706,9 +816,22 @@ static enum process_message_result process_message(
             return PROCESS_MESSAGE_OK;
         }
 
+        case MSG_SNAKE_DEATH: {
+            log_warn(
+                "Server received unexpected message type MSG_SNAKE_DEATH\n");
+            break;
+        }
+
+        case MSG_SNAKE_DEATH_ACK: {
+            msg_vec_remove_type(client->pending_msgs, MSG_SNAKE_DEATH);
+            return PROCESS_MESSAGE_OK;
+        }
+
         case MSG_BEZIER:
         case MSG_KNOT: {
-            log_warn("Server received unexpected message type %d\n", msg_type);
+            log_warn(
+                "Server received unexpected message type %s\n",
+                msg_type == MSG_BEZIER ? "MSG_BEZIER" : "MSG_KNOT");
             break;
         }
 
@@ -737,7 +860,12 @@ static enum process_message_result process_message(
             return PROCESS_MESSAGE_OK;
         }
 
-        case MSG_FOOD_CREATE: break;
+        case MSG_FOOD_CREATE: {
+            log_warn(
+                "Server received unexpected message type MSG_FOOD_CREATE\n");
+            break;
+        }
+
         case MSG_FOOD_CREATE_ACK: {
             uint64_t morton = morton_encode_qwpos(pp.food_create_ack.pos);
             msg_vec_remove_food_create(
@@ -754,7 +882,12 @@ static enum process_message_result process_message(
             return PROCESS_MESSAGE_OK;
         }
 
-        case MSG_FOOD_DESTROY: break;
+        case MSG_FOOD_DESTROY: {
+            log_warn(
+                "Server received unexpected message type MSG_FOOD_DESTROY\n");
+            break;
+        }
+
         case MSG_FOOD_DESTROY_ACK: {
             msg_vec_remove_food_destroy(
                 client->pending_msgs, pp.food_destroy_ack.pos);
@@ -958,11 +1091,13 @@ void* server_run(const void* p)
     struct server_instance_bmap* instances;
     const struct settings*       settings = p;
 
+    mem_init_threadlocal();
+    log_init();
+
     /* Change log prefix and color for server log messages */
     log_set_prefix(settings->server.log_prefix);
     log_set_colors(COL_B_CYAN, COL_RESET);
 
-    mem_init_threadlocal();
     server_instance_bmap_init(&instances);
 
     /*
@@ -1014,15 +1149,11 @@ void* server_run(const void* p)
 
     server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
-    log_set_colors("", "");
-    log_set_prefix("");
 
     return (void*)0;
 
 start_default_instance_failed:
     server_instance_bmap_deinit(instances);
     mem_deinit_threadlocal();
-    log_set_colors("", "");
-    log_set_prefix("");
     return (void*)-1;
 }

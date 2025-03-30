@@ -1,10 +1,12 @@
+#include "clither/tests/LogHelper.hpp"
+
 #include "gmock/gmock.h"
 
 extern "C" {
 #include "clither/util/vec.h"
 }
 
-#define NAME          vec
+#define NAME          test_vec
 #define MIN_CAPACITY  32
 #define EXPAND_FACTOR 2
 
@@ -55,7 +57,7 @@ VEC_DEFINE(shitty_vobj, struct obj, 16)
 /* clang-format on */
 } // namespace
 
-class NAME : public Test
+struct NAME : Test, LogHelper
 {
 public:
     void SetUp() override { vobj = NULL; }
@@ -80,6 +82,9 @@ TEST_F(NAME, realloc_returns_error_if_realloc_fails)
 {
     EXPECT_THAT(shitty_vobj_realloc((shitty_vobj**)&vobj, 16), Eq(-1));
     EXPECT_THAT(vobj, IsNull());
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 520 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, push_increments_counter)
@@ -129,22 +134,34 @@ TEST_F(NAME, push_returns_error_if_realloc_fails)
     EXPECT_THAT(
         shitty_vobj_push((shitty_vobj**)&vobj, obj{5, 5, 5, 5}), Eq(-1));
     EXPECT_THAT(vobj, IsNull());
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, emplace_returns_error_if_realloc_fails)
 {
     EXPECT_THAT(shitty_vobj_emplace((shitty_vobj**)&vobj), IsNull());
     EXPECT_THAT(vobj, IsNull());
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_returns_error_if_realloc_fails)
 {
     EXPECT_THAT(
         shitty_vobj_insert((shitty_vobj**)&vobj, 0, obj{5, 5, 5, 5}), Eq(-1));
     EXPECT_THAT(vobj, IsNull());
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_emplace_returns_error_if_realloc_fails)
 {
     EXPECT_THAT(shitty_vobj_insert_emplace((shitty_vobj**)&vobj, 0), IsNull());
     EXPECT_THAT(vobj, IsNull());
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, push_few_values_works)
@@ -318,6 +335,9 @@ TEST_F(NAME, push_expand_with_failed_realloc_returns_error)
         shitty_vobj_push((shitty_vobj**)&vobj, obj{42, 42, 42, 42}), Eq(-1));
     EXPECT_THAT(vec_count(vobj), Eq(MIN_CAPACITY));
     EXPECT_THAT(vec_capacity(vobj), Eq(MIN_CAPACITY));
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, emplace_expand_with_failed_realloc_returns_error)
 {
@@ -330,6 +350,9 @@ TEST_F(NAME, emplace_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(shitty_vobj_emplace((shitty_vobj**)&vobj), IsNull());
     EXPECT_THAT(vec_count(vobj), Eq(MIN_CAPACITY));
     EXPECT_THAT(vec_capacity(vobj), Eq(MIN_CAPACITY));
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_expand_with_failed_realloc_returns_error)
 {
@@ -344,6 +367,9 @@ TEST_F(NAME, insert_expand_with_failed_realloc_returns_error)
         Eq(-1));
     EXPECT_THAT(vec_count(vobj), Eq(MIN_CAPACITY));
     EXPECT_THAT(vec_capacity(vobj), Eq(MIN_CAPACITY));
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_emplace_expand_with_failed_realloc_returns_error)
 {
@@ -356,6 +382,9 @@ TEST_F(NAME, insert_emplace_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(shitty_vobj_insert_emplace((shitty_vobj**)&vobj, 3), IsNull());
     EXPECT_THAT(vec_count(vobj), Eq(MIN_CAPACITY));
     EXPECT_THAT(vec_capacity(vobj), Eq(MIN_CAPACITY));
+    EXPECT_THAT(
+        log(),
+        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, inserting_preserves_existing_elements)

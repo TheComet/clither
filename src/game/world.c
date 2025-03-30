@@ -1,3 +1,4 @@
+#include "clither/game/bezier_point_vec.h"
 #include "clither/game/food.h"
 #include "clither/game/q.h"
 #include "clither/game/settings.h"
@@ -10,13 +11,19 @@
 #include <stddef.h>
 
 /* ------------------------------------------------------------------------- */
+static uint64_t rng(struct world* w)
+{
+    return w->rng += hash32_jenkins_oaat(&w->rng, sizeof(w->rng));
+}
+
+/* ------------------------------------------------------------------------- */
 void world_init(struct world* world)
 {
     snake_bmap_init(&world->snakes);
     food_grid_init(&world->food_grid);
 
     world->food_count = 0;
-    world->food_rng = 1;
+    world->rng = 1;
     world->inner_radius = 0;
     world->ring_start = 0;
     world->ring_end = 0;
@@ -68,14 +75,57 @@ struct snake* world_create_snake(
 }
 
 /* ------------------------------------------------------------------------- */
+static int
+is_position_out_of_visible_range(const struct world* world, struct qwpos pos)
+{
+    int16_t             idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+    bmap_for_each (world->snakes, idx, snake_id, snake)
+    {
+        struct qwpos  range = snake_calculate_visible_range(snake);
+        struct qwaabb visible_bb = make_qwaabbqw(
+            qw_sub(snake->head.pos.x, range.x),
+            qw_sub(snake->head.pos.y, range.y),
+            qw_add(snake->head.pos.x, range.x),
+            qw_add(snake->head.pos.y, range.y));
+        if (qwaabb_test_qwpos(visible_bb, pos))
+            return 0;
+
+        (void)idx, (void)snake_id;
+    }
+
+    return 1;
+}
+
+/* ------------------------------------------------------------------------- */
+static struct qwpos find_spawn_position(struct world* world)
+{
+    struct qwpos spawn;
+    int          tries = 32;
+    do
+    {
+        qa phi = (qa)(rng(world));
+        qw r = (qw)(rng(world) & 0x7FFFFFFF);
+        r = qw_rescale(r, world->inner_radius, 1 << 31);
+        spawn = make_qwposqw(qw_mul(qa_cos(phi), r), qw_mul(qa_sin(phi), r));
+    } while (!is_position_out_of_visible_range(world, spawn) && --tries);
+
+    return spawn;
+}
+
+/* ------------------------------------------------------------------------- */
 uint16_t world_spawn_snake(struct world* world, const char* username)
 {
-    struct qwpos spawn = make_qwposi(0, 0);
+    uint16_t     snake_id;
+    struct qwpos spawn;
 
     /* Snake ID 0 is reserved to mean "invalid" */
-    uint16_t snake_id = world->next_free_snake_id++;
+    snake_id = world->next_free_snake_id++;
     if (world->next_free_snake_id == 0)
         world->next_free_snake_id++;
+
+    spawn = find_spawn_position(world);
 
     if (world_create_snake(world, snake_id, spawn, username) == NULL)
         return 0;
@@ -102,19 +152,15 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-static uint64_t food_rng(struct world* w)
-{
-    return w->food_rng +=
-           hash32_jenkins_oaat(&w->food_rng, sizeof(w->food_rng));
-}
 int world_respawn_food(struct world* w)
 {
-    while (food_grid_food_count(&w->food_grid) < w->food_count)
+    int tries = 64;
+    while (food_grid_food_count(&w->food_grid) < w->food_count && --tries)
     {
         struct qwpos pos, dir;
-        qa           a = (qa)(food_rng(w));
-        qa           phi = (qa)(food_rng(w));
-        qw           r = (qw)(food_rng(w) & 0x7FFFFFFF);
+        qa           a = (qa)(rng(w));
+        qa           phi = (qa)(rng(w));
+        qw           r = (qw)(rng(w) & 0x7FFFFFFF);
         r = qw_rescale(r, w->inner_radius, 1 << 31);
         pos = make_qwposqw(qw_mul(qa_cos(phi), r), qw_mul(qa_sin(phi), r));
         dir = make_qwposqw(qa_cos(a), qa_sin(a));
@@ -126,8 +172,27 @@ int world_respawn_food(struct world* w)
 }
 
 /* ------------------------------------------------------------------------- */
-int world_step(
-    struct world* world, uint16_t frame_number, uint8_t sim_tick_rate)
+int world_spawn_food_corpse(
+    struct world*             w,
+    const struct snake_data*  data,
+    const struct snake_param* param)
 {
+    int                        i;
+    const struct bezier_point* p;
+
+    vec_for_each (data->bezier_points, p)
+        for (i = 0; i != 10; ++i)
+        {
+            qw           scale = qw_div(snake_scale(param), make_qw(4));
+            qw           dx = qw_rescale(rng(w) & 0x7FFFFFFF, scale, 1 << 31);
+            qw           dy = qw_rescale(rng(w) & 0x7FFFFFFF, scale, 1 << 31);
+            qa           a = (qa)(rng(w));
+            struct qwpos dir = make_qwposqw(qa_cos(a), qa_sin(a));
+            struct qwpos pos =
+                make_qwposqw(qw_add(p->pos.x, dx), qw_add(p->pos.y, dy));
+            if (food_grid_add_food(&w->food_grid, pos, dir) != 0)
+                return -1;
+        }
+
     return 0;
 }

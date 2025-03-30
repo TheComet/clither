@@ -29,62 +29,62 @@
 static int print_help(const char* prog_name)
 {
     /* clang-format off */
-    fprintf(stderr, SECTION "Usage:\n" RESET "  %s [" ARG2 "options" RESET "]\n\n", prog_name);
+    log_raw(SECTION "Usage:\n" RESET "  %s [" ARG2 "options" RESET "]\n\n", prog_name);
 
     /*
      * Available options section
      */
-    fprintf(stderr,
+    log_raw(
         SECTION "Available options:\n" RESET
         "  " ARG2 "-h" RESET "," ARG1 " --help  " RESET "          Print this help text.\n");
 
 #if defined(CLITHER_TESTS)
-    fprintf(stderr, "     " ARG1 " --tests " RESET "          Run unit tests.\n");
+    log_raw("     " ARG1 " --tests " RESET "          Run unit tests.\n");
 #endif
 
 #if defined(CLITHER_BENCHMARKS)
-    fprintf(stderr, "     " ARG1 " --benchmarks" RESET "      Run benchmarks.\n");
+    log_raw("     " ARG1 " --benchmarks" RESET "      Run benchmarks.\n");
 #endif
 
 #if defined(CLITHER_SERVER)
-    fprintf(stderr, "  " ARG2 "-s" RESET "," ARG1 " --server" RESET "          Run in  headless  mode.  This only  starts  the  server\n");
+    log_raw("  " ARG2 "-s" RESET "," ARG1 " --server" RESET "          Run in  headless  mode.  This only  starts  the  server\n");
 #endif
 
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    fprintf(stderr,
+    log_raw(
         "     " ARG1 " --host  " RESET "          Spawn both the server and client,  and join the server.\n"
         "                        If the  client is closed,  the server  will continue to\n"
         "                        run in the background.\n");
 #endif
 
 #if defined(CLITHER_CLIENT)
-    fprintf(stderr,
+    log_raw(
         "  " ARG2 "-u" RESET "," ARG1 " --username" RESET " <" ARG2 "name" RESET "> Username to use when connecting to a server.\n");
 #endif
 
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER)
-    fprintf(stderr,
+    log_raw(
         "  " ARG2 "-a" RESET "," ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server  address to  connect to. Can  be a URL  or an IP\n"
         "                        address. If --host or --server is used,  then this sets\n"
         "                        the bind address rather than  the address to connect to\n"
         "                        The client  will always  use localhost or  127.0.0.1 in\n"
         "                        this case.\n");
-    fprintf(stderr,
+    log_raw(
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port  number  of  server  to  connect to.  If --host or\n"
         "                        --server  is used, then this sets the  bind port rather\n"
         "                        than the port to connect to.\n");
 #elif defined(CLITHER_CLIENT)
-    fprintf(stderr,
+    log_raw(
         "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server address to connect to. Can be a URL or an IP address.\n"
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port number of the server to connec to.\n");
 #elif defined(CLITHER_SERVER)
-    fprintf(stderr,
+    log_raw(
         "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Address to bind server to.\n"
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port to bind server to.\n");
 #endif
 
 #if defined(CLITHER_MCD)
-    fprintf(stderr,
+    log_raw(
         "     " ARG1 " --mcd " RESET "<" ARG2 "latency" RESET "> <" ARG2 "loss" RESET "> <" ARG2 "dup" RESET "> <" ARG2 "reorder" RESET ">\n"
         "                        Enable McDonald's  WiFi mode.  Latency is in ms.  Loss,\n"
         "                        dup  and reorder are in percent, and specify the chance\n"
@@ -94,27 +94,27 @@ static int print_help(const char* prog_name)
 #endif
 
 #if defined(CLITHER_GFX)
-    fprintf(stderr,
+    log_raw(
         "     " ARG1 " --gfx" RESET " <" ARG2 "index" RESET ">     Open a window for rendering the game.\n"
         "                        Currently available backends:\n");
     {
         int i;
         for (i = 0; gfx_backends[i]; ++i)
-            fprintf(stderr, "                            " ARG2 "%d" RESET ": %s\n", i, gfx_backends[i]->name);
+            log_raw("                            " ARG2 "%d" RESET ": %s\n", i, gfx_backends[i]->name);
     }
 #endif
 
     /* Logging options */
 #if defined(CLITHER_LOGGING)
-    fprintf(stderr,
+    log_raw(
         "  " ARG2 "-l" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">      Write log output to a custom file.  The default file is\n"
         "                        \"clither.txt\".  To  disable logging to a file, set this\n"
         "                        to an empty string.\n");
-    fprintf(stderr,
+    log_raw(
         "     " ARG1 " --netlog " RESET "<" ARG2 "file" RESET ">   Write  networking  log  output  to  a  custom file. The\n"
         "                        default  file  is \"net.txt\".  To  disable  logging to a\n"
         "                        file, set this to an empty string.\n");
-    fprintf(stderr,
+    log_raw(
         "     " ARG1 " --prefix " RESET "<" ARG2 "name" RESET ">   Sets the \"log prefix\" of the client.  This is the  text\n"
         "                        that  appears  in front of  every log message generated\n"
         "                        by the client. The default is \"Client: \"");
@@ -122,50 +122,50 @@ static int print_help(const char* prog_name)
 
     /* Disabled options */
 #if !defined(CLITHER_TESTS) || !defined(CLITHER_BENCHMARKS) || !defined(CLITHER_GFX) || !defined(CLITHER_LOGGING)
-    fprintf(stderr,
+    log_raw(
         SECTION "\nDisabled options:\n" RESET);
 #endif
 #if !defined(CLITHER_TESTS)
-    fprintf(stderr, "     " RED  " --tests " RESET "          (Recompile with -DCLITHER_TESTS=ON)\n");
+    log_raw("     " RED  " --tests " RESET "          (Recompile with -DCLITHER_TESTS=ON)\n");
 #endif
 #if !defined(CLITHER_BENCHMARKS)
-    fprintf(stderr, "     " RED  " --benchmarks" RESET "      (Recompile with -DCLITHER_BENCHMARKS=ON)\n");
+    log_raw("     " RED  " --benchmarks" RESET "      (Recompile with -DCLITHER_BENCHMARKS=ON)\n");
 #endif
 #if !defined(CLITHER_SERVER)
-    fprintf(stderr, "  " RED "-s" RESET "," RED " --server" RESET "          (Recompile with -DCLITHER_SERVER=ON)\n");
+    log_raw("  " RED "-s" RESET "," RED " --server" RESET "          (Recompile with -DCLITHER_SERVER=ON)\n");
 #endif
 #if !defined(CLITHER_SERVER) || !defined(CLITHER_CLIENT)
-    fprintf(stderr, "     " RED " --host " RESET "           (Recompile with -DCLITHER_CLIENT=ON -DCLITHER_SERVER=ON)\n");
+    log_raw("     " RED " --host " RESET "           (Recompile with -DCLITHER_CLIENT=ON -DCLITHER_SERVER=ON)\n");
 #endif
 #if !defined(CLITHER_CLIENT)
-    fprintf(stderr,
+    log_raw(
         "  " RED "-u" RESET "," RED " --username" RESET " <" RED "name" RESET "> (Recompile with -DCLITHER_CLIENT=ON)\n");
 #endif
 #if !defined(CLITHER_MCD)
-    fprintf(stderr, "     " RED " --mcd " RESET "<" RED "latency" RESET "> <" RED "loss" RESET "> <" RED "dup" RESET "> <" RED "reorder" RESET "> (Recompile with -DCLITHER_MCD=ON)\n");
+    log_raw("     " RED " --mcd " RESET "<" RED "latency" RESET "> <" RED "loss" RESET "> <" RED "dup" RESET "> <" RED "reorder" RESET "> (Recompile with -DCLITHER_MCD=ON)\n");
 #endif
 #if !defined(CLITHER_GFX)
-    fprintf(stderr, "     " RED " --gfx " RESET "<" RED "index" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
+    log_raw("     " RED " --gfx " RESET "<" RED "index" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
 #endif
 #if !defined(CLITHER_LOGGING)
-    fprintf(stderr, "  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOGGING=ON)\n");
-    fprintf(stderr, "     " RED " --netlog " RESET "<" RED "file" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
-    fprintf(stderr, "     " RED " --prefix " RESET "<" RED "name" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
+    log_raw("  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOGGING=ON)\n");
+    log_raw("     " RED " --netlog " RESET "<" RED "file" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
+    log_raw("     " RED " --prefix " RESET "<" RED "name" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
 #endif
 
     /*
      * Examples section
      */
-    fprintf(stderr, SECTION "\nExamples:\n" RESET);
+    log_raw(SECTION "\nExamples:\n" RESET);
 #if defined(CLITHER_GFX)
-    fprintf(stderr,
+    log_raw(
         TEXT "  Join a server\n" RESET
         "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2\n"
         "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2" ARG1 " --port" RESET " 4200\n" RESET
         "\n",
         prog_name, prog_name
     );
-    fprintf(stderr,
+    log_raw(
         TEXT "  Create a server and join it as a client. The server will stop when the\n"
         "  client stops, since it is a child process.\n" RESET
         "    %s" ARG1 " --host\n" RESET
@@ -174,7 +174,7 @@ static int print_help(const char* prog_name)
         prog_name, prog_name
     );
 #endif
-    fprintf(stderr,
+    log_raw(
         TEXT "  Start a dedicated server (headless mode):\n" RESET
         "    %s " ARG1 "--server\n" RESET
         "    %s " ARG1 "--server --addr" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "    # change bind address\n" RESET
@@ -460,13 +460,16 @@ int args_parse(struct args* a, int argc, char* argv[])
         a->mode = MODE_SERVER;
 #endif
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    else if (server_flag && host_flag)
+    else if (host_flag)
+        a->mode = MODE_HOST;
+#endif
+
+#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
+    if (server_flag && host_flag)
     {
         log_err("Can't use \"--server\" and \"--host\" at the same time\n");
         return -1;
     }
-    else if (host_flag)
-        a->mode = MODE_HOST;
 #endif
 
     return 0;

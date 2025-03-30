@@ -8,13 +8,13 @@ typedef int32_t q16_16;
 #define Q16_16_K (1 << (Q16_16_Q - 1))
 
 /*
- * Since the world size is fixed, we use a Q10.14 (24-bit) fixed point representation
- * for world position.
+ * Since the world size is fixed, we use a Q10.14 (24-bit) fixed point
+ * representation for world position.
  */
 typedef int32_t qw;
-#define QW_Q    14
-#define QW_K    (1 << (QW_Q - 1))
-#define QW_MAX  ((1 << QW_Q) - 1)
+#define QW_Q   14
+#define QW_K   (1 << (QW_Q - 1))
+#define QW_MAX ((1 << QW_Q) - 1)
 
 /*
  * Angles are stored in a Q4.12 fixed point representation (16-bit), which is
@@ -43,12 +43,12 @@ struct qwaabb
     qw x2, y2;
 };
 
-#define make_q16_16(v) (qw)((v) * (1 << Q16_16_Q))
+#define make_q16_16(v)        (qw)((v) * (1 << Q16_16_Q))
 #define make_q16_16_2(v, div) (qw)((v) * (1 << Q16_16_Q) / (div))
-#define q16_16_to_int(q) ((int)((q) / (1 << Q16_16_Q)))
-#define q16_16_to_float(q) ((double)(q) / (1 << Q16_16_Q))
+#define q16_16_to_int(q)      ((int)((q) / (1 << Q16_16_Q)))
+#define q16_16_to_float(q)    ((double)(q) / (1 << Q16_16_Q))
 #define q16_16_rebase(q, den) ((q) * den / (1 << Q16_16_Q))
-#define qw_to_q16_16(qw) ((int64_t)(qw) * (1 << Q16_16_Q) / (1 << QW_Q))
+#define qw_to_q16_16(qw)      ((int64_t)(qw) * (1 << Q16_16_Q) / (1 << QW_Q))
 
 static q16_16 q16_16_add(q16_16 a, q16_16 b)
 {
@@ -73,9 +73,12 @@ static q16_16 q16_16_sub(q16_16 a, q16_16 b)
 /* saturate to range of 24-bit signed int */
 static q16_16 q16_16_sat32(int64_t x)
 {
-    if (x > 0x7FFFFFFFL) return 0x7FFFFFFFL;
-    else if (x < -(int64_t)0x80000000L) return -(int64_t)0x80000000L;
-    else return (q16_16)x;
+    if (x > 0x7FFFFFFFL)
+        return 0x7FFFFFFFL;
+    else if (x < -(int64_t)0x80000000L)
+        return -(int64_t)0x80000000L;
+    else
+        return (q16_16)x;
 }
 
 static q16_16 q16_16_mul(q16_16 a, q16_16 b)
@@ -89,55 +92,72 @@ static q16_16 q16_16_mul(q16_16 a, q16_16 b)
 
 static q16_16 q16_16_div(q16_16 a, q16_16 b)
 {
-    /* pre-multiply by the base (Upscale to Q64 so that the result will be in Q32 format) */
+    /* pre-multiply by the base (Upscale to Q64 so that the result will be in
+     * Q32 format) */
     int64_t temp = (int64_t)a << Q16_16_Q;
     /* Rounding: mid values are rounded up (down for negative values). */
-    /* OR compare most significant bits i.e. if (((temp >> 31) & 1) == ((b >> 15) & 1)) */
-    if ((temp >= 0 && b >= 0) || (temp < 0 && b < 0)) {
-        temp += b / 2;    /* OR shift 1 bit i.e. temp += (b >> 1); */
+    /* OR compare most significant bits i.e. if (((temp >> 31) & 1) == ((b >>
+     * 15) & 1)) */
+    if ((temp >= 0 && b >= 0) || (temp < 0 && b < 0))
+    {
+        temp += b / 2; /* OR shift 1 bit i.e. temp += (b >> 1); */
     }
-    else {
-        temp -= b / 2;    /* OR shift 1 bit i.e. temp -= (b >> 1); */
+    else
+    {
+        temp -= b / 2; /* OR shift 1 bit i.e. temp -= (b >> 1); */
     }
     return (q16_16)(temp / b);
 }
 
-#define make_qw(v) (qw)((v) * (1 << QW_Q))
-#define make_qw2(v, div) (qw)((v) * (1 << QW_Q) / (div))
-#define qw_to_int(q) ((int)((q) / (1 << QW_Q)))
-#define qw_to_float(q) ((double)(q) / (1 << QW_Q))
-#define qw_rebase(q, den) ((q) * den / (1 << QW_Q))
+#define make_qw(v)              (qw)((v) * (1 << QW_Q))
+#define make_qw2(v, div)        (qw)((v) * (1 << QW_Q) / (div))
+#define qw_to_int(q)            ((int)((q) / (1 << QW_Q)))
+#define qw_to_float(q)          ((double)(q) / (1 << QW_Q))
+#define qw_rebase(q, den)       ((q) * den / (1 << QW_Q))
 #define qw_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
-#define q16_16_to_qw(q16) qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
+#define q16_16_to_qw(q16)       qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
 
 static struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
 {
     struct qwaabb bb;
-    bb.x1 = make_qw(x1); bb.y1 = make_qw(y1);
-    bb.x2 = make_qw(x2); bb.y2 = make_qw(y2);
+    bb.x1 = make_qw(x1);
+    bb.y1 = make_qw(y1);
+    bb.x2 = make_qw(x2);
+    bb.y2 = make_qw(y2);
     return bb;
 }
 
 static struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
 {
     struct qwaabb bb;
-    bb.x1 = x1; bb.y1 = y1;
-    bb.x2 = x2; bb.y2 = y2;
+    bb.x1 = x1;
+    bb.y1 = y1;
+    bb.x2 = x2;
+    bb.y2 = y2;
     return bb;
 }
 
 static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
 {
-    if (a.x1 > b.x1) a.x1 = b.x1;
-    if (a.x2 < b.x2) a.x2 = b.x2;
-    if (a.y1 > b.y1) a.y1 = b.y1;
-    if (a.y2 < b.y2) a.y2 = b.y2;
+    if (a.x1 > b.x1)
+        a.x1 = b.x1;
+    if (a.x2 < b.x2)
+        a.x2 = b.x2;
+    if (a.y1 > b.y1)
+        a.y1 = b.y1;
+    if (a.y2 < b.y2)
+        a.y2 = b.y2;
     return a;
 }
 
 static int qwaabb_test_qwpos(struct qwaabb bb, const struct qwpos p)
 {
     return p.x >= bb.x1 && p.x <= bb.x2 && p.y >= bb.y1 && p.y <= bb.y2;
+}
+
+static int qwaabb_test_qwaabb(struct qwaabb a, struct qwaabb b)
+{
+    return a.x1 <= b.x2 && a.x2 >= b.x1 && a.y1 <= b.y2 && a.y2 >= b.y1;
 }
 
 static qw qw_add(qw a, qw b)
@@ -165,9 +185,12 @@ static qw qw_sub(qw a, qw b)
 /* saturate to range of 24-bit signed int */
 static qw qw_sat24(int64_t x)
 {
-    if (x > 0x7FFFFF) return 0x7FFFFF;
-    else if (x < -0x800000) return -0x800000;
-    else return (qw)x;
+    if (x > 0x7FFFFF)
+        return 0x7FFFFF;
+    else if (x < -0x800000)
+        return -0x800000;
+    else
+        return (qw)x;
 }
 
 static qw qw_mul(qw a, qw b)
@@ -191,15 +214,19 @@ static int qw_mul_to_int(qw a, int b)
 
 static qw qw_div(qw a, qw b)
 {
-    /* pre-multiply by the base (Upscale to Q64 so that the result will be in Q32 format) */
+    /* pre-multiply by the base (Upscale to Q64 so that the result will be in
+     * Q32 format) */
     int64_t temp = (int64_t)a << QW_Q;
     /* Rounding: mid values are rounded up (down for negative values). */
-    /* OR compare most significant bits i.e. if (((temp >> 31) & 1) == ((b >> 15) & 1)) */
-    if ((temp >= 0 && b >= 0) || (temp < 0 && b < 0)) {
-        temp += b / 2;    /* OR shift 1 bit i.e. temp += (b >> 1); */
+    /* OR compare most significant bits i.e. if (((temp >> 31) & 1) == ((b >>
+     * 15) & 1)) */
+    if ((temp >= 0 && b >= 0) || (temp < 0 && b < 0))
+    {
+        temp += b / 2; /* OR shift 1 bit i.e. temp += (b >> 1); */
     }
-    else {
-        temp -= b / 2;    /* OR shift 1 bit i.e. temp -= (b >> 1); */
+    else
+    {
+        temp -= b / 2; /* OR shift 1 bit i.e. temp -= (b >> 1); */
     }
     return (qw)(temp / b);
 }
@@ -257,18 +284,16 @@ static struct qwpos qwpos_normalize(struct qwpos p)
     return p;
 }
 
-#define make_qa(v) (qa)((v) * (1 << QA_Q))
-#define make_qa2(v, div) (qa)((v) * (1 << QA_Q) / (div))
-#define qa_to_int(q) ((int)((q) / (1 << QA_Q)))
-#define qa_to_float(q) ((double)(q) / (1 << QA_Q))
+#define make_qa(v)              (qa)((v) * (1 << QA_Q))
+#define make_qa2(v, div)        (qa)((v) * (1 << QA_Q) / (div))
+#define qa_to_int(q)            ((int)((q) / (1 << QA_Q)))
+#define qa_to_float(q)          ((double)(q) / (1 << QA_Q))
 #define qa_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 
 /*! \brief Converts an 8-bit angle into fixed-point radians */
-#define u8_to_qa(u) \
-    (qa_rescale(2*QA_PI, u, 256) - QA_PI)
+#define u8_to_qa(u) (qa_rescale(2 * QA_PI, u, 256) - QA_PI)
 
-#define qa_to_u8(q) \
-    qa_rescale((q + QA_PI), 256, 2*QA_PI)
+#define qa_to_u8(q) qa_rescale((q + QA_PI), 256, 2 * QA_PI)
 
 static qa qa_wrapvalue(int32_t value)
 {
@@ -293,9 +318,12 @@ static qa qa_sub(qa a, qa b)
 /* saturate to range of 16-bit signed int */
 static qa qa_sat16(int32_t x)
 {
-    if (x > 0x7FFF) return 0x7FFF;
-    else if (x < -0x8000) return -0x8000;
-    else return (qa)x;
+    if (x > 0x7FFF)
+        return 0x7FFF;
+    else if (x < -0x8000)
+        return -0x8000;
+    else
+        return (qa)x;
 }
 
 static qa qa_mul(qa a, qa b)

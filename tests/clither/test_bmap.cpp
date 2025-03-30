@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/util/bmap.h"
 }
 
-#define NAME              bmap
+#define NAME              test_bmap
 #define BMAP_MIN_CAPACITY 32
 
 using namespace testing;

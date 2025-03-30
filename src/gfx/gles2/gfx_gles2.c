@@ -370,8 +370,13 @@ static void gfx_gles2_draw_world(
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
-        (void)snake_id, gfx_gles2_draw_snake_shadow(
-                            snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+    {
+        (void)snake_id;
+        if (snake_is_dead(snake))
+            continue;
+        gfx_gles2_draw_snake_shadow(
+            snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+    }
     gfx_gles2_draw_food_shadows(
         &world->food_grid, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
 
@@ -379,7 +384,12 @@ static void gfx_gles2_draw_world(
     gfx_gles2_draw_food(&world->food_grid, gfx, camera, &ar);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
-        (void)snake_id, gfx_gles2_draw_snake(snake, gfx, camera, &ar);
+    {
+        (void)snake_id;
+        if (snake_is_dead(snake))
+            continue;
+        gfx_gles2_draw_snake(snake, gfx, camera, &ar);
+    }
 
     glfwSwapBuffers(gfx->window);
 }

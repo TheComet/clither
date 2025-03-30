@@ -11,7 +11,7 @@ extern "C" {
 #include "clither/util/vec.h"
 }
 
-#define NAME snake
+#define NAME test_snake
 
 using namespace testing;
 

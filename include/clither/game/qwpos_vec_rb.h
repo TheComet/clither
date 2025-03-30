@@ -4,4 +4,4 @@
 
 struct qwpos_vec;
 
-RB_DECLARE(qwpos_vec_rb, struct qwpos_vec*, 8)
+RB_DECLARE(qwpos_vec_rb, struct qwpos_vec*, 16)

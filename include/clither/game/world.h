@@ -4,6 +4,8 @@
 #include "clither/game/q.h"
 
 struct snake_bmap;
+struct snake_data;
+struct snake_param;
 struct food_grid;
 struct settings_world;
 
@@ -11,7 +13,7 @@ struct world
 {
     struct snake_bmap* snakes;
     struct food_grid   food_grid;
-    uint64_t           food_rng;
+    uint32_t           rng;
     int                food_count;
     qw                 inner_radius;
     qw                 ring_start;
@@ -48,5 +50,7 @@ struct snake* world_create_snake(
 void world_remove_snake(struct world* world, uint16_t snake_id);
 
 int world_respawn_food(struct world* w);
-
-int world_step(struct world* w, uint16_t frame_number, uint8_t sim_tick_rate);
+int world_spawn_food_corpse(
+    struct world*             w,
+    const struct snake_data*  data,
+    const struct snake_param* param);

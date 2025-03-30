@@ -10,9 +10,7 @@ int benchmarks_run(int argc, char** argv)
     if (ReportUnrecognizedArguments(argc, argv))
         return 1;
 
-    mem_init_threadlocal();
     RunSpecifiedBenchmarks();
-    mem_deinit_threadlocal();
 
     return 0;
 }

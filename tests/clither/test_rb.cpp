@@ -17,7 +17,7 @@ bool operator==(const struct obj& a, const struct obj& b)
 RB_DECLARE(rbobj, struct obj, 16)
 RB_DEFINE(rbobj, struct obj, 16)
 
-#define NAME odbutil_rb
+#define NAME test_rb
 
 using namespace testing;
 

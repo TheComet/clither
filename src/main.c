@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
 #endif
 
     mem_init_threadlocal();
+    log_init();
 
     /*
      * Parse command line args before doing anything else. This function

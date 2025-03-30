@@ -40,13 +40,14 @@ int server_init(
 void server_deinit(struct server* server);
 
 int server_update_snakes_in_range(
-    struct server* server, const struct world* world, qw proximity_range);
+    struct server* server, const struct world* world);
+
+int server_kill_snake_checks(struct server* server, struct world* world);
 
 int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number);
 
-int server_queue_food_data(
-    struct server* server, const struct world* world, qw proximity_range);
+int server_queue_food_data(struct server* server, const struct world* world);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.

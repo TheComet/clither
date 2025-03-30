@@ -24,7 +24,10 @@ enum msg_type
     MSG_SNAKE_USERNAME_ACK,
     MSG_SNAKE_DESTROY,
     MSG_SNAKE_DESTROY_ACK,
+    MSG_SNAKE_DEATH,
+    MSG_SNAKE_DEATH_ACK,
     MSG_SNAKE_HEAD,
+    MSG_SNAKE_PARAM,
 
     MSG_BEZIER,
     MSG_KNOT,
@@ -109,10 +112,17 @@ union parsed_payload
     struct
     {
         struct qwpos pos;
+        uint32_t     food_eaten;
         uint16_t     frame_number;
         qa           angle;
         uint8_t      speed;
     } snake_head;
+
+    struct
+    {
+        uint16_t snake_id;
+        uint32_t food_eaten;
+    } snake_param;
 
     struct
     {
@@ -211,8 +221,15 @@ struct msg* msg_snake_username(uint16_t snake_id, const char* username);
 struct msg* msg_snake_username_ack(uint16_t snake_id);
 struct msg* msg_snake_destroy(uint16_t snake_id);
 struct msg* msg_snake_destroy_ack(uint16_t snake_id);
+struct msg* msg_snake_death(void);
+struct msg* msg_snake_death_ack(void);
 struct msg* msg_snake_head(
-    uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed);
+    uint16_t     frame_number,
+    struct qwpos pos,
+    qa           angle,
+    uint8_t      speed,
+    uint32_t     food_eaten);
+struct msg* msg_snake_param(uint16_t snake_id, uint32_t food_eaten);
 
 struct msg* msg_bezier(
     uint16_t     snake_id,

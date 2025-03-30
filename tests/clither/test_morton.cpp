@@ -4,45 +4,48 @@ extern "C" {
 #include "clither/util/morton.h"
 }
 
-#define NAME morton
+#define NAME test_morton
 
 using namespace testing;
 
-class NAME : public Test
+struct NAME : Test
 {
-public:
 };
 
 struct QwposEqMatcher : testing::MatcherInterface<struct qwpos>
 {
     explicit QwposEqMatcher(struct qwpos expected) : expected(expected) {}
-    explicit QwposEqMatcher(int32_t x, int32_t y) : expected(make_qwposqw(x, y)) {}
+    explicit QwposEqMatcher(int32_t x, int32_t y) : expected(make_qwposqw(x, y))
+    {
+    }
 
     bool MatchAndExplain(
-        struct qwpos pos,
-        testing::MatchResultListener* listener) const override
+        struct qwpos pos, testing::MatchResultListener* listener) const override
     {
-        *listener << "qwpos: [" << std::hex << pos.x << ", " << std::hex << pos.y << "]";
+        *listener << "qwpos: [" << std::hex << pos.x << ", " << std::hex
+                  << pos.y << "]";
         return expected.x == pos.x && expected.y == pos.y;
     }
 
-    void DescribeTo(::std::ostream* os) const override {    
-        *os << "qwpos equals: [" << std::hex << expected.x << ", " << std::hex << expected.y << "]";
+    void DescribeTo(::std::ostream* os) const override
+    {
+        *os << "qwpos equals: [" << std::hex << expected.x << ", " << std::hex
+            << expected.y << "]";
     }
-    void DescribeNegationTo(::std::ostream* os) const override {
-        *os << "qwpos does not equal: [" << std::hex << expected.x << ", " << std::hex << expected.y << "]";
+    void DescribeNegationTo(::std::ostream* os) const override
+    {
+        *os << "qwpos does not equal: [" << std::hex << expected.x << ", "
+            << std::hex << expected.y << "]";
     }
 
     struct qwpos expected;
 };
 
-inline testing::Matcher<struct qwpos>
-QwposEq(struct qwpos expected)
+inline testing::Matcher<struct qwpos> QwposEq(struct qwpos expected)
 {
     return testing::MakeMatcher(new QwposEqMatcher(expected));
 }
-inline testing::Matcher<struct qwpos>
-QwposEq(int32_t x, int32_t y)
+inline testing::Matcher<struct qwpos> QwposEq(int32_t x, int32_t y)
 {
     return testing::MakeMatcher(new QwposEqMatcher(x, y));
 }
@@ -66,7 +69,6 @@ TEST_F(NAME, to_qwpos_positive)
     EXPECT_THAT(morton_decode_qwpos(0xC00000000030), QwposEq(4, 4));
     EXPECT_THAT(morton_decode_qwpos(0xC000000000C0), QwposEq(8, 8));
 }
-
 
 TEST_F(NAME, from_qwpos_negative)
 {

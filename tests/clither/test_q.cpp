@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/game/q.h"
 }
 
-#define NAME q
+#define NAME test_q
 
 using namespace testing;
 

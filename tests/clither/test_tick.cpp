@@ -7,7 +7,7 @@ extern "C" {
 #include "clither/platform/tick.h"
 }
 
-#define NAME tick
+#define NAME test_tick
 
 using namespace testing;
 

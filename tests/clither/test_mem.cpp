@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/util/mem.h"
 }
 
-#define NAME memory
+#define NAME test_mem
 
 using namespace testing;
 

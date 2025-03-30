@@ -2,11 +2,15 @@
 \vspace{.25em}\\
 
 \begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
-    \bitheader{0-1} \\
+    \bitheader{0-4} \\
     \bitbox{2}{snake ID}
+    \bitbox{3}{food}
 \end{bytefield}
 
 \begin{itemize}
     \item\textbf{snake ID:} Unique snake identifier.
+    \item\textbf{food:} Amount  of  food  eaten  by  the  snake. Internally this is
+    stored  as  a  \verb$uint32_t$,  but it's not likely  this  number  will  reach
+    anywhere near 16 million.
 \end{itemize}
 

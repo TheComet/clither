@@ -21,14 +21,13 @@ int food_grid_add_food(
     switch (food_bmap_emplace_new(&grid->morton, m, &new_food))
     {
         case BMAP_OOM: return -1;
-        case BMAP_NEW: new_food->dir = dir;
+        case BMAP_NEW: new_food->dir = dir; new_food->value = 5;
         case BMAP_EXISTS: break;
     }
     return 0;
 }
 
-int food_grid_remove_food(struct food_grid* grid, struct qwpos pos)
+int food_grid_remove_food(struct food_grid* grid, uint64_t morton)
 {
-    uint64_t m = morton_encode_qwpos(pos);
-    return food_bmap_erase(grid->morton, m);
+    return food_bmap_erase(grid->morton, morton);
 }

@@ -4,31 +4,127 @@
 #include <stdio.h>
 #include <string.h>
 
-static CLITHER_THREADLOCAL const char* g_prefix = "";
-static CLITHER_THREADLOCAL const char* g_col_set = "";
-static CLITHER_THREADLOCAL const char* g_col_clr = "";
+static CLITHER_THREADLOCAL struct log_interface g_out_log;
 
 #if defined(CLITHER_LOGGING)
-static FILE* g_log = NULL;
-static FILE* g_net = NULL;
+static FILE* g_file_log = NULL;
+static FILE* g_net_log = NULL;
 #endif
 
-/* ------------------------------------------------------------------------- */
+enum log_severity
+{
+    LOG_DBG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERR,
+    LOG_NOTE
+};
+
+static void default_write_func(const char* fmt, va_list ap)
+{
+    vfprintf(stderr, fmt, ap);
+    fflush(stderr);
+}
+
+#if !defined(_WIN32)
+#    include <unistd.h>
+#endif
+static char stream_is_terminal(FILE* fp)
+{
+#if defined(_WIN32)
+    return 1;
+#else
+    return isatty(fileno(fp));
+#endif
+}
+
+void log_init(void)
+{
+    g_out_log.write = default_write_func;
+    g_out_log.prefix = "";
+    g_out_log.set_color = "";
+    g_out_log.clear_color = "";
+    g_out_log.use_color = stream_is_terminal(stderr);
+}
+
 void log_set_prefix(const char* prefix)
 {
-    g_prefix = prefix;
+    g_out_log.prefix = prefix;
 }
-void log_set_colors(const char* set, const char* clear)
+
+void log_set_colors(const char* set_color, const char* clear_color)
 {
-    g_col_set = set;
-    g_col_clr = clear;
+    g_out_log.set_color = set_color;
+    g_out_log.clear_color = clear_color;
+}
+
+struct log_interface log_configure(struct log_interface iface)
+{
+    struct log_interface old = g_out_log;
+    g_out_log = iface;
+    return old;
+}
+
+CLITHER_PRINTF_FORMAT(1, 2)
+static void out_log_write(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    g_out_log.write(fmt, ap);
+    va_end(ap);
+}
+static void
+out_log_vwrite(enum log_severity severity, const char* fmt, va_list ap)
+{
+    va_list ap_copy;
+
+    /* clang-format off */
+    static const char* severity_str[] = {
+        "Debug",
+        "Info ",
+        "Warn ",
+        "Error",
+        "Note "
+    };
+    static const char* severity_color[] = {
+        COL_N_WHITE,
+        COL_B_WHITE,
+        COL_B_YELLOW,
+        COL_B_RED,
+        COL_B_MAGENTA
+    };
+    /* clang-format on */
+
+    if (g_out_log.write)
+    {
+        va_copy(ap_copy, ap);
+        out_log_write(
+            "[%s%s%s] %s%s%s",
+            g_out_log.use_color ? severity_color[severity] : "",
+            severity_str[severity],
+            g_out_log.use_color ? COL_RESET : "",
+            g_out_log.set_color,
+            g_out_log.prefix,
+            g_out_log.clear_color);
+        g_out_log.write(fmt, ap_copy);
+    }
+
+#if defined(CLITHER_LOGGING)
+    if (g_file_log)
+    {
+        fprintf(
+            g_file_log, "[%s] %s", severity_str[severity], g_out_log.prefix);
+        vfprintf(g_file_log, fmt, ap);
+        fflush(g_file_log);
+    }
+#endif
 }
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_LOGGING)
 void log_file_open(const char* log_file)
 {
-    if (g_log)
+    if (g_file_log)
     {
         log_warn(
             "log_file_open() called, but a log file is already open. Closing "
@@ -37,24 +133,40 @@ void log_file_open(const char* log_file)
     }
 
     log_info("Opening log file \"%s\"\n", log_file);
-    g_log = fopen(log_file, "w");
-    if (g_log == NULL)
+    g_file_log = fopen(log_file, "w");
+    if (g_file_log == NULL)
         log_err(
             "Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
 }
 void log_file_close(void)
 {
-    if (g_log)
+    if (g_file_log)
     {
         log_info("Closing log file\n");
-        fclose(g_log);
-        g_log = NULL;
+        fclose(g_file_log);
+        g_file_log = NULL;
     }
+}
+static void log_file_vwrite(const char* fmt, va_list ap)
+{
+    if (g_file_log)
+    {
+        fprintf(g_file_log, "%s", g_out_log.prefix);
+        vfprintf(g_file_log, fmt, ap);
+        fflush(g_file_log);
+    }
+}
+static void log_file_write(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    log_file_vwrite(fmt, ap);
+    va_end(ap);
 }
 
 void log_net_open(const char* log_file)
 {
-    if (g_net)
+    if (g_net_log)
     {
         log_warn(
             "log_net_open() called, but a log file is already open. Closing "
@@ -63,19 +175,35 @@ void log_net_open(const char* log_file)
     }
 
     log_info("Opening networking log file \"%s\"\n", log_file);
-    g_net = fopen(log_file, "w");
-    if (g_net == NULL)
+    g_net_log = fopen(log_file, "w");
+    if (g_net_log == NULL)
         log_err(
             "Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
 }
 void log_net_close(void)
 {
-    if (g_net)
+    if (g_net_log)
     {
         log_info("Closing net log file\n");
-        fclose(g_net);
-        g_net = NULL;
+        fclose(g_net_log);
+        g_net_log = NULL;
     }
+}
+static void log_net_vwrite(const char* fmt, va_list ap)
+{
+    if (g_net_log)
+    {
+        fprintf(g_net_log, "%s", g_out_log.prefix);
+        vfprintf(g_net_log, fmt, ap);
+        fflush(g_net_log);
+    }
+}
+static void log_net_write(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    log_net_vwrite(fmt, ap);
+    va_end(ap);
 }
 #endif
 
@@ -83,17 +211,21 @@ void log_net_close(void)
 void log_raw(const char* fmt, ...)
 {
     va_list va;
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
 
-#if defined(CLITHER_LOGGING)
-    if (g_log)
+    if (g_out_log.write)
     {
         va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
+        g_out_log.write(fmt, va);
         va_end(va);
-        fflush(g_log);
+    }
+
+#if defined(CLITHER_LOGGING)
+    if (g_file_log)
+    {
+        va_start(va, fmt);
+        vfprintf(g_file_log, fmt, va);
+        va_end(va);
+        fflush(g_file_log);
     }
 #endif
 }
@@ -102,148 +234,62 @@ void log_raw(const char* fmt, ...)
 #if defined(CLITHER_DEBUG)
 void log_dbg(const char* fmt, ...)
 {
-    va_list va;
-    fprintf(
-        stderr,
-        "[" COL_N_YELLOW "Debug" COL_RESET "] %s%s%s",
-        g_col_set,
-        g_prefix,
-        g_col_clr);
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-
-#    if defined(CLITHER_LOGGING)
-    if (g_log)
-    {
-        fprintf(g_log, "[Debug] %s", g_prefix);
-        va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
-        va_end(va);
-        fflush(g_log);
-    }
-#    endif
+    va_list ap;
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_DBG, fmt, ap);
+    va_end(ap);
 }
 #endif
 
 /* ------------------------------------------------------------------------- */
 void log_info(const char* fmt, ...)
 {
-    va_list va;
-    fprintf(
-        stderr,
-        "[" COL_B_WHITE "Info " COL_RESET "] %s%s%s",
-        g_col_set,
-        g_prefix,
-        g_col_clr);
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-
-#if defined(CLITHER_LOGGING)
-    if (g_log)
-    {
-        fprintf(g_log, "[Info ] %s", g_prefix);
-        va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
-        va_end(va);
-        fflush(g_log);
-    }
-#endif
+    va_list ap;
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_INFO, fmt, ap);
+    va_end(ap);
 }
 
 /* ------------------------------------------------------------------------- */
 void log_warn(const char* fmt, ...)
 {
-    va_list va;
-    fprintf(
-        stderr,
-        "[" COL_B_YELLOW "Warn " COL_RESET "] %s%s%s",
-        g_col_set,
-        g_prefix,
-        g_col_clr);
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-
-#if defined(CLITHER_LOGGING)
-    if (g_log)
-    {
-        fprintf(g_log, "[Warn ] %s", g_prefix);
-        va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
-        va_end(va);
-        fflush(g_log);
-    }
-#endif
+    va_list ap;
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_WARN, fmt, ap);
+    va_end(ap);
 }
 
 /* ------------------------------------------------------------------------- */
 int log_err(const char* fmt, ...)
 {
-    va_list va;
-    fprintf(
-        stderr,
-        "[" COL_B_RED "Error" COL_RESET "] %s%s%s",
-        g_col_set,
-        g_prefix,
-        g_col_clr);
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-
-#if defined(CLITHER_LOGGING)
-    if (g_log)
-    {
-        fprintf(g_log, "[Error] %s", g_prefix);
-        va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
-        va_end(va);
-        fflush(g_log);
-    }
-#endif
+    va_list ap;
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_ERR, fmt, ap);
+    va_end(ap);
     return -1;
 }
 
 /* ------------------------------------------------------------------------- */
 void log_note(const char* fmt, ...)
 {
-    va_list va;
-    fprintf(
-        stderr,
-        "[" COL_B_MAGENTA "NOTE " COL_RESET "] %s%s%s" COL_B_YELLOW,
-        g_col_set,
-        g_prefix,
-        g_col_clr);
-    va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
-    va_end(va);
-    fprintf(stderr, COL_RESET);
-
-#if defined(CLITHER_LOGGING)
-    if (g_log)
-    {
-        fprintf(g_log, "[NOTE ] %s", g_prefix);
-        va_start(va, fmt);
-        vfprintf(g_log, fmt, va);
-        va_end(va);
-        fflush(g_log);
-    }
-#endif
+    va_list ap;
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_NOTE, fmt, ap);
+    va_end(ap);
 }
 
 /* ------------------------------------------------------------------------- */
 void log_net(const char* fmt, ...)
 {
 #if defined(CLITHER_LOGGING)
-    if (g_net)
+    if (g_net_log)
     {
         va_list va;
-        fprintf(g_net, "%s", g_prefix);
+        fprintf(g_net_log, "%s", g_out_log.prefix);
         va_start(va, fmt);
-        vfprintf(g_net, fmt, va);
+        vfprintf(g_net_log, fmt, va);
         va_end(va);
-        fflush(g_net);
+        fflush(g_net_log);
     }
 #else
     (void)fmt;

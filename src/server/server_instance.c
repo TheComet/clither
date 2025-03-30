@@ -28,6 +28,7 @@ void* server_instance_run(const void* args)
         COL_N_CYAN, COL_N_MAGENTA, COL_N_BLUE, COL_N_GREEN, COL_N_RED};
 
     mem_init_threadlocal();
+    log_init();
 
     /* Change log prefix and color for server log messages */
     sprintf(log_prefix + 2, "%-6s", instance->port);
@@ -73,11 +74,11 @@ void* server_instance_run(const void* args)
             (void)uid;
             if (!snake_try_reset_hold(snake, frame_number))
                 continue;
+            if (snake_is_dead(snake))
+                continue;
+
             cmd = cmd_queue_take_or_predict(&snake->cmdq, frame_number);
-            /*snake_param_update(
-                 &snake->param,
-                 snake->param.upgrades,
-                 snake->param.food_eaten + 1);*/
+            snake_eat_food(&snake->head, &snake->param, &world.food_grid);
             snake_remove_stale_segments(
                 &snake->data,
                 snake_step(
@@ -86,19 +87,20 @@ void* server_instance_run(const void* args)
                     &snake->param,
                     cmd,
                     instance->settings_server->sim_tick_rate));
+            if (server_update_snakes_in_range(&server, &world) != 0)
+                break;
+            if (server_kill_snake_checks(&server, &world) != 0)
+                break;
         }
-        world_step(
-            &world, frame_number, instance->settings_server->sim_tick_rate);
+
+        if (world_respawn_food(&world) != 0)
+            break;
 
         if (net_update)
         {
-            qw proximity_range = make_qw(2);
-            if (server_update_snakes_in_range(
-                    &server, &world, proximity_range) != 0)
-                break;
             if (server_queue_snake_data(&server, &world, frame_number) != 0)
                 break;
-            if (server_queue_food_data(&server, &world, proximity_range) != 0)
+            if (server_queue_food_data(&server, &world) != 0)
                 break;
             if (server_send_pending_data(&server, &world) != 0)
                 break;
@@ -124,7 +126,5 @@ void* server_instance_run(const void* args)
 server_init_failed:
 world_spawn_food_failed:
     world_deinit(&world);
-    log_set_colors("", "");
-    log_set_prefix("");
     return (void*)-1;
 }

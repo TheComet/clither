@@ -26,6 +26,7 @@
 
 #if defined(CLITHER_DEBUG)
 #   define CLITHER_DEBUG_ASSERT
+#   define CLITHER_DEBUG_ZOOM
 #endif
 
 #if defined(CLITHER_MEMORY_DEBUGGING)

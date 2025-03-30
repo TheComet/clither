@@ -30,7 +30,8 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
     /* Make sure to send it immediately first */
     msg->resend_period_counter = 1;
     /* How many times to retry before dropping the connection */
-    msg->resend_retry_counter = 60;
+    msg->resend_retry_counter =
+        resend_period > 0 && resend_period < 60 ? 60 / resend_period : 60;
 
     return msg;
 }
@@ -68,7 +69,10 @@ void msg_update_frame_number(struct msg* m, uint16_t frame_number)
         case MSG_SNAKE_USERNAME_ACK: break;
         case MSG_SNAKE_DESTROY: break;
         case MSG_SNAKE_DESTROY_ACK: break;
+        case MSG_SNAKE_DEATH: break;
+        case MSG_SNAKE_DEATH_ACK: break;
         case MSG_SNAKE_HEAD: break;
+        case MSG_SNAKE_PARAM: break;
 
         case MSG_BEZIER: break;
         case MSG_KNOT: break;
@@ -99,7 +103,9 @@ int msg_parse_payload(
              */
             if (payload_len < 6)
             {
-                log_warn("MSG_JOIN_REQUEST payload is too small\n");
+                log_warn(
+                    "MSG_JOIN_REQUEST: Payload size %d too small\n",
+                    payload_len);
                 return -1;
             }
 
@@ -292,36 +298,64 @@ int msg_parse_payload(
             return type;
         }
 
+        case MSG_SNAKE_DEATH: {
+            return type;
+        }
+
+        case MSG_SNAKE_DEATH_ACK: {
+            return type;
+        }
+
         case MSG_SNAKE_HEAD: {
-            if (payload_len < 11)
+            if (payload_len != 14)
             {
-                log_warn("MSG_SNAKE_HEAD payload is too small\n");
+                log_warn(
+                    "MSG_SNAKE_HEAD: Invalid payload size %d\n", payload_len);
                 return -1;
             }
 
             pp->snake_head.frame_number = (payload[0] << 8) | (payload[1] << 0);
+
             pp->snake_head.pos.x =
                 (payload[2] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[2] << 16) |
                 (payload[3] << 8) | (payload[4] << 0);
+
             pp->snake_head.pos.y =
                 (payload[5] & 0x80
                      ? 0xFF << 24
                      : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
                 (payload[5] << 16) |
                 (payload[6] << 8) | (payload[7] << 0);
+
             pp->snake_head.angle = (payload[8] << 8) | (payload[9] << 0);
             pp->snake_head.speed = payload[10];
+            pp->snake_head.food_eaten =
+                (payload[11] << 16) | (payload[12] << 8) | (payload[13] << 0);
+
+            return type;
+        }
+
+        case MSG_SNAKE_PARAM: {
+            if (payload_len != 5)
+            {
+                log_warn("MSG_SNAKE_PARAM payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_param.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->snake_param.food_eaten =
+                (payload[2] << 16) | (payload[3] << 8) | (payload[4] << 0);
 
             return type;
         }
 
         case MSG_BEZIER: {
-            if (payload_len < 19)
+            if (payload_len != 19)
             {
-                log_warn("MSG_BEZIER: Payload is too small\n");
+                log_warn("MSG_BEZIER: Invalid payload size %d\n", payload_len);
                 return -1;
             }
 
@@ -364,11 +398,9 @@ int msg_parse_payload(
         }
 
         case MSG_KNOT: {
-            if (payload_len < 14)
+            if (payload_len != 14)
             {
-                log_warn(
-                    "MSG_SNAKE_KNOT: Payload is too small (%d) < 14\n",
-                    payload_len);
+                log_warn("MSG_KNOT: Invalid payload size %d\n", payload_len);
                 return -1;
             }
 
@@ -583,9 +615,26 @@ struct msg* msg_join_accept(
     m->payload[11] = spawn_pos->x >> 16;
     m->payload[12] = spawn_pos->x >> 8;
     m->payload[13] = spawn_pos->x & 0xFF;
+
     m->payload[14] = spawn_pos->y >> 16;
     m->payload[15] = spawn_pos->y >> 8;
     m->payload[16] = spawn_pos->y & 0xFF;
+
+    log_dbg(
+        "MSG_JOIN_ACCEPT: sim_tick_rate=%d, net_tick_rate=%d, "
+        "world_inner_radius=%d, world_ring_start=%d, world_ring_end=%d, "
+        "client_frame=%d, server_frame=%d, snake_id=%d, spawn_pos=[%.2f, "
+        "%.2f]\n",
+        sim_tick_rate,
+        net_tick_rate,
+        world_inner_radius,
+        world_ring_start,
+        world_ring_end,
+        client_frame,
+        server_frame,
+        snake_id,
+        qw_to_float(spawn_pos->x),
+        qw_to_float(spawn_pos->y));
 
     return m;
 }
@@ -977,8 +1026,26 @@ struct msg* msg_snake_destroy_ack(uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg*
-msg_snake_head(uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed)
+struct msg* msg_snake_death(void)
+{
+    log_net("MSG_SNAKE_DEATH\n");
+    return msg_alloc(MSG_SNAKE_DEATH, 10, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_death_ack(void)
+{
+    log_net("MSG_SNAKE_DEATH_ACK\n");
+    return msg_alloc(MSG_SNAKE_DEATH_ACK, 0, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_head(
+    uint16_t     frame_number,
+    struct qwpos pos,
+    qa           angle,
+    uint8_t      speed,
+    uint32_t     food_eaten)
 {
     struct msg* m = msg_alloc(
         MSG_SNAKE_HEAD,
@@ -986,7 +1053,8 @@ msg_snake_head(uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed)
         2 +     /* frame number */
             6 + /* world position (2x 24-bit qwpos) */
             2 + /* angle (16-bit) */
-            1); /* speed (uint8_t) */
+            1 + /* speed (uint8_t) */
+            3); /* food eaten */
 
     m->payload[0] = (frame_number >> 8) & 0xFF;
     m->payload[1] = (frame_number & 0xFF);
@@ -1004,13 +1072,43 @@ msg_snake_head(uint16_t frame_number, struct qwpos pos, qa angle, uint8_t speed)
 
     m->payload[10] = speed;
 
+    m->payload[11] = (food_eaten >> 16) & 0xFF;
+    m->payload[12] = (food_eaten >> 8) & 0xFF;
+    m->payload[13] = food_eaten & 0xFF;
+
     log_net(
-        "MSG_SNAKE_HEAD: frame=%d, pos=[%.2f,%.2f], angle=%.2f, speed=%d\n",
+        "MSG_SNAKE_HEAD: frame=%d, pos=[%.2f,%.2f], angle=%.2f, speed=%d, "
+        "food_eaten=%d\n",
         frame_number,
         qw_to_float(pos.x),
         qw_to_float(pos.y),
         qa_to_float(angle),
-        speed);
+        speed,
+        food_eaten);
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_param(uint16_t snake_id, uint32_t food_eaten)
+{
+    struct msg* m = msg_alloc(
+        MSG_SNAKE_PARAM,
+        0,
+        2 +     /* snake_id */
+            3); /* food_eaten*/
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (snake_id >> 8) & 0xFF;
+    m->payload[1] = (snake_id & 0xFF);
+
+    m->payload[2] = (food_eaten >> 16) & 0xFF;
+    m->payload[3] = (food_eaten >> 8) & 0xFF;
+    m->payload[4] = (food_eaten & 0xFF);
+
+    log_net(
+        "MSG_SNAKE_PARAM: snake_id=%d, food_eaten=%d\n", snake_id, food_eaten);
 
     return m;
 }

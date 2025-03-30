@@ -17,6 +17,7 @@
 #include "clither/util/bmap.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
+#include "clither/util/morton.h"
 #include "clither/util/str.h"
 #include <string.h> /* memcpy */
 
@@ -261,6 +262,8 @@ static struct client_recv_result process_message(
             struct snake*         snake;
             uint16_t              rtt;
 
+            log_dbg("MSG_JOIN_ACCEPT\n");
+
             if (client->state != CLIENT_JOINING)
                 return client_recv_ok();
 
@@ -395,15 +398,30 @@ static struct client_recv_result process_message(
         }
         case MSG_SNAKE_DESTROY_ACK: break;
 
+        case MSG_SNAKE_DEATH: {
+            struct snake* snake =
+                snake_bmap_find(world->snakes, client->snake_id);
+            CLITHER_DEBUG_ASSERT(snake != NULL);
+
+            snake_set_dead(snake);
+            client_queue(client, msg_snake_death_ack());
+            return client_recv_ok();
+        }
+        case MSG_SNAKE_DEATH_ACK: break;
+
         case MSG_SNAKE_HEAD: {
             struct snake_head head_auth;
             struct snake*     snake =
                 snake_bmap_find(world->snakes, client->snake_id);
-            CLITHER_DEBUG_ASSERT(snake != NULL);
+            if (snake == NULL)
+                return client_recv_ok();
 
             head_auth.pos = pp.snake_head.pos;
             head_auth.angle = pp.snake_head.angle;
             head_auth.speed = pp.snake_head.speed;
+
+            snake_param_update(
+                &snake->param, snake->param.upgrades, pp.snake_head.food_eaten);
 
             snake_ack_frame(
                 &snake->data,
@@ -414,6 +432,20 @@ static struct client_recv_result process_message(
                 &snake->cmdq,
                 pp.snake_head.frame_number,
                 client->sim_tick_rate);
+
+            return client_recv_ok();
+        }
+
+        case MSG_SNAKE_PARAM: {
+            struct snake* snake =
+                snake_bmap_find(world->snakes, pp.snake_param.snake_id);
+            if (snake == NULL)
+                return client_recv_ok();
+
+            snake_param_update(
+                &snake->param,
+                snake->param.upgrades,
+                pp.snake_param.food_eaten);
 
             return client_recv_ok();
         }
@@ -520,7 +552,8 @@ static struct client_recv_result process_message(
         case MSG_FOOD_CREATE_ACK: break;
 
         case MSG_FOOD_DESTROY: {
-            food_grid_remove_food(&world->food_grid, pp.food_destroy.pos);
+            uint64_t morton = morton_encode_qwpos(pp.food_destroy.pos);
+            food_grid_remove_food(&world->food_grid, morton);
             client_queue(client, msg_food_destroy_ack(pp.food_destroy.pos));
             return client_recv_ok();
         }
@@ -641,10 +674,9 @@ void* client_run(
     int                         tick_lag;
     struct fs_watch*            pack_watch;
 
-/* Change log prefix and color for server log messages */
-#    if defined(CLITHER_LOGGING)
+    /* Change log prefix and color for server log messages */
+    log_init();
     log_set_prefix(settings->log_prefix);
-#    endif
     log_set_colors(COL_B_GREEN, COL_RESET);
 
     client_init(&client);
@@ -810,47 +842,46 @@ void* client_run(
             uint16_t      snake_id;
             struct snake* snake =
                 snake_bmap_find(world.snakes, client.snake_id);
+            if (!snake_is_dead(snake))
+            {
+                /*
+                 * Map "input" to "command". This converts the mouse and
+                 * keyboard information into a structure that lets us step the
+                 * snake forwards in time.
+                 */
+                cmd = gfx_iface->input_to_cmd(
+                    cmd, &input, gfx, &camera, snake->head.pos);
 
-            /*
-             * Map "input" to "command". This converts the mouse and keyboard
-             * information into a structure that lets us step the snake forwards
-             * in time.
-             */
-            cmd = gfx_iface->input_to_cmd(
-                cmd, &input, gfx, &camera, snake->head.pos);
+                /*
+                 * Append the new command to the ring buffer of unconfirmed
+                 * commands. This entire list is sent to the server every
+                 * network update so in the event of packet loss, the server
+                 * always has a complete history of what our snake has done,
+                 * frame by frame. When the server acknowledges our move, we
+                 * remove all commands that date back before and up to that
+                 * point in time from the list again.
+                 */
+                cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
 
-            /*
-             * Append the new command to the ring buffer of unconfirmed
-             * commands. This entire list is sent to the server every network
-             * update so in the event of packet loss, the server always has a
-             * complete history of what our snake has done, frame by frame. When
-             * the server acknowledges our move, we remove all commands that
-             * date back before and up to that point in time from the list
-             * again.
-             */
-            cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
-
-            /* Update snake */
-            /* snake_param_update(
-                   &snake->param,
-                   snake->param.upgrades,
-                   snake->param.food_eaten + 1);*/
-            snake_remove_stale_segments_with_rollback_constraint(
-                &snake->data,
-                &snake->remote.ack,
-                snake_step(
+                /* Update snake */
+                snake_eat_food(&snake->head, &snake->param, &world.food_grid);
+                snake_remove_stale_segments_with_rollback_constraint(
                     &snake->data,
-                    &snake->head,
-                    &snake->param,
-                    cmd,
-                    client.sim_tick_rate));
-
-            /* Update world */
-            world_step(&world, client.frame_number, client.sim_tick_rate);
+                    &snake->remote.ack,
+                    snake_step(
+                        &snake->data,
+                        &snake->head,
+                        &snake->param,
+                        cmd,
+                        client.sim_tick_rate));
+            }
 
             camera_update(
-                &camera, &snake->head, &snake->param, client.sim_tick_rate);
-            camera.scale += input.scroll * camera.scale * 0.05;
+                &camera,
+                &snake->head,
+                &snake->param,
+                &input,
+                client.sim_tick_rate);
 
             if (net_update)
             {
@@ -928,8 +959,6 @@ parse_resource_pack_failed:
         client_disconnect(&client);
 client_connect_failed:
     client_deinit(&client);
-    log_set_colors("", "");
-    log_set_prefix("");
 
     return NULL;
 }

@@ -1,3 +1,5 @@
+#include "clither/tests/LogHelper.hpp"
+
 #include "gmock/gmock.h"
 
 extern "C" {
@@ -6,16 +8,20 @@ extern "C" {
 #include "clither/game/msg_vec.h"
 }
 
-#define NAME msg
+#define NAME test_msg
 
 using namespace testing;
+
+struct NAME : Test, LogHelper
+{
+};
 
 bool operator==(const struct cmd& a, const struct cmd& b)
 {
     return a.action == b.action && a.action == b.action && a.speed == b.speed;
 }
 
-TEST(NAME, compress_single_controls)
+TEST_F(NAME, compress_single_controls)
 {
     struct cmd_queue cmdq;
     cmd_queue_init(&cmdq);
@@ -44,7 +50,7 @@ TEST(NAME, compress_single_controls)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, compress_multiple_controls)
+TEST_F(NAME, compress_multiple_controls)
 {
     struct cmd_queue rb;
     cmd_queue_init(&rb);
@@ -82,10 +88,10 @@ TEST(NAME, compress_multiple_controls)
     cmd_queue_deinit(&rb);
 }
 
-TEST(NAME, parse_join_request_payload_too_small)
+TEST_F(NAME, parse_join_request_payload_too_small)
 {
     // clang-format off
-    uint8_t payload[5] = {
+    uint8_t payload[] = {
         0x00, 0x00, // Protocol version
         0x00, 0x00, // Frame number
         0,          // Username length
@@ -93,13 +99,17 @@ TEST(NAME, parse_join_request_payload_too_small)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 5), Eq(-1));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, sizeof(payload) - 1),
+        Eq(-1));
+    ASSERT_THAT(
+        log(), LogEq("[Warn ] MSG_JOIN_REQUEST: Payload size 4 too small\n"));
 }
 
-TEST(NAME, parse_join_request_empty_username)
+TEST_F(NAME, parse_join_request_empty_username)
 {
     // clang-format off
-    uint8_t payload[6] = {
+    uint8_t payload[] = {
         0x00, 0x00, // Protocol version
         0x00, 0x00, // Frame number
         0,          // Username length
@@ -107,10 +117,12 @@ TEST(NAME, parse_join_request_empty_username)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 6), Eq(-2));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, sizeof(payload)),
+        Eq(-2));
 }
 
-TEST(NAME, parse_join_request_incorrect_username_length)
+TEST_F(NAME, parse_join_request_incorrect_username_length)
 {
     // clang-format off
     uint8_t payload[7] = {
@@ -125,7 +137,7 @@ TEST(NAME, parse_join_request_incorrect_username_length)
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 6), Eq(-3));
 }
 
-TEST(NAME, parse_join_request_incorrect_username_not_null_terminated)
+TEST_F(NAME, parse_join_request_incorrect_username_not_null_terminated)
 {
     // clang-format off
     uint8_t payload[7] = {
@@ -140,7 +152,7 @@ TEST(NAME, parse_join_request_incorrect_username_not_null_terminated)
     ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 7), Eq(-4));
 }
 
-TEST(NAME, parse_join_request)
+TEST_F(NAME, parse_join_request)
 {
     // clang-format off
     uint8_t payload[9] = {
@@ -161,33 +173,35 @@ TEST(NAME, parse_join_request)
     EXPECT_THAT(pp.join_request.username, StrEq("abc"));
 }
 
-TEST(NAME, parse_join_accept_payload_too_small)
+TEST_F(NAME, parse_join_accept_payload_too_small)
 {
     // clang-format off
-    uint8_t payload[14] = {
+    uint8_t payload[17] = {
         0xAA,             // Sim tick rate
         0xBB,             // Net tick rate
-        0x12, 0x34,       // Client frame
-        0x56, 0x78,       // Server frame
-        0x90, 0xA0,       // Snake ID
-        0xAB, 0xCD, 0xEF, // Spawn X
-        0xFE, 0xDC, 0xBA, // Spawn Y
+        0x12, 0x34, 0x56, // World inner radius, ring start, ring end
+        0x78, 0x9A,       // Client frame
+        0xBC, 0xDE,       // Server frame
+        0xFE, 0xDC,       // Snake ID
+        0xBA, 0x98, 0x76, // Spawn X
+        0x54, 0x32, 0x10, // Spawn Y
     };
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 13), Eq(-1));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 16), Eq(-1));
 }
 
-TEST(NAME, parse_join_accept_qw_sign_extension)
+TEST_F(NAME, parse_join_accept_qw_sign_extension)
 {
     // clang-format off
-    uint8_t payload[14] = {
+    uint8_t payload[17] = {
         0xAA,             // Sim tick rate
         0xBB,             // Net tick rate
-        0x12, 0x34,       // Client frame
-        0x56, 0x78,       // Server frame
-        0x90, 0xA0,       // Snake ID
+        0x12, 0x34, 0x56, // World inner radius, ring start, ring end
+        0x78, 0x9A,       // Client frame
+        0xBC, 0xDE,       // Server frame
+        0xFE, 0xDC,       // Snake ID
         0xFF, 0xFF, 0xFF, // Spawn X
         0xFF, 0xFF, 0xFF, // Spawn Y
     };
@@ -195,40 +209,44 @@ TEST(NAME, parse_join_accept_qw_sign_extension)
 
     parsed_payload pp;
     ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 14),
+        msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 17),
         Eq(MSG_JOIN_ACCEPT));
     EXPECT_THAT(pp.join_accept.spawn.x, Eq(-1));
     EXPECT_THAT(pp.join_accept.spawn.y, Eq(-1));
 }
 
-TEST(NAME, parse_join_accept)
+TEST_F(NAME, parse_join_accept)
 {
     // clang-format off
-    uint8_t payload[14] = {
+    uint8_t payload[17] = {
         0xAA,             // Sim tick rate
         0xBB,             // Net tick rate
-        0x12, 0x34,       // Client frame
-        0x56, 0x78,       // Server frame
-        0x90, 0xA0,       // Snake ID
-        0x0B, 0xCD, 0xEF, // Spawn X
-        0x0E, 0xDC, 0xBA, // Spawn Y
+        0x12, 0x34, 0x56, // World inner radius, ring start, ring end
+        0x78, 0x9A,       // Client frame
+        0xBC, 0xDE,       // Server frame
+        0xFE, 0xDC,       // Snake ID
+        0x0A, 0x98, 0x76, // Spawn X
+        0x04, 0x32, 0x10, // Spawn Y
     };
     // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 14),
+        msg_parse_payload(&pp, MSG_JOIN_ACCEPT, payload, 17),
         Eq(MSG_JOIN_ACCEPT));
     EXPECT_THAT(pp.join_accept.sim_tick_rate, Eq(0xAA));
     EXPECT_THAT(pp.join_accept.net_tick_rate, Eq(0xBB));
-    EXPECT_THAT(pp.join_accept.client_frame, Eq(0x1234));
-    EXPECT_THAT(pp.join_accept.server_frame, Eq(0x5678));
-    EXPECT_THAT(pp.join_accept.snake_id, Eq(0x90A0));
-    EXPECT_THAT(pp.join_accept.spawn.x, Eq(0x0BCDEF));
-    EXPECT_THAT(pp.join_accept.spawn.y, Eq(0x0EDCBA));
+    EXPECT_THAT(pp.join_accept.world_inner_radius, Eq(0x12));
+    EXPECT_THAT(pp.join_accept.world_ring_start, Eq(0x34));
+    EXPECT_THAT(pp.join_accept.world_ring_end, Eq(0x56));
+    EXPECT_THAT(pp.join_accept.client_frame, Eq(0x789A));
+    EXPECT_THAT(pp.join_accept.server_frame, Eq(0xBCDE));
+    EXPECT_THAT(pp.join_accept.snake_id, Eq(0xFEDC));
+    EXPECT_THAT(pp.join_accept.spawn.x, Eq(0x0A9876));
+    EXPECT_THAT(pp.join_accept.spawn.y, Eq(0x043210));
 }
 
-TEST(NAME, parse_join_deny_payload_too_small)
+TEST_F(NAME, parse_join_deny_payload_too_small)
 {
     // clang-format off
     uint8_t payload[] = {
@@ -246,7 +264,7 @@ TEST(NAME, parse_join_deny_payload_too_small)
         msg_parse_payload(&pp, MSG_JOIN_DENY_SERVER_FULL, payload, 1), Eq(-1));
 }
 
-TEST(NAME, parse_join_deny_invalid_string_length)
+TEST_F(NAME, parse_join_deny_invalid_string_length)
 {
     // clang-format off
     uint8_t payload[] = {
@@ -264,7 +282,7 @@ TEST(NAME, parse_join_deny_invalid_string_length)
         msg_parse_payload(&pp, MSG_JOIN_DENY_SERVER_FULL, payload, 2), Eq(-2));
 }
 
-TEST(NAME, parse_join_deny_string_not_null_terminated)
+TEST_F(NAME, parse_join_deny_string_not_null_terminated)
 {
     // clang-format off
     uint8_t payload[] = {
@@ -282,7 +300,7 @@ TEST(NAME, parse_join_deny_string_not_null_terminated)
         msg_parse_payload(&pp, MSG_JOIN_DENY_SERVER_FULL, payload, 5), Eq(-3));
 }
 
-TEST(NAME, parse_join_deny)
+TEST_F(NAME, parse_join_deny)
 {
     // clang-format off
     uint8_t payload[] = {
@@ -306,83 +324,225 @@ TEST(NAME, parse_join_deny)
     EXPECT_THAT(pp.join_deny.error, StrEq("oops"));
 }
 
-TEST(NAME, parse_snake_bezier_payload_too_small)
+TEST_F(NAME, parse_bezier_payload_wrong_size)
 {
     // clang-format off
     uint8_t payload[] = {
         0xAA, 0xBB, // Snake ID
-        0x00, 0x01, // Handle idx
+        0xCC, 0xDD, // Frame number
+        0x12, 0x34, // rb_read
+        0x56, 0x78, // rb_write
+        0x12, 0x34, 0x56, // head_pos.x
+        0x65, 0x43, 0x21, // head_pos.y
+        0x50, 0x51,       // head_angle
+        0x34,             // speed
+        0x20, 0x21,       // head_len_backwards/forwards
     };
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 4), Eq(-1));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload) - 1),
+        Eq(-1));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload) + 1),
+        Eq(-1));
+    ASSERT_THAT(
+        log(),
+        LogEq("[Warn ] MSG_BEZIER: Invalid payload size 18\n"
+              "[Warn ] MSG_BEZIER: Invalid payload size 20\n"));
 }
 
-TEST(NAME, parse_snake_bezier_negative_handle_index)
+TEST_F(NAME, parse_bezier_negative_rb_read)
 {
     // clang-format off
-    uint8_t payload[24] = {
+    uint8_t payload[] = {
+        0xAA, 0xBB, // Snake ID
+        0xCC, 0xDD, // Frame number
+        0x80, 0x00, // rb_read
+        0x56, 0x78, // rb_write
+        0x12, 0x34, 0x56, // head_pos.x
+        0x65, 0x43, 0x21, // head_pos.y
+        0x50, 0x51,       // head_angle
+        0x34,             // speed
+        0x20, 0x21,       // head_len_backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    EXPECT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload)), Eq(-2));
+    EXPECT_THAT(
+        log(), LogEq("[Warn ] MSG_BEZIER: rb_read cannot be negative!\n"));
+}
+
+TEST_F(NAME, parse_bezier_negative_rb_write)
+{
+    // clang-format off
+    uint8_t payload[] = {
+        0xAA, 0xBB, // Snake ID
+        0xCC, 0xDD, // Frame number
+        0x12, 0x34, // rb_read
+        0x80, 0x00, // rb_write
+        0x12, 0x34, 0x56, // head_pos.x
+        0x65, 0x43, 0x21, // head_pos.y
+        0x50, 0x51,       // head_angle
+        0x34,             // speed
+        0x20, 0x21,       // head_len_backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    EXPECT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload)), Eq(-3));
+    EXPECT_THAT(
+        log(), LogEq("[Warn ] MSG_BEZIER: rb_write cannot be negative!\n"));
+}
+
+TEST_F(NAME, parse_bezier_qwpos_sign_extension)
+{
+    // clang-format off
+    uint8_t payload[] = {
+        0xAA, 0xBB, // Snake ID
+        0xCC, 0xDD, // Frame number
+        0x12, 0x34, // rb_read
+        0x56, 0x78, // rb_write
+        0xFF, 0xFF, 0xFF, // head_pos.x
+        0xFF, 0xFF, 0xFF, // head_pos.y
+        0x50, 0x51,       // head_angle
+        0x34,             // speed
+        0x20, 0x21,       // head_len_backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    EXPECT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload)),
+        Eq(MSG_BEZIER))
+        << log().text;
+    EXPECT_THAT(pp.bezier.pos.x, Eq(-1));
+    EXPECT_THAT(pp.bezier.pos.y, Eq(-1));
+}
+
+TEST_F(NAME, parse_bezier)
+{
+    // clang-format off
+    uint8_t payload[] = {
+        0xAA, 0xBB, // Snake ID
+        0xCC, 0xDD, // Frame number
+        0x12, 0x34, // rb_read
+        0x56, 0x78, // rb_write
+        0x12, 0x34, 0x56, // head_pos.x
+        0x65, 0x43, 0x21, // head_pos.y
+        0x50, 0x51,       // head_angle
+        0x34,             // speed
+        0x20, 0x21,       // head_len_backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    EXPECT_THAT(
+        msg_parse_payload(&pp, MSG_BEZIER, payload, sizeof(payload)),
+        Eq(MSG_BEZIER))
+        << log().text;
+    EXPECT_THAT(pp.bezier.snake_id, Eq(0xAABB));
+    EXPECT_THAT(pp.bezier.frame_number, Eq(0xCCDD));
+    EXPECT_THAT(pp.bezier.rb_read, Eq(0x1234));
+    EXPECT_THAT(pp.bezier.rb_write, Eq(0x5678));
+    EXPECT_THAT(pp.bezier.pos.x, Eq(0x123456));
+    EXPECT_THAT(pp.bezier.pos.y, Eq(0x654321));
+    EXPECT_THAT(pp.bezier.angle, Eq(0x5051));
+    EXPECT_THAT(pp.bezier.speed, Eq(0x34));
+    EXPECT_THAT(pp.bezier.head_len_backwards, Eq(0x20));
+    EXPECT_THAT(pp.bezier.second_len_forwards, Eq(0x21));
+}
+
+TEST_F(NAME, parse_knot_payload_wrong_size)
+{
+    // clang-format off
+    uint8_t payload[] = {
         0xAA, 0xBB,       // Snake ID
-        0x80, 0x00,       // Handle idx
+        0x45, 0x67,       // knot idx
         0x12, 0x34, 0x56, // X Position
         0x65, 0x43, 0x21, // Y Position
-        0x50,             // Angle
+        0x50, 0x51,       // Angle
         0x20, 0x21,       // Length backwards/forwards
     };
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 14), Eq(-2));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_KNOT, payload, sizeof(payload) - 1), Eq(-1));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_KNOT, payload, sizeof(payload) + 1), Eq(-1));
+    ASSERT_THAT(
+        log(),
+        LogEq("[Warn ] MSG_KNOT: Invalid payload size 13\n"
+              "[Warn ] MSG_KNOT: Invalid payload size 15\n"));
 }
 
-TEST(NAME, parse_snake_bezier)
+TEST_F(NAME, parse_knot_negative_knot_index)
 {
     // clang-format off
-    uint8_t payload[14] = {
+    uint8_t payload[] = {
+        0xAA, 0xBB,       // Snake ID
+        0x80, 0x00,       // knot idx
+        0x12, 0x34, 0x56, // X Position
+        0x65, 0x43, 0x21, // Y Position
+        0x50, 0x51,       // Angle
+        0x20, 0x21,       // Length backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_KNOT, payload, sizeof(payload)), Eq(-2));
+}
+
+TEST_F(NAME, parse_knot_qwpos_sign_extension)
+{
+    // clang-format off
+    uint8_t payload[] = {
         0xAA, 0xBB, // Snake ID
         0x02, 0x00, // Handle idx
-
-        0x12, 0x34, 0x56, // X Position
-        0x65, 0x43, 0x21, // Y Position
-        0x50,             // Angle
+        0xFF, 0xFF, 0xFF, // X Position
+        0xFF, 0xFF, 0xFF, // Y Position
+        0x50, 0x51,       // Angle
         0x20, 0x21,       // Length backwards/forwards
     };
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 24), Eq(MSG_KNOT));
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_KNOT, payload, sizeof(payload)),
+        Eq(MSG_KNOT));
+    EXPECT_THAT(pp.knot.pos.x, Eq(-1));
+    EXPECT_THAT(pp.knot.pos.y, Eq(-1));
+}
+
+TEST_F(NAME, parse_knot)
+{
+    // clang-format off
+    uint8_t payload[] = {
+        0xAA, 0xBB, // Snake ID
+        0x02, 0x00, // Handle idx
+        0x12, 0x34, 0x56, // X Position
+        0x65, 0x43, 0x21, // Y Position
+        0x50, 0x51,       // Angle
+        0x20, 0x21,       // Length backwards/forwards
+    };
+    // clang-format on
+
+    parsed_payload pp;
+    ASSERT_THAT(
+        msg_parse_payload(&pp, MSG_KNOT, payload, sizeof(payload)),
+        Eq(MSG_KNOT));
     EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
     EXPECT_THAT(pp.knot.knot_idx, Eq(0x200));
     EXPECT_THAT(pp.knot.pos.x, Eq(0x123456));
     EXPECT_THAT(pp.knot.pos.y, Eq(0x654321));
-    EXPECT_THAT(pp.knot.angle, Eq(0x50));
+    EXPECT_THAT(pp.knot.angle, Eq(0x5051));
     EXPECT_THAT(pp.knot.len_backwards, Eq(0x20));
     EXPECT_THAT(pp.knot.len_forwards, Eq(0x21));
     EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
-}
-
-TEST(NAME, parse_snake_bezier_qwpos_sign_extension)
-{
-    // clang-format off
-    uint8_t payload[14] = {
-        0xAA, 0xBB, // Snake ID
-        0x02, 0x00, // Handle idx
-
-        0xFF, 0xFF, 0xFF, // X Position
-        0xFF, 0xFF, 0xFF, // Y Position
-        0x50,             // Angle
-        0x20, 0x21,       // Length backwards/forwards
-    };
-    // clang-format on
-
-    parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_KNOT, payload, 14), Eq(MSG_KNOT));
-    EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
-    EXPECT_THAT(pp.knot.knot_idx, Eq(0x200));
-    EXPECT_THAT(pp.knot.pos.x, Eq(-1));
-    EXPECT_THAT(pp.knot.pos.y, Eq(-1));
-    EXPECT_THAT(pp.knot.angle, Eq(0x50));
-    EXPECT_THAT(pp.knot.len_backwards, Eq(0x20));
-    EXPECT_THAT(pp.knot.len_forwards, Eq(0x21));
 }

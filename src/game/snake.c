@@ -1,6 +1,7 @@
 #include "clither/game/bezier.h"
 #include "clither/game/bezier_knot_rb.h"
 #include "clither/game/bezier_point_vec.h"
+#include "clither/game/food.h"
 #include "clither/game/q.h"
 #include "clither/game/qwaabb_rb.h"
 #include "clither/game/qwpos_vec.h"
@@ -8,8 +9,8 @@
 #include "clither/game/snake.h"
 #include "clither/game/wrap.h"
 #include "clither/util/log.h"
+#include "clither/util/morton.h"
 #include "clither/util/str.h"
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,7 +76,7 @@ static int snake_data_init(
     aabb = qwaabb_rb_emplace_realloc(&data->bezier_aabbs);
     if (aabb == NULL)
         goto emplace_aabb_failed;
-    data->aabb = *aabb =
+    data->bb = *aabb =
         make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
 
     return 0;
@@ -118,6 +119,7 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
     snake_head_init(&snake->head, spawn_pos);
 
     snake->hold = 0;
+    snake->dead = 0;
 
     return 0;
 }
@@ -199,11 +201,11 @@ void snake_step_head(
 static void snake_update_aabb(struct snake_data* data)
 {
     int i;
-    data->aabb = *rb_peek(data->bezier_aabbs, 0);
+    data->bb = *rb_peek(data->bezier_aabbs, 0);
     for (i = 1; i < rb_count(data->bezier_aabbs); ++i)
     {
         struct qwaabb aabb = *rb_peek(data->bezier_aabbs, i);
-        data->aabb = qwaabb_union(data->aabb, aabb);
+        data->bb = qwaabb_union(data->bb, aabb);
     }
 }
 
@@ -625,6 +627,18 @@ int snake_update_bezier_extents(
 }
 
 /* ------------------------------------------------------------------------- */
+struct qwpos snake_calculate_visible_range(const struct snake* snake)
+{
+    /* On a perfectly square screen, the width and height would be [2,2] */
+    qw cam_scale = qw_mul(make_qw(2), snake_scale(&snake->param));
+    /* Add some buffer for network latency */
+    cam_scale = qw_add(cam_scale, make_qw(1));
+
+    /* Most people are going to be playing on 16:9 */
+    return make_qwposqw(qw_mul(cam_scale, make_qw2(16, 9)), cam_scale);
+}
+
+/* ------------------------------------------------------------------------- */
 void snake_unextrapolate(
     struct snake_data*          data,
     struct snake_head*          head,
@@ -867,4 +881,55 @@ void snake_extrapolate(
         data->bezier_knots,
         qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
         snake_length(param));
+}
+
+int snake_eat_food(
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct food_grid*   food_grid)
+{
+    struct qwaabb bb;
+    struct qwpos  mouth_pos;
+    struct food*  food;
+    qw            mouth_radius, mouth_radius_sq;
+    int32_t       lower_idx, upper_idx, idx;
+    uint64_t      morton;
+    int           snake_params_updated = 0;
+
+    /* The "mouth" is a circle leading the head position. The distance and
+     * radius depends on the snake's size as well as its upgrades */
+    mouth_radius = make_qw(0.15);
+    mouth_radius = qw_mul(mouth_radius, snake_scale(param));
+    mouth_radius_sq = qw_mul(mouth_radius, mouth_radius);
+    mouth_pos.x =
+        qw_add(head->pos.x, qw_mul(qa_cos(head->angle), mouth_radius));
+    mouth_pos.y =
+        qw_add(head->pos.y, qw_mul(qa_sin(head->angle), mouth_radius));
+
+    bb = make_qwaabbqw(
+        mouth_pos.x - mouth_radius,
+        mouth_pos.y - mouth_radius,
+        mouth_pos.x + mouth_radius,
+        mouth_pos.y + mouth_radius);
+    lower_idx = food_bmap_lower_bound(
+        food_grid->morton, morton_encode_qwpos(make_qwposqw(bb.x1, bb.y1)));
+    upper_idx = food_bmap_lower_bound(
+        food_grid->morton, morton_encode_qwpos(make_qwposqw(bb.x2, bb.y2)));
+    bmap_for_each_range (
+        food_grid->morton, idx, morton, food, lower_idx, upper_idx)
+    {
+        struct qwpos food_pos = morton_decode_qwpos(morton);
+        qw           dx = qw_sub(mouth_pos.x, food_pos.x);
+        qw           dy = qw_sub(mouth_pos.y, food_pos.y);
+        qw           dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        if (dist_sq > mouth_radius_sq)
+            continue;
+
+        snake_param_update(
+            param, param->upgrades, param->food_eaten + food->value);
+        food_grid_remove_food(food_grid, morton);
+        snake_params_updated = 1;
+    }
+
+    return snake_params_updated;
 }

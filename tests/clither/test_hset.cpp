@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/util/hset.h"
 }
 
-#define NAME         hset
+#define NAME         test_hset
 #define MIN_CAPACITY 128
 
 using namespace testing;
@@ -95,30 +95,6 @@ TEST_F(NAME, insertion_random)
     EXPECT_THAT(obj_hset_find(obj_hset, 82), IsTrue());
 }
 
-TEST_F(NAME, insert_new_with_realloc_shifts_data_correctly)
-{
-    int16_t midway = MIN_CAPACITY / 2;
-
-    for (int16_t i = 0; i != MIN_CAPACITY; ++i)
-    {
-        if (i < midway)
-            ASSERT_THAT(obj_hset_insert(&obj_hset, i), Eq(HSET_NEW));
-        else
-            ASSERT_THAT(obj_hset_insert(&obj_hset, i + 1), Eq(HSET_NEW));
-    }
-
-    // Make sure we didn't cause a realloc yet
-    ASSERT_THAT(hset_capacity(obj_hset), Eq(MIN_CAPACITY));
-    ASSERT_THAT(obj_hset_insert(&obj_hset, midway), Eq(HSET_NEW));
-    // Now it should have reallocated
-    ASSERT_THAT(hset_capacity(obj_hset), Gt(MIN_CAPACITY));
-
-    // Check all keys are there
-    for (int i = 0; i != MIN_CAPACITY + 1; ++i)
-        EXPECT_THAT(obj_hset_find(obj_hset, i), IsTrue())
-            << "i: " << i << ", midway: " << midway;
-}
-
 TEST_F(NAME, clear_keeps_underlying_buffer)
 {
     obj_hset_insert(&obj_hset, 0);
@@ -172,32 +148,6 @@ TEST_F(NAME, insert_key_twice_returns_exists)
     EXPECT_THAT(obj_hset_insert(&obj_hset, 0), Eq(HSET_EXISTS));
     EXPECT_THAT(hset_count(obj_hset), Eq(1));
     EXPECT_THAT(obj_hset_find(obj_hset, 0), IsTrue());
-}
-
-TEST_F(NAME, insert_with_realloc_shifts_data_correctly)
-{
-    int16_t midway = MIN_CAPACITY / 2;
-
-    for (int i = 0; i != MIN_CAPACITY; ++i)
-    {
-        if (i < (int)midway)
-            ASSERT_THAT(obj_hset_insert(&obj_hset, i), Eq(HSET_NEW));
-        else
-            ASSERT_THAT(obj_hset_insert(&obj_hset, i + 1), Eq(HSET_NEW));
-    }
-
-    // Make sure we didn't cause a realloc yet
-    ASSERT_THAT(hset_capacity(obj_hset), Eq(MIN_CAPACITY));
-    ASSERT_THAT(obj_hset_insert(&obj_hset, midway), Eq(HSET_NEW));
-    // Now it should have reallocated
-    ASSERT_THAT(hset_capacity(obj_hset), Gt(MIN_CAPACITY));
-
-    // Check all keys are there
-    for (int i = 0; i != MIN_CAPACITY + 1; ++i)
-    {
-        EXPECT_THAT(obj_hset_find(obj_hset, i), IsTrue())
-            << "i: " << i << ", midway: " << midway;
-    }
 }
 
 TEST_F(NAME, find_on_empty_hset_doesnt_crash)

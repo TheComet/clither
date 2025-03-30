@@ -4,6 +4,8 @@
 #include "clither/game/cmd_queue.h"
 #include "clither/game/snake_param.h"
 
+struct food_grid;
+
 struct snake_head
 {
     struct qwpos pos;
@@ -78,7 +80,7 @@ struct snake_data
     struct snake_splits_rb* splits;
 
     /* AABB of the entire snake */
-    struct qwaabb aabb;
+    struct qwaabb bb;
 };
 
 struct snake
@@ -95,6 +97,7 @@ struct snake
     } remote;
 
     unsigned hold : 1;
+    unsigned dead : 1;
 };
 
 int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name);
@@ -115,8 +118,10 @@ snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
  * relevant for the server.
  */
 #define snake_set_hold(snake) (snake)->hold = 1
+#define snake_is_held(snake)  (snake)->hold
 
-#define snake_is_held(snake) (snake)->hold
+#define snake_set_dead(snake) (snake)->dead = 1
+#define snake_is_dead(snake)  (snake)->dead
 
 /*!
  * \brief If a snake is in hold mode (@see snake_set_hold), this
@@ -208,6 +213,13 @@ int snake_update_bezier_extents(
     uint8_t            head_len_backwards,
     uint8_t            second_len_forwards);
 
+/*!
+ * \brief Determines an area in the world a client's snake would visibly be able
+ * to see. This is used by the server to limit what each client is allowed to
+ * see, and is used to spawn snakes into empty locations in the world.
+ */
+struct qwpos snake_calculate_visible_range(const struct snake* snake);
+
 void snake_unextrapolate(
     struct snake_data*          data,
     struct snake_head*          head,
@@ -220,3 +232,8 @@ void snake_extrapolate(
     const struct snake_param*   param,
     uint16_t                    frame_number,
     uint8_t                     sim_tick_rate);
+
+int snake_eat_food(
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct food_grid*   food_grid);

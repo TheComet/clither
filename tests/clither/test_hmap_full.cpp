@@ -6,7 +6,7 @@ extern "C" {
 #include "clither/util/hmap.h"
 }
 
-#define NAME         hmap_full
+#define NAME         test_hmap_full
 #define MIN_CAPACITY 64
 
 using namespace ::testing;

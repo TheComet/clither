@@ -1,3 +1,5 @@
+#include "clither/tests/LogHelper.hpp"
+
 #include "gmock/gmock.h"
 
 extern "C" {
@@ -5,11 +7,15 @@ extern "C" {
 #include "clither/game/snake.h"
 }
 
-#define NAME command
+#define NAME test_cmd
 
 using namespace testing;
 
-TEST(NAME, default_command_agrees_with_default_snake_head)
+struct NAME : Test, LogHelper
+{
+};
+
+TEST_F(NAME, default_command_agrees_with_default_snake_head)
 {
     struct cmd         command;
     struct snake_head  head1, head2;
@@ -23,7 +29,7 @@ TEST(NAME, default_command_agrees_with_default_snake_head)
     EXPECT_THAT(head1.angle, Eq(head2.angle));
 }
 
-TEST(NAME, inserting_sequential_commands_works)
+TEST_F(NAME, inserting_sequential_commands_works)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -48,7 +54,7 @@ TEST(NAME, inserting_sequential_commands_works)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, inserting_with_frame_gaps_doesnt_work)
+TEST_F(NAME, inserting_with_frame_gaps_doesnt_work)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -71,7 +77,7 @@ TEST(NAME, inserting_with_frame_gaps_doesnt_work)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, take_first_matching_command)
+TEST_F(NAME, take_first_matching_command)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -123,7 +129,7 @@ TEST(NAME, take_first_matching_command)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, take_command_in_past_uses_last_predicted)
+TEST_F(NAME, take_command_in_past_uses_last_predicted)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -152,7 +158,7 @@ TEST(NAME, take_command_in_past_uses_last_predicted)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, take_last_command_updates_predicted)
+TEST_F(NAME, take_last_command_updates_predicted)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -183,7 +189,7 @@ TEST(NAME, take_last_command_updates_predicted)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, take_command_in_middle)
+TEST_F(NAME, take_command_in_middle)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;
@@ -214,7 +220,7 @@ TEST(NAME, take_command_in_middle)
     cmd_queue_deinit(&cmdq);
 }
 
-TEST(NAME, take_command_in_future_clears_buffer)
+TEST_F(NAME, take_command_in_future_clears_buffer)
 {
     struct cmd       c = cmd_default();
     struct cmd_queue cmdq;

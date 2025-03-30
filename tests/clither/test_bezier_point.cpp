@@ -7,7 +7,7 @@ extern "C" {
 #include "clither/game/q.h"
 }
 
-#define NAME bezier_point
+#define NAME test_bezier_point
 
 using namespace testing;
 

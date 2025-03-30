@@ -23,6 +23,7 @@ cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT"
 option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 option (CLITHER_DEBUG "Enable debug checks" ON)
 cmake_dependent_option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON "CLITHER_DEBUG" OFF)
+cmake_dependent_option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" ON "CLITHER_DEBUG" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 cmake_dependent_option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." OFF "CLITHER_CLIENT" ON)
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
@@ -266,6 +267,7 @@ add_executable (clither
 
     $<$<BOOL:${CLITHER_TESTS}>:
         tests/tests.cpp
+        tests/src/LogHelper.cpp
         tests/clither/test_args.cpp
         tests/clither/test_bezier_aabb.cpp
         tests/clither/test_bezier_fit.cpp
@@ -302,6 +304,9 @@ target_include_directories (clither
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        
+        $<$<BOOL:${CLITHER_TESTS}>:
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/tests/include>>
 
         $<$<BOOL:${CLITHER_GFX_GLES2}>:
             $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/gfx/gles2/glad/include>>)

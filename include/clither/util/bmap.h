@@ -435,6 +435,10 @@ enum bmap_status
                   (value = &(bmap)->values[idx], 1);                           \
          ++idx)
 
+#define bmap_for_each_key(bmap, idx, key)                                      \
+    for (idx = 0; idx != bmap_count(bmap) && (key = (bmap)->keys[idx], 1);     \
+         ++idx)
+
 #define bmap_for_each_range(bmap, idx, key, value, begin, end)                 \
     for (idx = begin;                                                          \
          idx < end && idx < bmap_count(bmap) &&                                \

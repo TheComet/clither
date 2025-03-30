@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/game/wrap.h"
 }
 
-#define NAME wrap
+#define NAME test_wrap
 
 using namespace testing;
 

@@ -4,7 +4,7 @@ extern "C" {
 #include "clither/util/bset.h"
 }
 
-#define NAME              bset
+#define NAME              test_bset
 #define BSET_MIN_CAPACITY 32
 
 using namespace testing;

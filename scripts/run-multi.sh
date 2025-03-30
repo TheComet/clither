@@ -14,7 +14,7 @@ trap cleanup SIGINT
 ./clither --server --log "server.txt" --netlog "server-net.txt" &
 PIDS+=($!)
 
-for i in {1..2}; do
+for i in {1..3}; do
   ./clither --addr localhost --username "Client $i" --prefix "Client $i: " --log "client$i.txt" --netlog "client$i-net.txt" &
   PIDS+=($!)
 done

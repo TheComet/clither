@@ -64,11 +64,12 @@ void* run_mcd_wifi(const void* p)
     struct tick                tick;
     const struct settings_mcd* settings = p;
 
+    mem_init_threadlocal();
+    log_init();
+
     /* Change log prefix and color for server log messages */
     log_set_prefix("McD WiFi: ");
     log_set_colors(COL_B_MAGENTA, COL_RESET);
-
-    mem_init_threadlocal();
 
     /* Client will connect to this socket */
     ctx.client_fd = net_bind(settings->bind_addr, settings->bind_port);
@@ -206,8 +207,6 @@ exit_mcd:;
     net_close(ctx.client_fd);
 
     mem_deinit_threadlocal();
-    log_set_colors("", "");
-    log_set_prefix("");
 
     return (void*)0;
 
@@ -216,7 +215,5 @@ connect_server_failed:
     net_close(ctx.client_fd);
 bind_client_fd_failed:
     mem_deinit_threadlocal();
-    log_set_colors("", "");
-    log_set_prefix("");
     return (void*)-1;
 }

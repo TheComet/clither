@@ -5,7 +5,7 @@ extern "C" {
 #include "clither/game/q.h"
 }
 
-#define NAME bezier_aabb
+#define NAME test_bezier_aabb
 
 using namespace testing;
 

@@ -2,12 +2,13 @@
 \vspace{.25em}\\
 
 \begin{bytefield}[bitwidth=3em,bitformatting=\small]{1}
-    \bitheader{0-10} \\
+    \bitheader{0-13} \\
     \bitbox{2}{frame}
     \bitbox{3}{pos x}
     \bitbox{3}{pos y}
     \bitbox{2}{angle}
     \bitbox{1}{speed}
+    \bitbox{3}{food}
 \end{bytefield}
 
 \begin{itemize}
@@ -16,6 +17,9 @@
     \item\textbf{pos y:} Q10.14 y coordinate of the snake's head position in world space.
     \item\textbf{angle:} Q4.12 angle of the snake's head.
     \item\textbf{speed:} Current speed of the snake's head.
+    \item\textbf{food:} Amount  of  food  eaten  by  the  snake. Internally this is
+    stored  as  a  \verb$uint32_t$,  but it's not likely  this  number  will  reach
+    anywhere near 16 million.
 \end{itemize}
 
 

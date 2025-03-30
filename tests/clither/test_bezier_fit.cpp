@@ -6,7 +6,7 @@ extern "C" {
 #include "clither/game/qwpos_vec.h"
 }
 
-#define NAME bezier_fit
+#define NAME test_bezier_fit
 
 using namespace testing;
 

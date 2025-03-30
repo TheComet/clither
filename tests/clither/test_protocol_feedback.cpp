@@ -1,3 +1,5 @@
+#include "clither/tests/LogHelper.hpp"
+
 #include "gmock/gmock.h"
 
 extern "C" {
@@ -11,7 +13,7 @@ extern "C" {
 #include "clither/server/server_client_hmap.h"
 }
 
-#define NAME protocol_feedback
+#define NAME test_protocol_feedback
 
 using namespace testing;
 
@@ -22,7 +24,7 @@ operator==(const client_recv_result& r1, const client_recv_result& r2)
            r1.error == r2.error && r1.disconnected == r2.disconnected;
 }
 
-class NAME : public Test
+struct NAME : Test, LogHelper
 {
 public:
     void SetUp() override
