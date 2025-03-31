@@ -7,8 +7,11 @@
 
 struct bot;
 struct bot_interface;
+struct gfx;
+struct gfx_interface;
 struct msg;
 struct msg_vec;
+struct resource_pack;
 struct settings_client;
 struct settings_gfx;
 struct settings_world;
@@ -120,7 +123,9 @@ client_recv(struct client* client, struct world* world);
  */
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx,
+    struct resource_pack**        pack,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
     const struct bot_interface*   ibot,
     struct bot*                   bot);
 #endif

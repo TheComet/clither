@@ -263,8 +263,6 @@ static struct client_recv_result process_message(
             struct snake*         snake;
             uint16_t              rtt;
 
-            log_dbg("MSG_JOIN_ACCEPT\n");
-
             if (client->state != CLIENT_JOINING)
                 return client_recv_ok();
 
@@ -465,7 +463,11 @@ static struct client_recv_result process_message(
                     pp.bezier.frame_number,
                     snake->remote.replica.head_frame_numbers[0]))
             {
-                log_dbg("Received outdated MSG_BEZIER, ignoring\n");
+                log_dbg(
+                    "Received outdated MSG_BEZIER: received frame=%d, replica "
+                    "frame=%d\n",
+                    pp.bezier.frame_number,
+                    snake->remote.replica.head_frame_numbers[0]);
                 return client_recv_ok();
             }
 
@@ -660,27 +662,35 @@ client_recv(struct client* client, struct world* world)
 #if defined(CLITHER_CLIENT)
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx,
+    struct resource_pack**        pack,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
     const struct bot_interface*   ibot,
     struct bot*                   bot)
 {
-    struct world                world;
-    struct input                input;
-    struct cmd                  cmd;
-    const struct gfx_interface* gfx_iface;
-    struct gfx*                 gfx;
-    struct resource_pack*       pack;
-    struct camera               camera;
-    struct client               client;
-    struct tick                 sim_tick;
-    struct tick                 net_tick;
-    int                         tick_lag;
-    struct fs_watch*            pack_watch;
+    struct fs_watch* pack_watch;
+    struct world     world;
+    struct input     input;
+    struct cmd       cmd;
+    struct camera    camera;
+    struct client    client;
+    struct tick      sim_tick;
+    struct tick      net_tick;
+    int              tick_lag;
+    int              retval = -1;
 
     /* Change log prefix and color for server log messages */
     log_init();
     log_set_prefix(settings->log_prefix);
     log_set_colors(COL_B_GREEN, COL_RESET);
+
+    pack_watch = NULL;
+    if (*pack != NULL)
+    {
+        pack_watch = resource_pack_watch(*pack);
+        if (pack_watch == NULL)
+            goto watch_resource_pack_failed;
+    }
 
     client_init(&client);
     /*
@@ -701,26 +711,6 @@ void* client_run(
     cmd = cmd_default();
     world_init(&world);
 
-    pack = resource_pack_parse("packs/horror");
-    if (pack == NULL)
-        goto parse_resource_pack_failed;
-    pack_watch = resource_pack_watch(pack);
-    if (pack_watch == NULL)
-        goto watch_resource_pack_failed;
-
-    /* Init all graphics and create window */
-    /* NOTE: Due to how graphics backends are switched, this must be done
-     * last so we can still clean up properly in case of failure */
-    gfx_iface = gfx_backends[settings_gfx->backend];
-    log_info("Using graphics backend: %s\n", gfx_iface->name);
-    if (gfx_iface->init() < 0)
-        goto init_gfx_failed;
-    gfx = gfx_iface->create(settings_gfx->width, settings_gfx->height);
-    if (gfx == NULL)
-        goto create_gfx_failed;
-    if (gfx_iface->load_resource_pack(gfx, pack) < 0)
-        goto load_resource_pack_failed;
-
     log_info("Client started\n");
 
     tick_cfg(&sim_tick, client.sim_tick_rate);
@@ -729,12 +719,17 @@ void* client_run(
     {
         int net_update;
 
-        gfx_iface->poll_input(gfx, &input);
+        if (*gfx != NULL)
+            (*igfx)->poll_input(*gfx, &input);
+
         if (input.quit)
+        {
+            retval = 0;
             break;
+        }
 
         /* Switch graphics backends */
-        if (input.next_gfx_backend || input.prev_gfx_backend)
+        if (*gfx != NULL && (input.next_gfx_backend || input.prev_gfx_backend))
         {
             int count;
             int idx, new_idx;
@@ -742,7 +737,7 @@ void* client_run(
             for (count = 0; gfx_backends[count]; ++count)
                 ;
             for (idx = 0; gfx_backends[idx]; ++idx)
-                if (gfx_iface == gfx_backends[idx])
+                if (*igfx == gfx_backends[idx])
                     break;
 
             if (input.next_gfx_backend)
@@ -756,45 +751,45 @@ void* client_run(
              * seem to work. GL contexts aren't properly transferred to the
              * new instance. This is why we destroy first - then create
              */
-            gfx_iface->unload_resource_pack(gfx, pack);
-            gfx_iface->destroy(gfx);
-            gfx_iface->deinit();
+            (*igfx)->unload_resource_pack(*gfx, *pack);
+            (*igfx)->destroy(*gfx);
+            (*igfx)->deinit();
 
-            gfx_iface = gfx_backends[new_idx];
-            if (gfx_iface->init() < 0)
+            *igfx = gfx_backends[new_idx];
+            if ((*igfx)->init() < 0)
                 goto init_new_gfx_failed;
-            gfx = gfx_iface->create(640, 480);
-            if (gfx == NULL)
+            *gfx = (*igfx)->create(640, 480);
+            if (*gfx == NULL)
                 goto create_new_gfx_failed;
-            if (gfx_iface->load_resource_pack(gfx, pack) < 0)
+            if ((*igfx)->load_resource_pack(*gfx, *pack) < 0)
                 goto load_new_resource_pack_failed;
 
             /* Clears the button press for switching graphics backends */
             input_init(&input);
-            gfx_iface->poll_input(gfx, &input);
+            (*igfx)->poll_input(*gfx, &input);
 
             goto create_new_gfx_success;
 
         load_new_resource_pack_failed:
-            gfx_iface->destroy(gfx);
+            (*igfx)->destroy(*gfx);
         create_new_gfx_failed:
-            gfx_iface->deinit();
+            (*igfx)->deinit();
         init_new_gfx_failed:
             /* Try to restore to previous backend. Shouldn't fail but who knows
              */
-            gfx_iface = gfx_backends[idx];
-            if (gfx_iface->init() < 0)
-                goto init_gfx_failed;
-            gfx = gfx_iface->create(640, 480);
-            if (gfx == NULL)
-                goto create_gfx_failed;
-            if (gfx_iface->load_resource_pack(gfx, pack) < 0)
-                goto load_resource_pack_failed;
+            (*igfx) = gfx_backends[idx];
+            if ((*igfx)->init() < 0)
+                break;
+            *gfx = (*igfx)->create(640, 480);
+            if (*gfx == NULL)
+                break;
+            if ((*igfx)->load_resource_pack(*gfx, *pack) < 0)
+                break;
         }
     create_new_gfx_success:;
 
         /* Check for resource pack changes */
-        if (fs_watch_check(pack_watch) > 0)
+        if (pack_watch != NULL && fs_watch_check(pack_watch) > 0)
         {
             struct resource_pack* new_pack;
 
@@ -802,14 +797,14 @@ void* client_run(
             fs_watch_deinit(pack_watch);
 
             new_pack = resource_pack_parse("packs/horror");
-            if (new_pack)
+            if (new_pack && *gfx != NULL)
             {
-                gfx_iface->unload_resource_pack(gfx, pack);
-                resource_pack_destroy(pack);
-                gfx_iface->load_resource_pack(gfx, new_pack);
-                pack = new_pack;
+                (*igfx)->unload_resource_pack(*gfx, *pack);
+                resource_pack_destroy(*pack);
+                (*igfx)->load_resource_pack(*gfx, new_pack);
+                *pack = new_pack;
             }
-            pack_watch = resource_pack_watch(pack);
+            pack_watch = resource_pack_watch(*pack);
         }
 
         /* Receive net data */
@@ -857,8 +852,9 @@ void* client_run(
                  */
                 if (bot == NULL)
                 {
-                    cmd = gfx_iface->next_cmd(
-                        gfx, &input, &camera, cmd, snake->head.pos);
+                    if (*gfx != NULL)
+                        cmd = (*igfx)->next_cmd(
+                            *gfx, &input, &camera, cmd, snake->head.pos);
                 }
                 else
                 {
@@ -928,7 +924,8 @@ void* client_run(
                 break;
         }
 
-        gfx_iface->step_anim(gfx, client.sim_tick_rate);
+        if (*gfx != NULL)
+            (*igfx)->step_anim(*gfx, client.sim_tick_rate);
 
         /*
          * Skip rendering if we are lagging, as this is most likely the source
@@ -939,7 +936,10 @@ void* client_run(
             tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
         client.warp = 0;
         if (tick_lag == 0)
-            gfx_iface->draw_world(gfx, &world, &camera);
+        {
+            if (*gfx != NULL)
+                (*igfx)->draw_world(*gfx, &world, &camera);
+        }
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
@@ -959,22 +959,14 @@ void* client_run(
     client_queue(&client, msg_leave());
     client_send_pending_data(&client);
 
-    gfx_iface->unload_resource_pack(gfx, pack);
-load_resource_pack_failed:
-    gfx_iface->destroy(gfx);
-create_gfx_failed:
-    gfx_iface->deinit();
-init_gfx_failed:
-    fs_watch_deinit(pack_watch);
-watch_resource_pack_failed:
-    resource_pack_destroy(pack);
-parse_resource_pack_failed:
     world_deinit(&world);
     if (client.state != CLIENT_DISCONNECTED)
         client_disconnect(&client);
 client_connect_failed:
     client_deinit(&client);
-
-    return NULL;
+    if (pack_watch != NULL)
+        fs_watch_deinit(pack_watch);
+watch_resource_pack_failed:
+    return (void*)(intptr_t)retval;
 }
 #endif

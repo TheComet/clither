@@ -66,14 +66,14 @@ static int print_help(const char* prog_name)
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER)
     log_raw(
         "  " ARG2 "-a" RESET "," ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server  address to  connect to. Can  be a URL  or an IP\n"
-        "                        address. If --host or --server is used,  then this sets\n"
-        "                        the bind address rather than  the address to connect to\n"
-        "                        The client  will always  use localhost or  127.0.0.1 in\n"
-        "                        this case.\n");
+        "                        address. If used together with --host or --server, then\n"
+        "                        this sets the bind  address rather than  the address to\n"
+        "                        connect  to. The  client will  always  use localhost or\n"
+        "                        127.0.0.1 in this case.\n");
     log_raw(
-        "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port  number  of  server  to  connect to.  If --host or\n"
-        "                        --server  is used, then this sets the  bind port rather\n"
-        "                        than the port to connect to.\n");
+        "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port  number  of  the  server  to  connect  to. If used\n"
+        "                        together  with --host or  --server, then  this sets the\n"
+        "                        bind port rather than the port to connect to.\n");
 #elif defined(CLITHER_CLIENT)
     log_raw(
         "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server address to connect to. Can be a URL or an IP address.\n"
@@ -96,19 +96,22 @@ static int print_help(const char* prog_name)
 
 #if defined(CLITHER_BOT_API)
     log_raw(
-        "     " ARG1 " --bot" RESET " <" ARG2 "script" RESET ">     Runs the client in bot mode. The script file is used to control the snake.\n"
-        "                        Currently available scripting languages:\n");
+        "  " ARG2 "-b" RESET "," ARG1 " --bot" RESET " <" ARG2 "script" RESET ">    Runs the client in bot mode. The script file is used to\n"
+        "                        control the snake.  Use together with --gfx if you want\n"
+        "                        to see what the bot is doing.\n"
+        "                          Currently available scripting languages:\n");
     {
         int i;
         for (i = 0; bot_backends[i]; ++i)
-            log_raw("                            " ARG2 "%d" RESET ": %s\n", i, bot_backends[i]->name);
+            log_raw("                            - %s\n", bot_backends[i]->name);
     }
   #endif
 
 #if defined(CLITHER_GFX)
     log_raw(
-        "     " ARG1 " --gfx" RESET " <" ARG2 "index" RESET ">     Open a window for rendering the game.\n"
-        "                        Currently available backends:\n");
+        "  " ARG2 "-g" RESET "," ARG1 " --gfx" RESET " [" ARG2 "index" RESET "]     Opens  a window for rendering  the game. This option is\n"
+        "                        implicitly active unless --bot or --server is specified\n"
+        "                          Currently available backends:\n");
     {
         int i;
         for (i = 0; gfx_backends[i]; ++i)
@@ -157,10 +160,10 @@ static int print_help(const char* prog_name)
     log_raw("     " RED " --mcd " RESET "<" RED "latency" RESET "> <" RED "loss" RESET "> <" RED "dup" RESET "> <" RED "reorder" RESET "> (Recompile with -DCLITHER_MCD=ON)\n");
 #endif
 #if !defined(CLITHER_BOT_API)
-    log_raw("     " RED " --bot " RESET "<" RED "script" RESET ">     (Recompile with -DCLITHER_BOT_API=ON)\n");
+    log_raw("  " RED "-b" RESET "," RED " --bot " RESET "<" RED "script" RESET ">    (Recompile with -DCLITHER_BOT_API=ON)\n");
 #endif
 #if !defined(CLITHER_GFX)
-    log_raw("     " RED " --gfx " RESET "<" RED "index" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
+    log_raw("     " RED " --gfx " RESET "[" RED "index" RESET "]     (Recompile with -DCLITHER_GFX=ON)\n");
 #endif
 #if !defined(CLITHER_LOGGING)
     log_raw("  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOGGING=ON)\n");
@@ -181,8 +184,7 @@ static int print_help(const char* prog_name)
         prog_name, prog_name
     );
     log_raw(
-        TEXT "  Create a server and join it as a client. The server will stop when the\n"
-        "  client stops, since it is a child process.\n" RESET
+        TEXT "  Create a server and join it as a client. Other players will be able to join.\n" RESET
         "    %s" ARG1 " --host\n" RESET
         "    %s" ARG1 " --host --addr" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind address\n" RESET
         "\n",
@@ -196,6 +198,15 @@ static int print_help(const char* prog_name)
         "\n",
         prog_name, prog_name
     );
+#if defined(CLITHER_BOT_API)
+    log_raw(
+        TEXT "  Join a server as a bot:\n" RESET
+        "    %s " ARG1 "--bot " RESET "mybot.lua" ARG1 " --addr" RESET " 192.168.1.2\n" RESET
+        "    %s " ARG1 "--bot " RESET "mybot.lua" ARG1 " --addr" RESET " 192.168.1.2" ARG1 " --gfx" COMMENT "        # Render bot\n" RESET
+        "\n",
+        prog_name, prog_name
+    );
+#endif
     /* clang-format on */
 
     return 1;
@@ -269,42 +280,6 @@ int args_parse(struct args* a, int argc, char* argv[])
                 else if (strcmp(arg, "benchmarks") == 0)
                     bench_flag = 1;
 #endif
-#if defined(CLITHER_BOT_API)
-                else if (strcmp(arg, "bot") == 0)
-                {
-                    ++i;
-                    if (i >= argc || !*argv[i])
-                    {
-                        log_err("Missing argument for --bot <script>\n");
-                        return -1;
-                    }
-                    a->bot_script = atoi(argv[i]);
-                }
-#endif
-#if defined(CLITHER_GFX)
-                else if (strcmp(arg, "gfx") == 0)
-                {
-                    int count;
-                    ++i;
-                    if (i >= argc || !*argv[i])
-                    {
-                        log_err("Missing argument for --gfx <index>\n");
-                        return -1;
-                    }
-                    a->gfx_backend = atoi(argv[i]);
-
-                    for (count = 0; gfx_backends[count]; ++count)
-                    {
-                    }
-                    if (a->gfx_backend >= count || a->gfx_backend < 0)
-                    {
-                        log_err(
-                            "Graphics backend index \"%d\" is out of range!\n",
-                            a->gfx_backend);
-                        return -1;
-                    }
-                }
-#endif
 #if defined(CLITHER_SERVER)
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
@@ -312,6 +287,18 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
                 else if (strcmp(arg, "host") == 0)
                     host_flag = 1;
+#endif
+#if defined(CLITHER_CLIENT)
+                else if (strcmp(arg, "username") == 0)
+                {
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err("Missing argument for --username <name>\n");
+                        return -1;
+                    }
+                    a->username = argv[i];
+                }
 #endif
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
                 else if (strcmp(arg, "addr") == 0)
@@ -335,18 +322,6 @@ int args_parse(struct args* a, int argc, char* argv[])
                     a->port = argv[i];
                 }
 #endif
-#if defined(CLITHER_CLIENT)
-                else if (strcmp(arg, "username") == 0)
-                {
-                    ++i;
-                    if (i >= argc || !*argv[i])
-                    {
-                        log_err("Missing argument for --username <name>\n");
-                        return -1;
-                    }
-                    a->username = argv[i];
-                }
-#endif
 #if defined(CLITHER_MCD)
                 else if (strcmp(arg, "mcd") == 0)
                 {
@@ -362,6 +337,42 @@ int args_parse(struct args* a, int argc, char* argv[])
                     a->mcd_dup = atoi(argv[i + 3]);
                     a->mcd_reorder = atoi(argv[i + 4]);
                     i += 4;
+                }
+#endif
+#if defined(CLITHER_BOT_API)
+                else if (strcmp(arg, "bot") == 0)
+                {
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err("Missing argument for --bot <script>\n");
+                        return -1;
+                    }
+                    a->bot_script = argv[i];
+                }
+#endif
+#if defined(CLITHER_GFX)
+                else if (strcmp(arg, "gfx") == 0)
+                {
+                    int count;
+                    a->gfx_backend = 0;
+
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                        continue;
+
+                    a->gfx_backend = atoi(argv[i]);
+
+                    for (count = 0; gfx_backends[count]; ++count)
+                        ;
+                    if (a->gfx_backend >= count || a->gfx_backend < 0)
+                    {
+                        log_err(
+                            "Graphics backend index \"%d\" is out of "
+                            "range!\n",
+                            a->gfx_backend);
+                        return -1;
+                    }
                 }
 #endif
 #if defined(CLITHER_LOGGING)
@@ -409,21 +420,8 @@ int args_parse(struct args* a, int argc, char* argv[])
                 const char* p;
                 for (p = &argv[i][1]; *p; ++p)
                 {
-                    if (0)
-                    {
-                    }
-#if defined(CLITHER_SERVER) || defined(CLITHER_CLIENT) || defined(CLITHER_MCD)
-                    else if (*p == 'p')
-                    {
-                        ++i;
-                        if (p[1] || i >= argc || !*argv[i])
-                        {
-                            log_err("Missing argument for -p <port>\n");
-                            return -1;
-                        }
-                        a->port = argv[i];
-                    }
-#endif
+                    if (*p == 'h')
+                        return print_help(argv[0]);
 #if defined(CLITHER_SERVER)
                     else if (*p == 's')
                         server_flag = 1;
@@ -438,6 +436,66 @@ int args_parse(struct args* a, int argc, char* argv[])
                             return -1;
                         }
                         a->username = argv[i];
+                    }
+#endif
+#if defined(CLITHER_SERVER) || defined(CLITHER_CLIENT) || defined(CLITHER_MCD)
+                    else if (*p == 'a')
+                    {
+                        ++i;
+                        if (p[1] || i >= argc || !*argv[i])
+                        {
+                            log_err("Missing argument for -a <address>\n");
+                            return -1;
+                        }
+                        a->addr = argv[i];
+                    }
+                    else if (*p == 'p')
+                    {
+                        ++i;
+                        if (p[1] || i >= argc || !*argv[i])
+                        {
+                            log_err("Missing argument for -p <port>\n");
+                            return -1;
+                        }
+                        a->port = argv[i];
+                    }
+#endif
+#if defined(CLITHER_BOT_API)
+                    else if (*p == 'b')
+                    {
+                        ++i;
+                        if (p[1] || i >= argc || !*argv[i])
+                        {
+                            log_err("Missing argument for -b <script>\n");
+                            return -1;
+                        }
+                        a->bot_script = argv[i];
+                    }
+#endif
+#if defined(CLITHER_GFX)
+                    else if (*p == 'g')
+                    {
+                        int count;
+                        a->gfx_backend = 0;
+
+                        if (p[1])
+                            continue;
+                        ++i;
+                        if (i >= argc || !*argv[i])
+                            continue;
+
+                        a->gfx_backend = atoi(argv[i]);
+
+                        for (count = 0; gfx_backends[count]; ++count)
+                            ;
+                        if (a->gfx_backend >= count || a->gfx_backend < 0)
+                        {
+                            log_err(
+                                "Graphics backend index \"%d\" is out of "
+                                "range!\n",
+                                a->gfx_backend);
+                            return -1;
+                        }
                     }
 #endif
 #if defined(CLITHER_LOGGING)

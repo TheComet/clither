@@ -620,7 +620,7 @@ struct msg* msg_join_accept(
     m->payload[15] = spawn_pos->y >> 8;
     m->payload[16] = spawn_pos->y & 0xFF;
 
-    log_dbg(
+    log_net(
         "MSG_JOIN_ACCEPT: sim_tick_rate=%d, net_tick_rate=%d, "
         "world_inner_radius=%d, world_ring_start=%d, world_ring_end=%d, "
         "client_frame=%d, server_frame=%d, snake_id=%d, spawn_pos=[%.2f, "

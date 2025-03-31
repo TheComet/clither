@@ -64,13 +64,6 @@ struct snake* world_create_snake(
         return NULL;
     snake_init(snake, spawn_pos, username);
 
-    log_info(
-        "Creating snake id: %d, pos: [%.2f,%.2f], username: \"%s\"\n",
-        snake_id,
-        qw_to_float(snake->head.pos.x),
-        qw_to_float(snake->head.pos.y),
-        username);
-
     return snake;
 }
 
@@ -138,15 +131,8 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 {
     struct snake* snake = snake_bmap_find(world->snakes, snake_id);
     if (snake == NULL)
-    {
-        log_warn("Tried removing snake %d, but it doesn't exist\n", snake_id);
         return;
-    }
 
-    log_info(
-        "Removing snake %d with username \"%s\"\n",
-        snake_id,
-        str_cstr(snake->data.name));
     snake_deinit(snake);
     snake_bmap_erase(world->snakes, snake_id);
 }

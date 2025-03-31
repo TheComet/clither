@@ -3,8 +3,8 @@
 #include "clither/util/hash.h"
 #include "clither/util/log.h" /* log_oom */
 #include "clither/util/mem.h" /* mem_alloc, mem_free */
-#include <stddef.h>      /* offsetof */
-#include <string.h>      /* memset */
+#include <stddef.h>           /* offsetof */
+#include <string.h>           /* memset */
 
 #define HMAP_SLOT_UNUSED 0 /* SLOT_UNUSED must be 0 for memset() to work */
 #define HMAP_SLOT_RIP    1
@@ -335,7 +335,7 @@ enum hmap_status
         last_rip = -1;                                                         \
         slot = (int##bits##_t)(h & (H)(hmap->capacity - 1));                   \
                                                                                \
-        while (hmap->hashes[slot] != HMAP_SLOT_UNUSED)                         \
+        while (i < hmap->capacity && hmap->hashes[slot] != HMAP_SLOT_UNUSED)   \
         {                                                                      \
             /* If the same hash already exists in this slot, and this isn't    \
              * the result of a hash collision (which we can verify by          \
@@ -360,6 +360,7 @@ enum hmap_status
          * entire probing sequence. */                                         \
         if (last_rip != -1)                                                    \
             slot = last_rip;                                                   \
+        CLITHER_DEBUG_ASSERT(slot >= 0);                                       \
                                                                                \
         return slot;                                                           \
     }                                                                          \

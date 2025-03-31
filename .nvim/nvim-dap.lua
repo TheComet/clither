@@ -1,4 +1,5 @@
 local dap = require("dap")
+local last_bot_script = vim.fn.getcwd() .. '/lua/figure8.lua'
 
 dap.set_log_level("TRACE")
 
@@ -9,15 +10,6 @@ dap.adapters.lldb = {
 }
 
 dap.configurations.cpp = {
-  {
-    name = "Host game",
-    type = "lldb",
-    request = "launch",
-    program = "${workspaceFolder}/build-Debug/bin/clither",
-    cwd = "${workspaceFolder}/build-Debug/bin/",
-    args = { "--host" },
-    stopOnEntry = false,
-  },
   {
     name = "Start server",
     type = "lldb",
@@ -34,6 +26,31 @@ dap.configurations.cpp = {
     program = "${workspaceFolder}/build-Debug/bin/clither",
     cwd = "${workspaceFolder}/build-Debug/bin/",
     args = { "--addr", "localhost" },
+    stopOnEntry = false,
+  },
+  {
+    name = "Host game",
+    type = "lldb",
+    request = "launch",
+    program = "${workspaceFolder}/build-Debug/bin/clither",
+    cwd = "${workspaceFolder}/build-Debug/bin/",
+    args = { "--host" },
+    stopOnEntry = false,
+  },
+  {
+    name = "Host bot script",
+    type = "lldb",
+    request = "launch",
+    program = "${workspaceFolder}/build-Debug/bin/clither",
+    cwd = "${workspaceFolder}/build-Debug/bin/",
+    args = function()
+      local current_fname = vim.api.nvim_buf_get_name(0)
+      if current_fname:match(".lua$") then
+        last_bot_script = current_fname
+      end
+      local script_file = vim.fn.input("Script file: ", last_bot_script, "file")
+      return { "--host", "--bot", script_file }
+    end,
     stopOnEntry = false,
   },
   {

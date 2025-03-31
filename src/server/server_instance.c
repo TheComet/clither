@@ -112,6 +112,7 @@ void* server_instance_run(const void* args)
                 tick_lag,
                 tick_lag == 1 ? ' ' : 's');
 
+        log_dbg("frame=%d\n", frame_number);
         frame_number++;
     }
     log_info("Stopping server instance\n");
