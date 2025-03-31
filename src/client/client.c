@@ -1,3 +1,4 @@
+#include "clither/bot/bot.h"
 #include "clither/client/client.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
@@ -659,7 +660,9 @@ client_recv(struct client* client, struct world* world)
 #if defined(CLITHER_CLIENT)
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx)
+    const struct settings_gfx*    settings_gfx,
+    const struct bot_interface*   ibot,
+    struct bot*                   bot)
 {
     struct world                world;
     struct input                input;
@@ -706,8 +709,8 @@ void* client_run(
         goto watch_resource_pack_failed;
 
     /* Init all graphics and create window */
-    /* NOTE: Due to how graphics backends are switched, this must be done last
-     * so we can still clean up properly in case of failure */
+    /* NOTE: Due to how graphics backends are switched, this must be done
+     * last so we can still clean up properly in case of failure */
     gfx_iface = gfx_backends[settings_gfx->backend];
     log_info("Using graphics backend: %s\n", gfx_iface->name);
     if (gfx_iface->init() < 0)
@@ -848,9 +851,21 @@ void* client_run(
                  * Map "input" to "command". This converts the mouse and
                  * keyboard information into a structure that lets us step the
                  * snake forwards in time.
+                 *
+                 * If a bot was created, then it has precedence over the mouse
+                 * controls of the graphics interface.
                  */
-                cmd = gfx_iface->input_to_cmd(
-                    cmd, &input, gfx, &camera, snake->head.pos);
+                if (bot == NULL)
+                {
+                    cmd = gfx_iface->next_cmd(
+                        gfx, &input, &camera, cmd, snake->head.pos);
+                }
+                else
+                {
+                    if (ibot->next_cmd(
+                            bot, &cmd, cmd, &world, client.sim_tick_rate) != 0)
+                        break;
+                }
 
                 /*
                  * Append the new command to the ring buffer of unconfirmed

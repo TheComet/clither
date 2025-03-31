@@ -5,6 +5,8 @@
 #if defined(CLITHER_CLIENT)
 #    include <stdint.h>
 
+struct bot;
+struct bot_interface;
 struct msg;
 struct msg_vec;
 struct settings_client;
@@ -118,5 +120,7 @@ client_recv(struct client* client, struct world* world);
  */
 void* client_run(
     const struct settings_client* settings,
-    const struct settings_gfx*    settings_gfx);
+    const struct settings_gfx*    settings_gfx,
+    const struct bot_interface*   ibot,
+    struct bot*                   bot);
 #endif

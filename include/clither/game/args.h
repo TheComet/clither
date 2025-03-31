@@ -26,6 +26,9 @@ enum mode
 struct args
 {
     const char* settings_file;
+#if defined(CLITHER_BOT_API)
+    const char* bot_script;
+#endif
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
     const char* addr;
     const char* port;

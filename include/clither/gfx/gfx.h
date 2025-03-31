@@ -77,19 +77,19 @@ struct gfx_interface
      * which the "angle" and "speed" properties are allowed to change. This
      * limitation allows commands to be delta-compressed more efficiently.
      *
-     * \param[in] command The previously calculated command from the previous
-     * frame.
-     * \param[in] input Raw user input.
      * \param[in] gfx Graphics context.
+     * \param[in] input Raw user input.
      * \param[in] cam Camera information required for transformation.
+     * \param[in] cmd The previously calculated command from the previous
+     * frame.
      * \param[in] snake_head Snake's head position in world space.
      * \return The new command. Make sure to use @see cmd_make()
      */
-    struct cmd (*input_to_cmd)(
-        struct cmd           prev,
-        const struct input*  input,
+    struct cmd (*next_cmd)(
         const struct gfx*    gfx,
+        const struct input*  input,
         const struct camera* cam,
+        struct cmd           prev,
         struct qwpos         snake_head);
 
     /*!

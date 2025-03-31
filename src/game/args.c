@@ -1,3 +1,4 @@
+#include "clither/bot/bot.h"
 #include "clither/game/args.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
@@ -93,6 +94,17 @@ static int print_help(const char* prog_name)
         "                        is applied more than once per packet.\n");
 #endif
 
+#if defined(CLITHER_BOT_API)
+    log_raw(
+        "     " ARG1 " --bot" RESET " <" ARG2 "script" RESET ">     Runs the client in bot mode. The script file is used to control the snake.\n"
+        "                        Currently available scripting languages:\n");
+    {
+        int i;
+        for (i = 0; bot_backends[i]; ++i)
+            log_raw("                            " ARG2 "%d" RESET ": %s\n", i, bot_backends[i]->name);
+    }
+  #endif
+
 #if defined(CLITHER_GFX)
     log_raw(
         "     " ARG1 " --gfx" RESET " <" ARG2 "index" RESET ">     Open a window for rendering the game.\n"
@@ -143,6 +155,9 @@ static int print_help(const char* prog_name)
 #endif
 #if !defined(CLITHER_MCD)
     log_raw("     " RED " --mcd " RESET "<" RED "latency" RESET "> <" RED "loss" RESET "> <" RED "dup" RESET "> <" RED "reorder" RESET "> (Recompile with -DCLITHER_MCD=ON)\n");
+#endif
+#if !defined(CLITHER_BOT_API)
+    log_raw("     " RED " --bot " RESET "<" RED "script" RESET ">     (Recompile with -DCLITHER_BOT_API=ON)\n");
 #endif
 #if !defined(CLITHER_GFX)
     log_raw("     " RED " --gfx " RESET "<" RED "index" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
@@ -220,6 +235,9 @@ int args_parse(struct args* a, int argc, char* argv[])
 #else
     a->mode = MODE_NONE;
 #endif
+#if defined(CLITHER_BOT_API)
+    a->bot_script = NULL;
+#endif
 #if defined(CLITHER_GFX)
     a->gfx_backend = -1;
 #endif
@@ -250,6 +268,18 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_BENCHMARKS)
                 else if (strcmp(arg, "benchmarks") == 0)
                     bench_flag = 1;
+#endif
+#if defined(CLITHER_BOT_API)
+                else if (strcmp(arg, "bot") == 0)
+                {
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err("Missing argument for --bot <script>\n");
+                        return -1;
+                    }
+                    a->bot_script = atoi(argv[i]);
+                }
 #endif
 #if defined(CLITHER_GFX)
                 else if (strcmp(arg, "gfx") == 0)

@@ -16,6 +16,10 @@
 
 #if defined(CLITHER_CLIENT)
 #   cmakedefine CLITHER_BOT_API
+#   if defined(CLITHER_BOT_API)
+#      cmakedefine CLITHER_BOT_API_LUA
+#   endif
+
 #   cmakedefine CLITHER_GFX
 #   if defined(CLITHER_GFX)
 #      cmakedefine CLITHER_GFX_SDL

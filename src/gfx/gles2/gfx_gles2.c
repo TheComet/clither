@@ -278,11 +278,11 @@ static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
         input->quit = 1;
 }
 
-static struct cmd gfx_gles2_input_to_cmd(
-    struct cmd           prev,
-    const struct input*  input,
+static struct cmd gfx_gles2_next_cmd(
     const struct gfx*    gfx,
+    const struct input*  input,
     const struct camera* camera,
+    struct cmd           prev,
     struct qwpos         snake_head)
 {
     float       a, d, dx, dy;
@@ -404,6 +404,6 @@ struct gfx_interface gfx_gles2 = {
     &gfx_gles2_load_resource_pack,
     &gfx_gles2_unload_resource_pack,
     &gfx_gles2_poll_input,
-    &gfx_gles2_input_to_cmd,
+    &gfx_gles2_next_cmd,
     &gfx_gles2_step_anim,
     &gfx_gles2_draw_world};

@@ -2,18 +2,18 @@
 #include "clither/game/bezier_point_vec.h"
 #include "clither/game/camera.h"
 #include "clither/game/cmd.h"
+#include "clither/game/input.h"
+#include "clither/game/qwaabb_rb.h"
+#include "clither/game/snake.h"
+#include "clither/game/snake_bmap.h"
+#include "clither/game/world.h"
 #include "clither/gfx/gfx.h"
 #include "clither/util/hash.h"
-#include "clither/game/input.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include "clither/util/morton.h"
-#include "clither/game/qwaabb_rb.h"
 #include "clither/util/rb.h"
-#include "clither/game/snake.h"
-#include "clither/game/snake_bmap.h"
 #include "clither/util/vec.h"
-#include "clither/game/world.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <math.h>
@@ -303,7 +303,7 @@ gfx_sdl_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 }
 
 /* ------------------------------------------------------------------------- */
-static int
+static void
 gfx_sdl_unload_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     (void)gfx;
@@ -350,11 +350,11 @@ static void gfx_sdl_poll_input(struct gfx* gfx, struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-static struct cmd gfx_sdl_input_to_command(
-    struct cmd           command,
-    const struct input*  input,
+static struct cmd gfx_sdl_next_cmd(
     const struct gfx*    gfx,
+    const struct input*  input,
     const struct camera* camera,
+    struct cmd           command,
     struct qwpos         snake_head)
 {
     double      a, d, dx, dy;
@@ -702,6 +702,6 @@ struct gfx_interface gfx_sdl = {
     gfx_sdl_load_resource_pack,
     gfx_sdl_unload_resource_pack,
     gfx_sdl_poll_input,
-    gfx_sdl_input_to_command,
+    gfx_sdl_next_cmd,
     gfx_sdl_step_anim,
     gfx_sdl_draw_world};

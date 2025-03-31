@@ -1,14 +1,15 @@
-#include "clither/game/args.h"
 #include "clither/benchmarks.h"
+#include "clither/bot/bot.h"
 #include "clither/client/client.h"
-#include "clither/util/log.h"
+#include "clither/game/args.h"
 #include "clither/game/mcd_wifi.h"
-#include "clither/platform/net.h"
-#include "clither/server/server.h"
 #include "clither/game/settings.h"
+#include "clither/platform/net.h"
 #include "clither/platform/signals.h"
-#include "clither/tests.h"
 #include "clither/platform/thread.h"
+#include "clither/server/server.h"
+#include "clither/tests.h"
+#include "clither/util/log.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,10 @@ static struct settings settings;
 int main(int argc, char* argv[])
 {
     int retval;
+#if defined(CLITHER_BOT_API)
+    const struct bot_interface* boti;
+    struct bot*                 bot;
+#endif
 #if defined(CLITHER_MCD)
     struct thread* mcd_thread;
 #endif
@@ -56,6 +61,20 @@ int main(int argc, char* argv[])
         log_file_open(args.log_file);
     if (args.netlog_file)
         log_net_open(args.netlog_file);
+#endif
+
+#if defined(CLITHER_BOT_API)
+    boti = NULL;
+    bot = NULL;
+    if (args.bot_script && bot_backends[0] != NULL)
+    {
+        boti = bot_backends[0];
+        if (boti->init() != 0)
+            goto init_bot_failed;
+        bot = boti->create(args.bot_script);
+        if (bot == NULL)
+            goto create_bot_failed;
+    }
 #endif
 
     /* Init networking */
@@ -113,7 +132,8 @@ int main(int argc, char* argv[])
             /* NOTE: client_run() is the only function that expects to be run
              * in the main thread. It does not call any threadlocal init
              * functions. */
-            retval = (int)(intptr_t)client_run(&settings.client, &settings.gfx);
+            retval = (int)(intptr_t)client_run(
+                &settings.client, &settings.gfx, boti, bot);
             break;
         }
 #endif
@@ -130,8 +150,8 @@ int main(int argc, char* argv[])
             }
 
             /* The server should be running, so try to join as a client */
-            retval +=
-                (int)(intptr_t)client_run(&settings.client, &settings.gfx);
+            retval += (int)(intptr_t)client_run(
+                &settings.client, &settings.gfx, boti, bot);
 
             if (!signals_exit_requested())
             {
@@ -166,6 +186,12 @@ start_mcd_failed:
     return retval;
 
 net_init_failed:
+#if defined(CLITHER_BOT_API)
+    boti->destroy(bot);
+create_bot_failed:
+    boti->deinit();
+init_bot_failed:
+#endif
 #if defined(CLITHER_LOGGING)
     log_file_close();
 #endif

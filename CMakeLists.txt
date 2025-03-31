@@ -20,6 +20,7 @@ set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (dept
 cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_MEMORY_DEBUGGING" OFF)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
+cmake_dependent_option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON "CLITHER_BOT_API" OFF)
 option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 option (CLITHER_DEBUG "Enable debug checks" ON)
 cmake_dependent_option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON "CLITHER_DEBUG" OFF)
@@ -87,6 +88,8 @@ add_executable (clither
 
     "include/clither/benchmarks.h"
     "include/clither/tests.h"
+
+    "include/clither/bot/bot.h"
 
     "include/clither/client/client.h"
 
@@ -189,19 +192,10 @@ add_executable (clither
     "src/util/strview.c"
     "src/util/strlist.c"
 
-    $<$<BOOL:${CLITHER_SERVER}>:
-        src/server/bezier_knot_acks_bmap.c
-        src/server/snakes_in_proximity_bmap.c
-        src/server/food_in_proximity_hset.c
-        src/server/net_addr_hmap.c
-        src/server/server.c
-        src/server/server_client.c
-        src/server/server_client_hmap.c
-        src/server/server_instance.c
-        src/server/server_instance_bmap.c>
-
-    $<$<BOOL:${CLITHER_MCD}>:
-        src/game/mcd_wifi.c>
+    $<$<BOOL:${CLITHER_BOT_API}>:
+        src/bot/bot.c
+        $<$<BOOL:${CLITHER_BOT_API_LUA}>:
+            src/bot/lua/bot_lua.c>>
 
     $<$<BOOL:${CLITHER_CLIENT}>:
         src/client/client.c>
@@ -224,8 +218,22 @@ add_executable (clither
         $<$<BOOL:${CLITHER_GFX_VULKAN}>:
             src/gfx/vulkan/gfx_vulkan.c>>
 
+    $<$<BOOL:${CLITHER_MCD}>:
+        src/game/mcd_wifi.c>
+
     $<$<BOOL:${CLITHER_MEMORY_DEBUGGING}>:
         src/util/mem.c>
+
+    $<$<BOOL:${CLITHER_SERVER}>:
+        src/server/bezier_knot_acks_bmap.c
+        src/server/snakes_in_proximity_bmap.c
+        src/server/food_in_proximity_hset.c
+        src/server/net_addr_hmap.c
+        src/server/server.c
+        src/server/server_client.c
+        src/server/server_client_hmap.c
+        src/server/server_instance.c
+        src/server/server_instance_bmap.c>
 
     $<$<PLATFORM_ID:Windows>:
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_win32.c>
@@ -400,6 +408,11 @@ if (CLITHER_GFX_GLES2)
     endif ()
 
     target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
+endif ()
+
+if (CLITHER_BOT_API_LUA)
+    add_subdirectory ("thirdparty/lua-5.4.7")
+    target_link_libraries (clither PRIVATE lua-lib)
 endif ()
 
 if (CLITHER_TESTS)
