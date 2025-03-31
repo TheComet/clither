@@ -21,7 +21,7 @@ int food_grid_add_food(
     switch (food_bmap_emplace_new(&grid->morton, m, &new_food))
     {
         case BMAP_OOM: return -1;
-        case BMAP_NEW: new_food->dir = dir; new_food->value = 5;
+        case BMAP_NEW: new_food->dir = dir; new_food->value = 20;
         case BMAP_EXISTS: break;
     }
     return 0;

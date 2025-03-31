@@ -1,9 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
-#if defined(CLITHER_GFX)
-
-#    include "clither/game/cmd.h"
+#include "clither/game/cmd.h"
 
 struct bot;
 struct world;
@@ -45,6 +43,6 @@ struct bot_interface
         uint8_t             sim_tick_rate);
 };
 
+#if defined(CLITHER_BOT_API)
 extern const struct bot_interface* bot_backends[];
-
 #endif

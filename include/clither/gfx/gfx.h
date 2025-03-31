@@ -1,9 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
-#if defined(CLITHER_GFX)
-
-#    include "clither/game/q.h"
+#include "clither/game/q.h"
 
 struct camera;
 struct command;
@@ -107,6 +105,6 @@ struct gfx_interface
         const struct camera* camera);
 };
 
+#if defined(CLITHER_GFX)
 extern const struct gfx_interface* gfx_backends[];
-
 #endif

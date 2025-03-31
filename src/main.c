@@ -23,7 +23,7 @@ static struct settings settings;
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
-#if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT)
     struct resource_pack*       pack;
     const struct gfx_interface* igfx;
     struct gfx*                 gfx;
@@ -85,12 +85,13 @@ int main(int argc, char* argv[])
     }
 #endif
 
-#if defined(CLITHER_GFX)
-    /* Create graphics backend if specified on the command line, or if no bot
-     * was specified. */
+#if defined(CLITHER_CLIENT)
     pack = NULL;
     igfx = NULL;
     gfx = NULL;
+#    if defined(CLITHER_GFX)
+    /* Create graphics backend if specified on the command line, or if no bot
+     * was specified. */
     if (args.gfx_backend >= 0 && gfx_backends[args.gfx_backend] != NULL)
     {
         pack = resource_pack_parse("packs/horror");
@@ -107,6 +108,7 @@ int main(int argc, char* argv[])
         if (igfx->load_resource_pack(gfx, pack) < 0)
             goto load_resource_pack_failed;
     }
+#    endif
 #endif
 
     /* Init networking */

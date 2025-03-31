@@ -8,7 +8,9 @@ void camera_init(struct camera* camera)
 {
     camera->pos = make_qwposi(0, 0);
     camera->scale = make_qw(1);
+#if defined(CLITHER_DEBUG_ZOOM)
     camera->debug_zoom = make_qw(1);
+#endif
 }
 
 /* ------------------------------------------------------------------------- */

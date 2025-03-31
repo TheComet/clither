@@ -617,7 +617,6 @@ static enum process_message_result process_message(
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
         case MSG_JOIN_REQUEST: {
-            log_dbg("MSG_JOIN_REQUEST\n");
             if (hmap_count(server->clients) + 1 > settings_server->max_players)
             {
                 struct net_udp_packet pkt;

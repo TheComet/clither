@@ -728,6 +728,7 @@ void* client_run(
             break;
         }
 
+#    if defined(CLITHER_GFX)
         /* Switch graphics backends */
         if (*gfx != NULL && (input.next_gfx_backend || input.prev_gfx_backend))
         {
@@ -787,6 +788,7 @@ void* client_run(
                 break;
         }
     create_new_gfx_success:;
+#    endif
 
         /* Check for resource pack changes */
         if (pack_watch != NULL && fs_watch_check(pack_watch) > 0)
