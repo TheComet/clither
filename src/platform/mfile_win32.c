@@ -1,6 +1,6 @@
 #include "clither/util/mem.h"
-#include "clither/mfile.h"
-#include "clither/utf8.h"
+#include "clither/platform/mfile.h"
+#include "clither/platform/utf8.h"
 #include "clither/util/log.h"
 
 #define WIN32_LEAN_AND_MEAN

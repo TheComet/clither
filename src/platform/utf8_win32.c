@@ -1,4 +1,4 @@
-#include "clither/utf8.h"
+#include "clither/platform/utf8.h"
 #include "clither/util/mem.h"
 
 #define WIN32_LEAN_AND_MEAN

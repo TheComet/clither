@@ -228,7 +228,7 @@ add_executable (clither
         src/util/mem.c>
 
     $<$<PLATFORM_ID:Windows>:
-        $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_win32.c>
+        $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_win32.c>
         src/platform/fs_win32.c
         src/platform/mfile_win32.c
         src/platform/mutex_win32.c
@@ -240,7 +240,7 @@ add_executable (clither
         src/platform/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
-        $<$<BOOL:${CLITHER_BACKTRACE}>:src/backtrace_linux.c>
+        $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_linux.c>
         src/platform/fs_linux.c
         src/platform/mfile_posix.c
         src/platform/mutex_pthread.c
@@ -326,12 +326,17 @@ target_link_options (clither
 set_target_properties (clither
     PROPERTIES
         C_STANDARD 90
+        CXX_STANDARD 17  # Required for LogHelper std::string::data() non-const version
         VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
         VS_DEBUGGER_COMMAND_ARGUMENTS "--host"
         RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CLITHER_BUILD_BINDIR}
         INSTALL_RPATH ${CLITHER_INSTALL_LIBDIR})
+
+# Visual studio should show the source files in their original hierarchy
+get_target_property (source_list clither SOURCES)
+source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
 
 if (EMSCRIPTEN)
     set_target_properties(clither

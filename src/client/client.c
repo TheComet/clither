@@ -698,7 +698,7 @@ void* client_run(
     cmd = cmd_default();
     world_init(&world);
 
-    pack = resource_pack_parse("packs/liam-playground");
+    pack = resource_pack_parse("packs/horror");
     if (pack == NULL)
         goto parse_resource_pack_failed;
     pack_watch = resource_pack_watch(pack);
@@ -798,7 +798,7 @@ void* client_run(
             log_info("Resource pack changed, reloading\n");
             fs_watch_deinit(pack_watch);
 
-            new_pack = resource_pack_parse("packs/liam-playground");
+            new_pack = resource_pack_parse("packs/horror");
             if (new_pack)
             {
                 gfx_iface->unload_resource_pack(gfx, pack);

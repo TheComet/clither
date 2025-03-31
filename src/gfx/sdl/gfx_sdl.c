@@ -11,9 +11,9 @@
 #include "clither/game/qwaabb_rb.h"
 #include "clither/util/rb.h"
 #include "clither/game/snake.h"
-#include "clither/snake_bmap.h"
+#include "clither/game/snake_bmap.h"
 #include "clither/util/vec.h"
-#include "clither/world.h"
+#include "clither/game/world.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <math.h>
@@ -296,6 +296,15 @@ static void gfx_sdl_destroy(struct gfx* gfx)
 /* ------------------------------------------------------------------------- */
 static int
 gfx_sdl_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
+{
+    (void)gfx;
+    (void)pack;
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+gfx_sdl_unload_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     (void)gfx;
     (void)pack;
@@ -691,6 +700,7 @@ struct gfx_interface gfx_sdl = {
     gfx_sdl_create,
     gfx_sdl_destroy,
     gfx_sdl_load_resource_pack,
+    gfx_sdl_unload_resource_pack,
     gfx_sdl_poll_input,
     gfx_sdl_input_to_command,
     gfx_sdl_step_anim,

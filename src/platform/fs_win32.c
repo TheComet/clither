@@ -1,5 +1,5 @@
-#include "clither/fs.h"
-#include "clither/str.h"
+#include "clither/platform/fs.h"
+#include "clither/util/str.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -62,4 +62,23 @@ fs_dir_exists(const char* path)
     if (attr == INVALID_FILE_ATTRIBUTES)
         return 0;
     return !!(attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+struct fs_watch* fs_watch_init(void)
+{
+    return (void*)1;
+}
+
+void fs_watch_deinit(struct fs_watch* w)
+{
+}
+
+int fs_watch_file(struct fs_watch* w, const char* path)
+{
+    return 1;
+}
+
+int fs_watch_check(struct fs_watch* w)
+{
+    return 0;
 }

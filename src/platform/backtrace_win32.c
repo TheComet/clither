@@ -1,7 +1,10 @@
-#include "clither/backtrace.h"
+#include "clither/platform/backtrace.h"
+
+#define WIN32_LEAN_AND_MEAN
 #include <process.h>
 #include <Windows.h>
 #include <DbgHelp.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 #define BACKTRACE_FUNC_LEN 1024
