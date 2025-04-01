@@ -1,4 +1,5 @@
 #include "clither/bot/bot.h"
+#include "clither/game/world.h"
 #include "clither/util/log.h"
 #include <inttypes.h>
 
@@ -19,6 +20,36 @@
 #elif defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif
+
+static int hello(lua_State* L)
+{
+    lua_pushstring(L, "hello");
+    return 1;
+}
+
+/* clang-format off */
+static const struct luaL_Reg clither_functions[] = {
+  {"hello", hello},
+  {NULL, NULL}
+};
+/* clang-format on */
+
+static int world_get_radius(lua_State* L)
+{
+    struct world* world = lua_touserdata(L, 1);
+    CLITHER_DEBUG_ASSERT(world != NULL);
+    lua_pushnumber(L, qw_to_float(world->inner_radius));
+    return 1;
+}
+
+static const struct luaL_Reg world_methods[] = {
+    {"inner_radius", world_get_radius}, {NULL, NULL}};
+
+int luaopen_clither(lua_State* L)
+{
+    luaL_newlib(L, clither_functions);
+    return 1;
+}
 
 static void dumpstack(lua_State* L)
 {
@@ -67,6 +98,15 @@ static struct bot* bot_lua_create(const char* script_filepath)
         goto newstate_failed;
     luaL_openlibs(L);
 
+    luaL_requiref(L, "clither", luaopen_clither, 1);
+    lua_pop(L, 1);
+
+    luaL_newmetatable(L, "clither.worldMeta");
+    lua_newtable(L);
+    luaL_setfuncs(L, world_methods, 0);
+    lua_setfield(L, -2, "__index");
+    lua_pop(L, -1);
+
     if (luaL_dofile(L, script_filepath) != LUA_OK)
     {
         print_error_and_stack(L);
@@ -108,7 +148,7 @@ static int bot_lua_next_cmd(
     lua_getglobal(L, "clither_next_cmd");
     if (lua_isfunction(L, -1))
     {
-        lua_pushinteger(L, 2);
+        lua_pushlightuserdata(L, (void*)world);
         lua_pushinteger(L, 3);
         lua_pushinteger(L, sim_tick_rate);
         if (lua_pcall(L, 3, 2, 0) == LUA_OK)

@@ -19,6 +19,8 @@ enum hset_status
 #define HSET_RETAIN 0
 #define HSET_ERASE  1
 
+#define HSET_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
+
 #define HSET_DECLARE(prefix, K, bits) HSET_DECLARE_HASH(prefix, hash32, K, bits)
 
 #define HSET_DECLARE_HASH(prefix, H, K, bits)                                  \
@@ -268,12 +270,13 @@ enum hset_status
     static int##bits##_t prefix##_find_slot(                                   \
         const struct prefix* hset, K key, H h)                                 \
     {                                                                          \
-        int##bits##_t slot, i, last_rip;                                       \
+        int##bits##_t slot, i, rip;                                            \
         CLITHER_DEBUG_ASSERT(hset && hset->capacity > 0);                      \
         CLITHER_DEBUG_ASSERT(h > 1);                                           \
+        CLITHER_DEBUG_ASSERT(HSET_IS_POWER_OF_2(hset->capacity));              \
                                                                                \
         i = 0;                                                                 \
-        last_rip = -1;                                                         \
+        rip = -1;                                                              \
         slot = (int##bits##_t)(h & (H)(hset->capacity - 1));                   \
                                                                                \
         while (i < hset->capacity && hset->hashes[slot] != HSET_SLOT_UNUSED)   \
@@ -285,10 +288,9 @@ enum hset_status
             if (hset->hashes[slot] == h)                                       \
                 if (kvs_keys_equal(kvs_get_key(&hset->kvs, slot), key))        \
                     return -(1 + slot);                                        \
-            /* Keep track of visited tombstones, as it's possible to insert    \
-             * into them */                                                    \
-            if (hset->hashes[slot] == HSET_SLOT_RIP)                           \
-                last_rip = slot;                                               \
+            /* Keep track of first tombstone if we find one */                 \
+            if (rip == -1 && hset->hashes[slot] == HSET_SLOT_RIP)              \
+                rip = slot;                                                    \
             /* Quadratic probing following p(K,i)=(i^2+i)/2. If the hash table \
              * size is a power of two, this will visit every slot. */          \
             i++;                                                               \
@@ -299,10 +301,8 @@ enum hset_status
          * exit early when probing for insert positions, because it's not      \
          * possible to know if the key exists or not without completing the    \
          * entire probing sequence. */                                         \
-        if (last_rip != -1)                                                    \
-            slot = last_rip;                                                   \
-        CLITHER_DEBUG_ASSERT(slot >= 0);                                       \
-                                                                               \
+        slot = rip == -1 ? slot : rip;                                         \
+        CLITHER_DEBUG_ASSERT(hset->hashes[slot] < 2);                          \
         return slot;                                                           \
     }                                                                          \
     void prefix##_clear(struct prefix* hset)                                   \

@@ -16,6 +16,8 @@ enum hmap_status
     HMAP_NEW = 1
 };
 
+#define HMAP_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
+
 #define HMAP_DECLARE(prefix, K, V, bits)                                       \
     HMAP_DECLARE_HASH(prefix, hash32, K, V, bits)
 
@@ -327,12 +329,13 @@ enum hmap_status
     static int##bits##_t prefix##_find_slot(                                   \
         const struct prefix* hmap, K key, H h)                                 \
     {                                                                          \
-        int##bits##_t slot, i, last_rip;                                       \
+        int##bits##_t slot, i, rip;                                            \
         CLITHER_DEBUG_ASSERT(hmap && hmap->capacity > 0);                      \
         CLITHER_DEBUG_ASSERT(h > 1);                                           \
+        CLITHER_DEBUG_ASSERT(HMAP_IS_POWER_OF_2(hmap->capacity));              \
                                                                                \
         i = 0;                                                                 \
-        last_rip = -1;                                                         \
+        rip = -1;                                                              \
         slot = (int##bits##_t)(h & (H)(hmap->capacity - 1));                   \
                                                                                \
         while (i < hmap->capacity && hmap->hashes[slot] != HMAP_SLOT_UNUSED)   \
@@ -344,10 +347,9 @@ enum hmap_status
             if (hmap->hashes[slot] == h)                                       \
                 if (kvs_keys_equal(kvs_get_key(&hmap->kvs, slot), key))        \
                     return -(1 + slot);                                        \
-            /* Keep track of visited tombstones, as it's possible to insert    \
-             * into them */                                                    \
-            if (hmap->hashes[slot] == HMAP_SLOT_RIP)                           \
-                last_rip = slot;                                               \
+            /* Keep track of first tombstone if we find one */                 \
+            if (rip == -1 && hmap->hashes[slot] == HMAP_SLOT_RIP)              \
+                rip = slot;                                                    \
             /* Quadratic probing following p(K,i)=(i^2+i)/2. If the hash table \
              * size is a power of two, this will visit every slot. */          \
             i++;                                                               \
@@ -358,10 +360,8 @@ enum hmap_status
          * exit early when probing for insert positions, because it's not      \
          * possible to know if the key exists or not without completing the    \
          * entire probing sequence. */                                         \
-        if (last_rip != -1)                                                    \
-            slot = last_rip;                                                   \
-        CLITHER_DEBUG_ASSERT(slot >= 0);                                       \
-                                                                               \
+        slot = rip == -1 ? slot : rip;                                         \
+        CLITHER_DEBUG_ASSERT(hmap->hashes[slot] < 2);                          \
         return slot;                                                           \
     }                                                                          \
     V* prefix##_emplace_new(struct prefix** hmap, K key)                       \

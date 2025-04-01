@@ -20,8 +20,8 @@
 #include "clither/config.h"
 #include "clither/util/log.h" /* log_oom */
 #include "clither/util/mem.h" /* mem_alloc, mem_realloc, mem_free */
-#include <stddef.h>      /* offsetof */
-#include <string.h>      /* memmove */
+#include <stddef.h>           /* offsetof */
+#include <string.h>           /* memmove */
 
 #define RB_DECLARE(prefix, T, bits) RB_DECLARE_FULL(prefix, T, bits, 16)
 
@@ -176,7 +176,7 @@
         rb->read = rb->write;                                                  \
     }
 
-#define IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
+#define RB_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
 #define RB_DEFINE(prefix, T, bits)                                             \
     void prefix##_deinit(struct prefix* rb)                                    \
     {                                                                          \
@@ -189,7 +189,7 @@
         int            header = offsetof(struct prefix, data);                 \
         int            data = sizeof(T) * elems;                               \
                                                                                \
-        CLITHER_DEBUG_ASSERT(IS_POWER_OF_2(elems));                            \
+        CLITHER_DEBUG_ASSERT(RB_IS_POWER_OF_2(elems));                         \
         new_rb = (struct prefix*)mem_realloc(*rb, header + data);              \
         if (new_rb == NULL)                                                    \
             return log_oom(header + data, "rb_resize()");                      \
