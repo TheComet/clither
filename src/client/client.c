@@ -861,7 +861,12 @@ void* client_run(
                 else
                 {
                     if (ibot->next_cmd(
-                            bot, &cmd, cmd, &world, client.sim_tick_rate) != 0)
+                            bot,
+                            &cmd,
+                            cmd,
+                            &world,
+                            snake,
+                            client.sim_tick_rate) != 0)
                         break;
                 }
 

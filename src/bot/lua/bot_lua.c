@@ -1,4 +1,5 @@
 #include "clither/bot/bot.h"
+#include "clither/game/snake.h"
 #include "clither/game/world.h"
 #include "clither/util/log.h"
 #include <inttypes.h>
@@ -20,36 +21,6 @@
 #elif defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif
-
-static int hello(lua_State* L)
-{
-    lua_pushstring(L, "hello");
-    return 1;
-}
-
-/* clang-format off */
-static const struct luaL_Reg clither_functions[] = {
-  {"hello", hello},
-  {NULL, NULL}
-};
-/* clang-format on */
-
-static int world_get_radius(lua_State* L)
-{
-    struct world* world = lua_touserdata(L, 1);
-    CLITHER_DEBUG_ASSERT(world != NULL);
-    lua_pushnumber(L, qw_to_float(world->inner_radius));
-    return 1;
-}
-
-static const struct luaL_Reg world_methods[] = {
-    {"inner_radius", world_get_radius}, {NULL, NULL}};
-
-int luaopen_clither(lua_State* L)
-{
-    luaL_newlib(L, clither_functions);
-    return 1;
-}
 
 static void dumpstack(lua_State* L)
 {
@@ -82,6 +53,18 @@ static void print_error_and_stack(lua_State* L)
     dumpstack(L);
 }
 
+/* clang-format off */
+static const struct luaL_Reg clither_functions[] = {
+    {NULL, NULL}
+};
+/* clang-format on */
+
+int luaopen_clither(lua_State* L)
+{
+    luaL_newlib(L, clither_functions);
+    return 1;
+}
+
 static int bot_lua_init(void)
 {
     return 0;
@@ -100,12 +83,6 @@ static struct bot* bot_lua_create(const char* script_filepath)
 
     luaL_requiref(L, "clither", luaopen_clither, 1);
     lua_pop(L, 1);
-
-    luaL_newmetatable(L, "clither.worldMeta");
-    lua_newtable(L);
-    luaL_setfuncs(L, world_methods, 0);
-    lua_setfield(L, -2, "__index");
-    lua_pop(L, -1);
 
     if (luaL_dofile(L, script_filepath) != LUA_OK)
     {
@@ -140,6 +117,7 @@ static int bot_lua_next_cmd(
     struct cmd*         next,
     struct cmd          prev,
     const struct world* world,
+    const struct snake* snake,
     uint8_t             sim_tick_rate)
 {
     lua_State* L = (lua_State*)bot;
@@ -148,9 +126,38 @@ static int bot_lua_next_cmd(
     lua_getglobal(L, "clither_next_cmd");
     if (lua_isfunction(L, -1))
     {
-        lua_pushlightuserdata(L, (void*)world);
-        lua_pushinteger(L, 3);
+        lua_newtable(L);
+        {
+            lua_pushnumber(L, qw_to_float(world->inner_radius));
+            lua_setfield(L, -2, "inner_radius");
+            lua_pushnumber(L, qw_to_float(world->ring_start));
+            lua_setfield(L, -2, "ring_start");
+            lua_pushnumber(L, qw_to_float(world->ring_end));
+            lua_setfield(L, -2, "ring_end");
+        }
+
+        lua_newtable(L);
+        {
+            lua_newtable(L);
+            {
+                lua_newtable(L);
+                {
+                    lua_pushnumber(L, qw_to_float(snake->head.pos.y));
+                    lua_setfield(L, -2, "y");
+                    lua_pushnumber(L, qw_to_float(snake->head.pos.x));
+                    lua_setfield(L, -2, "x");
+                }
+                lua_setfield(L, -2, "pos");
+                lua_pushnumber(L, qa_to_float(snake->head.angle));
+                lua_setfield(L, -2, "angle");
+                lua_pushnumber(L, (float)snake->head.speed / 255.0f);
+                lua_setfield(L, -2, "speed");
+            }
+            lua_setfield(L, -2, "head");
+        }
+
         lua_pushinteger(L, sim_tick_rate);
+
         if (lua_pcall(L, 3, 2, 0) == LUA_OK)
         {
             float angle = lua_tonumber(L, -2);

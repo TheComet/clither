@@ -4,6 +4,7 @@
 #include "clither/game/cmd.h"
 
 struct bot;
+struct snake;
 struct world;
 
 struct bot_interface
@@ -40,6 +41,7 @@ struct bot_interface
         struct cmd*         next,
         struct cmd          prev,
         const struct world* world,
+        const struct snake* snake,
         uint8_t             sim_tick_rate);
 };
 

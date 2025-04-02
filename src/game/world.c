@@ -140,7 +140,7 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 /* ------------------------------------------------------------------------- */
 int world_respawn_food(struct world* w)
 {
-    int tries = 64;
+    int tries = 1024 * 64;
     while (food_grid_food_count(&w->food_grid) < w->food_count && --tries)
     {
         struct qwpos pos, dir;
