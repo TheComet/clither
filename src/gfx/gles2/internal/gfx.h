@@ -7,6 +7,10 @@
 #include "./text.h"
 #include "clither/game/input.h"
 
+#if defined(CLITHER_GFX_DEBUG)
+#    include "./debug.h"
+#endif
+
 struct gfx
 {
     struct GLFWwindow* window;
@@ -27,6 +31,9 @@ struct gfx
     struct sprite_tex        head0_gather;
     struct sprite_tex        body0_base;
     struct sprite_tex        tail0_base;
+#if defined(CLITHER_GFX_DEBUG)
+    struct debug debug;
+#endif
 };
 
 struct aspect_ratio

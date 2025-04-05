@@ -14,11 +14,11 @@ trap cleanup SIGINT
 #./clither --server --log "server.txt" --netlog "server-net.txt" &
 #PIDS+=($!)
 
-for i in {1..30}; do
+for i in {1..8}; do
   ./clither \
       --addr localhost \
       --username "Bot $i" \
-      --bot ../../lua/figure8.lua &
+      --bot ../../lua/bot.lua --gfx &
   PIDS+=($!)
 done
 

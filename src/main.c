@@ -70,21 +70,6 @@ int main(int argc, char* argv[])
         log_net_open(args.netlog_file);
 #endif
 
-#if defined(CLITHER_BOT_API)
-    /* Create bot if specified on the command line */
-    ibot = NULL;
-    bot = NULL;
-    if (args.bot_script != NULL && bot_backends[0] != NULL)
-    {
-        ibot = bot_backends[0];
-        if (ibot->init() != 0)
-            goto init_bot_failed;
-        bot = ibot->create(args.bot_script);
-        if (bot == NULL)
-            goto create_bot_failed;
-    }
-#endif
-
 #if defined(CLITHER_CLIENT)
     pack = NULL;
     igfx = NULL;
@@ -109,6 +94,21 @@ int main(int argc, char* argv[])
             goto load_resource_pack_failed;
     }
 #    endif
+#endif
+
+#if defined(CLITHER_BOT_API)
+    /* Create bot if specified on the command line */
+    ibot = NULL;
+    bot = NULL;
+    if (args.bot_script != NULL && bot_backends[0] != NULL)
+    {
+        ibot = bot_backends[0];
+        if (ibot->init() != 0)
+            goto init_bot_failed;
+        bot = ibot->create(args.bot_script, &igfx, &gfx);
+        if (bot == NULL)
+            goto create_bot_failed;
+    }
 #endif
 
     /* Init networking */
@@ -160,7 +160,16 @@ int main(int argc, char* argv[])
              * in the main thread. It does not call any threadlocal init
              * functions. */
             retval = (int)(intptr_t)client_run(
-                &settings.client, &pack, &igfx, &gfx, ibot, bot);
+#    if defined(CLITHER_GFX_DEBUG)
+                &igfx,
+                &gfx,
+#    endif
+#    if defined(CLITHER_BOT_API)
+                ibot,
+                bot,
+#    endif
+                &settings.client,
+                &pack);
             break;
         }
 #endif
@@ -175,12 +184,33 @@ int main(int argc, char* argv[])
 
             /* The server should be running, so try to join as a client */
             retval = (int)(intptr_t)client_run(
-                &settings.client, &pack, &igfx, &gfx, ibot, bot);
+#    if defined(CLITHER_GFX_DEBUG)
+                &igfx,
+                &gfx,
+#    endif
+#    if defined(CLITHER_BOT_API)
+                ibot,
+                bot,
+#    endif
+                &settings.client,
+                &pack);
+
+            /* The server continues after the client exits -- clean up the
+             * "visible" client state (i.e. close the window) */
+            if (gfx != NULL && pack != NULL)
+                igfx->unload_resource_pack(gfx, pack);
+            if (pack != NULL)
+                resource_pack_destroy(pack);
+            if (gfx != NULL)
+                igfx->destroy(gfx);
+            pack = NULL;
+            gfx = NULL;
 
             if (!signals_exit_requested())
             {
                 log_note("The server will continue to run.\n");
                 log_note("You can stop it by pressing CTRL+C\n");
+                thread_sigint(server_thread);
             }
 
             if ((intptr_t)thread_join(server_thread) != 0)
@@ -203,6 +233,15 @@ start_mcd_failed:
 
 net_init_failed:
 
+#if defined(CLITHER_BOT_API)
+    if (bot != NULL)
+        ibot->destroy(bot);
+create_bot_failed:
+    if (ibot != NULL)
+        ibot->deinit();
+init_bot_failed:
+#endif
+
 #if defined(CLITHER_GFX)
     if (gfx != NULL && pack != NULL)
         igfx->unload_resource_pack(gfx, pack);
@@ -216,15 +255,6 @@ init_gfx_failed:
     if (pack != NULL)
         resource_pack_destroy(pack);
 parse_resource_pack_failed:
-#endif
-
-#if defined(CLITHER_BOT_API)
-    if (bot != NULL)
-        ibot->destroy(bot);
-create_bot_failed:
-    if (ibot != NULL)
-        ibot->deinit();
-init_bot_failed:
 #endif
 
 #if defined(CLITHER_LOGGING)

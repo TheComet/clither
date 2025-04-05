@@ -22,6 +22,7 @@
 
 #   cmakedefine CLITHER_GFX
 #   if defined(CLITHER_GFX)
+#      cmakedefine CLITHER_GFX_DEBUG
 #      cmakedefine CLITHER_GFX_SDL
 #      cmakedefine CLITHER_GFX_GLES2
 #      cmakedefine CLITHER_GFX_VULKAN

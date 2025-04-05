@@ -84,6 +84,7 @@ static void track_allocation(uintptr_t addr, int size)
 #if defined(CLITHER_BACKTRACE)
         print_backtrace();
 #endif
+        return;
     }
 
     if (state.ignore_malloc)
@@ -127,6 +128,7 @@ static void track_deallocation(uintptr_t addr, const char* free_type)
 #if defined(CLITHER_BACKTRACE)
         print_backtrace();
 #endif
+        return;
     }
 
     if (state.ignore_malloc)

@@ -129,6 +129,10 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         gfx_gles2_sprite_tex_load(&gfx->body0_base, body->base);
     }
 
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_load(&gfx->debug);
+#endif
+
     return 0;
 
 sprite_mat_load_failed:
@@ -142,6 +146,10 @@ bg_load_failed:
 static void gfx_gles2_unload_resource_pack(
     struct gfx* gfx, const struct resource_pack* pack)
 {
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_unload(&gfx->debug);
+#endif
+
     if (vec_count(pack->sprites.bodies) > 0)
         gfx_gles2_sprite_tex_unload(&gfx->body0_base);
 
@@ -229,6 +237,10 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_sprite_tex_init(&gfx->head0_gather);
     gfx_gles2_sprite_tex_init(&gfx->body0_base);
 
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_init(&gfx->debug);
+#endif
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -253,10 +265,14 @@ create_window_failed:
 
 static void gfx_gles2_destroy(struct gfx* gfx)
 {
-    gfx_gles2_sprite_tex_deinit(&gfx->head0_base);
-    gfx_gles2_sprite_tex_deinit(&gfx->head0_gather);
-    gfx_gles2_sprite_tex_deinit(&gfx->body0_base);
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_deinit(&gfx->debug);
+#endif
 
+    gfx_gles2_sprite_tex_deinit(&gfx->body0_base);
+    gfx_gles2_sprite_tex_deinit(&gfx->head0_gather);
+    gfx_gles2_sprite_tex_deinit(&gfx->head0_base);
+    gfx_gles2_sprite_tex_deinit(&gfx->food);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
@@ -391,8 +407,25 @@ static void gfx_gles2_draw_world(
         gfx_gles2_draw_snake(snake, gfx, camera, &ar);
     }
 
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_draw(&gfx->debug, &gfx->quad_mesh, camera, &ar);
+#endif
+
     glfwSwapBuffers(gfx->window);
 }
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_GFX_DEBUG)
+static void gfx_gles2_draw_debug_circle(
+    struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba)
+{
+    struct debug_circle* circle = debug_circle_vec_emplace(&gfx->debug.circles);
+    if (circle == NULL)
+        return;
+    circle->pos = pos;
+    circle->radius = radius;
+    circle->rgba = rgba;
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 struct gfx_interface gfx_gles2 = {
@@ -406,4 +439,8 @@ struct gfx_interface gfx_gles2 = {
     &gfx_gles2_poll_input,
     &gfx_gles2_next_cmd,
     &gfx_gles2_step_anim,
-    &gfx_gles2_draw_world};
+    &gfx_gles2_draw_world,
+#if defined(CLITHER_GFX_DEBUG)
+    &gfx_gles2_draw_debug_circle
+#endif
+};

@@ -13,23 +13,22 @@ project ("clither"
 # Config and options
 ###############################################################################
 
-include (CMakeDependentOption)
-
-cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" ON "CLITHER_MEMORY_DEBUGGING" OFF)
+option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" OFF)
 set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
-cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_MEMORY_DEBUGGING" OFF)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
-cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
-cmake_dependent_option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON "CLITHER_BOT_API" OFF)
+option (CLITHER_BOT_API "Enable the bot API" ON)
+option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON)
 option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 option (CLITHER_DEBUG "Enable debug checks" ON)
-cmake_dependent_option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON "CLITHER_DEBUG" OFF)
-cmake_dependent_option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" ON "CLITHER_DEBUG" OFF)
+option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
+option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" ON)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-cmake_dependent_option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." OFF "CLITHER_CLIENT" ON)
-cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON "CLITHER_GFX" OFF)
-cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
-cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
+option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." OFF)
+option (CLITHER_GFX_DEBUG "Enable the graphics debug layer" ON)
+option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON)
+option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON)
+option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF)
+option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF)
 option (CLITHER_LOGGING "Enable logging functionality" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
 option (CLITHER_MEMORY_DEBUGGING "Enable tracking malloc/realloc/free calls to detect memory leaks" ON)
@@ -214,7 +213,9 @@ add_executable (clither
             src/gfx/gles2/internal/sprite.c
             src/gfx/gles2/internal/sprite_shadow.c
             src/gfx/gles2/internal/text.c
-            src/gfx/gles2/glad/src/gles2.c>
+            src/gfx/gles2/glad/src/gles2.c
+            $<$<BOOL:${CLITHER_GFX_DEBUG}>:
+                src/gfx/gles2/internal/debug.c>>
         $<$<BOOL:${CLITHER_GFX_VULKAN}>:
             src/gfx/vulkan/gfx_vulkan.c>>
 

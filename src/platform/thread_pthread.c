@@ -1,6 +1,6 @@
 #define _GNU_SOURCE
-#include "clither/util/log.h"
 #include "clither/platform/thread.h"
+#include "clither/util/log.h"
 #include <pthread.h>
 #include <signal.h>
 #include <string.h>
@@ -43,4 +43,10 @@ void* thread_join(struct thread* t)
 void thread_kill(struct thread* t)
 {
     pthread_kill((pthread_t)t, SIGKILL);
+}
+
+/* ------------------------------------------------------------------------- */
+void thread_sigint(struct thread* t)
+{
+    pthread_kill((pthread_t)t, SIGINT);
 }

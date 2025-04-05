@@ -4,6 +4,9 @@
 #include "clither/game/cmd.h"
 
 struct bot;
+struct camera;
+struct gfx;
+struct gfx_interface;
 struct snake;
 struct world;
 
@@ -28,7 +31,10 @@ struct bot_interface
      * everything for rendering.
      * \return Return a pointer to a new graphics context, or NULL on failure.
      */
-    struct bot* (*create)(const char* script_filepath);
+    struct bot* (*create)(
+        const char*                  script_filepath,
+        const struct gfx_interface** igfx,
+        struct gfx**                 gfx);
 
     /*!
      * \brief Destroy the graphics context.

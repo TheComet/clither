@@ -122,10 +122,15 @@ client_recv(struct client* client, struct world* world);
  * a Command line arguments.
  */
 void* client_run(
+#    if defined(CLITHER_GFX_DEBUG)
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx,
+#    endif
+#    if defined(CLITHER_BOT_API)
+    const struct bot_interface* ibot,
+    struct bot*                 bot,
+#    endif
     const struct settings_client* settings,
-    struct resource_pack**        pack,
-    const struct gfx_interface**  igfx,
-    struct gfx**                  gfx,
-    const struct bot_interface*   ibot,
-    struct bot*                   bot);
+    struct resource_pack**        pack);
+
 #endif

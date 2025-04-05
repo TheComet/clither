@@ -1,7 +1,9 @@
 #include "clither/bot/bot.h"
 #include "clither/game/snake.h"
 #include "clither/game/world.h"
+#include "clither/gfx/gfx.h"
 #include "clither/util/log.h"
+#include "clither/util/morton.h"
 #include <inttypes.h>
 
 #if defined(__clang__)
@@ -21,6 +23,11 @@
 #elif defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif
+
+static const char WorldKey;
+static const char SnakeKey;
+static const char IGfxKey;
+static const char GfxKey;
 
 static void dumpstack(lua_State* L)
 {
@@ -47,21 +54,158 @@ static void dumpstack(lua_State* L)
     }
 }
 
-static void print_error_and_stack(lua_State* L)
+static int clither_food_grid_for_each_in_radius(lua_State* L)
 {
-    log_err("Lua error\n");
-    dumpstack(L);
+    const struct food* food;
+    struct food_grid*  food_grid;
+    struct qwpos       lower_pos, upper_pos, pos;
+    uint64_t           lower_morton, upper_morton, morton;
+    int64_t            lower_idx, upper_idx;
+    int32_t            idx;
+    qw                 radius, x, y, dx, dy, r_sq;
+
+    luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checknumber(L, 3);
+    luaL_checktype(L, 4, LUA_TFUNCTION);
+
+    food_grid = lua_touserdata(L, 1);
+
+    {
+        lua_pushstring(L, "x");
+        lua_rawget(L, 2);
+        x = make_qw(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+
+        lua_pushstring(L, "y");
+        lua_rawget(L, 2);
+        y = make_qw(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+
+    radius = make_qw(lua_tonumber(L, 3));
+    r_sq = qw_mul(radius, radius);
+
+    lower_pos.x = qw_sub(x, radius);
+    lower_pos.y = qw_sub(y, radius);
+    upper_pos.x = qw_add(x, radius);
+    upper_pos.y = qw_add(y, radius);
+    lower_morton = morton_encode_qwpos(lower_pos);
+    upper_morton = morton_encode_qwpos(upper_pos);
+    lower_idx = food_bmap_lower_bound(food_grid->morton, lower_morton);
+    upper_idx = food_bmap_lower_bound(food_grid->morton, upper_morton);
+    bmap_for_each_range (
+        food_grid->morton, idx, morton, food, lower_idx, upper_idx)
+    {
+        pos = morton_decode_qwpos(morton);
+        dx = qw_sub(pos.x, x);
+        dy = qw_sub(pos.y, y);
+        if (qw_mul(dx, dx) + qw_mul(dy, dy) > r_sq)
+            continue;
+
+        lua_pushvalue(L, 4);
+        lua_newtable(L);
+        {
+            lua_newtable(L);
+            {
+                lua_pushnumber(L, qw_to_float(pos.x));
+                lua_setfield(L, -2, "x");
+                lua_pushnumber(L, qw_to_float(pos.y));
+                lua_setfield(L, -2, "y");
+
+                lua_setfield(L, -2, "pos");
+            }
+            lua_newtable(L);
+            {
+                lua_pushnumber(L, qw_to_float(food->dir.x));
+                lua_setfield(L, -2, "x");
+                lua_pushnumber(L, qw_to_float(food->dir.y));
+                lua_setfield(L, -2, "y");
+
+                lua_setfield(L, -2, "dir");
+            }
+            lua_pushnumber(L, qw_to_float(food->value));
+            lua_setfield(L, -2, "value");
+        }
+
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            return lua_error(L);
+    }
+
+    return 0;
 }
 
-/* clang-format off */
-static const struct luaL_Reg clither_functions[] = {
-    {NULL, NULL}
-};
-/* clang-format on */
+static int clither_gfx_draw_debug_circle(lua_State* L)
+{
+    const struct gfx_interface** igfx;
+    struct gfx**                 gfx;
+    struct qwpos                 pos;
+    qw                           radius;
+    uint32_t                     rgba;
+
+    luaL_checktype(L, 1, LUA_TTABLE);
+    luaL_checknumber(L, 2);
+    luaL_checkinteger(L, 3);
+
+    {
+        lua_pushstring(L, "x");
+        lua_rawget(L, 1);
+        pos.x = make_qw(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+
+        lua_pushstring(L, "y");
+        lua_rawget(L, 1);
+        pos.y = make_qw(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+
+    radius = make_qw(lua_tonumber(L, 2));
+    rgba = (uint32_t)lua_tointeger(L, 3);
+
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &IGfxKey);
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &GfxKey);
+    igfx = lua_touserdata(L, -2);
+    gfx = lua_touserdata(L, -1);
+    lua_pop(L, 2);
+
+    if (*igfx && *gfx)
+        (*igfx)->draw_debug_circle(*gfx, pos, radius, rgba);
+
+    return 0;
+}
+
+static void* alloc(void* ud, void* ptr, size_t osize, size_t nsize)
+{
+    (void)ud;
+    (void)osize;
+    if (ptr && nsize == 0)
+    {
+        mem_free(ptr);
+        return NULL;
+    }
+    else if (nsize > 0)
+        return mem_realloc(ptr, nsize);
+    return NULL;
+}
 
 int luaopen_clither(lua_State* L)
 {
-    luaL_newlib(L, clither_functions);
+    lua_newtable(L);
+    {
+        lua_newtable(L);
+        {
+            lua_pushcfunction(L, clither_food_grid_for_each_in_radius);
+            lua_setfield(L, -2, "for_each_in_radius");
+        }
+        lua_setfield(L, -2, "food_grid");
+
+        lua_newtable(L);
+        {
+            lua_pushcfunction(L, clither_gfx_draw_debug_circle);
+            lua_setfield(L, -2, "draw_debug_circle");
+        }
+        lua_setfield(L, -2, "gfx");
+    }
     return 1;
 }
 
@@ -74,9 +218,16 @@ static void bot_lua_deinit(void)
 {
 }
 
-static struct bot* bot_lua_create(const char* script_filepath)
+static struct bot* bot_lua_create(
+    const char*                  script_filepath,
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx)
 {
-    lua_State* L = luaL_newstate();
+    lua_State* L;
+
+    log_info("Creating Lua bot\n");
+
+    L = lua_newstate(alloc, NULL);
     if (L == NULL)
         goto newstate_failed;
     luaL_openlibs(L);
@@ -86,21 +237,81 @@ static struct bot* bot_lua_create(const char* script_filepath)
 
     if (luaL_dofile(L, script_filepath) != LUA_OK)
     {
-        print_error_and_stack(L);
+        log_err("Failed to load script \"%s\"\n", script_filepath);
+        dumpstack(L);
         goto load_script_failed;
     }
-    lua_pop(L, -1);
 
-    lua_getglobal(L, "clither_next_cmd");
-    if (!lua_isfunction(L, -1))
-        log_warn(
+    if (lua_getglobal(L, "clither_next_cmd") != LUA_TFUNCTION)
+    {
+        log_err(
             "Script \"%s\" does not define the function "
-            "\"clither_next_cmd(world, snake)\"\n",
+            "\"clither_next_cmd(world, snake, sim_tick_rate)\"\n"
+            "Here is a minimal example script:\n"
+            "function clither_next_cmd(world, snake, sim_tick_rate)\n"
+            "    local angle = 0.0  -- radians\n"
+            "    local speed = 1.0  -- [0, 1]\n"
+            "    return angle, speed\n"
+            "end\n",
             script_filepath);
-    lua_pop(L, -1);
+        goto check_update_function_failed;
+    }
+    lua_pop(L, 1);
+
+    lua_pushlightuserdata(L, (void*)&WorldKey);
+    lua_newtable(L);
+    {
+        lua_pushnumber(L, 0);
+        lua_setfield(L, -2, "inner_radius");
+        lua_pushnumber(L, 0);
+        lua_setfield(L, -2, "ring_start");
+        lua_pushnumber(L, 0);
+        lua_setfield(L, -2, "ring_end");
+        lua_pushlightuserdata(L, NULL);
+        lua_setfield(L, -2, "food_grid");
+    }
+    lua_settable(L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(L, (void*)&SnakeKey);
+    lua_newtable(L);
+    {
+        lua_newtable(L);
+        {
+            lua_newtable(L);
+            {
+                lua_pushnumber(L, 0);
+                lua_setfield(L, -2, "y");
+                lua_pushnumber(L, 0);
+                lua_setfield(L, -2, "x");
+            }
+            lua_setfield(L, -2, "pos");
+            lua_pushnumber(L, 0);
+            lua_setfield(L, -2, "angle");
+            lua_pushnumber(L, 0);
+            lua_setfield(L, -2, "speed");
+        }
+        lua_setfield(L, -2, "head");
+
+        lua_newtable(L);
+        {
+            lua_pushnumber(L, 0);
+            lua_setfield(L, -2, "scale");
+        }
+        lua_setfield(L, -2, "param");
+    }
+    lua_settable(L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(L, (void*)&IGfxKey);
+    lua_pushlightuserdata(L, igfx);
+    lua_settable(L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(L, (void*)&GfxKey);
+    lua_pushlightuserdata(L, gfx);
+    lua_settable(L, LUA_REGISTRYINDEX);
 
     return (struct bot*)L;
 
+check_update_function_failed:
 load_script_failed:
     lua_close(L);
 newstate_failed:
@@ -109,6 +320,7 @@ newstate_failed:
 
 static void bot_lua_destroy(struct bot* bot)
 {
+    log_info("Destroying Lua bot\n");
     lua_close((lua_State*)bot);
 }
 
@@ -120,58 +332,80 @@ static int bot_lua_next_cmd(
     const struct snake* snake,
     uint8_t             sim_tick_rate)
 {
+    float      angle, speed;
     lua_State* L = (lua_State*)bot;
-    *next = prev;
 
     lua_getglobal(L, "clither_next_cmd");
-    if (lua_isfunction(L, -1))
+
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &WorldKey);
     {
-        lua_newtable(L);
+        lua_pushstring(L, "inner_radius");
+        lua_pushnumber(L, qw_to_float(world->inner_radius));
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "ring_start");
+        lua_pushnumber(L, qw_to_float(world->ring_start));
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "ring_end");
+        lua_pushnumber(L, qw_to_float(world->ring_end));
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "food_grid");
+        lua_pushlightuserdata(L, (void*)&world->food_grid);
+        lua_rawset(L, -3);
+    }
+
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &SnakeKey);
+    lua_pushstring(L, "head");
+    lua_rawget(L, -2);
+    {
+        lua_pushstring(L, "angle");
+        lua_pushnumber(L, qa_to_float(snake->head.angle));
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "speed");
+        lua_pushnumber(L, (float)snake->head.speed / 255.0f);
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "pos");
+        lua_rawget(L, -2);
         {
-            lua_pushnumber(L, qw_to_float(world->inner_radius));
-            lua_setfield(L, -2, "inner_radius");
-            lua_pushnumber(L, qw_to_float(world->ring_start));
-            lua_setfield(L, -2, "ring_start");
-            lua_pushnumber(L, qw_to_float(world->ring_end));
-            lua_setfield(L, -2, "ring_end");
+            lua_pushstring(L, "x");
+            lua_pushnumber(L, qw_to_float(snake->head.pos.x));
+            lua_rawset(L, -3);
+
+            lua_pushstring(L, "y");
+            lua_pushnumber(L, qw_to_float(snake->head.pos.y));
+            lua_rawset(L, -3);
+
+            lua_pop(L, 2);
         }
 
-        lua_newtable(L);
+        lua_pushstring(L, "param");
+        lua_rawget(L, -2);
         {
-            lua_newtable(L);
-            {
-                lua_newtable(L);
-                {
-                    lua_pushnumber(L, qw_to_float(snake->head.pos.y));
-                    lua_setfield(L, -2, "y");
-                    lua_pushnumber(L, qw_to_float(snake->head.pos.x));
-                    lua_setfield(L, -2, "x");
-                }
-                lua_setfield(L, -2, "pos");
-                lua_pushnumber(L, qa_to_float(snake->head.angle));
-                lua_setfield(L, -2, "angle");
-                lua_pushnumber(L, (float)snake->head.speed / 255.0f);
-                lua_setfield(L, -2, "speed");
-            }
-            lua_setfield(L, -2, "head");
-        }
+            lua_pushstring(L, "scale");
+            lua_pushnumber(L, qw_to_float(snake_scale(&snake->param)));
+            lua_rawset(L, -3);
 
-        lua_pushinteger(L, sim_tick_rate);
-
-        if (lua_pcall(L, 3, 2, 0) == LUA_OK)
-        {
-            float angle = lua_tonumber(L, -2);
-            float speed = lua_tonumber(L, -1);
-            *next = cmd_make(prev, angle, speed, CMD_ACTION_NONE);
-            lua_pop(L, -3);
-        }
-        else
-        {
-            print_error_and_stack(L);
-            lua_pop(L, -1);
+            lua_pop(L, 1);
         }
     }
-    lua_pop(L, -1);
+
+    lua_pushinteger(L, sim_tick_rate);
+
+    if (lua_pcall(L, 3, 2, 0) != LUA_OK)
+    {
+        log_err("Error in Lua script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return -1;
+    }
+
+    angle = lua_tonumber(L, -2);
+    speed = lua_tonumber(L, -1);
+    *next = cmd_make(prev, angle, speed, CMD_ACTION_NONE);
+    lua_pop(L, 2);
 
     return 0;
 }

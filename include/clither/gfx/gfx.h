@@ -29,7 +29,7 @@ struct gfx_interface
     void (*deinit)(void);
 
     /*!
-     * \brief Create a graphics contet. This will open the window,
+     * \brief Create a graphics context. This will open the window,
      * load all resources (images, sounds, shaders...) and prepare
      * everything for rendering.
      * \return Return a pointer to a new graphics context, or NULL on failure.
@@ -103,6 +103,11 @@ struct gfx_interface
         struct gfx*          gfx,
         const struct world*  world,
         const struct camera* camera);
+
+#if defined(CLITHER_GFX_DEBUG)
+    void (*draw_debug_circle)(
+        struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba);
+#endif
 };
 
 #if defined(CLITHER_GFX)

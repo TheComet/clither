@@ -9,3 +9,5 @@ struct thread* thread_start(void* (*func)(const void*), const void* p);
 void* thread_join(struct thread* t);
 
 void thread_kill(struct thread* t);
+
+void thread_sigint(struct thread* t);

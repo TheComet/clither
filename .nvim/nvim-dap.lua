@@ -1,5 +1,5 @@
 local dap = require("dap")
-local last_bot_script = vim.fn.getcwd() .. '/lua/figure8.lua'
+local last_bot_script = vim.fn.getcwd() .. '/lua/bot.lua'
 
 dap.set_log_level("TRACE")
 
@@ -49,7 +49,7 @@ dap.configurations.cpp = {
         last_bot_script = current_fname
       end
       local script_file = vim.fn.input("Script file: ", last_bot_script, "file")
-      return { "--host", "--bot", script_file }
+      return { "--host", "--bot", script_file, "--gfx" }
     end,
     stopOnEntry = false,
   },
