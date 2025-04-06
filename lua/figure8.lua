@@ -8,5 +8,5 @@ function clither_next_cmd(world, snake, sim_tick_rate)
   if angle > math.pi or angle < -math.pi then
     da_dir = -da_dir
   end
-  return angle, 0.5
+  return angle, 0.0
 end

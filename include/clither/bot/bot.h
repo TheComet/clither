@@ -43,7 +43,7 @@ struct bot_interface
     void (*destroy)(struct bot* bot);
 
     int (*next_cmd)(
-        const struct bot*   bot,
+        struct bot*         bot,
         struct cmd*         next,
         struct cmd          prev,
         const struct world* world,

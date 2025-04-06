@@ -2,8 +2,10 @@
 #include "clither/game/snake.h"
 #include "clither/game/world.h"
 #include "clither/gfx/gfx.h"
+#include "clither/platform/fs.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
+#include "clither/util/str.h"
 #include <inttypes.h>
 
 #if defined(__clang__)
@@ -28,6 +30,13 @@ static const char WorldKey;
 static const char SnakeKey;
 static const char IGfxKey;
 static const char GfxKey;
+
+struct bot
+{
+    lua_State*       L;
+    struct str*      script_path;
+    struct fs_watch* script_watch;
+};
 
 static void dumpstack(lua_State* L)
 {
@@ -223,26 +232,158 @@ static struct bot* bot_lua_create(
     const struct gfx_interface** igfx,
     struct gfx**                 gfx)
 {
-    lua_State* L;
+    struct bot* bot;
 
     log_info("Creating Lua bot\n");
+    bot = mem_alloc(sizeof(struct bot));
+    if (bot == NULL)
+        goto alloc_bot_failed;
 
-    L = lua_newstate(alloc, NULL);
-    if (L == NULL)
+    bot->L = lua_newstate(alloc, NULL);
+    if (bot->L == NULL)
         goto newstate_failed;
-    luaL_openlibs(L);
+    luaL_openlibs(bot->L);
 
-    luaL_requiref(L, "clither", luaopen_clither, 1);
-    lua_pop(L, 1);
+    luaL_requiref(bot->L, "clither", luaopen_clither, 1);
+    lua_pop(bot->L, 1);
 
-    if (luaL_dofile(L, script_filepath) != LUA_OK)
+    if (luaL_dofile(bot->L, script_filepath) != LUA_OK)
     {
         log_err("Failed to load script \"%s\"\n", script_filepath);
-        dumpstack(L);
+        dumpstack(bot->L);
         goto load_script_failed;
     }
 
-    if (lua_getglobal(L, "clither_next_cmd") != LUA_TFUNCTION)
+    str_init(&bot->script_path);
+    if (str_set_cstr(&bot->script_path, script_filepath) != 0)
+    {
+        log_err("Failed to set script path \"%s\"\n", script_filepath);
+        goto store_script_path_failed;
+    }
+
+    bot->script_watch = fs_watch_init();
+    if (bot->script_watch == NULL)
+        goto init_script_watch_failed;
+    if (fs_watch_file(bot->script_watch, script_filepath) != 0)
+    {
+        log_err("Failed to watch script \"%s\"\n", script_filepath);
+        goto watch_script_failed;
+    }
+
+    lua_pushlightuserdata(bot->L, (void*)&WorldKey);
+    lua_newtable(bot->L);
+    {
+        lua_pushnumber(bot->L, 0);
+        lua_setfield(bot->L, -2, "inner_radius");
+        lua_pushnumber(bot->L, 0);
+        lua_setfield(bot->L, -2, "ring_start");
+        lua_pushnumber(bot->L, 0);
+        lua_setfield(bot->L, -2, "ring_end");
+        lua_pushlightuserdata(bot->L, NULL);
+        lua_setfield(bot->L, -2, "food_grid");
+    }
+    lua_settable(bot->L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(bot->L, (void*)&SnakeKey);
+    lua_newtable(bot->L);
+    {
+        lua_newtable(bot->L);
+        {
+            lua_newtable(bot->L);
+            {
+                lua_pushnumber(bot->L, 0);
+                lua_setfield(bot->L, -2, "y");
+                lua_pushnumber(bot->L, 0);
+                lua_setfield(bot->L, -2, "x");
+            }
+            lua_setfield(bot->L, -2, "pos");
+            lua_pushnumber(bot->L, 0);
+            lua_setfield(bot->L, -2, "angle");
+            lua_pushnumber(bot->L, 0);
+            lua_setfield(bot->L, -2, "speed");
+        }
+        lua_setfield(bot->L, -2, "head");
+
+        lua_newtable(bot->L);
+        {
+            lua_pushnumber(bot->L, 0);
+            lua_setfield(bot->L, -2, "scale");
+        }
+        lua_setfield(bot->L, -2, "param");
+    }
+    lua_settable(bot->L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(bot->L, (void*)&IGfxKey);
+    lua_pushlightuserdata(bot->L, igfx);
+    lua_settable(bot->L, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(bot->L, (void*)&GfxKey);
+    lua_pushlightuserdata(bot->L, gfx);
+    lua_settable(bot->L, LUA_REGISTRYINDEX);
+
+    return bot;
+
+watch_script_failed:
+    fs_watch_deinit(bot->script_watch);
+init_script_watch_failed:
+store_script_path_failed:
+    str_deinit(bot->script_path);
+load_script_failed:
+    lua_close(bot->L);
+newstate_failed:
+    mem_free(bot);
+alloc_bot_failed:
+    return NULL;
+}
+
+static void bot_lua_destroy(struct bot* bot)
+{
+    log_info("Destroying Lua bot\n");
+    fs_watch_deinit(bot->script_watch);
+    str_deinit(bot->script_path);
+    lua_close(bot->L);
+    mem_free(bot);
+}
+
+static int bot_lua_next_cmd(
+    struct bot*         bot,
+    struct cmd*         next,
+    struct cmd          prev,
+    const struct world* world,
+    const struct snake* snake,
+    uint8_t             sim_tick_rate)
+{
+    float      angle, speed;
+    lua_State* L = bot->L;
+
+    if (fs_watch_check(bot->script_watch) != 0)
+    {
+        struct fs_watch* new_watch;
+        log_info("Reloading Lua script \"%s\"\n", str_cstr(bot->script_path));
+
+        /* Have to set up watch again */
+        new_watch = fs_watch_init();
+        if (new_watch == NULL)
+            return -1;
+        if (fs_watch_file(new_watch, str_cstr(bot->script_path)) != 0)
+        {
+            fs_watch_deinit(new_watch);
+            return -1;
+        }
+        fs_watch_deinit(bot->script_watch);
+        bot->script_watch = new_watch;
+
+        /* Reload script */
+        if (luaL_dofile(L, str_cstr(bot->script_path)) != LUA_OK)
+        {
+            log_err(
+                "Failed to reload script \"%s\"\n", str_cstr(bot->script_path));
+            dumpstack(L);
+            return -1;
+        }
+    }
+
+    if (lua_getglobal(bot->L, "clither_next_cmd") != LUA_TFUNCTION)
     {
         log_err(
             "Script \"%s\" does not define the function "
@@ -253,89 +394,10 @@ static struct bot* bot_lua_create(
             "    local speed = 1.0  -- [0, 1]\n"
             "    return angle, speed\n"
             "end\n",
-            script_filepath);
-        goto check_update_function_failed;
+            str_cstr(bot->script_path));
+        lua_pop(bot->L, 1);
+        return -1;
     }
-    lua_pop(L, 1);
-
-    lua_pushlightuserdata(L, (void*)&WorldKey);
-    lua_newtable(L);
-    {
-        lua_pushnumber(L, 0);
-        lua_setfield(L, -2, "inner_radius");
-        lua_pushnumber(L, 0);
-        lua_setfield(L, -2, "ring_start");
-        lua_pushnumber(L, 0);
-        lua_setfield(L, -2, "ring_end");
-        lua_pushlightuserdata(L, NULL);
-        lua_setfield(L, -2, "food_grid");
-    }
-    lua_settable(L, LUA_REGISTRYINDEX);
-
-    lua_pushlightuserdata(L, (void*)&SnakeKey);
-    lua_newtable(L);
-    {
-        lua_newtable(L);
-        {
-            lua_newtable(L);
-            {
-                lua_pushnumber(L, 0);
-                lua_setfield(L, -2, "y");
-                lua_pushnumber(L, 0);
-                lua_setfield(L, -2, "x");
-            }
-            lua_setfield(L, -2, "pos");
-            lua_pushnumber(L, 0);
-            lua_setfield(L, -2, "angle");
-            lua_pushnumber(L, 0);
-            lua_setfield(L, -2, "speed");
-        }
-        lua_setfield(L, -2, "head");
-
-        lua_newtable(L);
-        {
-            lua_pushnumber(L, 0);
-            lua_setfield(L, -2, "scale");
-        }
-        lua_setfield(L, -2, "param");
-    }
-    lua_settable(L, LUA_REGISTRYINDEX);
-
-    lua_pushlightuserdata(L, (void*)&IGfxKey);
-    lua_pushlightuserdata(L, igfx);
-    lua_settable(L, LUA_REGISTRYINDEX);
-
-    lua_pushlightuserdata(L, (void*)&GfxKey);
-    lua_pushlightuserdata(L, gfx);
-    lua_settable(L, LUA_REGISTRYINDEX);
-
-    return (struct bot*)L;
-
-check_update_function_failed:
-load_script_failed:
-    lua_close(L);
-newstate_failed:
-    return NULL;
-}
-
-static void bot_lua_destroy(struct bot* bot)
-{
-    log_info("Destroying Lua bot\n");
-    lua_close((lua_State*)bot);
-}
-
-static int bot_lua_next_cmd(
-    const struct bot*   bot,
-    struct cmd*         next,
-    struct cmd          prev,
-    const struct world* world,
-    const struct snake* snake,
-    uint8_t             sim_tick_rate)
-{
-    float      angle, speed;
-    lua_State* L = (lua_State*)bot;
-
-    lua_getglobal(L, "clither_next_cmd");
 
     lua_rawgetp(L, LUA_REGISTRYINDEX, &WorldKey);
     {
