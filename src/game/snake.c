@@ -749,7 +749,7 @@ static int calc_T_inv_2x2(float T[2][2], float t1)
 }
 
 /* ------------------------------------------------------------------------- */
-void snake_extrapolate(
+int snake_extrapolate(
     struct snake_data*          data,
     struct snake_head*          head,
     const struct snake_replica* replica,
@@ -773,7 +773,7 @@ void snake_extrapolate(
     struct qwaabb*      segment_bb;
 
     if (rb_count(data->bezier_knots) < 2)
-        return;
+        return 0;
 
 #if ORDER == O4
     t0 = replica->head_frame_numbers[3];
@@ -881,6 +881,8 @@ void snake_extrapolate(
         data->bezier_knots,
         qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
         snake_length(param));
+
+    return frame_number - replica->head_frame_numbers[0];
 }
 
 int snake_eat_food(

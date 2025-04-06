@@ -218,12 +218,14 @@ int client_send_pending_data(struct client* client)
          * the next one.
          */
     retry_send:
+        if (vec_count(client->udp_sockfds) == 0)
+        {
+            log_warn("Connection to server was closed\n");
+            return -1;
+        }
         log_net("Sending UDP packet, size=%d\n", ctx.len);
-        CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
         if (net_send(*vec_last(client->udp_sockfds), ctx.buf, ctx.len) < 0)
         {
-            if (vec_count(client->udp_sockfds) == 1)
-                return -1;
             net_close(*sockfd_vec_pop(client->udp_sockfds));
             log_info("Attempting to use next socket\n");
             goto retry_send;
@@ -454,8 +456,7 @@ static struct client_recv_result process_message(
             int           i;
 
             snake = snake_bmap_find(world->snakes, pp.bezier.snake_id);
-            /* The message should have arrived after MSG_KNOT. Ignore until
-             * then. */
+            /* MSG_KNOT is responsible for creating the snake */
             if (snake == NULL)
                 return client_recv_ok();
 
@@ -660,6 +661,44 @@ client_recv(struct client* client, struct world* world)
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
+struct sim_other_snakes_ctx
+{
+    const struct client* client;
+    struct world*        world;
+};
+static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
+{
+    uint32_t                     frames_extrapolated;
+    struct sim_other_snakes_ctx* ctx = user;
+
+    if (snake_id == ctx->client->snake_id)
+        return BMAP_RETAIN;
+
+    snake_unextrapolate(&snake->data, &snake->head, &snake->remote.replica);
+    frames_extrapolated = snake_extrapolate(
+        &snake->data,
+        &snake->head,
+        &snake->remote.replica,
+        &snake->param,
+        ctx->client->frame_number,
+        ctx->client->sim_tick_rate);
+    /*
+     * This is a failsafe for when MSG_KNOT happens to be received after
+     * MSG_SNAKE_DESTROY. If the snake is extrapolated for more than 1 second,
+     * we assume it is dead.
+     */
+    if (frames_extrapolated > 1 * ctx->client->sim_tick_rate)
+    {
+        snake_deinit(snake);
+        return BMAP_ERASE;
+    }
+
+    return BMAP_RETAIN;
+}
+#endif
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_CLIENT)
 void* client_run(
 #    if defined(CLITHER_GFX_DEBUG)
     const struct gfx_interface** igfx,
@@ -684,7 +723,6 @@ void* client_run(
     int              retval = -1;
 
     /* Change log prefix and color for server log messages */
-    log_init();
     log_set_prefix(settings->log_prefix);
     log_set_colors(COL_B_GREEN, COL_RESET);
 
@@ -712,8 +750,8 @@ void* client_run(
 
     input_init(&input);
     camera_init(&camera);
-    cmd = cmd_default();
     world_init(&world);
+    cmd = cmd_default();
 
     log_info("Client started\n");
 
@@ -842,10 +880,9 @@ void* client_run(
         /* sim_update */
         if (client.state == CLIENT_CONNECTED)
         {
-            int16_t       snake_idx;
-            uint16_t      snake_id;
             struct snake* snake =
                 snake_bmap_find(world.snakes, client.snake_id);
+            CLITHER_DEBUG_ASSERT(snake != NULL);
             if (!snake_is_dead(snake))
             {
                 /*
@@ -905,27 +942,18 @@ void* client_run(
                 &input,
                 client.sim_tick_rate);
 
+            /* Simulate other snakes */
+            {
+                struct sim_other_snakes_ctx ctx;
+                ctx.client = &client;
+                ctx.world = &world;
+                snake_bmap_retain(world.snakes, sim_other_snakes, &ctx);
+            }
+
             if (net_update)
             {
                 /* Send all unconfirmed commands (unreliable) */
                 msg_commands(&client.pending_msgs, &snake->cmdq);
-            }
-
-            /* Simulate other snakes */
-            bmap_for_each (world.snakes, snake_idx, snake_id, snake)
-            {
-                if (snake_id == client.snake_id)
-                    continue;
-
-                snake_unextrapolate(
-                    &snake->data, &snake->head, &snake->remote.replica);
-                snake_extrapolate(
-                    &snake->data,
-                    &snake->head,
-                    &snake->remote.replica,
-                    &snake->param,
-                    client.frame_number,
-                    client.sim_tick_rate);
             }
         }
 
@@ -978,6 +1006,8 @@ client_connect_failed:
     if (pack_watch != NULL)
         fs_watch_deinit(pack_watch);
 watch_resource_pack_failed:
+    log_set_prefix("");
+    log_set_colors("", "");
     return (void*)(intptr_t)retval;
 }
 #endif

@@ -225,6 +225,7 @@ int main(int argc, char* argv[])
     /* Stop McDonald's WiFi if necessary */
     if (settings.mcd.enable)
     {
+        thread_sigint(mcd_thread);
         thread_join(mcd_thread);
         log_dbg("Joined McDonald's WiFi thread\n");
     }

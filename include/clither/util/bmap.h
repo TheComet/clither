@@ -17,6 +17,13 @@ enum bmap_status
 #define BMAP_RETAIN 0
 #define BMAP_ERASE  1
 
+#if defined(CLITHER_DEBUG)
+#    define BMAP_CAPACITY_WARNING()                                            \
+        log_warn("bmap_realloc(): Close to maximum capacity!\n");
+#else
+#    define BMAP_CAPACITY_WARNING()
+#endif
+
 #define BMAP_DECLARE(prefix, K, V, bits)                                       \
     /* Default key-value storage malloc()'s two arrays */                      \
     struct prefix                                                              \
@@ -185,6 +192,9 @@ enum bmap_status
             }                                                                  \
             return 0;                                                          \
         }                                                                      \
+                                                                               \
+        if (new_capacity >= (1 << (bits - 2)))                                 \
+            BMAP_CAPACITY_WARNING();                                           \
                                                                                \
         header = offsetof(struct prefix, values);                              \
         data = sizeof(V) * new_capacity;                                       \

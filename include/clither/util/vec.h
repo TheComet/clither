@@ -18,6 +18,13 @@
 #define VEC_RETAIN 0
 #define VEC_ERASE  1
 
+#if defined(CLITHER_DEBUG)
+#    define VEC_CAPACITY_WARNING()                                             \
+        log_warn("vec_realloc(): Close to maximum capacity!\n");
+#else
+#    define VEC_CAPACITY_WARNING()
+#endif
+
 #define VEC_DECLARE(prefix, T, bits)                                           \
     struct prefix                                                              \
     {                                                                          \
@@ -248,6 +255,9 @@
             }                                                                  \
             return 0;                                                          \
         }                                                                      \
+                                                                               \
+        if (elems >= (1 << (bits - 2)))                                        \
+            VEC_CAPACITY_WARNING();                                            \
                                                                                \
         header = offsetof(struct prefix, data);                                \
         data = sizeof(T) * elems;                                              \

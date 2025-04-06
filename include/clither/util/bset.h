@@ -16,6 +16,13 @@ enum bset_status
 #define BSET_RETAIN 0
 #define BSET_ERASE  1
 
+#if defined(CLITHER_DEBUG)
+#    define BSET_CAPACITY_WARNING()                                            \
+        log_warn("bset_realloc(): Close to maximum capacity!\n");
+#else
+#    define BSET_CAPACITY_WARNING()
+#endif
+
 #define BSET_DECLARE(prefix, K, bits)                                          \
     /* Default key storage implementation */                                   \
     struct prefix                                                              \
@@ -118,6 +125,9 @@ enum bset_status
             }                                                                  \
             return 0;                                                          \
         }                                                                      \
+                                                                               \
+        if (new_capacity >= (1 << (bits - 2)))                                 \
+            BSET_CAPACITY_WARNING();                                           \
                                                                                \
         header = offsetof(struct prefix, keys);                                \
         data = sizeof(K) * new_capacity;                                       \

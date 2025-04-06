@@ -357,9 +357,9 @@ int args_parse(struct args* a, int argc, char* argv[])
                     int count;
                     a->gfx_backend = 0;
 
-                    ++i;
-                    if (i >= argc || !*argv[i])
+                    if (i + 1 >= argc || !*argv[i + 1] || argv[i + 1][0] == '-')
                         continue;
+                    ++i;
 
                     a->gfx_backend = atoi(argv[i]);
 

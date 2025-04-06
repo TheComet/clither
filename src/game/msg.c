@@ -26,12 +26,12 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
     msg->type = type;
     msg->payload_len = size;
 
-    msg->resend_period = resend_period;
     /* Make sure to send it immediately first */
     msg->resend_period_counter = 1;
+    /* How often to resend the message (in net_tick_rate units) */
+    msg->resend_period = resend_period;
     /* How many times to retry before dropping the connection */
-    msg->resend_retry_counter =
-        resend_period > 0 && resend_period < 60 ? 60 / resend_period : 60;
+    msg->resend_retry_counter = 50;
 
     return msg;
 }
@@ -983,6 +983,8 @@ struct msg* msg_snake_username(uint16_t snake_id, const char* username)
     m->payload[0] = snake_id >> 8;
     m->payload[1] = snake_id & 0xFF;
 
+    log_net("MSG_SNAKE_USERNAME: snake_id=%d\n", snake_id);
+
     return m;
 }
 
@@ -1009,6 +1011,8 @@ struct msg* msg_snake_destroy(uint16_t snake_id)
     m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
+    log_dbg("MSG_SNAKE_DESTROY: snake_id=%d\n", snake_id);
+
     return m;
 }
 
@@ -1022,13 +1026,15 @@ struct msg* msg_snake_destroy_ack(uint16_t snake_id)
     m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
+    log_dbg("MSG_SNAKE_DESTROY_ACK: snake_id=%d\n", snake_id);
+
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_snake_death(void)
 {
-    log_net("MSG_SNAKE_DEATH\n");
+    log_dbg("MSG_SNAKE_DEATH\n");
     return msg_alloc(MSG_SNAKE_DEATH, 10, 0);
 }
 

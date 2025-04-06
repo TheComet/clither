@@ -6,15 +6,22 @@
 #include <stddef.h>           /* offsetof */
 #include <string.h>           /* memset */
 
-#define HMAP_SLOT_UNUSED 0 /* SLOT_UNUSED must be 0 for memset() to work */
-#define HMAP_SLOT_RIP    1
-
 enum hmap_status
 {
     HMAP_OOM = -1,
     HMAP_EXISTS = 0,
     HMAP_NEW = 1
 };
+
+#define HMAP_SLOT_UNUSED 0 /* SLOT_UNUSED must be 0 for memset() to work */
+#define HMAP_SLOT_RIP    1
+
+#if defined(CLITHER_DEBUG)
+#    define HMAP_CAPACITY_WARNING()                                            \
+        log_warn("hmap_grow(): Close to maximum capacity!\n");
+#else
+#    define HMAP_CAPACITY_WARNING()
+#endif
 
 #define HMAP_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
 
@@ -269,6 +276,9 @@ enum hmap_status
         int##bits##_t  new_cap = old_cap ? old_cap * 2 : MIN_CAPACITY;         \
         /* Must be power of 2 */                                               \
         CLITHER_DEBUG_ASSERT((new_cap & (new_cap - 1)) == 0);                  \
+                                                                               \
+        if (new_cap > (1 << (bits - 2)))                                       \
+            HMAP_CAPACITY_WARNING();                                           \
                                                                                \
         header = offsetof(struct prefix, hashes);                              \
         data = sizeof((*hmap)->hashes[0]) * new_cap;                           \

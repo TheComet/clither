@@ -23,6 +23,13 @@
 #include <stddef.h>           /* offsetof */
 #include <string.h>           /* memmove */
 
+#if defined(CLITHER_DEBUG)
+#    define RB_CAPACITY_WARNING()                                              \
+        log_warn("rb_resize(): Close to maximum capacity!\n");
+#else
+#    define RB_CAPACITY_WARNING()
+#endif
+
 #define RB_DECLARE(prefix, T, bits) RB_DECLARE_FULL(prefix, T, bits, 16)
 
 #define RB_DECLARE_FULL(prefix, T, bits, MIN_CAPACITY)                         \
@@ -190,6 +197,9 @@
         int            data = sizeof(T) * elems;                               \
                                                                                \
         CLITHER_DEBUG_ASSERT(RB_IS_POWER_OF_2(elems));                         \
+        if (elems >= (1 << (bits - 2)))                                        \
+            RB_CAPACITY_WARNING();                                             \
+                                                                               \
         new_rb = (struct prefix*)mem_realloc(*rb, header + data);              \
         if (new_rb == NULL)                                                    \
             return log_oom(header + data, "rb_resize()");                      \

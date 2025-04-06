@@ -225,7 +225,11 @@ void snake_unextrapolate(
     struct snake_head*          head,
     const struct snake_replica* replica);
 
-void snake_extrapolate(
+/*!
+ * \brief Predicts the snake's head position.
+ * \return Returns the number of frames that were extrapolated (delta).
+ */
+int snake_extrapolate(
     struct snake_data*          data,
     struct snake_head*          head,
     const struct snake_replica* replica,

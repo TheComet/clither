@@ -30,15 +30,25 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    if (key == GLFW_KEY_LEFT)
-        gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
-    if (key == GLFW_KEY_RIGHT)
-        gfx->input_buffer.next_gfx_backend = (action == GLFW_PRESS);
-
     (void)mods;
     (void)scancode;
+
+    switch (key)
+    {
+        case GLFW_KEY_ESCAPE:
+            if (action == GLFW_PRESS)
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+        case GLFW_KEY_LEFT:
+            gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
+            break;
+        case GLFW_KEY_RIGHT:
+            gfx->input_buffer.next_gfx_backend = (action == GLFW_PRESS);
+            break;
+        case GLFW_KEY_F1:
+            gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
+            break;
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -46,9 +56,10 @@ static void
 mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
+    (void)mods;
+
     if (button == GLFW_MOUSE_BUTTON_LEFT)
         gfx->input_buffer.boost = (action == GLFW_PRESS);
-    (void)mods;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -64,8 +75,8 @@ cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
-    gfx->input_buffer.scroll += (int)yoffset;
     (void)xoffset;
+    gfx->input_buffer.scroll += (int)yoffset;
 }
 
 /* ------------------------------------------------------------------------- */

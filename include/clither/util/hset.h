@@ -19,6 +19,13 @@ enum hset_status
 #define HSET_RETAIN 0
 #define HSET_ERASE  1
 
+#if defined(CLITHER_DEBUG)
+#    define HSET_CAPACITY_WARNING()                                            \
+        log_warn("hset_grow(): Close to maximum capacity!\n");
+#else
+#    define HSET_CAPACITY_WARNING()
+#endif
+
 #define HSET_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
 
 #define HSET_DECLARE(prefix, K, bits) HSET_DECLARE_HASH(prefix, hash32, K, bits)
@@ -212,6 +219,9 @@ enum hset_status
         int##bits##_t  new_cap = old_cap ? old_cap * 2 : MIN_CAPACITY;         \
         /* Must be power of 2 */                                               \
         CLITHER_DEBUG_ASSERT((new_cap & (new_cap - 1)) == 0);                  \
+                                                                               \
+        if (new_cap >= (1 << (bits - 2)))                                      \
+            HSET_CAPACITY_WARNING();                                           \
                                                                                \
         header = offsetof(struct prefix, hashes);                              \
         data = sizeof((*hset)->hashes[0]) * new_cap;                           \

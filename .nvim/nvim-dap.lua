@@ -1,5 +1,6 @@
 local dap = require("dap")
 local last_bot_script = vim.fn.getcwd() .. '/lua/bot.lua'
+local last_args = ""
 
 dap.set_log_level("TRACE")
 
@@ -130,6 +131,18 @@ dap.configurations.cpp = {
 
       error("No test found")
     end,
+  },
+  {
+    name = "Run with custom arguments",
+    type = "lldb",
+    request = "launch",
+    program = "${workspaceFolder}/build-Debug/bin/clither",
+    cwd = "${workspaceFolder}/build-Debug/bin/",
+    args = function()
+      last_args = vim.fn.input("Args: ", last_args)
+      return vim.split(last_args, " ")
+    end,
+    stopOnEntry = false,
   },
 }
 
