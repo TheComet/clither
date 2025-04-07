@@ -23,11 +23,13 @@
 #include <stddef.h>           /* offsetof */
 #include <string.h>           /* memmove */
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define RB_CAPACITY_WARNING()                                              \
         log_warn("rb_resize(): Close to maximum capacity!\n");
 #else
-#    define RB_CAPACITY_WARNING()
+/* clang-format off */
+#    define RB_CAPACITY_WARNING() do {} while (0)
+/* clang-format on */
 #endif
 
 #define RB_DECLARE(prefix, T, bits) RB_DECLARE_FULL(prefix, T, bits, 16)

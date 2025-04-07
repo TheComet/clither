@@ -19,11 +19,13 @@ enum hset_status
 #define HSET_RETAIN 0
 #define HSET_ERASE  1
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define HSET_CAPACITY_WARNING()                                            \
         log_warn("hset_grow(): Close to maximum capacity!\n");
 #else
-#    define HSET_CAPACITY_WARNING()
+/* clang-format off */
+#    define HSET_CAPACITY_WARNING() do {} while (0)
+/* clang-format on */
 #endif
 
 #define HSET_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)

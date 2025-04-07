@@ -36,9 +36,9 @@ backtrace_get(int* size)
     char** result;
     char** current_ptr;
     char* current_str;
-    void* stack[CLITHER_BACKTRACE_SIZE];
+    void* stack[CLITHER_BACKTRACE];
     char sym_buf[sizeof(SYMBOL_INFO) + (BACKTRACE_FUNC_LEN - 1) * sizeof(TCHAR)];
-    WORD frames_traced = CaptureStackBackTrace(0, CLITHER_BACKTRACE_SIZE, stack, NULL);
+    WORD frames_traced = CaptureStackBackTrace(0, CLITHER_BACKTRACE, stack, NULL);
 
     result = malloc(
         sizeof(char*) * frames_traced +  /* String table */

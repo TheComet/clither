@@ -5,7 +5,7 @@
 #include "clither/util/mem.h"
 #include <errno.h>
 #include <string.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>

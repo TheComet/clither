@@ -19,7 +19,7 @@ void log_set_prefix(const char* prefix);
 void log_set_colors(const char* set_color, const char* clear_color);
 struct log_interface log_configure(struct log_interface iface);
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
 
 void log_file_open(const char* log_file);
 void log_file_close(void);
@@ -37,10 +37,13 @@ CLITHER_PRINTF_FORMAT(1, 2) void log_warn(const char* fmt, ...);
 CLITHER_PRINTF_FORMAT(1, 2) int log_err(const char* fmt, ...);
 CLITHER_PRINTF_FORMAT(1, 2) void log_note(const char* fmt, ...);
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_LOG_DEBUG)
 CLITHER_PRINTF_FORMAT(1, 2) void log_dbg(const char* fmt, ...);
 #else
-#    define log_dbg(fmt, ...)
+CLITHER_PRINTF_FORMAT(1, 2) static void log_dbg(const char* fmt, ...)
+{
+    (void)fmt;
+}
 #endif
 
 /* Specialized logging functions -------------------------------------------- */

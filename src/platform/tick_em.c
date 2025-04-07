@@ -1,4 +1,4 @@
-#include "clither/tick.h"
+#include "clither/platform/tick.h"
 
 #include <emscripten.h>
 

@@ -41,18 +41,8 @@ source ./emsdk_env.sh
 Next, configure:
 ```sh
 cd path/to/clither
-mkdir build && cd build
-cmake \
-    -DCMAKE_TOOLCHAIN_FILE=/path/to/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
-    -DCLITHER_SERVER=OFF \
-    -DCLITHER_MCD=OFF \
-    -DCLITHER_DOC=OFF \
-    -DCLITHER_GFX_GLES2=ON \
-    -DCLITHER_GFX_SDL=OFF \
-    -DCLITHER_GFX_VULKAN=OFF \
-    -DCLITHER_TESTS=OFF \
-    -DCLITHER_BENCHMARKS=OFF ..
-cmake --build .
+EMSDK=<path/to/emsdk> cmake --preset web
+cmake --build build-web-Release/ --paralell $(nproc)
 ```
 
 ## Usage

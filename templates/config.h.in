@@ -3,17 +3,18 @@
 /* Config ------------------------------------------------------------------- */
 
 #cmakedefine CLITHER_BENCHMARKS
-#cmakedefine CLITHER_CLIENT
-#cmakedefine CLITHER_DEBUG
-#cmakedefine CLITHER_LOGGING
+#cmakedefine CLITHER_CAPACITY_WARNING
+#cmakedefine CLITHER_DEBUG_ASSERT
+#cmakedefine CLITHER_DEBUG_ZOOM
+#cmakedefine CLITHER_DOC
 #cmakedefine CLITHER_MCD
-#cmakedefine CLITHER_MEMORY_DEBUGGING
-#cmakedefine CLITHER_POPCOUNT
-#cmakedefine CLITHER_SERVER
+#cmakedefine CLITHER_LOG
+#cmakedefine CLITHER_LOG_DEBUG
 #cmakedefine CLITHER_TESTS
 
 #define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
 
+#cmakedefine CLITHER_CLIENT
 #if defined(CLITHER_CLIENT)
 #   cmakedefine CLITHER_BOT_API
 #   if defined(CLITHER_BOT_API)
@@ -29,22 +30,24 @@
 #   endif
 #endif
 
-#if defined(CLITHER_DEBUG)
-#   define CLITHER_DEBUG_ASSERT
-#   define CLITHER_DEBUG_ZOOM
-#endif
-
-#if defined(CLITHER_MEMORY_DEBUGGING)
-#   define CLITHER_BACKTRACE_SIZE ${CLITHER_BACKTRACE_SIZE}
-#   cmakedefine CLITHER_BACKTRACE
-#   cmakedefine CLITHER_HEX_DUMP
+#cmakedefine CLITHER_DEBUG_MEMORY
+#if defined(CLITHER_DEBUG_MEMORY)
+#    cmakedefine CLITHER_BACKTRACE
+#    cmakedefine CLITHER_HEX_DUMP
+#    define CLITHER_BACKTRACE_SIZE ${CLITHER_BACKTRACE_SIZE}
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
 
+#cmakedefine CLITHER_POPCOUNT
 #if defined(CLITHER_POPCOUNT)
 #   undef CLITHER_POPCOUNT
 #   define CLITHER_POPCOUNT ${CLITHER_POPCOUNT}
+#endif
+
+#cmakedefine CLITHER_SERVER
+#if defined(CLITHER_SERVER)
+#   cmakedefine CLITHER_SERVER_WEBSOCKETS
 #endif
 
 /* Assertions --------------------------------------------------------------- */

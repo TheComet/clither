@@ -1,5 +1,7 @@
 #pragma once
 
+#include "clither/config.h"
+
 struct fs_watch;
 
 int fs_list(

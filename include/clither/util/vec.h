@@ -18,11 +18,13 @@
 #define VEC_RETAIN 0
 #define VEC_ERASE  1
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define VEC_CAPACITY_WARNING()                                             \
         log_warn("vec_realloc(): Close to maximum capacity!\n");
 #else
-#    define VEC_CAPACITY_WARNING()
+/* clang-format off */
+#    define VEC_CAPACITY_WARNING() do {} while (0)
+/* clang-format on */
 #endif
 
 #define VEC_DECLARE(prefix, T, bits)                                           \

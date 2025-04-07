@@ -16,7 +16,7 @@ enum bset_status
 #define BSET_RETAIN 0
 #define BSET_ERASE  1
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define BSET_CAPACITY_WARNING()                                            \
         log_warn("bset_realloc(): Close to maximum capacity!\n");
 #else

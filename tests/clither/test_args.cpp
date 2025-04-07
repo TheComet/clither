@@ -27,7 +27,7 @@ TEST_F(NAME, no_args_check_defaults)
 #if defined(CLITHER_CLIENT)
     EXPECT_THAT(a.username, IsNull());
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
     EXPECT_THAT(a.netlog_file, StrEq("net.txt"));
     EXPECT_THAT(a.prefix, IsNull());
@@ -138,7 +138,7 @@ TEST_F(NAME, set_headless_mode_short)
 }
 #endif
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
 TEST_F(NAME, set_log_file_long)
 {
     const char* argv[] = {"./clither", "--log", "mylog.txt"};
@@ -172,7 +172,7 @@ TEST_F(NAME, set_prefix_long)
 }
 #endif
 
-#if defined(CLITHER_LOGGING) && defined(CLITHER_SERVER)
+#if defined(CLITHER_LOG) && defined(CLITHER_SERVER)
 TEST_F(NAME, set_log_file_short_other_options)
 {
     const char* argv[] = {"./clither", "-sl", "mylog.txt"};
@@ -190,7 +190,7 @@ TEST_F(NAME, set_log_file_short_other_options_invalid)
 }
 #endif
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
 TEST_F(NAME, set_log_file_long_empty)
 {
     const char* argv[] = {"./clither", "--log", ""};
@@ -222,7 +222,7 @@ TEST_F(NAME, set_log_file_short_missing_arg)
 }
 #endif
 
-#if defined(CLITHER_LOGGING) && defined(CLITHER_GFX)
+#if defined(CLITHER_LOG) && defined(CLITHER_GFX)
 TEST_F(NAME, set_log_file_short_missing_arg_other_options)
 {
     const char* argv[] = {"./clither", "-hl"};

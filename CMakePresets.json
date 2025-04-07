@@ -1,0 +1,58 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Default desktop build for debugging",
+      "binaryDir": "${sourceDir}/build-Debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_CAPACITY_WARNING": true,
+        "CLITHER_DEBUG_ASSERT": true,
+        "CLITHER_DEBUG_MEMORY": true,
+        "CLITHER_DEBUG_ZOOM": true,
+        "CLITHER_GFX_DEBUG": true,
+        "CLITHER_HOT_RELOAD": true,
+        "CLITHER_LOG_DEBUG": true,
+        "CLITHER_MCD": true
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Default desktop build",
+      "binaryDir": "${sourceDir}/build-Release"
+    },
+    {
+      "name": "server",
+      "displayName": "Server",
+      "description": "Build only server component",
+      "binaryDir": "${sourceDir}/build-server-Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_CLIENT": false,
+        "CLITHER_GFX": false,
+        "CLITHER_BOT_API": false
+      }
+    },
+    {
+      "name": "web",
+      "displayName": "Web",
+      "description": "Build web client",
+      "binaryDir": "${sourceDir}/build-web-Release",
+      "toolchainFile": "$penv{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_BOT_API": false,
+        "CLITHER_DOC": false,
+        "CLITHER_LOG": false,
+        "CLITHER_SERVER": false,
+        "CLITHER_TESTS": false
+      }
+    }
+  ]
+}

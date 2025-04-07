@@ -120,7 +120,7 @@ static int print_help(const char* prog_name)
 #endif
 
     /* Logging options */
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     log_raw(
         "  " ARG2 "-l" RESET "," ARG1 " --log " RESET "<" ARG2 "file" RESET ">      Write log output to a custom file.  The default file is\n"
         "                        \"clither.txt\".  To  disable logging to a file, set this\n"
@@ -136,7 +136,7 @@ static int print_help(const char* prog_name)
 #endif
 
     /* Disabled options */
-#if !defined(CLITHER_TESTS) || !defined(CLITHER_BENCHMARKS) || !defined(CLITHER_GFX) || !defined(CLITHER_LOGGING)
+#if !defined(CLITHER_TESTS) || !defined(CLITHER_BENCHMARKS) || !defined(CLITHER_GFX) || !defined(CLITHER_LOG)
     log_raw(
         SECTION "\nDisabled options:\n" RESET);
 #endif
@@ -165,10 +165,10 @@ static int print_help(const char* prog_name)
 #if !defined(CLITHER_GFX)
     log_raw("     " RED " --gfx " RESET "[" RED "index" RESET "]     (Recompile with -DCLITHER_GFX=ON)\n");
 #endif
-#if !defined(CLITHER_LOGGING)
-    log_raw("  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOGGING=ON)\n");
-    log_raw("     " RED " --netlog " RESET "<" RED "file" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
-    log_raw("     " RED " --prefix " RESET "<" RED "name" RESET ">   (Recompile with -DCLITHER_LOGGING=ON)\n");
+#if !defined(CLITHER_LOG)
+    log_raw("  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOG=ON)\n");
+    log_raw("     " RED " --netlog " RESET "<" RED "file" RESET ">   (Recompile with -DCLITHER_LOG=ON)\n");
+    log_raw("     " RED " --prefix " RESET "<" RED "name" RESET ">   (Recompile with -DCLITHER_LOG=ON)\n");
 #endif
 
     /*
@@ -234,7 +234,7 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_CLIENT)
     a->username = NULL;
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     a->log_file = "clither.txt";
     a->netlog_file = "net.txt";
     a->prefix = NULL;
@@ -375,7 +375,7 @@ int args_parse(struct args* a, int argc, char* argv[])
                     }
                 }
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
                 else if (strcmp(arg, "log") == 0)
                 {
                     ++i;
@@ -498,7 +498,7 @@ int args_parse(struct args* a, int argc, char* argv[])
                         }
                     }
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
                     else if (*p == 'l')
                     {
                         ++i;

@@ -72,7 +72,7 @@ target_include_directories (lua-lib
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
 target_compile_definitions (lua-lib
     PRIVATE
-        $<$<PLATFORM_ID:Linux>:LUA_USE_LINUX)
+        $<$<PLATFORM_ID:Linux>:LUA_USE_LINUX>)
 target_link_libraries (lua-lib
     PRIVATE
         $<$<PLATFORM_ID:Linux>:m>)

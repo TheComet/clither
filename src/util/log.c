@@ -6,7 +6,7 @@
 
 static CLITHER_THREADLOCAL struct log_interface g_out_log;
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
 static FILE* g_file_log = NULL;
 static FILE* g_net_log = NULL;
 #endif
@@ -33,6 +33,8 @@ static char stream_is_terminal(FILE* fp)
 {
 #if defined(_WIN32)
     return 1;
+#elif defined(__EMSCRIPTEN__)
+    return 0;
 #else
     return isatty(fileno(fp));
 #endif
@@ -109,7 +111,7 @@ out_log_vwrite(enum log_severity severity, const char* fmt, va_list ap)
         g_out_log.write(fmt, ap_copy);
     }
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     if (g_file_log)
     {
         fprintf(
@@ -121,7 +123,7 @@ out_log_vwrite(enum log_severity severity, const char* fmt, va_list ap)
 }
 
 /* ------------------------------------------------------------------------- */
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
 void log_file_open(const char* log_file)
 {
     if (g_file_log)
@@ -219,7 +221,7 @@ void log_raw(const char* fmt, ...)
         va_end(va);
     }
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     if (g_file_log)
     {
         va_start(va, fmt);
@@ -231,7 +233,7 @@ void log_raw(const char* fmt, ...)
 }
 
 /* ------------------------------------------------------------------------- */
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_LOG_DEBUG)
 void log_dbg(const char* fmt, ...)
 {
     va_list ap;
@@ -281,7 +283,7 @@ void log_note(const char* fmt, ...)
 /* ------------------------------------------------------------------------- */
 void log_net(const char* fmt, ...)
 {
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     if (g_net_log)
     {
         va_list va;

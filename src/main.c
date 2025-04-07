@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
      */
     signals_install();
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     /* Open log files */
     if (args.log_file)
         log_file_open(args.log_file);
@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
              * in the main thread. It does not call any threadlocal init
              * functions. */
             retval = (int)(intptr_t)client_run(
-#    if defined(CLITHER_GFX_DEBUG)
+#    if defined(CLITHER_GFX)
                 &igfx,
                 &gfx,
 #    endif
@@ -184,7 +184,7 @@ int main(int argc, char* argv[])
 
             /* The server should be running, so try to join as a client */
             retval = (int)(intptr_t)client_run(
-#    if defined(CLITHER_GFX_DEBUG)
+#    if defined(CLITHER_GFX)
                 &igfx,
                 &gfx,
 #    endif
@@ -258,7 +258,7 @@ init_gfx_failed:
 parse_resource_pack_failed:
 #endif
 
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     log_net_close();
     log_file_close();
 #endif

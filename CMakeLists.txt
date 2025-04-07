@@ -13,27 +13,34 @@ project ("clither"
 # Config and options
 ###############################################################################
 
-option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" OFF)
-set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
+include (CMakeDependentOption)
+
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
-option (CLITHER_BOT_API "Enable the bot API" ON)
-option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON)
-option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
-option (CLITHER_DEBUG "Enable debug checks" ON)
-option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" ON)
-option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" ON)
+option (CLITHER_CAPACITY_WARNING "Enable capacity warnings for data structures" OFF)
+option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
+option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
-option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." OFF)
-option (CLITHER_GFX_DEBUG "Enable the graphics debug layer" ON)
-option (CLITHER_GFX_SDL "Enable SDL graphics backend" ON)
-option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON)
-option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF)
-option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF)
-option (CLITHER_LOGGING "Enable logging functionality" ON)
-option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" ON)
-option (CLITHER_MEMORY_DEBUGGING "Enable tracking malloc/realloc/free calls to detect memory leaks" ON)
-option (CLITHER_SERVER "Build the server component. Requires threads." ON)
+option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" OFF)
+option (CLITHER_LOG "Enable logging functionality" ON)
+option (CLITHER_LOG_DEBUG "Enable log_dbg()" OFF)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
+
+option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
+cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
+cmake_dependent_option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON "CLITHER_BOT_API" OFF)
+cmake_dependent_option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." ON "CLITHER_CLIENT" OFF)
+cmake_dependent_option (CLITHER_GFX_DEBUG "Enable the graphics debug layer" OFF "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" OFF "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)
+
+option (CLITHER_DEBUG_MEMORY "Enable tracking malloc/realloc/free calls to detect memory leaks" OFF)
+cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" OFF "CLITHER_DEBUG_MEMORY" OFF)
+cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_DEBUG_MEMORY" OFF)
+set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
+
+option (CLITHER_SERVER "Build the server component. Requires threads." ON)
+cmake_dependent_option (CLITHER_SERVER_WEBSOCKETS "Enable WebSocket support" ON "CLITHER_SERVER" OFF)
 
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
 set (CLITHER_BUILD_LIBDIR "${CLITHER_BUILD_BINDIR}/lib")
@@ -222,7 +229,7 @@ add_executable (clither
     $<$<BOOL:${CLITHER_MCD}>:
         src/game/mcd_wifi.c>
 
-    $<$<BOOL:${CLITHER_MEMORY_DEBUGGING}>:
+    $<$<BOOL:${CLITHER_DEBUG_MEMORY}>:
         src/util/mem.c>
 
     $<$<BOOL:${CLITHER_SERVER}>:
@@ -268,7 +275,8 @@ add_executable (clither
         src/platform/tick_posix.c
         src/platform/utf8_posix.c>
     $<$<PLATFORM_ID:Emscripten>:
-        src/platform/fs_linux.c
+        src/platform/fs_em.c
+        src/platform/mfile_posix.c
         src/platform/net_em.c
         src/platform/signals_em.c
         src/platform/tick_em.c
@@ -351,7 +359,13 @@ if (EMSCRIPTEN)
     set_target_properties(clither
         PROPERTIES
             SUFFIX ".html"
-            LINK_FLAGS "-sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH -sASYNCIFY --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs --bind")
+            LINK_FLAGS "\
+                -s USE_GLFW=3 \
+                -s ALLOW_MEMORY_GROWTH \
+                -s ASYNCIFY \
+                --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs \
+                --bind \
+                --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js")
 endif ()
 
 ###############################################################################
@@ -430,6 +444,11 @@ endif ()
 
 if (CLITHER_DOC)
     add_subdirectory ("doc/clither-doc")
+endif ()
+
+if (CLITHER_SERVER_WEBSOCKETS)
+    add_subdirectory ("thirdparty/wsServer")
+    target_link_libraries (clither PRIVATE ws)
 endif ()
 
 ###############################################################################

@@ -122,7 +122,7 @@ client_recv(struct client* client, struct world* world);
  * a Command line arguments.
  */
 void* client_run(
-#    if defined(CLITHER_GFX_DEBUG)
+#    if defined(CLITHER_GFX)
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
 #    endif

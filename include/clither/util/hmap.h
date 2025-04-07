@@ -16,11 +16,13 @@ enum hmap_status
 #define HMAP_SLOT_UNUSED 0 /* SLOT_UNUSED must be 0 for memset() to work */
 #define HMAP_SLOT_RIP    1
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define HMAP_CAPACITY_WARNING()                                            \
         log_warn("hmap_grow(): Close to maximum capacity!\n");
 #else
-#    define HMAP_CAPACITY_WARNING()
+/* clang-format off */
+#    define HMAP_CAPACITY_WARNING() do {} while (0)
+/* clang-format on */
 #endif
 
 #define HMAP_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)

@@ -17,11 +17,13 @@ enum bmap_status
 #define BMAP_RETAIN 0
 #define BMAP_ERASE  1
 
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_CAPACITY_WARNING)
 #    define BMAP_CAPACITY_WARNING()                                            \
         log_warn("bmap_realloc(): Close to maximum capacity!\n");
 #else
-#    define BMAP_CAPACITY_WARNING()
+/* clang-format off */
+#    define BMAP_CAPACITY_WARNING() do {} while (0)
+/* clang-format on */
 #endif
 
 #define BMAP_DECLARE(prefix, K, V, bits)                                       \

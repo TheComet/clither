@@ -700,7 +700,7 @@ static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
 void* client_run(
-#    if defined(CLITHER_GFX_DEBUG)
+#    if defined(CLITHER_GFX)
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
 #    endif
@@ -761,8 +761,10 @@ void* client_run(
     {
         int net_update;
 
+#    if defined(CLITHER_GFX)
         if (*gfx != NULL)
             (*igfx)->poll_input(*gfx, &input);
+#    endif
 
         if (input.quit)
         {
@@ -893,13 +895,8 @@ void* client_run(
                  * If a bot was created, then it has precedence over the mouse
                  * controls of the graphics interface.
                  */
-                if (bot == NULL)
-                {
-                    if (*gfx != NULL)
-                        cmd = (*igfx)->next_cmd(
-                            *gfx, &input, &camera, cmd, snake->head.pos);
-                }
-                else
+#    if defined(CLITHER_BOT_API)
+                if (bot != NULL)
                 {
                     if (ibot->next_cmd(
                             bot,
@@ -910,6 +907,18 @@ void* client_run(
                             client.sim_tick_rate) != 0)
                         break;
                 }
+#    endif
+#    if defined(CLITHER_GFX)
+#        if defined(CLITHER_BOT_API)
+                if (*gfx != NULL && bot == NULL)
+#        else
+                if (*gfx != NULL)
+#        endif
+                {
+                    cmd = (*igfx)->next_cmd(
+                        *gfx, &input, &camera, cmd, snake->head.pos);
+                }
+#    endif
 
                 /*
                  * Append the new command to the ring buffer of unconfirmed
@@ -963,8 +972,10 @@ void* client_run(
                 break;
         }
 
+#    if defined(CLITHER_GFX)
         if (*gfx != NULL)
             (*igfx)->step_anim(*gfx, client.sim_tick_rate);
+#    endif
 
         /*
          * Skip rendering if we are lagging, as this is most likely the source
@@ -976,8 +987,10 @@ void* client_run(
         client.warp = 0;
         if (tick_lag == 0)
         {
+#    if defined(CLITHER_GFX)
             if (*gfx != NULL)
                 (*igfx)->draw_world(*gfx, &world, &camera);
+#    endif
         }
         else
         {

@@ -3,7 +3,7 @@
 #include "clither/config.h"
 #include <stdint.h>
 
-#if !defined(CLITHER_MEMORY_DEBUGGING)
+#if !defined(CLITHER_DEBUG_MEMORY)
 /* clang-format off */
 #   include <stdlib.h>
 #   define mem_init_threadlocal()

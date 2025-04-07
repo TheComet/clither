@@ -239,7 +239,7 @@ int net_connect(
 /* ------------------------------------------------------------------------- */
 void net_close(int sockfd)
 {
-#if defined(CLITHER_DEBUG)
+#if defined(CLITHER_LOG_DEBUG)
     struct sockaddr     addr;
     struct net_addr_str ipstr;
     socklen_t           addr_len = sizeof(addr);

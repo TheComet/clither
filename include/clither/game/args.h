@@ -36,7 +36,7 @@ struct args
 #if defined(CLITHER_CLIENT)
     const char* username;
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     const char* log_file;
     const char* netlog_file;
     const char* prefix;

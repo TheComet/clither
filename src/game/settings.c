@@ -210,25 +210,40 @@ int settings_apply_args(struct settings* s, const struct args* a)
         strcpy(dst, a->src);                                                   \
     } while (0)
 
-#if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
-    if (a->addr)
-        SAFE_COPY(s->server.bind_addr, addr);
-    if (a->port)
-        SAFE_COPY(s->server.bind_port, port);
-#endif
 #if defined(CLITHER_CLIENT)
     if (a->username)
         SAFE_COPY(s->client.username, username);
+    if (a->mode == MODE_CLIENT)
+    {
+        if (a->addr)
+            SAFE_COPY(s->client.connect_addr, addr);
+        if (a->port)
+            SAFE_COPY(s->client.connect_port, port);
+    }
+#endif
+#if defined(CLITHER_SERVER)
+    if (a->mode == MODE_SERVER)
+    {
+        if (a->addr)
+            SAFE_COPY(s->server.bind_addr, addr);
+        if (a->port)
+            SAFE_COPY(s->server.bind_port, port);
+    }
 #endif
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
     if (a->mode == MODE_HOST)
     {
+        if (a->addr)
+            SAFE_COPY(s->server.bind_addr, addr);
+        if (a->port)
+            SAFE_COPY(s->server.bind_port, port);
+
         /* Route client to server */
         strcpy(s->client.connect_addr, "localhost");
         strcpy(s->client.connect_port, s->server.bind_port);
     }
 #endif
-#if defined(CLITHER_LOGGING)
+#if defined(CLITHER_LOG)
     if (a->prefix)
         SAFE_COPY(s->client.log_prefix, prefix);
 #endif

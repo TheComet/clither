@@ -338,8 +338,8 @@ int mem_deinit_threadlocal(void)
             info->backtrace); /* this was allocated when malloc() was called */
 #endif
 
-#if defined(CLITHER_MEM_HEX_DUMP)
-        if (info->size <= CLITHER_MEM_HEX_DUMP_SIZE)
+#if defined(CLITHER_HEX_DUMP)
+        if (info->size <= CLITHER_HEX_DUMP_SIZE)
             log_hex_ascii((void*)info->location, info->size);
 #endif
     }
