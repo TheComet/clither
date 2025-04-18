@@ -20,6 +20,8 @@
 static struct args     args;
 static struct settings settings;
 
+void asm_optimizations_init(void);
+
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
@@ -39,6 +41,7 @@ int main(int argc, char* argv[])
 
     mem_init_threadlocal();
     log_init();
+    asm_optimizations_init();
 
     /*
      * Parse command line args before doing anything else. This function

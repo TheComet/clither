@@ -20,8 +20,9 @@
 #include "clither/config.h"
 #include "clither/util/log.h" /* log_oom */
 #include "clither/util/mem.h" /* mem_alloc, mem_realloc, mem_free */
-#include <stddef.h>           /* offsetof */
-#include <string.h>           /* memmove */
+#include <assert.h>
+#include <stddef.h> /* offsetof */
+#include <string.h> /* memmove */
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define RB_CAPACITY_WARNING()                                              \

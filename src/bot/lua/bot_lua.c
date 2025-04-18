@@ -177,8 +177,10 @@ static int clither_gfx_draw_debug_circle(lua_State* L)
     gfx = lua_touserdata(L, -1);
     lua_pop(L, 2);
 
+#if defined(CLITHER_GFX_DEBUG)
     if (*igfx && *gfx)
         (*igfx)->draw_debug_circle(*gfx, pos, radius, rgba);
+#endif
 
     return 0;
 }

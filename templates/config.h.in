@@ -38,6 +38,7 @@
 #endif
 
 #define CLITHER_THREADLOCAL ${CLITHER_THREADLOCAL}
+#define CLITHER_HOTPATCH ${CLITHER_HOTPATCH}
 
 #cmakedefine CLITHER_POPCOUNT
 #if defined(CLITHER_POPCOUNT)
@@ -48,6 +49,11 @@
 #cmakedefine CLITHER_SERVER
 #if defined(CLITHER_SERVER)
 #   cmakedefine CLITHER_SERVER_WEBSOCKETS
+#endif
+
+#cmakedefine CLITHER_ASM_OPTIMIZATIONS
+#if defined(CLITHER_ASM_OPTIMIZATIONS)
+#   define CLITHER_ASM_OPTIMIZATIONS_${CLITHER_ASM_OPTIMIZATIONS}
 #endif
 
 /* Assertions --------------------------------------------------------------- */
@@ -61,7 +67,6 @@
 #if defined(CLITHER_DEBUG_ASSERT)
 #    undef CLITHER_DEBUG_ASSERT
 #    define CLITHER_DEBUG_ASSERT assert
-#    include <assert.h>
 #else
 #    define CLITHER_DEBUG_ASSERT(condition) ((void)0)
 #endif
@@ -102,5 +107,3 @@
 #endif
 
 #define CLITHER_ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
-
-

@@ -70,7 +70,7 @@ static q16_16 q16_16_sub(q16_16 a, q16_16 b)
     return a - b;
 }
 
-/* saturate to range of 24-bit signed int */
+/* saturate to range of 32-bit signed int */
 static q16_16 q16_16_sat32(int64_t x)
 {
     if (x > 0x7FFFFFFFL)
@@ -87,7 +87,8 @@ static q16_16 q16_16_mul(q16_16 a, q16_16 b)
     /* Rounding; mid values are rounded up */
     temp += Q16_16_K;
     /* Correct by dividing by base and saturate result */
-    return q16_16_sat32(temp >> Q16_16_Q);
+    /*return q16_16_sat32(temp >> Q16_16_Q);*/
+    return temp >> Q16_16_Q;
 }
 
 static q16_16 q16_16_div(q16_16 a, q16_16 b)
@@ -199,7 +200,8 @@ static qw qw_mul(qw a, qw b)
     /* Rounding; mid values are rounded up */
     temp += QW_K;
     /* Correct by dividing by base and saturate result */
-    return qw_sat24(temp >> QW_Q);
+    /*return qw_sat24(temp >> QW_Q);*/
+    return temp >> QW_Q;
 }
 
 static int qw_mul_to_int(qw a, int b)

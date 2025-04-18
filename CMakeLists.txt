@@ -7,7 +7,7 @@ message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 project ("clither"
     VERSION 0.0.1
-    LANGUAGES C)
+    LANGUAGES C ASM)
 
 ###############################################################################
 # Config and options
@@ -24,6 +24,10 @@ option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet los
 option (CLITHER_LOG "Enable logging functionality" ON)
 option (CLITHER_LOG_DEBUG "Enable log_dbg()" OFF)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
+
+set (CLITHER_ASM_OPTIMIZATIONS "HOTPATCH" CACHE STRING "")
+set_property (CACHE CLITHER_ASM_OPTIMIZATIONS
+    PROPERTY STRINGS "OFF;HARDCODE;HOTPATCH;FUNCPTR")
 
 option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
@@ -50,17 +54,19 @@ set (CLITHER_INSTALL_BINDIR ".")
 set (CLITHER_INSTALL_LIBDIR "lib")
 set (CLITHER_INSTALL_DOCDIR "doc")
 
-include (CheckCSourceCompiles)
-check_c_source_compiles ("__declspec(thread) int value; int main(void) { return 0; }" MSVC_THREADLOCAL)
-check_c_source_compiles ("__thread int value; int main(void) { return 0; }" GCC_THREADLOCAL)
-if (MSVC_THREADLOCAL)
+if (${CMAKE_C_COMPILER_ID} MATCHES "MSVC")
     set (CLITHER_THREADLOCAL "__declspec(thread)")
-elseif (GCC_THREADLOCAL)
+    set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
+    set (CLITHER_HOTPATCH "__declspec(noinline)")
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "GNU")
     set (CLITHER_THREADLOCAL "__thread")
+    set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
+    set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
 else ()
     message (FATAL_ERROR "Unable to detect thread local storage semantics!")
 endif ()
 
+include (CheckCSourceCompiles)
 check_c_source_compiles ("int main(void) { return __popcnt(0xAAAA); }" MSVC_POPCOUNT)
 check_c_source_compiles ("int main(void) { return __builtin_popcount(0xAAAA); }" GCC_POPCOUNT)
 if (MSVC_POPCOUNT)
@@ -70,16 +76,6 @@ elseif (GCC_POPCOUNT)
 else ()
     message (WARNING "Could not detect a popcount intrinsic, falling back to slow implementation")
     set (CLITHER_POPCOUNT OFF)
-endif ()
-
-check_c_source_compiles ("int main(void) { _Static_assert(1, \"\"); return 0; }" GCC_STATIC_ASSERT)
-check_c_source_compiles ("int main(void) { _STATIC_ASSERT(1); return 0; }" MSVC_STATIC_ASSERT)
-if (MSVC_STATIC_ASSERT)
-    set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
-elseif (GCC_STATIC_ASSERT)
-    set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
-else ()
-    set (CLITHER_STATIC_ASSERT "")
 endif ()
 
 configure_file ("templates/config.h.in" "include/clither/config.h")
@@ -138,6 +134,7 @@ add_executable (clither
     "include/clither/platform/system.h"
     "include/clither/platform/thread.h"
     "include/clither/platform/tick.h"
+    "include/clither/platform/asm_optimizations.h"
     "include/clither/platform/utf8.h"
 
     "include/clither/util/bmap.h"
@@ -193,10 +190,14 @@ add_executable (clither
 
     "src/util/hash.c"
     "src/util/log.c"
-    "src/util/morton.c"
     "src/util/str.c"
     "src/util/strview.c"
     "src/util/strlist.c"
+
+    "src/util/morton.c"
+    $<$<BOOL:${CLITHER_ASM_OPTIMIZATIONS}>:
+        $<$<C_COMPILER_ID:GNU>:src/util/morton_gas_x86-64.S>
+    >
 
     $<$<BOOL:${CLITHER_BOT_API}>:
         src/bot/bot.c
@@ -262,8 +263,10 @@ add_executable (clither
         src/platform/mutex_pthread.c
         src/platform/net_posix.c
         src/platform/signals_posix.c
+        src/platform/system_linux.c
         src/platform/thread_pthread.c
         src/platform/tick_posix.c
+        src/platform/asm_optimizations_posix.c
         src/platform/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
         src/platform/fs_linux.c
@@ -334,7 +337,8 @@ target_compile_options (clither
     PRIVATE
         $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244 /wd4505>
         $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic -Wno-unused-function -Wno-overlength-strings>
-        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>)
+        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>
+        -mavx2 -msse3)
 target_link_options (clither
     PRIVATE
         $<$<BOOL:${CLITHER_BACKTRACE}>:

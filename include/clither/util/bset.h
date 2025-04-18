@@ -127,7 +127,9 @@ enum bset_status
         }                                                                      \
                                                                                \
         if (new_capacity >= (1 << (bits - 2)))                                 \
+        {                                                                      \
             BSET_CAPACITY_WARNING();                                           \
+        }                                                                      \
                                                                                \
         header = offsetof(struct prefix, keys);                                \
         data = sizeof(K) * new_capacity;                                       \

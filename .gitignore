@@ -2,6 +2,10 @@
 /build*
 /.cache
 
+# GDB
+.gdbinit
+.gdb_history
+
 # IDE files
 CMakeLists.txt.user
 *.kdev4
