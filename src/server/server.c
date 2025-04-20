@@ -83,15 +83,28 @@ static void mark_client_as_malicious_and_drop(
 int server_init(
     struct server* server, const char* bind_address, const char* port)
 {
-    server->udp_sock = net_bind(bind_address, port);
+    server->udp_sock = udp_bind(bind_address, port);
     if (server->udp_sock < 0)
-        return -1;
+        goto bind_udp_sock_failed;
+
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+    server->tcp_sock = tcp_bind(bind_address, port);
+    if (server->tcp_sock < 0)
+        goto bind_tcp_sock_failed;
+#endif
 
     server_client_hmap_init(&server->clients);
     net_addr_hmap_init(&server->malicious_clients);
     net_addr_hmap_init(&server->banned_clients);
 
     return 0;
+
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+bind_tcp_sock_failed:
+#endif
+    net_close(server->udp_sock);
+bind_udp_sock_failed:
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -101,6 +114,9 @@ void server_deinit(struct server* server)
     struct server_client*  client;
     int                    slot;
 
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+    net_close(server->tcp_sock);
+#endif
     net_close(server->udp_sock);
 
     net_addr_hmap_deinit(server->banned_clients);
@@ -982,6 +998,7 @@ static int unpack_packet(
 }
 
 /* ------------------------------------------------------------------------- */
+#include <stdio.h>
 int server_recv(
     struct server*                server,
     const struct settings_server* settings_server,
@@ -1025,6 +1042,20 @@ int server_recv(
         net_addr_to_str(&ipstr, server_addr);
         log_info("Client %s removed from malicious list\n", ipstr.cstr);
         net_addr_hmap_erase(server->malicious_clients, server_addr);
+    }
+
+    int fd = tcp_accept(server->tcp_sock, &client_addr);
+    if (fd < 0)
+        return -1;
+    if (fd > 0)
+    {
+        struct net_addr_str ipstr;
+        net_addr_to_str(&ipstr, &client_addr);
+        log_info("Accepted TCP connection from %s\n", ipstr.cstr);
+        int len = net_recv(fd, udp_buf, sizeof(udp_buf));
+        fprintf(stderr, "%.*s\n", len, udp_buf);
+        net_close(fd);
+        return 0;
     }
 
     /* We may need to read more than one UDP packet */

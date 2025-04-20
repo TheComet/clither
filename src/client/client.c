@@ -78,7 +78,7 @@ int client_connect(
 
     if (str_set_cstr(&client->username, username) != 0)
         return -1;
-    if (net_connect(&client->udp_sockfds, server_address, port) < 0)
+    if (udp_connect(&client->udp_sockfds, server_address, port) < 0)
         return -1;
 
     client_queue(

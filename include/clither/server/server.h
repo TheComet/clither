@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/game/q.h"
+#include "clither/config.h"
 
 struct net_addr;
 struct net_addr_hmap;
@@ -18,6 +18,9 @@ struct server
     struct net_addr_hmap*      banned_clients;
 
     int udp_sock;
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+    int tcp_sock;
+#endif
 };
 
 /*!

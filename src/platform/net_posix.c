@@ -1,6 +1,6 @@
+#include "clither/platform/net.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
-#include "clither/platform/net.h"
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
@@ -99,7 +99,7 @@ void net_log_host_ips(void)
 }
 
 /* ------------------------------------------------------------------------- */
-int net_bind(const char* bind_address, const char* port)
+static int net_bind(const char* bind_address, const char* port, int socktype)
 {
     struct addrinfo     hints;
     struct addrinfo*    candidates;
@@ -112,10 +112,11 @@ int net_bind(const char* bind_address, const char* port)
      * Set up hints structure. If an IP address was specified in the command
      * line args, then we call getaddrinfo() with that info. If not, then we
      * have to set AI_PASSIVE and call getaddrinfo() with NULL as the address
+     * to resolve the wildcard address.
      */
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;    /* IPv4 or IPv6 */
-    hints.ai_socktype = SOCK_DGRAM; /* UDP */
+    hints.ai_family = AF_UNSPEC; /* IPv4 or IPv6 */
+    hints.ai_socktype = socktype;
     if (*bind_address)
         ret = getaddrinfo(bind_address, port, &hints, &candidates);
     else
@@ -132,7 +133,11 @@ int net_bind(const char* bind_address, const char* port)
     for (p = candidates; p != NULL; p = p->ai_next)
     {
         ai_addr_to_str(&ipstr, p->ai_addr);
-        log_dbg("Attempting to bind UDP %s:%s\n", ipstr.cstr, port);
+        log_dbg(
+            "Attempting to bind %s %s:%s\n",
+            socktype == SOCK_DGRAM ? "UDP" : "TCP",
+            ipstr.cstr,
+            port);
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             continue;
@@ -147,7 +152,8 @@ int net_bind(const char* bind_address, const char* port)
         if (bind(sockfd, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn(
-                "bind() failed for UDP %s:%s: %s\n",
+                "bind() failed for %s %s:%s: %s\n",
+                socktype == SOCK_DGRAM ? "UDP" : "TCP",
                 ipstr.cstr,
                 port,
                 strerror(errno));
@@ -159,17 +165,32 @@ int net_bind(const char* bind_address, const char* port)
     freeaddrinfo(candidates);
     if (p == NULL)
     {
-        log_err("Failed to bind UDP socket\n");
+        log_err(
+            "Failed to bind %s socket\n",
+            socktype == SOCK_DGRAM ? "UDP" : "TCP");
         return -1;
     }
 
-    log_dbg("Bound UDP socket to %s:%s\n", ipstr.cstr, port);
+    log_dbg(
+        "Bound %s socket to %s:%s\n",
+        socktype == SOCK_DGRAM ? "UDP" : "TCP",
+        ipstr.cstr,
+        port);
     return sockfd;
 }
 
 /* ------------------------------------------------------------------------- */
-int net_connect(
-    struct sockfd_vec** sockfds, const char* server_address, const char* port)
+int udp_bind(const char* bind_address, const char* port)
+{
+    return net_bind(bind_address, port, SOCK_DGRAM);
+}
+
+/* ------------------------------------------------------------------------- */
+static int net_connect(
+    struct sockfd_vec** sockfds,
+    const char*         server_address,
+    const char*         port,
+    int                 socktype)
 {
     struct addrinfo     hints;
     struct addrinfo*    candidates;
@@ -181,8 +202,8 @@ int net_connect(
     CLITHER_DEBUG_ASSERT(vec_count(*sockfds) == 0);
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;    /* IPv4 or IPv6 */
-    hints.ai_socktype = SOCK_DGRAM; /* UDP */
+    hints.ai_family = AF_UNSPEC; /* IPv4 or IPv6 */
+    hints.ai_socktype = socktype;
 
     if ((ret = getaddrinfo(server_address, port, &hints, &candidates)) != 0)
     {
@@ -194,7 +215,10 @@ int net_connect(
         ai_addr_to_str(&ipstr, p->ai_addr);
 
         log_dbg(
-            "Attempting to connect UDP socket %s:%s...\n", ipstr.cstr, port);
+            "Attempting to connect %s socket %s:%s...\n",
+            socktype == SOCK_DGRAM ? "UDP" : "TCP",
+            ipstr.cstr,
+            port);
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             continue;
@@ -214,7 +238,8 @@ int net_connect(
         if (connect(sockfd, p->ai_addr, (int)p->ai_addrlen) != 0)
         {
             log_warn(
-                "connect() failed for UDP %s:%s: %s\n",
+                "connect() failed for %s %s:%s: %s\n",
+                socktype == SOCK_DGRAM ? "UDP" : "TCP",
                 ipstr.cstr,
                 port,
                 strerror(errno));
@@ -222,18 +247,31 @@ int net_connect(
             continue;
         }
 
-        log_dbg("Connected UDP socket to %s:%s\n", ipstr.cstr, port);
+        log_dbg(
+            "Connected %s socket to %s:%s\n",
+            socktype == SOCK_DGRAM ? "UDP" : "TCP",
+            ipstr.cstr,
+            port);
         sockfd_vec_push(sockfds, sockfd);
     }
     freeaddrinfo(candidates);
 
     if (vec_count(*sockfds) == 0)
     {
-        log_err("Failed to connect any UDP socket\n");
+        log_err(
+            "Failed to connect any %s socket\n",
+            socktype == SOCK_DGRAM ? "UDP" : "TCP");
         return -1;
     }
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int udp_connect(
+    struct sockfd_vec** sockfds, const char* server_address, const char* port)
+{
+    return net_connect(sockfds, server_address, port, SOCK_DGRAM);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -312,3 +350,42 @@ int net_recv(int sockfd, void* buf, int capacity)
 
     return bytes_received;
 }
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+int tcp_bind(const char* bind_address, const char* port)
+{
+    int fd = net_bind(bind_address, port, SOCK_STREAM);
+    if (fd < 0)
+        return fd;
+    if (listen(fd, 1) < 0)
+    {
+        log_err("listen() failed: %s\n", strerror(errno));
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+int tcp_connect(
+    struct sockfd_vec** sockfds,
+    const char*         server_address,
+    const char*         server_port)
+{
+    return net_connect(sockfds, server_address, server_port, SOCK_STREAM);
+}
+int tcp_accept(int sockfd, struct net_addr* addr)
+{
+    socklen_t addrlen = sizeof(addr->sockaddr_storage);
+    int       fd =
+        accept(sockfd, (struct sockaddr*)&addr->sockaddr_storage, &addrlen);
+    if (fd < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0;
+        log_err("accept() failed: %s\n", strerror(errno));
+        return -1;
+    }
+    addr->len = (int)addrlen;
+    return fd;
+}
+#endif

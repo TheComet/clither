@@ -1,5 +1,6 @@
 #pragma once
 
+#include "clither/config.h"
 #include "clither/util/vec.h"
 
 /*
@@ -71,7 +72,7 @@ void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr);
  * of the incoming addresses (IPv4 or IPv6) needs to be known.
  * \return Returns the socket file descriptor, or -1 if an error occurred.
  */
-int net_bind(const char* bind_address, const char* port);
+int udp_bind(const char* bind_address, const char* port);
 
 /*!
  * \brief Creates a number of non-blocking sockets and connects them to the
@@ -90,7 +91,7 @@ int net_bind(const char* bind_address, const char* port);
  * \param[in] port The port of the server to connect to.
  * \return Returns 0 on success and -1 if an error occurred.
  */
-int net_connect(
+int udp_connect(
     struct sockfd_vec** sockfds, const char* server_address, const char* port);
 
 /*! Closes a socket */
@@ -126,3 +127,12 @@ int net_recvfrom(int sockfd, void* buf, int capacity, struct net_addr* addr);
  * Returns the number of bytes received if successful.
  */
 int net_recv(int sockfd, void* buf, int capacity);
+
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+int tcp_bind(const char* bind_address, const char* port);
+int tcp_connect(
+    struct sockfd_vec** sockfds,
+    const char*      server_address,
+    const char*      server_port);
+int tcp_accept(int sockfd, struct net_addr* addr);
+#endif

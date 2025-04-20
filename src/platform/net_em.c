@@ -66,14 +66,14 @@ void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr)
 }
 
 /* ------------------------------------------------------------------------- */
-int net_bind(const char* bind_address, const char* port)
+int udp_bind(const char* bind_address, const char* port)
 {
     assert(0);
     return -1;
 }
 
 /* ------------------------------------------------------------------------- */
-int net_connect(
+int udp_connect(
     struct sockfd_vec** sockfds, const char* server_address, const char* port)
 {
     int sockfd;
