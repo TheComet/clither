@@ -210,14 +210,11 @@ add_executable (clither
         $<$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>>:
             src/util/morton_gas_x86-64.s
             $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_gas_x86-64.s>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>
-        >
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>>
         $<$<C_COMPILER_ID:MSVC>:
             src/util/morton_masm_x86-64.asm
             $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_masm_x86-64.asm>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>
-        >
-    >
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>>>
 
     $<$<BOOL:${CLITHER_BOT_API}>:
         src/bot/bot.c
@@ -381,6 +378,15 @@ set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
 get_target_property (source_list clither SOURCES)
 source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
 
+if (WIN32)
+    set (EXE "clither.exe")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/host.bat" "${EXE} --host --gfx")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/join.bat" "${EXE} --addr localhost --gfx")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --bot ../../lua/bot.lua")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --gfx --bot ../../lua/figure8.lua")
+endif ()
+
 if (EMSCRIPTEN)
     set_target_properties(clither
         PROPERTIES
@@ -393,6 +399,28 @@ if (EMSCRIPTEN)
                 --bind \
                 --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js")
 endif ()
+
+###############################################################################
+# Assets
+###############################################################################
+
+include (ExternalProject)
+
+if (WIN32)
+    set (ASSETS_COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${PROJECT_BINARY_DIR}/clither-assets/packs ${CLITHER_BUILD_BINDIR}/packs)
+else ()
+    set (ASSETS_COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_BINARY_DIR}/clither-assets/packs ${CLITHER_BUILD_BINDIR}/packs)
+endif ()
+ExternalProject_Add (clither-assets
+    GIT_REPOSITORY https://github.com/thecomet/clither-assets
+    GIT_TAG master
+    GIT_SHALLOW ON
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/clither-assets
+    UPDATE_COMMAND ""
+    CONFIGURE_COMMAND ${ASSETS_COMMAND}
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    TEST_COMMAND "")
 
 ###############################################################################
 # Dependencies
