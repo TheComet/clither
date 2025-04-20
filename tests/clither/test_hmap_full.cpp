@@ -84,9 +84,11 @@ test_set_value(struct hmap_test_kvs* kvs, int32_t slot, const float* value)
     kvs->values[slot] = *value;
 }
 
+#define API
 HMAP_DECLARE_FULL(
-    hmap_test, hash32, const char*, float, 32, struct hmap_test_kvs)
+    API, hmap_test, hash32, const char*, float, 32, struct hmap_test_kvs)
 HMAP_DEFINE_FULL(
+    API,
     hmap_test,
     hash32,
     const char*,
@@ -317,8 +319,8 @@ TEST_F(NAME, foreach_empty)
     float*    value;
     int       counter = 0;
     int       slot;
-    hmap_for_each(hm, slot, key, value)(void) slot, (void)key, (void)value,
-        counter++;
+    hmap_for_each (hm, slot, key, value)
+        (void)slot, (void)key, (void)value, counter++;
     EXPECT_THAT(counter, Eq(0));
 }
 
@@ -373,7 +375,7 @@ TEST_F(NAME, foreach)
     const char* k;
     float*      value;
     int         slot;
-    hmap_for_each_full(hm, slot, k, value, test_get_key, test_get_value)
+    hmap_for_each_full (hm, slot, k, value, test_get_key, test_get_value)
     {
         (void)k;
         expected_values[*value] += 1;

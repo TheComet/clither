@@ -210,7 +210,8 @@ add_executable (clither
             src/bot/lua/bot_lua.c>>
 
     $<$<BOOL:${CLITHER_CLIENT}>:
-        src/client/client.c>
+        src/client/client.c
+        src/platform/net_udp_client.c>
 
     $<$<BOOL:${CLITHER_GFX}>:
         src/gfx/gfx.c
@@ -247,7 +248,10 @@ add_executable (clither
         src/server/server_client.c
         src/server/server_client_hmap.c
         src/server/server_instance.c
-        src/server/server_instance_bmap.c>
+        src/server/server_instance_bmap.c
+        src/platform/net_udp_server.c
+        $<$<BOOL:${CLITHER_SERVER_WEBSOCKETS}>:
+            src/platform/net_ws_server.c>>
 
     $<$<PLATFORM_ID:Windows>:
         src/platform/asm_optimizations_win32.c

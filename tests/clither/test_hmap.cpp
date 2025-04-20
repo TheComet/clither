@@ -17,8 +17,9 @@ const uintptr_t KEY2 = 2222;
 const uintptr_t KEY3 = 3333;
 const uintptr_t KEY4 = 4444;
 
-HMAP_DECLARE(hmap_test, uintptr_t, float, 32)
-HMAP_DEFINE(hmap_test, uintptr_t, float, 32);
+#define API
+HMAP_DECLARE(API, hmap_test, uintptr_t, float, 32)
+HMAP_DEFINE(API, hmap_test, uintptr_t, float, 32);
 } // namespace
 
 struct NAME : Test
@@ -153,8 +154,8 @@ TEST_F(NAME, foreach_empty)
     uintptr_t key;
     float*    value;
     int       counter = 0;
-    hmap_for_each(hmap_test, slot, key, value)(void) slot, (void)key,
-        (void)value, counter++;
+    hmap_for_each (hmap_test, slot, key, value)
+        (void)slot, (void)key, (void)value, counter++;
     EXPECT_THAT(counter, Eq(0));
 }
 
@@ -193,8 +194,8 @@ TEST_F(NAME, foreach)
     int       slot;
     uintptr_t key;
     float*    value;
-    hmap_for_each(hmap_test, slot, key, value)(void) slot, (void)key,
-        expected_values[*value] += 1;
+    hmap_for_each (hmap_test, slot, key, value)
+        (void)slot, (void)key, expected_values[*value] += 1;
 
     EXPECT_THAT(hmap_count(hmap_test), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));

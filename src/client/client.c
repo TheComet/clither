@@ -33,9 +33,9 @@ void client_init(struct client* client)
     client->snake_id = 0;
     client->warp = 0;
     client->state = CLIENT_DISCONNECTED;
+    client->connection = NULL;
 
     msg_vec_init(&client->pending_msgs);
-    sockfd_vec_init(&client->udp_sockfds);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -44,8 +44,8 @@ void client_deinit(struct client* client)
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
 
+    client->connection = NULL;
     str_deinit(client->username);
-    sockfd_vec_deinit(client->udp_sockfds);
     msg_vec_deinit(client->pending_msgs);
 }
 
@@ -57,7 +57,7 @@ int client_connect(
     const char*    username)
 {
     CLITHER_DEBUG_ASSERT(client->state == CLIENT_DISCONNECTED);
-    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) == 0);
+    CLITHER_DEBUG_ASSERT(client->connection == NULL);
     CLITHER_DEBUG_ASSERT(str_len(client->username) == 0);
 
     if (server_address == NULL || !*server_address)
@@ -78,7 +78,8 @@ int client_connect(
 
     if (str_set_cstr(&client->username, username) != 0)
         return -1;
-    if (udp_connect(&client->udp_sockfds, server_address, port) < 0)
+    client->connection = net_udp_client.create(server_address, port);
+    if (client->connection == NULL)
         return -1;
 
     client_queue(
@@ -92,19 +93,17 @@ int client_connect(
 /* ------------------------------------------------------------------------- */
 void client_disconnect(struct client* client)
 {
-    int*         sockfd;
     struct msg** msg;
 
     CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED);
-    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) != 0);
+    CLITHER_DEBUG_ASSERT(client->connection != NULL);
     CLITHER_DEBUG_ASSERT(str_len(client->username) != 0);
+
+    net_udp_client.destroy(client->connection);
+    client->connection = NULL;
 
     str_deinit(client->username);
     client->username = NULL;
-
-    vec_for_each (client->udp_sockfds, sockfd)
-        net_close(*sockfd);
-    sockfd_vec_clear(client->udp_sockfds);
 
     vec_for_each (client->pending_msgs, msg)
         msg_free(*msg);
@@ -120,122 +119,80 @@ int client_queue(struct client* client, struct msg* m)
 }
 
 /* ------------------------------------------------------------------------- */
-struct append_msgs_ctx
-{
-    uint16_t frame_number;
-    int      len;
-    uint8_t  buf[NET_MAX_UDP_PACKET_SIZE];
-};
 static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
 {
-    uint8_t                 type;
-    struct append_msgs_ctx* ctx = user;
-    struct msg*             msg = *pmsg;
+    uint8_t            type;
+    struct net_packet* pkt = user;
+    struct msg*        msg = *pmsg;
 
-    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+    if (pkt->len + msg->payload_len + 2 > (int)sizeof(pkt->data))
         return VEC_RETAIN;
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
-    log_net("Packing msg type=%d, len=%d\n", msg->type, msg->payload_len);
-
     type = (uint8_t)msg->type;
-    memcpy(ctx->buf + ctx->len + 0, &type, 1);
-    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
-    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
+    memcpy(pkt->data + pkt->len + 0, &type, 1);
+    memcpy(pkt->data + pkt->len + 1, &msg->payload_len, 1);
+    memcpy(pkt->data + pkt->len + 2, msg->payload, msg->payload_len);
+    pkt->len += msg->payload_len + 2;
 
-    ctx->len += msg->payload_len + 2;
     msg_free(msg);
     return VEC_ERASE;
-}
-static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
-{
-    uint8_t                 type;
-    struct append_msgs_ctx* ctx = user;
-    struct msg*             msg = *pmsg;
-
-    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
-        return VEC_RETAIN;
-    if (msg_is_unreliable(msg))
-        return VEC_RETAIN;
-
-    if (--msg->resend_period_counter > 0)
-        return VEC_RETAIN;
-    msg->resend_period_counter = msg->resend_period;
-    if (--msg->resend_retry_counter == 0)
-    {
-        return log_err(
-            "Server did not acknowledge reliable message: type=%d\n",
-            msg->type);
-    }
-
-    /*
-     * Some messages in the reliable queue contain the frame number they were
-     * sent on as part of the message payload. These numbers need to be updated
-     * to the most recent frame number every time they are resent so the server
-     * is able to differentiate them.
-     */
-    msg_update_frame_number(msg, ctx->frame_number);
-
-    log_net(
-        "Packing msg type=%d, len=%d, resend=%d, retry=%d\n",
-        msg->type,
-        msg->payload_len,
-        msg->resend_period,
-        msg->resend_retry_counter);
-
-    type = (uint8_t)msg->type;
-    memcpy(ctx->buf + ctx->len + 0, &type, 1);
-    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
-    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
-
-    ctx->len += msg->payload_len + 2;
-    return VEC_RETAIN;
 }
 
 /* ------------------------------------------------------------------------- */
 int client_send_pending_data(struct client* client)
 {
-    struct append_msgs_ctx ctx;
+    struct net_packet pkt;
+    struct msg**      pmsg;
+    uint8_t           type;
 
     /* Append unreliable messages first before appending reliable */
-    ctx.len = 0;
-    ctx.frame_number = client->frame_number;
-    msg_vec_retain(client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
-    if (msg_vec_retain(
-            client->pending_msgs, append_reliable_msgs_to_buf, &ctx) == -1)
+    while (1)
     {
-        return -1;
+        pkt.len = 0;
+        msg_vec_retain(
+            client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
+        if (pkt.len == 0)
+            break;
+
+        net_udp_client.send(client->connection, &pkt);
     }
 
-    if (ctx.len > 0)
+    /* Reliable messages */
+    pkt.len = 0;
+    vec_for_each (client->pending_msgs, pmsg)
     {
-        /*
-         * The client was initialized with a list of possible sockets. This is
-         * because we can't know without first communicating with the server
-         * which protocol (IPv4 vs IPv6) is being used. If a send call fails,
-         * and there are more sockets, simply close the one that failed and try
-         * the next one.
-         */
-    retry_send:
-        if (vec_count(client->udp_sockfds) == 0)
+        struct msg* msg = *pmsg;
+        if (msg_is_unreliable(msg))
+            continue;
+
+        if (pkt.len + msg->payload_len + 2 > (int)sizeof(pkt.data))
         {
-            log_warn("Connection to server was closed\n");
-            return -1;
-        }
-        log_net("Sending UDP packet, size=%d\n", ctx.len);
-        if (net_send(*vec_last(client->udp_sockfds), ctx.buf, ctx.len) < 0)
-        {
-            net_close(*sockfd_vec_pop(client->udp_sockfds));
-            log_info("Attempting to use next socket\n");
-            goto retry_send;
+            net_udp_client.send(client->connection, &pkt);
+            pkt.len = 0;
         }
 
-        /* We can't reset our timeout counter if we aren't sending data */
-        client->timeout_counter++;
+        if (--msg->resend_period_counter > 0)
+            continue;
+
+        msg->resend_period_counter = msg->resend_period;
+        if (--msg->resend_retry_counter == 0)
+            return log_err(
+                "Server did not acknowledge reliable message: type=%d\n",
+                msg->type);
+
+        type = (uint8_t)msg->type;
+        memcpy(pkt.data + pkt.len + 0, &type, 1);
+        memcpy(pkt.data + pkt.len + 1, &msg->payload_len, 1);
+        memcpy(pkt.data + pkt.len + 2, msg->payload, msg->payload_len);
+        pkt.len += msg->payload_len + 2;
     }
+    if (pkt.len > 0)
+        net_udp_client.send(client->connection, &pkt);
 
     /* 3 second timeout */
+    client->timeout_counter++;
     if (client->timeout_counter > client->net_tick_rate * 3)
     {
         log_err("Server timed out\n");
@@ -573,9 +530,7 @@ static struct client_recv_result process_message(
 
 /* ------------------------------------------------------------------------- */
 static struct client_recv_result unpack_packet(
-    struct client*               client,
-    struct world*                world,
-    const struct net_udp_packet* packet)
+    struct client* client, struct world* world, const struct net_packet* packet)
 {
     int                       i;
     struct client_recv_result result = client_recv_ok();
@@ -618,30 +573,22 @@ static struct client_recv_result unpack_packet(
 struct client_recv_result
 client_recv(struct client* client, struct world* world)
 {
-    struct net_udp_packet     packet;
+    struct net_packet         packet;
     struct client_recv_result result = client_recv_ok();
 
-    CLITHER_DEBUG_ASSERT(vec_count(client->udp_sockfds) > 0);
+    CLITHER_DEBUG_ASSERT(client->connection != NULL);
 
     log_net("client_recv() frame=%d\n", client->frame_number);
 
     /* We may need to read more than one UDP packet */
     while (1)
     {
-    retry_recv:
-        packet.len = net_recv(
-            *vec_last(client->udp_sockfds), packet.data, sizeof(packet.data));
-        if (packet.len < 0)
+        switch (net_udp_client.receive(client->connection, &packet))
         {
-            if (vec_count(client->udp_sockfds) == 1)
-                return client_recv_error();
-            net_close(*sockfd_vec_pop(client->udp_sockfds));
-            log_info("Attempting to use next socket\n");
-            goto retry_recv;
+            case NET_RECEIVE_ERROR: return client_recv_error();
+            case NET_RECEIVE_NO_DATA: return result;
+            case NET_RECEIVE_DATA: break;
         }
-
-        if (packet.len == 0)
-            break;
 
         /* Don't let client time out */
         client->timeout_counter = 0;

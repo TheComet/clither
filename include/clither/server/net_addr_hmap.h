@@ -9,6 +9,7 @@ struct net_addr_hmap_kvs
 };
 
 HMAP_DECLARE_FULL(
+    CLITHER_PRIVATE_API,
     net_addr_hmap,
     hash32,
     const struct net_addr*,
@@ -23,7 +24,7 @@ int* net_addr_hmap_kvs_get_value(
     const struct net_addr_hmap_kvs* kvs, int16_t slot);
 
 #define net_addr_hmap_for_each(server_clients, slot, addr, client)             \
-    hmap_for_each_full(                                                        \
+    hmap_for_each_full (                                                       \
         server_clients,                                                        \
         slot,                                                                  \
         addr,                                                                  \

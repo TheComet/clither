@@ -27,19 +27,19 @@ enum hmap_status
 
 #define HMAP_IS_POWER_OF_2(x) (((x) & ((x) - 1)) == 0)
 
-#define HMAP_DECLARE(prefix, K, V, bits)                                       \
-    HMAP_DECLARE_HASH(prefix, hash32, K, V, bits)
+#define HMAP_DECLARE(API, prefix, K, V, bits)                                  \
+    HMAP_DECLARE_HASH(API, prefix, hash32, K, V, bits)
 
-#define HMAP_DECLARE_HASH(prefix, H, K, V, bits)                               \
+#define HMAP_DECLARE_HASH(API, prefix, H, K, V, bits)                          \
     /* Default key-value storage malloc()'s two arrays */                      \
     struct prefix##_kvs                                                        \
     {                                                                          \
         K* keys;                                                               \
         V* values;                                                             \
     };                                                                         \
-    HMAP_DECLARE_FULL(prefix, H, K, V, bits, struct prefix##_kvs)
+    HMAP_DECLARE_FULL(API, prefix, H, K, V, bits, struct prefix##_kvs)
 
-#define HMAP_DECLARE_FULL(prefix, H, K, V, bits, KVS)                          \
+#define HMAP_DECLARE_FULL(API, prefix, H, K, V, bits, KVS)                     \
     struct prefix                                                              \
     {                                                                          \
         KVS           kvs;                                                     \
@@ -57,7 +57,7 @@ enum hmap_status
      * @brief Destroys an existing hashmap and frees all memory allocated by   \
      * inserted elements.                                                      \
      */                                                                        \
-    void prefix##_deinit(struct prefix* hmap);                                 \
+    API void prefix##_deinit(struct prefix* hmap);                             \
                                                                                \
     /*!                                                                        \
      * @brief If the key does not exist, inserts the key and allocates space   \
@@ -67,7 +67,7 @@ enum hmap_status
      * @return A pointer to the allocated value. If the key already exists, or \
      * if allocation fails, NULL is returned.                                  \
      */                                                                        \
-    V* prefix##_emplace_new(struct prefix** hmap, K key);                      \
+    API V* prefix##_emplace_new(struct prefix** hmap, K key);                  \
                                                                                \
     /*!                                                                        \
      * @brief If the key does not exist, inserts the key and allocates space   \
@@ -81,7 +81,7 @@ enum hmap_status
      * HMAP_NEW if the key did not exist and was inserted and value will point \
      * to a newly allocated value.                                             \
      */                                                                        \
-    enum hmap_status prefix##_emplace_or_get(                                  \
+    API enum hmap_status prefix##_emplace_or_get(                              \
         struct prefix** hmap, K key, V** value);                               \
                                                                                \
     /*!                                                                        \
@@ -127,7 +127,7 @@ enum hmap_status
      * removed. It is valid to read/write to this pointer until the next       \
      * hashmap operation. If the key does not exist, returns NULL.             \
      */                                                                        \
-    V* prefix##_erase(struct prefix* hmap, K key);                             \
+    API V* prefix##_erase(struct prefix* hmap, K key);                         \
                                                                                \
     /*!                                                                        \
      * @brief Finds the value associated with the specified key.               \
@@ -137,16 +137,16 @@ enum hmap_status
      * valid to read/write to the value until the next hashmap operation. If   \
      * the key does not exist, NULL is returned.                               \
      */                                                                        \
-    V* prefix##_find(const struct prefix* hmap, K key);
+    API V* prefix##_find(const struct prefix* hmap, K key);
 
-#define HMAP_DEFINE(prefix, K, V, bits)                                        \
+#define HMAP_DEFINE(API, prefix, K, V, bits)                                   \
     static hash32 prefix##_hash(K key)                                         \
     {                                                                          \
         return hash32_jenkins_oaat(&key, sizeof(K));                           \
     }                                                                          \
-    HMAP_DEFINE_HASH(prefix, hash32, K, V, bits, prefix##_hash)
+    HMAP_DEFINE_HASH(API, prefix, hash32, K, V, bits, prefix##_hash)
 
-#define HMAP_DEFINE_HASH(prefix, H, K, V, bits, hash_func)                     \
+#define HMAP_DEFINE_HASH(API, prefix, H, K, V, bits, hash_func)                \
     /* Default key-value storage implementation */                             \
     static int prefix##_kvs_alloc(                                             \
         struct prefix##_kvs* kvs,                                              \
@@ -198,6 +198,7 @@ enum hmap_status
         kvs->values[slot] = *value;                                            \
     }                                                                          \
     HMAP_DEFINE_FULL(                                                          \
+        API,                                                                   \
         prefix,                                                                \
         H,                                                                     \
         K,                                                                     \
@@ -216,6 +217,7 @@ enum hmap_status
         70)
 
 #define HMAP_DEFINE_FULL(                                                      \
+    API,                                                                       \
     prefix,                                                                    \
     H,                                                                         \
     K,                                                                         \
@@ -233,7 +235,7 @@ enum hmap_status
     MIN_CAPACITY,                                                              \
     REHASH_AT_PERCENT)                                                         \
                                                                                \
-    void prefix##_deinit(struct prefix* hmap)                                  \
+    API void prefix##_deinit(struct prefix* hmap)                              \
     {                                                                          \
         /* These don't do anything, except act as a poor-man's type-check for  \
          * the various key-value storage functions. */                         \
@@ -334,6 +336,7 @@ enum hmap_status
     alloc_hmap_failed:                                                         \
         return log_oom(header + data, "hmap_grow()");                          \
     }                                                                          \
+                                                                               \
     /*!                                                                        \
      * @return If key exists: -(1 + slot)                                      \
      *         If key does not exist: slot                                     \
@@ -376,7 +379,8 @@ enum hmap_status
         CLITHER_DEBUG_ASSERT(hmap->hashes[slot] < 2);                          \
         return slot;                                                           \
     }                                                                          \
-    V* prefix##_emplace_new(struct prefix** hmap, K key)                       \
+                                                                               \
+    API V* prefix##_emplace_new(struct prefix** hmap, K key)                   \
     {                                                                          \
         H             h;                                                       \
         int##bits##_t slot;                                                    \
@@ -403,7 +407,8 @@ enum hmap_status
         kvs_set_key(&(*hmap)->kvs, slot, key);                                 \
         return kvs_get_value(&(*hmap)->kvs, slot);                             \
     }                                                                          \
-    enum hmap_status prefix##_emplace_or_get(                                  \
+                                                                               \
+    API enum hmap_status prefix##_emplace_or_get(                              \
         struct prefix** hmap, K key, V** value)                                \
     {                                                                          \
         hash32        h;                                                       \
@@ -435,7 +440,8 @@ enum hmap_status
         *value = kvs_get_value(&(*hmap)->kvs, slot);                           \
         return HMAP_NEW;                                                       \
     }                                                                          \
-    V* prefix##_find(const struct prefix* hmap, K key)                         \
+                                                                               \
+    API V* prefix##_find(const struct prefix* hmap, K key)                     \
     {                                                                          \
         H             h;                                                       \
         int##bits##_t slot;                                                    \
@@ -455,7 +461,8 @@ enum hmap_status
                                                                                \
         return kvs_get_value(&hmap->kvs, -1 - slot);                           \
     }                                                                          \
-    V* prefix##_erase(struct prefix* hmap, K key)                              \
+                                                                               \
+    API V* prefix##_erase(struct prefix* hmap, K key)                          \
     {                                                                          \
         H             h;                                                       \
         int##bits##_t slot;                                                    \

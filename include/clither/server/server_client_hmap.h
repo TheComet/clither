@@ -12,6 +12,7 @@ struct server_client_hmap_kvs
 };
 
 HMAP_DECLARE_FULL(
+    CLITHER_PRIVATE_API,
     server_client_hmap,
     hash32,
     const struct net_addr*,

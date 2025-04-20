@@ -43,49 +43,6 @@ void msg_free(struct msg* m)
 }
 
 /* ------------------------------------------------------------------------- */
-void msg_update_frame_number(struct msg* m, uint16_t frame_number)
-{
-    switch (m->type)
-    {
-        case MSG_JOIN_REQUEST:
-            log_net(
-                "msg_update_frame_number(): %x -> %x\n",
-                (m->payload[2] << 8) | m->payload[3],
-                frame_number);
-            m->payload[2] = frame_number >> 8;
-            m->payload[3] = frame_number & 0xFF;
-            break;
-
-        case MSG_JOIN_ACCEPT: break;
-        case MSG_JOIN_DENY_BAD_PROTOCOL: break;
-        case MSG_JOIN_DENY_BAD_USERNAME: break;
-        case MSG_JOIN_DENY_SERVER_FULL: break;
-        case MSG_LEAVE: break;
-
-        case MSG_COMMANDS: break;
-        case MSG_FEEDBACK: break;
-
-        case MSG_SNAKE_USERNAME: break;
-        case MSG_SNAKE_USERNAME_ACK: break;
-        case MSG_SNAKE_DESTROY: break;
-        case MSG_SNAKE_DESTROY_ACK: break;
-        case MSG_SNAKE_DEATH: break;
-        case MSG_SNAKE_DEATH_ACK: break;
-        case MSG_SNAKE_HEAD: break;
-        case MSG_SNAKE_PARAM: break;
-
-        case MSG_BEZIER: break;
-        case MSG_KNOT: break;
-        case MSG_KNOT_ACK: break;
-
-        case MSG_FOOD_CREATE: break;
-        case MSG_FOOD_CREATE_ACK: break;
-        case MSG_FOOD_DESTROY: break;
-        case MSG_FOOD_DESTROY_ACK: break;
-    }
-}
-
-/* ------------------------------------------------------------------------- */
 int msg_parse_payload(
     union parsed_payload* pp,
     enum msg_type         type,

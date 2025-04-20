@@ -25,7 +25,7 @@ struct net_addr
     char sockaddr_storage[NET_MAX_ADDRLEN];
 };
 
-struct net_udp_packet
+struct net_packet
 {
     int     len;
     uint8_t data[NET_MAX_UDP_PACKET_SIZE];
@@ -72,7 +72,7 @@ void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr);
  * of the incoming addresses (IPv4 or IPv6) needs to be known.
  * \return Returns the socket file descriptor, or -1 if an error occurred.
  */
-int udp_bind(const char* bind_address, const char* port);
+int net_host_udp(const char* bind_address, const char* port);
 
 /*!
  * \brief Creates a number of non-blocking sockets and connects them to the
@@ -91,7 +91,7 @@ int udp_bind(const char* bind_address, const char* port);
  * \param[in] port The port of the server to connect to.
  * \return Returns 0 on success and -1 if an error occurred.
  */
-int udp_connect(
+int net_connect_udp(
     struct sockfd_vec** sockfds, const char* server_address, const char* port);
 
 /*! Closes a socket */
@@ -129,10 +129,48 @@ int net_recvfrom(int sockfd, void* buf, int capacity, struct net_addr* addr);
 int net_recv(int sockfd, void* buf, int capacity);
 
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-int tcp_bind(const char* bind_address, const char* port);
-int tcp_connect(
-    struct sockfd_vec** sockfds,
-    const char*      server_address,
-    const char*      server_port);
-int tcp_accept(int sockfd, struct net_addr* addr);
+int net_host_tcp(const char* bind_address, const char* port);
+int net_accept(int sockfd, struct net_addr* addr);
+#endif
+
+enum net_receive_result
+{
+    NET_RECEIVE_ERROR = -1,
+    NET_RECEIVE_NO_DATA = 0,
+    NET_RECEIVE_DATA = 1
+};
+
+struct net_server;
+struct net_server_interface
+{
+    struct net_server* (*create)(const char* address, const char* port);
+    void (*destroy)(struct net_server* server);
+
+    void (*disconnect)(struct net_server* net, const struct net_addr* addr);
+    enum net_receive_result (*receive)(
+        struct net_server* server,
+        struct net_addr*   addr,
+        struct net_packet* packet);
+    int (*send)(
+        struct net_server*       server,
+        const struct net_addr*   addr,
+        const struct net_packet* packet);
+};
+
+struct net_connection;
+struct net_client_interface
+{
+    struct net_connection* (*create)(const char* address, const char* port);
+    void (*destroy)(struct net_connection* net);
+
+    enum net_receive_result (*receive)(
+        struct net_connection* net, struct net_packet* packet);
+    int (*send)(struct net_connection* net, const struct net_packet* packet);
+};
+
+extern const struct net_server_interface net_udp_server;
+extern const struct net_client_interface net_udp_client;
+
+#if defined(CLITHER_SERVER_WEBSOCKETS)
+extern const struct net_server_interface net_ws_server;
 #endif

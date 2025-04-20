@@ -1,9 +1,11 @@
 #pragma once
 
 #include "clither/config.h"
+#include <stdint.h>
 
 struct net_addr;
 struct net_addr_hmap;
+struct net_server;
 struct server_client_hmap;
 struct settings;
 struct settings_server;
@@ -17,9 +19,9 @@ struct server
     struct net_addr_hmap*      malicious_clients;
     struct net_addr_hmap*      banned_clients;
 
-    int udp_sock;
+    struct net_server* udp_server;
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-    int tcp_sock;
+    struct net_server* ws_server;
 #endif
 };
 

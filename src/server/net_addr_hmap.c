@@ -70,6 +70,7 @@ static void net_addr_hmap_kvs_set_value(
 }
 
 HMAP_DEFINE_FULL(
+    CLITHER_PRIVATE_API,
     net_addr_hmap,
     hash32,
     const struct net_addr*,

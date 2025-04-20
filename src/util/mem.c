@@ -22,9 +22,16 @@ struct report_info
 #endif
 };
 
-HMAP_DECLARE_HASH(report_hmap, hash32, uintptr_t, struct report_info, 32)
+HMAP_DECLARE_HASH(
+    static, report_hmap, hash32, uintptr_t, struct report_info, 32)
 HMAP_DEFINE_HASH(
-    report_hmap, hash32, uintptr_t, struct report_info, 32, hash32_aligned_ptr)
+    static,
+    report_hmap,
+    hash32,
+    uintptr_t,
+    struct report_info,
+    32,
+    hash32_aligned_ptr)
 
 struct state
 {

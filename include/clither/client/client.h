@@ -72,16 +72,16 @@ static struct client_recv_result client_recv_result_combine(
 
 struct client
 {
-    struct str*        username;
-    struct msg_vec*    pending_msgs;
-    struct sockfd_vec* udp_sockfds;
-    int                timeout_counter;
-    uint16_t           frame_number; /* Counts upwards at sim_tick_rate */
-    uint16_t           snake_id;
-    int16_t            warp;
-    uint8_t            sim_tick_rate;
-    uint8_t            net_tick_rate;
-    enum client_state  state;
+    struct str*            username;
+    struct msg_vec*        pending_msgs;
+    struct net_connection* connection;
+    int                    timeout_counter;
+    uint16_t               frame_number; /* Counts upwards at sim_tick_rate */
+    uint16_t               snake_id;
+    int16_t                warp;
+    uint8_t                sim_tick_rate;
+    uint8_t                net_tick_rate;
+    enum client_state      state;
 };
 
 /*! \brief Initializes a client structure. The client will be unconnected by

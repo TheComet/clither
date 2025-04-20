@@ -72,13 +72,13 @@ void* run_mcd_wifi(const void* p)
     log_set_colors(COL_B_MAGENTA, COL_RESET);
 
     /* Client will connect to this socket */
-    ctx.client_fd = udp_bind(settings->bind_addr, settings->bind_port);
+    ctx.client_fd = net_host_udp(settings->bind_addr, settings->bind_port);
     if (ctx.client_fd < 0)
         goto bind_client_fd_failed;
 
     /* We connect as a proxy to the server */
     sockfd_vec_init(&ctx.server_fds);
-    if (udp_connect(
+    if (net_connect_udp(
             &ctx.server_fds, settings->connect_addr, settings->connect_port) <
         0)
     {

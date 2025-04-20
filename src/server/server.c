@@ -83,13 +83,13 @@ static void mark_client_as_malicious_and_drop(
 int server_init(
     struct server* server, const char* bind_address, const char* port)
 {
-    server->udp_sock = udp_bind(bind_address, port);
-    if (server->udp_sock < 0)
+    server->udp_server = net_udp_server.create(bind_address, port);
+    if (server->udp_server == NULL)
         goto bind_udp_sock_failed;
 
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-    server->tcp_sock = tcp_bind(bind_address, port);
-    if (server->tcp_sock < 0)
+    server->ws_server = net_ws_server.create(bind_address, port);
+    if (server->ws_server == NULL)
         goto bind_tcp_sock_failed;
 #endif
 
@@ -102,7 +102,7 @@ int server_init(
 #if defined(CLITHER_SERVER_WEBSOCKETS)
 bind_tcp_sock_failed:
 #endif
-    net_close(server->udp_sock);
+    net_udp_server.destroy(server->udp_server);
 bind_udp_sock_failed:
     return -1;
 }
@@ -115,9 +115,9 @@ void server_deinit(struct server* server)
     int                    slot;
 
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-    net_close(server->tcp_sock);
+    net_ws_server.destroy(server->ws_server);
 #endif
-    net_close(server->udp_sock);
+    net_udp_server.destroy(server->udp_server);
 
     net_addr_hmap_deinit(server->banned_clients);
     net_addr_hmap_deinit(server->malicious_clients);
@@ -149,65 +149,25 @@ static int cbf_min(struct server_client* client)
 }
 
 /* ------------------------------------------------------------------------- */
-struct append_msgs_ctx
-{
-    int  len;
-    char buf[NET_MAX_UDP_PACKET_SIZE];
-};
 static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
 {
-    uint8_t                 type;
-    struct append_msgs_ctx* ctx = user;
-    struct msg*             msg = *pmsg;
+    uint8_t            type;
+    struct net_packet* pkt = user;
+    struct msg*        msg = *pmsg;
 
-    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
+    if (pkt->len + msg->payload_len + 2 > (int)sizeof(pkt->data))
         return VEC_RETAIN;
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
-    log_net("Packing msg type=%d, len=%d", msg->type, msg->payload_len);
-
     type = (uint8_t)msg->type;
-    memcpy(ctx->buf + ctx->len + 0, &type, 1);
-    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
-    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
+    memcpy(pkt->data + pkt->len + 0, &type, 1);
+    memcpy(pkt->data + pkt->len + 1, &msg->payload_len, 1);
+    memcpy(pkt->data + pkt->len + 2, msg->payload, msg->payload_len);
+    pkt->len += msg->payload_len + 2;
 
-    ctx->len += msg->payload_len + 2;
     msg_free(msg);
     return VEC_ERASE;
-}
-static int append_reliable_msgs_to_buf(struct msg** pmsg, void* user)
-{
-    uint8_t                 type;
-    struct append_msgs_ctx* ctx = user;
-    struct msg*             msg = *pmsg;
-    if (ctx->len + msg->payload_len + 2 > NET_MAX_UDP_PACKET_SIZE)
-        return VEC_RETAIN;
-    if (msg_is_unreliable(msg))
-        return VEC_RETAIN;
-
-    if (--msg->resend_period_counter > 0)
-        return VEC_RETAIN;
-    msg->resend_period_counter = msg->resend_period;
-    if (--msg->resend_retry_counter <= 0)
-        return log_err(
-            "Client did not acknowledge reliable message: type=%d\n",
-            msg->type);
-
-    log_net(
-        "Packing msg type=%d, len=%d, resend=%d, retry=%d\n",
-        msg->type,
-        msg->payload_len,
-        msg->resend_period,
-        msg->resend_retry_counter);
-
-    type = (uint8_t)msg->type;
-    memcpy(ctx->buf + ctx->len + 0, &type, 1);
-    memcpy(ctx->buf + ctx->len + 1, &msg->payload_len, 1);
-    memcpy(ctx->buf + ctx->len + 2, msg->payload, msg->payload_len);
-
-    ctx->len += msg->payload_len + 2;
-    return VEC_RETAIN;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -216,28 +176,60 @@ int server_send_pending_data(struct server* server, struct world* world)
     int                    slot;
     const struct net_addr* addr;
     struct server_client*  client;
-    struct append_msgs_ctx ctx;
+    struct net_packet      pkt;
+    struct msg**           pmsg;
+    uint8_t                type;
 
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         /* Append unreliable messages first */
-        ctx.len = 0;
-        msg_vec_retain(
-            client->pending_msgs, append_unreliable_msgs_to_buf, &ctx);
-        if (msg_vec_retain(
-                client->pending_msgs, append_reliable_msgs_to_buf, &ctx) == -1)
+        while (1)
         {
-            server_client_remove(server, world, addr, client);
-            continue;
+            pkt.len = 0;
+            msg_vec_retain(
+                client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
+            if (pkt.len == 0)
+                break;
+
+            client->inet->send(client->net, addr, &pkt);
         }
 
-        if (ctx.len == 0)
-            continue;
+        /* Reliable messages */
+        pkt.len = 0;
+        vec_for_each (client->pending_msgs, pmsg)
+        {
+            struct msg* msg = *pmsg;
+            if (msg_is_unreliable(msg))
+                continue;
 
-        /* NOTE: The hashmap's key size contains the length of the stored
-         * address */
-        log_net("Sending UDP packet, size=%d\n", ctx.len);
-        net_sendto(server->udp_sock, ctx.buf, ctx.len, addr);
+            if (pkt.len + msg->payload_len + 2 > (int)sizeof(pkt.data))
+            {
+                client->inet->send(client->net, addr, &pkt);
+                pkt.len = 0;
+            }
+
+            if (--msg->resend_period_counter > 0)
+                continue;
+
+            msg->resend_period_counter = msg->resend_period;
+            if (--msg->resend_retry_counter <= 0)
+            {
+                log_err(
+                    "Client did not acknowledge reliable message: type=%d\n",
+                    msg->type);
+                server_client_remove(server, world, addr, client);
+                break;
+            }
+
+            type = (uint8_t)msg->type;
+            memcpy(pkt.data + pkt.len + 0, &type, 1);
+            memcpy(pkt.data + pkt.len + 1, &msg->payload_len, 1);
+            memcpy(pkt.data + pkt.len + 2, msg->payload, msg->payload_len);
+            pkt.len += msg->payload_len + 2;
+        }
+        if (pkt.len > 0)
+            client->inet->send(client->net, addr, &pkt);
+
         client->timeout_counter++;
     }
 
@@ -612,16 +604,18 @@ enum process_message_result
     PROCESS_MESSAGE_CLIENT_DROPPED
 };
 static enum process_message_result process_message(
-    struct server*                server,
-    const struct settings_server* settings_server,
-    struct world*                 world,
-    const struct settings_world*  settings_world,
-    struct server_client*         client,
-    const struct net_addr*        addr,
-    enum msg_type                 msg_type,
-    const uint8_t*                msg_data,
-    uint8_t                       msg_len,
-    uint16_t                      frame_number)
+    struct server*                     server,
+    const struct settings_server*      settings_server,
+    const struct net_server_interface* inet,
+    struct net_server*                 net,
+    struct world*                      world,
+    const struct settings_world*       settings_world,
+    struct server_client*              client,
+    const struct net_addr*             addr,
+    enum msg_type                      msg_type,
+    const uint8_t*                     msg_data,
+    uint8_t                            msg_len,
+    uint16_t                           frame_number)
 {
     /*
      * NOTE: Beyond this point, "client" won't be NULL *unless* the
@@ -632,16 +626,19 @@ static enum process_message_result process_message(
     union parsed_payload pp;
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
+        /* XXX: This being here is really ugly because we have to pass down
+         * "inet" and "net", and we have the edge case that client is NULL. This
+         * logic should be moved further up. */
         case MSG_JOIN_REQUEST: {
             if (hmap_count(server->clients) + 1 > settings_server->max_players)
             {
-                struct net_udp_packet pkt;
+                struct net_packet response;
                 struct msg* msg = msg_join_deny_server_full("Server full");
-                pkt.len = msg->payload_len + 2;
-                pkt.data[0] = msg->type;
-                pkt.data[1] = msg->payload_len;
-                memcpy(pkt.data + 2, msg->payload, msg->payload_len);
-                net_sendto(server->udp_sock, pkt.data, pkt.len, addr);
+                response.len = msg->payload_len + 2;
+                response.data[0] = msg->type;
+                response.data[1] = msg->payload_len;
+                memcpy(response.data + 2, msg->payload, msg->payload_len);
+                inet->send(net, addr, &response);
                 msg_free(msg);
                 return PROCESS_MESSAGE_OK;
             }
@@ -649,14 +646,14 @@ static enum process_message_result process_message(
             if (pp.join_request.username_len >
                 settings_server->max_username_len)
             {
-                struct net_udp_packet pkt;
-                struct msg*           msg =
+                struct net_packet response;
+                struct msg*       msg =
                     msg_join_deny_bad_username("Username too long");
-                pkt.len = msg->payload_len + 2;
-                pkt.data[0] = msg->type;
-                pkt.data[1] = msg->payload_len;
-                memcpy(pkt.data + 2, msg->payload, msg->payload_len);
-                net_sendto(server->udp_sock, pkt.data, pkt.len, addr);
+                response.len = msg->payload_len + 2;
+                response.data[0] = msg->type;
+                response.data[1] = msg->payload_len;
+                memcpy(response.data + 2, msg->payload, msg->payload_len);
+                inet->send(net, addr, &response);
                 msg_free(msg);
                 return PROCESS_MESSAGE_OK;
             }
@@ -687,6 +684,8 @@ static enum process_message_result process_message(
 
                 server_client_init(
                     client,
+                    inet,
+                    net,
                     snake_id,
                     frame_number,
                     settings_server->sim_tick_rate,
@@ -917,15 +916,16 @@ static enum process_message_result process_message(
 
 /* ------------------------------------------------------------------------- */
 static int unpack_packet(
-    struct server*                server,
-    const struct settings_server* settings_server,
-    struct world*                 world,
-    const struct settings_world*  settings_world,
-    struct server_client*         client,
-    const struct net_addr*        client_addr,
-    const uint8_t*                udp_buf,
-    int                           udp_len,
-    uint16_t                      frame_number)
+    struct server*                     server,
+    const struct settings_server*      settings_server,
+    const struct net_server_interface* inet,
+    struct net_server*                 net,
+    struct world*                      world,
+    const struct settings_world*       settings_world,
+    struct server_client*              client,
+    const struct net_addr*             client_addr,
+    const struct net_packet*           packet,
+    uint16_t                           frame_number)
 {
     /*
      * Packet can contain multiple message objects.
@@ -934,15 +934,15 @@ static int unpack_packet(
      * buf[2] == beginning of message payload
      */
     int i;
-    for (i = 0; i < udp_len - 1;)
+    for (i = 0; i < packet->len - 1;)
     {
-        enum msg_type  type = udp_buf[i + 0];
-        const uint8_t  msg_len = udp_buf[i + 1];
-        const uint8_t* msg = &udp_buf[i + 2];
+        enum msg_type  type = packet->data[i + 0];
+        const uint8_t  msg_len = packet->data[i + 1];
+        const uint8_t* msg = &packet->data[i + 2];
 
         log_net("Unpacking msg type=%d, len=%d\n", type, msg_len);
 
-        if (i + 2 + msg_len > udp_len)
+        if (i + 2 + msg_len > packet->len)
         {
             struct net_addr_str ipstr;
             net_addr_to_str(&ipstr, client_addr);
@@ -977,6 +977,8 @@ static int unpack_packet(
         switch (process_message(
             server,
             settings_server,
+            inet,
+            net,
             world,
             settings_world,
             client,
@@ -1006,7 +1008,7 @@ int server_recv(
     const struct settings_world*  settings_world,
     uint16_t                      frame_number)
 {
-    uint8_t                udp_buf[NET_MAX_UDP_PACKET_SIZE];
+    struct net_packet      packet;
     const struct net_addr* server_addr;
     struct net_addr        client_addr;
     struct server_client*  client;
@@ -1044,32 +1046,16 @@ int server_recv(
         net_addr_hmap_erase(server->malicious_clients, server_addr);
     }
 
-    int fd = tcp_accept(server->tcp_sock, &client_addr);
-    if (fd < 0)
-        return -1;
-    if (fd > 0)
-    {
-        struct net_addr_str ipstr;
-        net_addr_to_str(&ipstr, &client_addr);
-        log_info("Accepted TCP connection from %s\n", ipstr.cstr);
-        int len = net_recv(fd, udp_buf, sizeof(udp_buf));
-        fprintf(stderr, "%.*s\n", len, udp_buf);
-        net_close(fd);
-        return 0;
-    }
-
-    /* We may need to read more than one UDP packet */
+    /* We may need to read more than one packet */
     while (1)
     {
-        int udp_len;
-
-        udp_len = net_recvfrom(
-            server->udp_sock, udp_buf, sizeof(udp_buf), &client_addr);
-
-        /* Nothing received or error */
-        if (udp_len <= 0)
-            return udp_len;
-        log_net("Received UDP packet, size=%d\n", udp_len);
+        switch (
+            net_udp_server.receive(server->udp_server, &client_addr, &packet))
+        {
+            case NET_RECEIVE_ERROR: return -1;
+            case NET_RECEIVE_NO_DATA: goto recv_udp_done;
+            case NET_RECEIVE_DATA: break;
+        }
 
         /*
          * If we received a packet from a banned client, ignore packet
@@ -1100,17 +1086,19 @@ int server_recv(
         if (unpack_packet(
                 server,
                 settings_server,
+                &net_udp_server,
+                server->udp_server,
                 world,
                 settings_world,
                 client,
                 &client_addr,
-                udp_buf,
-                udp_len,
+                &packet,
                 frame_number) != 0)
         {
             return -1;
         }
     }
+recv_udp_done:;
 
     return 0;
 }

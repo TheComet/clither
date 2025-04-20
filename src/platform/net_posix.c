@@ -180,7 +180,7 @@ static int net_bind(const char* bind_address, const char* port, int socktype)
 }
 
 /* ------------------------------------------------------------------------- */
-int udp_bind(const char* bind_address, const char* port)
+int net_host_udp(const char* bind_address, const char* port)
 {
     return net_bind(bind_address, port, SOCK_DGRAM);
 }
@@ -268,7 +268,7 @@ static int net_connect(
 }
 
 /* ------------------------------------------------------------------------- */
-int udp_connect(
+int net_connect_udp(
     struct sockfd_vec** sockfds, const char* server_address, const char* port)
 {
     return net_connect(sockfds, server_address, port, SOCK_DGRAM);
@@ -353,7 +353,7 @@ int net_recv(int sockfd, void* buf, int capacity)
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-int tcp_bind(const char* bind_address, const char* port)
+int net_host_tcp(const char* bind_address, const char* port)
 {
     int fd = net_bind(bind_address, port, SOCK_STREAM);
     if (fd < 0)
@@ -366,14 +366,7 @@ int tcp_bind(const char* bind_address, const char* port)
     }
     return fd;
 }
-int tcp_connect(
-    struct sockfd_vec** sockfds,
-    const char*         server_address,
-    const char*         server_port)
-{
-    return net_connect(sockfds, server_address, server_port, SOCK_STREAM);
-}
-int tcp_accept(int sockfd, struct net_addr* addr)
+int net_accept(int sockfd, struct net_addr* addr)
 {
     socklen_t addrlen = sizeof(addr->sockaddr_storage);
     int       fd =

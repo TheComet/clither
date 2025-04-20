@@ -186,8 +186,6 @@ void msg_free(struct msg* m);
 #define msg_is_reliable(m)   ((m)->resend_period > 0)
 #define msg_is_unreliable(m) ((m)->resend_period == 0)
 
-void msg_update_frame_number(struct msg* m, uint16_t frame_number);
-
 struct msg* msg_join_request(
     uint16_t protocol_version, uint16_t frame_number, const char* username);
 
