@@ -75,7 +75,7 @@ void fs_watch_deinit(struct fs_watch* w)
 
 int fs_watch_file(struct fs_watch* w, const char* path)
 {
-    return 1;
+    return 0;
 }
 
 int fs_watch_check(struct fs_watch* w)

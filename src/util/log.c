@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif
+
 static CLITHER_THREADLOCAL struct log_interface g_out_log;
 
 #if defined(CLITHER_LOG)
@@ -279,6 +284,36 @@ void log_note(const char* fmt, ...)
     out_log_vwrite(LOG_NOTE, fmt, ap);
     va_end(ap);
 }
+
+/* ------------------------------------------------------------------------- */
+#if defined(_WIN32)
+int log_err_win32(const char* fmt, ...)
+{
+    va_list ap;
+    char* error;
+    DWORD dwError = GetLastError();
+    if (FormatMessageA(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
+                | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            dwError,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR)&error,
+            0,
+            NULL)
+        == 0)
+    {
+        log_err("(Failed to get error from FormatMessage())");
+        return;
+    }
+    
+    va_start(ap, fmt);
+    out_log_vwrite(LOG_ERR, fmt, ap);
+    va_end(ap);
+    log_err("(%d) %s", dwError, error);
+    LocalFree(error);
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 void log_net(const char* fmt, ...)

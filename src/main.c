@@ -6,6 +6,7 @@
 #include "clither/game/resource_pack.h"
 #include "clither/game/settings.h"
 #include "clither/gfx/gfx.h"
+#include "clither/platform/asm_optimizations.h"
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
 #include "clither/platform/thread.h"
@@ -19,8 +20,6 @@
 
 static struct args     args;
 static struct settings settings;
-
-void asm_optimizations_init(void);
 
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
@@ -41,7 +40,8 @@ int main(int argc, char* argv[])
 
     mem_init_threadlocal();
     log_init();
-    asm_optimizations_init();
+    if (asm_optimizations_init() != 0)
+        goto asm_optimizations_failed;
 
     /*
      * Parse command line args before doing anything else. This function
@@ -235,6 +235,7 @@ int main(int argc, char* argv[])
 start_mcd_failed:
 #endif
 
+    net_deinit();
 net_init_failed:
 
 #if defined(CLITHER_BOT_API)
@@ -268,6 +269,7 @@ parse_resource_pack_failed:
 
     signals_remove();
 parse_args_failed:
+asm_optimizations_failed:
     (void)mem_deinit_threadlocal();
     return retval;
 }

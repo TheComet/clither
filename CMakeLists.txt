@@ -7,7 +7,7 @@ message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 project ("clither"
     VERSION 0.0.1
-    LANGUAGES C ASM)
+    LANGUAGES C)
 
 ###############################################################################
 # Config and options
@@ -53,12 +53,11 @@ set (CLITHER_BUILD_DOCDIR "${CLITHER_BUILD_BINDIR}/doc")
 set (CLITHER_INSTALL_BINDIR ".")
 set (CLITHER_INSTALL_LIBDIR "lib")
 set (CLITHER_INSTALL_DOCDIR "doc")
-
-if (${CMAKE_C_COMPILER_ID} MATCHES "MSVC")
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
     set (CLITHER_THREADLOCAL "__declspec(thread)")
     set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
     set (CLITHER_HOTPATCH "__declspec(noinline)")
-elseif (${CMAKE_C_COMPILER_ID} MATCHES "GNU")
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set (CLITHER_THREADLOCAL "__thread")
     set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
     set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
@@ -79,6 +78,18 @@ else ()
 endif ()
 
 configure_file ("templates/config.h.in" "include/clither/config.h")
+
+if (CLITHER_ASM_OPTIMIZATIONS)
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+        enable_language (ASM)
+    endif ()
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+        enable_language (ASM)
+    endif ()
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+    enable_language (ASM_MASM)
+    endif ()
+endif ()
 
 ###############################################################################
 # Game source files
@@ -190,13 +201,22 @@ add_executable (clither
 
     "src/util/hash.c"
     "src/util/log.c"
+    "src/util/morton.c"
     "src/util/str.c"
     "src/util/strview.c"
     "src/util/strlist.c"
 
-    "src/util/morton.c"
     $<$<BOOL:${CLITHER_ASM_OPTIMIZATIONS}>:
-        $<$<C_COMPILER_ID:GNU>:src/util/morton_gas_x86-64.S>
+        $<$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>>:
+            src/util/morton_gas_x86-64.s
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_gas_x86-64.s>
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>
+        >
+        $<$<C_COMPILER_ID:MSVC>:
+            src/util/morton_masm_x86-64.asm
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_masm_x86-64.asm>
+            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>
+        >
     >
 
     $<$<BOOL:${CLITHER_BOT_API}>:
@@ -245,6 +265,7 @@ add_executable (clither
         src/server/server_instance_bmap.c>
 
     $<$<PLATFORM_ID:Windows>:
+        src/platform/asm_optimizations_win32.c
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_win32.c>
         src/platform/fs_win32.c
         src/platform/mfile_win32.c
@@ -257,6 +278,7 @@ add_executable (clither
         src/platform/utf8_win32.c
         src/winmain.c>
     $<$<PLATFORM_ID:Linux>:
+        src/platform/asm_optimizations_posix.c
         $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_linux.c>
         src/platform/fs_linux.c
         src/platform/mfile_posix.c
@@ -266,7 +288,6 @@ add_executable (clither
         src/platform/system_linux.c
         src/platform/thread_pthread.c
         src/platform/tick_posix.c
-        src/platform/asm_optimizations_posix.c
         src/platform/utf8_posix.c>
     $<$<PLATFORM_ID:Darwin>:
         src/platform/fs_linux.c
@@ -337,8 +358,7 @@ target_compile_options (clither
     PRIVATE
         $<$<C_COMPILER_ID:MSVC>:/W4 /wd4706 /wd4305 /wd4244 /wd4505>
         $<$<C_COMPILER_ID:GNU>:-W -Wall -Wextra -pedantic -Wno-unused-function -Wno-overlength-strings>
-        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>
-        -mavx2 -msse3)
+        $<$<C_COMPILER_ID:Clang>:-W -Wall -Wextra -pedantic -Wno-unused-function>)
 target_link_options (clither
     PRIVATE
         $<$<BOOL:${CLITHER_BACKTRACE}>:
@@ -349,11 +369,13 @@ set_target_properties (clither
         C_STANDARD 90
         CXX_STANDARD 17  # Required for LogHelper std::string::data() non-const version
         VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
-        VS_DEBUGGER_COMMAND_ARGUMENTS "--host"
+        VS_DEBUGGER_COMMAND_ARGUMENTS "--host --gfx"
         RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CLITHER_BUILD_BINDIR}
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CLITHER_BUILD_BINDIR}
         INSTALL_RPATH ${CLITHER_INSTALL_LIBDIR})
+set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
+    VS_STARTUP_PROJECT clither)
 
 # Visual studio should show the source files in their original hierarchy
 get_target_property (source_list clither SOURCES)
@@ -451,8 +473,8 @@ if (CLITHER_DOC)
 endif ()
 
 if (CLITHER_SERVER_WEBSOCKETS)
-    add_subdirectory ("thirdparty/wsServer")
-    target_link_libraries (clither PRIVATE ws)
+    #add_subdirectory ("thirdparty/wsServer")
+    #target_link_libraries (clither PRIVATE ws)
 endif ()
 
 ###############################################################################

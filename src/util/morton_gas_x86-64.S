@@ -1,29 +1,6 @@
-#include "clither/platform/asm_optimizations.h"
 .section .note.GNU-stack
-
-#if defined(CLITHER_ASM_OPTIMIZATIONS_HOTPATCH)
-#   define X(cpuid_feature, func_name) \
-    .section .text ; \
-    .globl func_name ; \
-    .type func_name, @function ; \
-    func_name: ; \
-        nop ; \
-        nop ; \
-        nop ; \
-        nop ; \
-        nop ;
-    CLITHER_ASM_OPTIMIZATIONS_LIST
-#   undef X
-#elif defined(CLITHER_ASM_OPTIMIZATIONS_FUNCPTR)
-#   define X(cpuid_feature, func_name) \
-    .section .data ; \
-    .globl func_name ; \
-    func_name: .quad 0 ;
-    CLITHER_ASM_OPTIMIZATIONS_LIST
-#   undef X
-#endif
-
 .section .text
+
 .globl morton_encode_qwpos_asm
 .type morton_encode_qwpos_asm, @function
 morton_encode_qwpos_asm:

@@ -46,6 +46,10 @@ CLITHER_PRINTF_FORMAT(1, 2) static void log_dbg(const char* fmt, ...)
 }
 #endif
 
+#if defined(_WIN32)
+CLITHER_PRINTF_FORMAT(1, 2) int log_err_win32(const char* fmt, ...);
+#endif
+
 /* Specialized logging functions -------------------------------------------- */
 
 CLITHER_PRINTF_FORMAT(1, 2) void log_net(const char* fmt, ...);

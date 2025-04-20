@@ -984,10 +984,9 @@ int settings_load(struct settings* s, const char* filepath)
 
     settings_set_defaults(s);
 
-    if (mfile_map_read(&mf, filepath, 1) != 0)
+    if (mfile_map_read(&mf, filepath, 0) != 0)
     {
-        log_warn(
-            "Using default settings and saving them to \"%s\"\n", filepath);
+        log_warn("Failed to open file \"%s\". Creating default settings.\n", filepath);
         settings_save(s, filepath);
         return 0;
     }

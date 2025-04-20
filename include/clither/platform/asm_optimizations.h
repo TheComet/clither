@@ -40,3 +40,5 @@
             return name##_generic(a1);                                         \
         }
 #endif
+
+int asm_optimizations_init(void);

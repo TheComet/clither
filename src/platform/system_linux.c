@@ -9,8 +9,6 @@ int system_cpu_count(void)
 int system_cpuid_bmi2(void)
 {
     unsigned int eax, ebx, ecx, edx;
-    __asm__ volatile("cpuid"
-                     : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-                     : "a"(7), "c"(0));
-    return (ebx >> 8) & 1;
+    __cpuid_count(7, 0, eax, ebx, ecx, edx);  /* cpuid with eax=7, ecx=0 */
+    return (ebx >> 8) & 1;  /* BMI2 is bit 8 of EBX */
 }
