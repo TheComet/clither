@@ -62,7 +62,7 @@ elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
     set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
 else ()
-    message (FATAL_ERROR "Unable to detect thread local storage semantics!")
+    message (FATAL_ERROR "Builtins not yet implemented for compiler: ${CMAKE_C_COMPILER_ID}\nYou could try to add them yourself (just check CMakeLists.txt at this location)")
 endif ()
 
 include (CheckCSourceCompiles)
@@ -78,18 +78,6 @@ else ()
 endif ()
 
 configure_file ("templates/config.h.in" "include/clither/config.h")
-
-if (CLITHER_ASM_OPTIMIZATIONS)
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-        enable_language (ASM)
-    endif ()
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-        enable_language (ASM)
-    endif ()
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-    enable_language (ASM_MASM)
-    endif ()
-endif ()
 
 ###############################################################################
 # Game source files
@@ -206,19 +194,6 @@ add_executable (clither
     "src/util/strview.c"
     "src/util/strlist.c"
 
-    $<$<BOOL:${CLITHER_ASM_OPTIMIZATIONS}>:
-        $<$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>>:
-            src/util/morton_gas_x86-64.s
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_gas_x86-64.s>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>
-        >
-        $<$<C_COMPILER_ID:MSVC>:
-            src/util/morton_masm_x86-64.asm
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_masm_x86-64.asm>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>
-        >
-    >
-
     $<$<BOOL:${CLITHER_BOT_API}>:
         src/bot/bot.c
         $<$<BOOL:${CLITHER_BOT_API_LUA}>:
@@ -304,6 +279,7 @@ add_executable (clither
         src/platform/net_em.c
         src/platform/signals_em.c
         src/platform/tick_em.c
+        src/platform/asm_optimizations_em.c
         src/platform/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
@@ -381,8 +357,29 @@ set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
 get_target_property (source_list clither SOURCES)
 source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
 
+if (CLITHER_ASM_OPTIMIZATIONS)
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+        enable_language (ASM)
+    endif ()
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+        enable_language (ASM_MASM)
+    endif ()
+
+    add_library (clither-asm OBJECT
+        $<$<BOOL:${CLITHER_ASM_OPTIMIZATIONS}>:
+            $<$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>>:
+                src/util/morton_gas_x86-64.s
+                $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_gas_x86-64.s>
+                $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>>
+            $<$<C_COMPILER_ID:MSVC>:
+                src/util/morton_masm_x86-64.asm
+                $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_masm_x86-64.asm>
+                $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>>>)
+    target_link_libraries (clither PRIVATE clither-asm)
+endif ()
+
 if (EMSCRIPTEN)
-    set_target_properties(clither
+    set_target_properties (clither
         PROPERTIES
             SUFFIX ".html"
             LINK_FLAGS "\

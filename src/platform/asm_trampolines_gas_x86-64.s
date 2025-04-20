@@ -1,9 +1,9 @@
 .section .note.GNU-stack
 
 .macro trampoline func_name
-  .globl func_name
-  .type func_name, @function
-  func_name:
+  .globl \func_name
+  .type \func_name, @function
+  \func_name:
     nop
     nop
     nop

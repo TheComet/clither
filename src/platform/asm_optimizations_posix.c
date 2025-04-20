@@ -8,16 +8,13 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-static int trampoline_hotpatch(void* trampoline, void* target)
+static int trampoline_hotpatch(void* trampoline, void* target, int pagesize)
 {
     unsigned char* code = (unsigned char*)trampoline;
     int32_t        rel_off = (intptr_t)target - ((intptr_t)trampoline + 5);
 
-    uintptr_t page_start = (uintptr_t)trampoline & ~(getpagesize() - 1);
-    if (mprotect(
-            (void*)page_start,
-            getpagesize(),
-            PROT_READ | PROT_WRITE | PROT_EXEC) != 0)
+    void* page_start = (void*)((uintptr_t)trampoline & ~(pagesize - 1));
+    if (mprotect(page_start, pagesize, PROT_READ | PROT_WRITE | PROT_EXEC) != 0)
     {
         return log_err(
             "mprotect() failed: Cannot patch trampoline: %s\n",
@@ -27,7 +24,7 @@ static int trampoline_hotpatch(void* trampoline, void* target)
     code[0] = 0xE9; /* JMP rel32 */
     memcpy(code + 1, &rel_off, sizeof(rel_off));
 
-    if (mprotect((void*)page_start, getpagesize(), PROT_READ | PROT_EXEC) != 0)
+    if (mprotect(page_start, pagesize, PROT_READ | PROT_EXEC) != 0)
     {
         return log_err(
             "mprotect() failed, but trampoline patch succeeded: %s\n",
@@ -38,18 +35,20 @@ static int trampoline_hotpatch(void* trampoline, void* target)
     return 0;
 }
 
-void asm_optimizations_init(void)
+int asm_optimizations_init(void)
 {
 #if defined(CLITHER_ASM_OPTIMIZATIONS_HOTPATCH)
 /* casting function to void* */
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wpedantic"
 
+    void* target;
+    int   pagesize = getpagesize();
 #    define X(cpuid_feature, func_name)                                        \
-        trampoline_hotpatch(                                                   \
-            (void*)func_name,                                                  \
-            system_cpuid_##cpuid_feature() ? (void*)func_name##_asm            \
-                                           : (void*)func_name##_generic);
+        target = system_cpuid_##cpuid_feature() ? (void*)func_name##_asm       \
+                                                : (void*)func_name##_generic;  \
+        if (trampoline_hotpatch((void*)func_name, target, pagesize) != 0)      \
+            return -1;
     CLITHER_ASM_OPTIMIZATIONS_LIST
 #    undef X
 
@@ -60,7 +59,6 @@ void asm_optimizations_init(void)
                                                    : func_name##_generic;
     CLITHER_ASM_OPTIMIZATIONS_LIST
 #    undef X
-#elif defined(CLITHER_ASM_OPTIMIZATIONS_HARDCODE)
-#else
 #endif
+    return 0;
 }
