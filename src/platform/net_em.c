@@ -12,7 +12,13 @@ static EM_BOOL ws_open_cb(
 {
     int sockfd = (int)(intptr_t)user_data;
     log_dbg("ws_open_cb\n");
-    emscripten_websocket_send_binary(sockfd, "succ", sizeof("succ"));
+    emscripten_websocket_send_binary(sockfd, "aaa", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "bbb", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "ccc", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "ddd", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "eee", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "fff", sizeof("aaa") - 1);
+    emscripten_websocket_send_binary(sockfd, "ggg", sizeof("aaa") - 1);
     return EM_TRUE;
 }
 

@@ -3,6 +3,7 @@
 #include "clither/util/hmap.h"
 #include "clither/util/sha1.h"
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 enum connection_state
@@ -11,27 +12,6 @@ enum connection_state
     STATE_OPEN,
     STATE_CLOSING,
     STATE_CLOSED
-};
-
-#define MESSAGE_LENGTH 2048
-struct frame_data
-{
-    /*! \brief Frame read. */
-    unsigned char frm[MESSAGE_LENGTH];
-    /*! \brief Processed message at the moment. */
-    unsigned char* msg;
-    /*! \brief Control frame payload */
-    unsigned char msg_ctrl[125];
-    /*! \brief Current byte position. */
-    size_t cur_pos;
-    /*! \brief Amount of read bytes. */
-    size_t amt_read;
-    /*! \brief Frame type, like text or binary. */
-    int frame_type;
-    /*! \brief Frame size. */
-    uint64_t frame_size;
-    /*! \brief Error flag, set when a read was not possible. */
-    int error;
 };
 
 /*!
@@ -45,8 +25,12 @@ struct frame_data
  * "token_state" keeps track of the next expected token. Tokens are combinations
  * of characters.
  */
+#define B64_KEY_SIZE 24 /* incoming base64 key is always 24 chars long */
+#define UUID         "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 struct http_upgrade_parser
 {
+    char websocket_key[B64_KEY_SIZE + sizeof(UUID)];
+
     int      char_state;
     int      token_state;
     unsigned found_websocket_upgrade : 1;
@@ -54,44 +38,65 @@ struct http_upgrade_parser
     unsigned found_websocket_key : 1;
 };
 
+struct frame_parser
+{
+    uint64_t frame_length;
+    uint64_t frame_idx;
+
+    int state;
+
+    unsigned fin : 1;
+    unsigned rsv : 3;
+    unsigned opcode : 4;
+
+    unsigned mask : 1;
+    unsigned payload_len : 7;
+
+    uint8_t masks[4];
+};
+
 struct connection
 {
-    struct frame_data          frame_data;
-    struct http_upgrade_parser http_header_parser;
-
     int socket;
 
     int32_t last_pong_id;
     int32_t current_ping_id;
 
+    struct frame_parser        frame_parser;
+    struct http_upgrade_parser http_header_parser;
+    struct net_packet          game_packet;
+    struct net_packet          ws_packet;
+    int                        ws_packet_off;
+
     enum connection_state state;
 };
 
-static void frame_data_init(struct frame_data* frame_data)
+static void frame_parser_init(struct frame_parser* p)
 {
-    frame_data->msg = NULL;
-    frame_data->cur_pos = 0;
-    frame_data->amt_read = 0;
-    frame_data->frame_type = 0;
-    frame_data->frame_size = 0;
-    frame_data->error = 0;
+    p->state = 0;
 }
 
-static void http_header_parser_init(struct http_upgrade_parser* parser)
+static void http_header_parser_init(struct http_upgrade_parser* p)
 {
-    parser->char_state = 0;
-    parser->token_state = 0;
+    p->char_state = 0;
+    p->token_state = 0;
+    p->found_websocket_upgrade = 0;
+    p->found_connection_upgrade = 0;
+    p->found_websocket_key = 0;
 }
 
-static void connection_init(struct connection* connection, int socket)
+static void connection_init(struct connection* conn, int socket)
 {
-    connection->socket = socket;
-    connection->state = STATE_CONNECTING;
-    connection->last_pong_id = 0;
-    connection->current_ping_id = 0;
+    conn->socket = socket;
+    conn->state = STATE_CONNECTING;
+    conn->last_pong_id = 0;
+    conn->current_ping_id = 0;
+    conn->game_packet.len = 0;
+    conn->ws_packet_off = 0;
+    conn->ws_packet.len = 0;
 
-    frame_data_init(&connection->frame_data);
-    http_header_parser_init(&connection->http_header_parser);
+    frame_parser_init(&conn->frame_parser);
+    http_header_parser_init(&conn->http_header_parser);
 }
 
 struct connection_hmap_kvs
@@ -279,20 +284,21 @@ accept_new_connections(struct net_server* server, struct net_addr* addr)
 
 enum handshake_result
 {
-    HANDSHAKE_NEED_MORE_DATA = -1,
+    HANDSHAKE_ERROR = -1,
     HANDSHAKE_SUCCESS = 0,
-    HANDSHAKE_ERROR
+    HANDSHAKE_NEED_MORE_DATA
 };
 
-#define B64_KEY_SIZE 24 /* incoming base64 key is always 24 chars long */
-static enum handshake_result parse_http_websocket_upgrade_request(
-    struct http_upgrade_parser* p,
-    const struct net_packet*    packet,
-    char                        key[B64_KEY_SIZE + 1])
+static enum handshake_result
+parse_http_websocket_upgrade_request(struct connection* conn)
 {
     static const char handshake_key[] = "sec-websocket-key: ";
     static const char upgrade_key[] = "upgrade: ";
     static const char connection_key[] = "connection: ";
+
+    struct http_upgrade_parser* p = &conn->http_header_parser;
+    const struct net_packet*    packet = &conn->ws_packet;
+    int*                        off = &conn->ws_packet_off;
 
     enum token_state
     {
@@ -309,17 +315,16 @@ static enum handshake_result parse_http_websocket_upgrade_request(
         EXPECT_END
     };
 
-    int off = 0;
 reswitch:
     switch ((enum token_state)p->token_state)
     {
         /* Parse GET request beginning */
         case EXPECT_GET: {
             static const char request[] = "get / http/";
-            while (off != packet->len && p->char_state != sizeof(request) - 1)
-                if (tolower(packet->data[off++]) != request[p->char_state++])
+            while (*off != packet->len && p->char_state != sizeof(request) - 1)
+                if (tolower(packet->data[(*off)++]) != request[p->char_state++])
                     return HANDSHAKE_ERROR;
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
             p->char_state = 0;
@@ -328,18 +333,18 @@ reswitch:
 
         /* HTTP version doesn't matter and ensure GET request ends with \r\n */
         case EXPECT_VERSION_AND_CRLF: {
-            while (off != packet->len && p->char_state != 2)
+            while (*off != packet->len && p->char_state != 2)
             {
                 if (p->char_state == 0 &&
-                    (isdigit(packet->data[off]) || packet->data[off] == '.'))
+                    (isdigit(packet->data[*off]) || packet->data[*off] == '.'))
                 {
-                    off++;
+                    (*off)++;
                     continue;
                 }
-                if (packet->data[off++] != "\r\n"[p->char_state++])
+                if (packet->data[(*off)++] != "\r\n"[p->char_state++])
                     return HANDSHAKE_ERROR;
             }
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
             p->char_state = 0;
@@ -347,13 +352,13 @@ reswitch:
         } /* fallthrough */
 
         case EXPECT_KEY_OR_END: {
-            if (tolower(packet->data[off]) == handshake_key[0])
+            if (tolower(packet->data[*off]) == handshake_key[0])
                 p->token_state = EXPECT_KEY_HANDSHAKE;
-            else if (tolower(packet->data[off]) == upgrade_key[0])
+            else if (tolower(packet->data[*off]) == upgrade_key[0])
                 p->token_state = EXPECT_KEY_UPGRADE;
-            else if (tolower(packet->data[off]) == connection_key[0])
+            else if (tolower(packet->data[*off]) == connection_key[0])
                 p->token_state = EXPECT_KEY_CONNECTION;
-            else if (packet->data[off] == '\r')
+            else if (packet->data[*off] == '\r')
                 p->token_state = EXPECT_END;
             else
                 p->token_state = IGNORE_UNTIL_CRLF;
@@ -362,14 +367,14 @@ reswitch:
         }
 
         case EXPECT_KEY_HANDSHAKE: {
-            while (off != packet->len &&
+            while (*off != packet->len &&
                    p->char_state != sizeof(handshake_key) - 1)
             {
-                if (tolower(packet->data[off++]) !=
+                if (tolower(packet->data[(*off)++]) !=
                     handshake_key[p->char_state++])
                     break;
             }
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
             p->token_state = p->char_state == sizeof(handshake_key) - 1
@@ -380,11 +385,11 @@ reswitch:
         }
 
         case EXPECT_VALUE_HANDSHAKE: {
-            while (off != packet->len && p->char_state != B64_KEY_SIZE)
-                key[p->char_state++] = packet->data[off++];
-            if (off == packet->len)
+            while (*off != packet->len && p->char_state != B64_KEY_SIZE)
+                p->websocket_key[p->char_state++] = packet->data[(*off)++];
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
-            if (packet->data[off] != '\r')
+            if (packet->data[*off] != '\r')
             {
                 log_err(
                     "The received Sec-WebSocket-Key has a different size than "
@@ -393,7 +398,7 @@ reswitch:
                 return HANDSHAKE_ERROR;
             }
 
-            key[p->char_state] = '\0';
+            p->websocket_key[p->char_state] = '\0';
             p->found_websocket_key = 1;
             p->char_state = 0;
             p->token_state = IGNORE_UNTIL_CRLF;
@@ -401,14 +406,14 @@ reswitch:
         }
 
         case EXPECT_KEY_UPGRADE: {
-            while (off != packet->len &&
+            while (*off != packet->len &&
                    p->char_state != sizeof(upgrade_key) - 1)
             {
-                if (tolower(packet->data[off++]) !=
+                if (tolower(packet->data[(*off)++]) !=
                     upgrade_key[p->char_state++])
                     break;
             }
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
             p->token_state = p->char_state == sizeof(upgrade_key) - 1
@@ -425,14 +430,14 @@ reswitch:
         }
 
         case EXPECT_KEY_CONNECTION: {
-            while (off != packet->len &&
+            while (*off != packet->len &&
                    p->char_state != sizeof(connection_key) - 1)
             {
-                if (tolower(packet->data[off++]) !=
+                if (tolower(packet->data[(*off)++]) !=
                     connection_key[p->char_state++])
                     break;
             }
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
             p->token_state = p->char_state == sizeof(connection_key) - 1
@@ -449,17 +454,17 @@ reswitch:
         }
 
         case IGNORE_UNTIL_CRLF: {
-            while (off != packet->len && p->char_state != 2)
+            while (*off != packet->len && p->char_state != 2)
             {
-                if (p->char_state == 0 && packet->data[off] != '\r')
+                if (p->char_state == 0 && packet->data[*off] != '\r')
                 {
-                    off++;
+                    (*off)++;
                     continue;
                 }
-                if (packet->data[off++] != "\r\n"[p->char_state++])
+                if (packet->data[(*off)++] != "\r\n"[p->char_state++])
                     return HANDSHAKE_ERROR;
             }
-            if (off == packet->len)
+            if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
             p->char_state = 0;
             p->token_state = EXPECT_KEY_OR_END;
@@ -467,8 +472,8 @@ reswitch:
         }
 
         case EXPECT_END: {
-            while (off != packet->len && p->char_state != 2)
-                if (packet->data[off++] != "\r\n"[p->char_state++])
+            while (*off != packet->len && p->char_state != 2)
+                if (packet->data[(*off)++] != "\r\n"[p->char_state++])
                     return HANDSHAKE_ERROR;
             break;
         }
@@ -480,10 +485,8 @@ reswitch:
                : HANDSHAKE_ERROR;
 }
 
-static enum handshake_result send_handshake_response(
-    struct connection* conn, const struct net_packet* packet)
+static enum handshake_result send_handshake_response(struct connection* conn)
 {
-#define UUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define ACCEPT                                                                 \
     "HTTP/1.1 101 Switching Protocols\r\n"                                     \
     "Upgrade: websocket\r\n"                                                   \
@@ -493,9 +496,7 @@ static enum handshake_result send_handshake_response(
     "HTTP/1.1 400 Bad Request\r\n"                                             \
     "Connection: close\r\n\r\n"
 
-    char key[B64_KEY_SIZE + sizeof(UUID)];
-    switch (parse_http_websocket_upgrade_request(
-        &conn->http_header_parser, packet, key))
+    switch (parse_http_websocket_upgrade_request(conn))
     {
         case HANDSHAKE_NEED_MORE_DATA: return HANDSHAKE_NEED_MORE_DATA;
 
@@ -508,12 +509,15 @@ static enum handshake_result send_handshake_response(
             SHA1Context ctx;
             char        accept_msg
                 [sizeof(ACCEPT) + base64_output_len(SHA1HashSize) + 4];
-            /* This includes the null terminator */
+            char* key = conn->http_header_parser.websocket_key;
+
+            CLITHER_DEBUG_ASSERT(strlen(key) == B64_KEY_SIZE);
             strcat(key, UUID);
 
             SHA1Reset(&ctx);
             SHA1Input(&ctx, (const uint8_t*)key, strlen(key));
-            CLITHER_STATIC_ASSERT(sizeof(key) >= SHA1HashSize);
+            CLITHER_STATIC_ASSERT(
+                sizeof(conn->http_header_parser.websocket_key) >= SHA1HashSize);
             SHA1Result(&ctx, (uint8_t*)key);
 
             memcpy(accept_msg, ACCEPT, sizeof(ACCEPT) - 1);
@@ -535,8 +539,180 @@ static enum handshake_result send_handshake_response(
     return HANDSHAKE_ERROR;
 }
 
+enum frame_result
+{
+    FRAME_ERROR = -1,
+    FRAME_SUCCESS = 0,
+    FRAME_NEED_MORE_DATA
+};
+
+static enum frame_result parse_frame(struct connection* conn)
+{
+    struct frame_parser* p = &conn->frame_parser;
+    struct net_packet*   packet = &conn->ws_packet;
+    struct net_packet*   game_packet = &conn->game_packet;
+    int*                 off = &conn->ws_packet_off;
+
+    enum state
+    {
+        FIN_RSV_OPCODE,
+        PAYLOAD_LEN,
+        PAYLOAD_LEN_16,
+        PAYLOAD_LEN_16_1,
+        PAYLOAD_LEN_64,
+        PAYLOAD_LEN_64_1,
+        PAYLOAD_LEN_64_2,
+        PAYLOAD_LEN_64_3,
+        PAYLOAD_LEN_64_4,
+        PAYLOAD_LEN_64_5,
+        PAYLOAD_LEN_64_6,
+        PAYLOAD_LEN_64_7,
+        CHECK_MASK,
+        MASK,
+        MASK_1,
+        MASK_2,
+        MASK_3,
+        CHECK_OPCODE,
+        BINARY_PAYLOAD
+    };
+
+reswitch:
+    switch ((enum state)p->state)
+    {
+        case FIN_RSV_OPCODE: {
+            uint8_t b = packet->data[(*off)++];
+            p->fin = (b >> 7) & 1;
+            p->rsv = (b >> 4) & 0x7;
+            p->opcode = b & 0xF;
+
+            p->state = PAYLOAD_LEN;
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+        } /* fallthrough */
+
+        case PAYLOAD_LEN: {
+            uint8_t b = packet->data[(*off)++];
+            p->mask = (b >> 7) & 1;
+            p->payload_len = b & 0x7F;
+
+            if (p->payload_len == 126)
+                p->state = PAYLOAD_LEN_16;
+            else if (p->payload_len == 127)
+                p->state = PAYLOAD_LEN_64;
+            else
+            {
+                p->frame_length = p->payload_len;
+                p->state = CHECK_MASK;
+            }
+
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+            goto reswitch;
+        }
+
+        /* 16-bit frame length */
+        case PAYLOAD_LEN_16: {
+            p->frame_length = packet->data[(*off)++] << 8;
+            p->state++;
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+        } /* fallthrough */
+        case PAYLOAD_LEN_16 + 1: {
+            p->frame_length |= packet->data[(*off)++];
+            p->state = CHECK_MASK;
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+            goto reswitch;
+        }
+
+        /* 64-bit frame length */
+        case PAYLOAD_LEN_64: {
+            uint8_t shift;
+            p->frame_length = 0;
+            while (*off != packet->len && p->state != PAYLOAD_LEN_64 + 8)
+            {
+                case PAYLOAD_LEN_64 + 1:
+                case PAYLOAD_LEN_64 + 2:
+                case PAYLOAD_LEN_64 + 3:
+                case PAYLOAD_LEN_64 + 4:
+                case PAYLOAD_LEN_64 + 5:
+                case PAYLOAD_LEN_64 + 6:
+                case PAYLOAD_LEN_64 + 7:
+                    shift = (PAYLOAD_LEN_64 + 7 - p->state++) * 8;
+                    p->frame_length |= (uint64_t)packet->data[(*off)++]
+                                       << shift;
+            }
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+        } /* fallthrough */
+
+        case CHECK_MASK: {
+            p->frame_idx = 0;
+            p->state = p->mask ? MASK : CHECK_OPCODE;
+            goto reswitch;
+        }
+
+        case MASK: {
+            while (*off != packet->len && p->state != CHECK_OPCODE)
+            {
+                case MASK + 1:
+                case MASK + 2:
+                case MASK + 3:
+                    p->masks[p->state++ - MASK] =
+                        (uint32_t)packet->data[(*off)++];
+            }
+            if (*off == packet->len)
+                return FRAME_NEED_MORE_DATA;
+        } /* fallthrough */
+
+        case CHECK_OPCODE: {
+            /* Prepare game packet for receiving the decoded payload */
+            if (p->opcode == 2 /* binary */)
+                conn->game_packet.len = 0;
+
+            if (p->opcode == 0 /* continuation */ ||
+                p->opcode == 2 /* binary */)
+            {
+                p->state = BINARY_PAYLOAD;
+            }
+            else
+                return log_err(
+                    "Unsupported WebSocket frame opcode %d\n", p->opcode);
+            goto reswitch;
+        }
+
+        case BINARY_PAYLOAD: {
+            while (*off != packet->len && p->frame_idx != p->frame_length &&
+                   game_packet->len != sizeof(game_packet->data))
+            {
+                uint8_t xor = p->mask ? (p->masks[p->frame_idx++ % 4]) : 0;
+                game_packet->data[game_packet->len++] =
+                    packet->data[(*off)++] ^ xor;
+            }
+
+            if (game_packet->len == sizeof(game_packet->data))
+            {
+                log_err(
+                    "WebSocket frame too large (%" PRIu64 ")\n",
+                    p->frame_length);
+                return FRAME_ERROR;
+            }
+
+            if (p->frame_idx != p->frame_length)
+                return FRAME_NEED_MORE_DATA;
+
+            p->state = FIN_RSV_OPCODE;
+            return FRAME_SUCCESS;
+        }
+    }
+
+    return FRAME_ERROR;
+}
+
 static enum net_receive_result ws_server_receive(
-    struct net_server* server, struct net_addr* addr, struct net_packet* packet)
+    struct net_server* server,
+    struct net_addr*   addr,
+    struct net_packet* payload_packet)
 {
     struct connection* conn;
 
@@ -559,18 +735,25 @@ recv_next_connection:
         &server->connections->kvs, server->iter_conn_slot);
 
 recv_next_chunk:
-    packet->len = net_recv(conn->socket, packet->data, sizeof(packet->data));
+    if (conn->ws_packet_off == conn->ws_packet.len)
+    {
+        conn->ws_packet_off = 0;
+        conn->ws_packet.len = net_recv(
+            conn->socket, conn->ws_packet.data, sizeof(conn->ws_packet.data));
+    }
 
-    if (packet->len < 0)
+    if (conn->ws_packet.len < 0)
         return NET_RECEIVE_ERROR;
 
-    if (packet->len == 0)
+    if (conn->ws_packet.len == 0)
         goto recv_next_connection;
 
     switch (conn->state)
     {
         case STATE_CONNECTING: {
-            switch (send_handshake_response(conn, packet))
+            log_dbg("WebSocket handshake in progress...\n");
+            log_hex_ascii(conn->ws_packet.data, conn->ws_packet.len);
+            switch (send_handshake_response(conn))
             {
                 case HANDSHAKE_NEED_MORE_DATA: goto recv_next_chunk;
                 case HANDSHAKE_SUCCESS:
@@ -588,11 +771,32 @@ recv_next_chunk:
         }
 
         case STATE_OPEN: {
-            log_dbg("WebSocket message received\n");
-            log_hex_ascii(packet->data, packet->len);
+            log_dbg(
+                "Parsing websocket frame, offset=%d\n", conn->ws_packet_off);
+            log_hex_ascii(conn->ws_packet.data, conn->ws_packet.len);
+            switch (parse_frame(conn))
+            {
+                case FRAME_NEED_MORE_DATA: goto recv_next_chunk;
+
+                case FRAME_SUCCESS:
+                    log_dbg("Successfully decoded WebSocket frame:\n");
+                    log_hex_ascii(
+                        conn->game_packet.data, conn->game_packet.len);
+                    *payload_packet = conn->game_packet;
+                    *addr = *connection_hmap_kvs_get_key(
+                        &server->connections->kvs, server->iter_conn_slot);
+                    return NET_RECEIVE_DATA;
+
+                case FRAME_ERROR:
+                    log_err("WebSocket communication error.\n");
+                    net_close(conn->socket);
+                    connection_hmap_erase_slot(
+                        server->connections, server->iter_conn_slot);
+                    goto recv_next_connection;
+            }
+
             break;
         }
-
         case STATE_CLOSING:
         case STATE_CLOSED: break;
     }

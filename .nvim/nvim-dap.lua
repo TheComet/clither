@@ -2,8 +2,6 @@ local dap = require("dap")
 local last_bot_script = vim.fn.getcwd() .. '/lua/bot.lua'
 local last_args = ""
 
-dap.set_log_level("TRACE")
-
 dap.adapters.lldb = {
   type = "executable",
   command = "/usr/bin/lldb-dap",
