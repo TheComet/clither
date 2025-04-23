@@ -19,10 +19,8 @@ struct server
     struct net_addr_hmap*      malicious_clients;
     struct net_addr_hmap*      banned_clients;
 
-    struct net_server* udp_server;
-#if defined(CLITHER_SERVER_WEBSOCKETS)
-    struct net_server* ws_server;
-#endif
+    const struct net_server_interface* inet[2];
+    struct net_server*                 net[2];
 };
 
 /*!

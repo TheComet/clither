@@ -119,6 +119,8 @@ enum hmap_status
         return 0;                                                              \
     }                                                                          \
                                                                                \
+    API V* prefix##_erase_slot(struct prefix* hmap, int##bits##_t slot);       \
+                                                                               \
     /*!                                                                        \
      * @brief Removes the key and its associated value from the hashmap.       \
      * @param[in] hmap Pointer to an initialized hashmap.                      \
@@ -462,6 +464,17 @@ enum hmap_status
         return kvs_get_value(&hmap->kvs, -1 - slot);                           \
     }                                                                          \
                                                                                \
+    API V* prefix##_erase_slot(struct prefix* hmap, int##bits##_t slot)        \
+    {                                                                          \
+        CLITHER_DEBUG_ASSERT(hmap && hmap->capacity > 0);                      \
+        CLITHER_DEBUG_ASSERT(slot >= 0 && slot < hmap->capacity);              \
+                                                                               \
+        hmap->count--;                                                         \
+        hmap->hashes[slot] = HMAP_SLOT_RIP;                                    \
+                                                                               \
+        return kvs_get_value(&hmap->kvs, slot);                                \
+    }                                                                          \
+                                                                               \
     API V* prefix##_erase(struct prefix* hmap, K key)                          \
     {                                                                          \
         H             h;                                                       \
@@ -476,9 +489,7 @@ enum hmap_status
         if (slot >= 0)                                                         \
             return NULL;                                                       \
                                                                                \
-        hmap->count--;                                                         \
-        hmap->hashes[-1 - slot] = HMAP_SLOT_RIP;                               \
-        return kvs_get_value(&hmap->kvs, -1 - slot);                           \
+        return prefix##_erase_slot(hmap, -1 - slot);                           \
     }
 
 #define hmap_count(hmap)    ((hmap) ? (hmap)->count : 0)

@@ -43,7 +43,7 @@ static int send_pending_server_msgs(uint8_t** pmsg, void* user)
     {
         int len = (msg[0] << 8) | msg[1];
         if (ctx->client_active)
-            net_sendto(ctx->client_fd, msg + 3, len, &ctx->client_addr);
+            net_sendto(ctx->client_fd, &ctx->client_addr, msg + 3, len);
         return mem_free(msg), VEC_ERASE;
     }
 
@@ -105,7 +105,7 @@ void* run_mcd_wifi(const void* p)
         while (1)
         {
             bytes_received =
-                net_recvfrom(ctx.client_fd, buf, sizeof(buf), &ctx.client_addr);
+                net_recvfrom(ctx.client_fd, &ctx.client_addr, buf, sizeof(buf));
             if (bytes_received < 0)
                 goto exit_mcd;
             if (bytes_received == 0)

@@ -156,7 +156,7 @@ static int udp_server_receive(
     struct connection* conn;
 
     packet->len =
-        net_recvfrom(server->socket, packet->data, sizeof(packet->data), addr);
+        net_recvfrom(server->socket, addr, packet->data, sizeof(packet->data));
     if (packet->len < 0)
         return NET_RECEIVE_ERROR;
     if (packet->len == 0)
@@ -177,7 +177,7 @@ static int udp_server_send(
     const struct net_addr*   addr,
     const struct net_packet* packet)
 {
-    return net_sendto(server->socket, packet->data, packet->len, addr);
+    return net_sendto(server->socket, addr, packet->data, packet->len);
 }
 
 const struct net_server_interface net_udp_server = {

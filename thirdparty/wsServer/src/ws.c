@@ -62,7 +62,7 @@ typedef int socklen_t;
 /**
  * @brief Client socks.
  */
-struct ws_connection
+struct connection
 {
 	int client_sock; /**< Client socket FD.        */
 	int state;       /**< WebSocket current state. */
@@ -94,12 +94,12 @@ struct ws_connection
 	ws_cli_conn_t client_id;
 };
 
-static struct ws_connection *get_client_by_cid(ws_cli_conn_t cid);
+static struct connection *get_client_by_cid(ws_cli_conn_t cid);
 
 /**
  * @brief Clients list.
  */
-static struct ws_connection client_socks[MAX_CLIENTS];
+static struct connection client_socks[MAX_CLIENTS];
 
 /**
  * @brief Timeout to a single send().
@@ -121,7 +121,7 @@ static uint32_t timeout;
  */
 void *ws_get_server_context(ws_cli_conn_t cli)
 {
-	struct ws_connection *client = get_client_by_cid(cli);
+	struct connection *client = get_client_by_cid(cli);
 	if (!CLIENT_VALID(client))
 		return NULL;
 	return client->ws_srv.context;
@@ -132,7 +132,7 @@ void *ws_get_server_context(ws_cli_conn_t cli)
  */
 void ws_set_connection_context(ws_cli_conn_t client, void *ptr)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return;
 	cli->connection_context = ptr;
@@ -143,7 +143,7 @@ void ws_set_connection_context(ws_cli_conn_t client, void *ptr)
  */
 void *ws_get_connection_context(ws_cli_conn_t client)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return NULL;
 	return cli->connection_context;
@@ -152,7 +152,7 @@ void *ws_get_connection_context(ws_cli_conn_t client)
 /**
  * @brief WebSocket frame data
  */
-struct ws_frame_data
+struct frame_data
 {
 	/**
 	 * @brief Frame read.
@@ -189,7 +189,7 @@ struct ws_frame_data
 	/**
 	 * @brief Client connection structure.
 	 */
-	struct ws_connection *client;
+	struct connection *client;
 };
 
 /**
@@ -209,7 +209,7 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 		exit(-1);  \
 	} while (0);
 
-static struct ws_connection *get_client_by_cid(ws_cli_conn_t cid)
+static struct connection *get_client_by_cid(ws_cli_conn_t cid)
 {
 	pthread_mutex_lock(&mutex);
 	for (int i = 0; i < MAX_CLIENTS; i++)
@@ -268,7 +268,7 @@ static uint64_t get_next_cid()
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int get_client_state(struct ws_connection *client)
+static int get_client_state(struct connection *client)
 {
 	int state;
 
@@ -293,7 +293,7 @@ static int get_client_state(struct ws_connection *client)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int set_client_state(struct ws_connection *client, int state)
+static int set_client_state(struct connection *client, int state)
 {
 	if (!CLIENT_VALID(client))
 		return (-1);
@@ -324,7 +324,7 @@ static int set_client_state(struct ws_connection *client, int state)
  * happening, so just to be cautious, I will keep using this routine.
  */
 static ssize_t send_all(
-	struct ws_connection *client, const void *buf, size_t len, int flags)
+	struct connection *client, const void *buf, size_t len, int flags)
 {
 	const char *p;
 	ssize_t ret;
@@ -366,7 +366,7 @@ static ssize_t send_all(
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static void close_client(struct ws_connection *client, int lock)
+static void close_client(struct connection *client, int lock)
 {
 	if (!CLIENT_VALID(client))
 		return;
@@ -405,7 +405,7 @@ static void close_client(struct ws_connection *client, int lock)
  */
 static void *close_timeout(void *p)
 {
-	struct ws_connection *conn = p;
+	struct connection *conn = p;
 	struct timespec ts;
 	int state;
 
@@ -452,7 +452,7 @@ quit:
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int start_close_timeout(struct ws_connection *client)
+static int start_close_timeout(struct connection *client)
 {
 	if (!CLIENT_VALID(client))
 		return (-1);
@@ -481,7 +481,7 @@ out:
  *
  * @param client Client connection.
  */
-static void set_client_address(struct ws_connection *client)
+static void set_client_address(struct connection *client)
 {
 	struct sockaddr_storage addr;
 	socklen_t hlen = sizeof(addr);
@@ -513,7 +513,7 @@ static void set_client_address(struct ws_connection *client)
  */
 char *ws_getaddress(ws_cli_conn_t client)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return (NULL);
 
@@ -532,7 +532,7 @@ char *ws_getaddress(ws_cli_conn_t client)
  */
 char *ws_getport(ws_cli_conn_t client)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return (NULL);
 
@@ -560,13 +560,13 @@ char *ws_getport(ws_cli_conn_t client)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int ws_sendframe_internal(struct ws_connection *client, const char *msg,
+static int ws_sendframe_internal(struct connection *client, const char *msg,
 	uint64_t size, int type, uint16_t port)
 {
 	unsigned char *response;   /* Response data.     */
 	unsigned char frame[10];   /* Frame.             */
 	uint8_t idx_first_rData;   /* Index data.        */
-	struct ws_connection *cli; /* Client.            */
+	struct connection *cli; /* Client.            */
 	int idx_response;          /* Index response.    */
 	ssize_t send_ret;          /* Ret send function  */
 	uint64_t length;           /* Message length.    */
@@ -703,7 +703,7 @@ skip_broadcast:
  */
 int ws_sendframe(ws_cli_conn_t client, const char *msg, uint64_t size, int type)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return (-1);
 	return ws_sendframe_internal(cli, msg, size, type, 0);
@@ -772,7 +772,7 @@ static inline void int32_to_ping_msg(int32_t ping_id, uint8_t *msg)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static void send_ping_close(struct ws_connection *cli, int threshold, int lock)
+static void send_ping_close(struct connection *cli, int threshold, int lock)
 {
 	uint8_t ping_msg[4];
 
@@ -827,7 +827,7 @@ static void send_ping_close(struct ws_connection *cli, int threshold, int lock)
  */
 void ws_ping(ws_cli_conn_t client, int threshold)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	int i;
 
 	/* Sanity check. */
@@ -920,7 +920,7 @@ int ws_sendframe_bin_bcast(uint16_t port, const char *msg, uint64_t size)
  */
 int ws_get_state(ws_cli_conn_t client)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 	if (!CLIENT_VALID(cli))
 		return -1;
 	return (get_client_state(cli));
@@ -941,7 +941,7 @@ int ws_get_state(ws_cli_conn_t client)
  */
 int ws_close_client(ws_cli_conn_t client)
 {
-	struct ws_connection *cli = get_client_by_cid(client);
+	struct connection *cli = get_client_by_cid(client);
 
 	unsigned char clse_code[2];
 	int cc;
@@ -1020,7 +1020,7 @@ static inline int is_valid_frame(int opcode)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int do_handshake(struct ws_frame_data *wfd)
+static int do_handshake(struct frame_data *wfd)
 {
 	char *response; /* Handshake response message. */
 	char *p;        /* Last request line pointer.  */
@@ -1083,7 +1083,7 @@ static int do_handshake(struct ws_frame_data *wfd)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int do_close(struct ws_frame_data *wfd, int close_code)
+static int do_close(struct frame_data *wfd, int close_code)
 {
 	int cc; /* Close code.           */
 
@@ -1152,7 +1152,7 @@ send:
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int do_pong(struct ws_frame_data *wfd, uint64_t frame_size)
+static int do_pong(struct frame_data *wfd, uint64_t frame_size)
 {
 	if (ws_sendframe(
 			wfd->client->client_id, (const char *)wfd->msg_ctrl, frame_size, WS_FR_OP_PONG) < 0)
@@ -1175,7 +1175,7 @@ static int do_pong(struct ws_frame_data *wfd, uint64_t frame_size)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static inline int next_byte(struct ws_frame_data *wfd)
+static inline int next_byte(struct frame_data *wfd)
 {
 	ssize_t n;
 
@@ -1206,7 +1206,7 @@ static inline int next_byte(struct ws_frame_data *wfd)
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int skip_frame(struct ws_frame_data *wfd, uint64_t frame_size)
+static int skip_frame(struct frame_data *wfd, uint64_t frame_size)
 {
 	uint64_t i;
 	for (i = 0; i < frame_size; i++)
@@ -1258,7 +1258,7 @@ struct frame_state_data
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int validate_utf8_txt(struct ws_frame_data *wfd,
+static int validate_utf8_txt(struct frame_data *wfd,
 	struct frame_state_data *fsd)
 {
 #ifdef VALIDATE_UTF8
@@ -1309,7 +1309,7 @@ static int validate_utf8_txt(struct ws_frame_data *wfd,
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int handle_pong_frame(struct ws_frame_data *wfd,
+static int handle_pong_frame(struct frame_data *wfd,
 	struct frame_state_data *fsd)
 {
 	fsd->is_fin = 0;
@@ -1348,7 +1348,7 @@ static int handle_pong_frame(struct ws_frame_data *wfd,
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int handle_ping_frame(struct ws_frame_data *wfd,
+static int handle_ping_frame(struct frame_data *wfd,
 	struct frame_state_data *fsd)
 {
 	if (do_pong(wfd, fsd->frame_size) < 0)
@@ -1371,7 +1371,7 @@ static int handle_ping_frame(struct ws_frame_data *wfd,
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int handle_close_frame(struct ws_frame_data *wfd,
+static int handle_close_frame(struct frame_data *wfd,
 	struct frame_state_data *fsd)
 {
 #ifdef VALIDATE_UTF8
@@ -1407,7 +1407,7 @@ static int handle_close_frame(struct ws_frame_data *wfd,
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int read_single_frame(struct ws_frame_data *wfd,
+static int read_single_frame(struct frame_data *wfd,
 	struct frame_state_data *fsd)
 {
 	uint64_t *frame_size; /* Curr frame size. */
@@ -1562,7 +1562,7 @@ static int read_single_frame(struct ws_frame_data *wfd,
  * @attention This is part of the internal API and is documented just
  * for completeness.
  */
-static int next_complete_frame(struct ws_frame_data *wfd)
+static int next_complete_frame(struct frame_data *wfd)
 {
 	struct frame_state_data fsd = {0};
 	fsd.msg_data = NULL;
@@ -1734,8 +1734,8 @@ done:
  */
 static void *ws_establishconnection(void *vclient)
 {
-	struct ws_frame_data wfd;      /* WebSocket frame data.   */
-	struct ws_connection *client;  /* Client structure.       */
+	struct frame_data wfd;      /* WebSocket frame data.   */
+	struct connection *client;  /* Client structure.       */
 	int clse_thrd;                 /* Time-out close thread.  */
 
 	client = vclient;

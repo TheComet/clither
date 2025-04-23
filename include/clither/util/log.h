@@ -56,7 +56,8 @@ CLITHER_PRINTF_FORMAT(1, 2) void log_net(const char* fmt, ...);
 
 /* Memory logging functions ------------------------------------------------- */
 
-int log_oom(int bytes, const char* func_name);
+int  log_oom(int bytes, const char* func_name);
+void log_hex_ascii(const void* data, int len);
 
 /* Parser/File logging functions -------------------------------------------- */
 

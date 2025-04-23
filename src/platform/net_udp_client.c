@@ -38,20 +38,19 @@ static void udp_client_destroy(struct net_connection* client)
 static enum net_receive_result
 udp_client_receive(struct net_connection* client, struct net_packet* packet)
 {
-    while (1)
+    while (vec_count(client->sockets) > 0)
     {
-        packet->len = net_recv(
-            *vec_last(client->sockets), packet->data, sizeof(packet->data));
+        int* sockfd = vec_last(client->sockets);
+        packet->len = net_recv(*sockfd, packet->data, sizeof(packet->data));
         if (packet->len == 0)
             return NET_RECEIVE_NO_DATA;
         if (packet->len > 0)
             return NET_RECEIVE_DATA;
 
         net_close(*sockfd_vec_pop(client->sockets));
-        if (vec_count(client->sockets) == 0)
-            return log_err("Connection to server was closed\n");
-        log_info("Attempting to use next socket\n");
     }
+
+    return log_err("Connection to server was closed\n");
 }
 
 static int
@@ -63,17 +62,16 @@ udp_client_send(struct net_connection* client, const struct net_packet* packet)
      * protocol (IPv4 vs IPv6) is being used. If a send call fails, and there
      * are more sockets, simply close the one that failed and try the next one.
      */
-    while (1)
+    while (vec_count(client->sockets) > 0)
     {
-        if (net_send(*vec_last(client->sockets), packet->data, packet->len) >=
-            0)
+        int* sockfd = vec_last(client->sockets);
+        if (net_send(*sockfd, packet->data, packet->len) >= 0)
             return 0;
 
         net_close(*sockfd_vec_pop(client->sockets));
-        if (vec_count(client->sockets) == 0)
-            return log_err("Connection to server was closed\n");
-        log_info("Attempting to use next socket\n");
     }
+
+    return log_err("Connection to server was closed\n");
 }
 
 const struct net_client_interface net_udp_client = {

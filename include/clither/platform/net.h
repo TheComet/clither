@@ -61,6 +61,8 @@ void net_log_host_ips(void);
  */
 void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr);
 
+int net_set_nonblock_reuse(int sockfd);
+
 /*!
  * \brief Creates a non-blocking socket and binds it to the specified address.
  * This function is designed to work with server_init() and net_sendto().
@@ -93,6 +95,8 @@ int net_host_udp(const char* bind_address, const char* port);
  */
 int net_connect_udp(
     struct sockfd_vec** sockfds, const char* server_address, const char* port);
+int net_connect_tcp(
+    struct sockfd_vec** sockfds, const char* server_address, const char* port);
 
 /*! Closes a socket */
 void net_close(int sockfd);
@@ -101,7 +105,7 @@ void net_close(int sockfd);
  * \brief Sends data to the specified address (UDP).
  */
 int net_sendto(
-    int sockfd, const void* buf, int len, const struct net_addr* addr);
+    int sockfd, const struct net_addr* addr, const void* buf, int len);
 
 /*!
  * \brief Sends data over a previously connected socket (see
@@ -117,7 +121,7 @@ int net_send(int sockfd, const void* buf, int len);
  * \return Returns 0 if nothing was received. Returns -1 if an error occurred.
  * Returns the number of bytes received if successful.
  */
-int net_recvfrom(int sockfd, void* buf, int capacity, struct net_addr* addr);
+int net_recvfrom(int sockfd, struct net_addr* addr, void* buf, int capacity);
 
 /*!
  * \brief Receive data (non-blocking) from a connected socket. Data is written

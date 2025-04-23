@@ -275,44 +275,6 @@ void mem_free(void* p)
     free(p);
 }
 
-/* ------------------------------------------------------------------------- */
-static void log_hex_ascii(const void* data, int len)
-{
-    int i;
-
-    for (i = 0; i != 16; ++i)
-        fprintf(stderr, "%c  ", "0123456789ABCDEF"[i]);
-    putc(' ', stderr);
-    for (i = 0; i != 16; ++i)
-        putc("0123456789ABCDEF"[i], stderr);
-    putc('\n', stderr);
-
-    for (i = 0; i < len;)
-    {
-        int     j;
-        uint8_t c = ((const uint8_t*)data)[i];
-        for (j = 0; j != 16; ++j)
-        {
-            if (i + j < len)
-                fprintf(stderr, "%02x ", c);
-            else
-                fprintf(stderr, "   ");
-        }
-
-        fprintf(stderr, " ");
-        for (j = 0; j != 16 && i + j != len; ++j)
-        {
-            if (c >= 32 && c < 127) /* printable ascii */
-                putc(c, stderr);
-            else
-                putc('.', stderr);
-        }
-
-        fprintf(stderr, "\n");
-        i += 16;
-    }
-}
-
 int mem_deinit_threadlocal(void)
 {
     uintptr_t leaks;

@@ -57,9 +57,10 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
     set (CLITHER_THREADLOCAL "__declspec(thread)")
     set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
     set (CLITHER_HOTPATCH "__declspec(noinline)")
-elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
     set (CLITHER_THREADLOCAL "__thread")
-    set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
+    #set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
+    set (CLITHER_STATIC_ASSERT "{                \\\n        typedef char static_assertion[(condition) ? 1 : -1]; \\\n        static_assertion static_assertion_;                  \\\n        (void)static_assertion_;                             \\\n    }")
     set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
 else ()
     message (FATAL_ERROR "Builtins not yet implemented for compiler: ${CMAKE_C_COMPILER_ID}\nYou could try to add them yourself (just check CMakeLists.txt at this location)")
@@ -136,6 +137,7 @@ add_executable (clither
     "include/clither/platform/asm_optimizations.h"
     "include/clither/platform/utf8.h"
 
+    "include/clither/util/base64.h"
     "include/clither/util/bmap.h"
     "include/clither/util/bset.h"
     "include/clither/util/cli_colors.h"
@@ -147,6 +149,7 @@ add_executable (clither
     "include/clither/util/morton.h"
     "include/clither/util/popcount.h"
     "include/clither/util/rb.h"
+    "include/clither/util/sha1.h"
     "include/clither/util/str.h"
     "include/clither/util/strspan.h"
     "include/clither/util/strview.h"
@@ -187,9 +190,11 @@ add_executable (clither
     "src/game/snake_split_rb.c"
     "src/game/world.c"
 
+    "src/util/base64.c"
     "src/util/hash.c"
     "src/util/log.c"
     "src/util/morton.c"
+    "src/util/sha1.c"
     "src/util/str.c"
     "src/util/strview.c"
     "src/util/strlist.c"
@@ -303,6 +308,8 @@ add_executable (clither
         tests/clither/test_bezier_aabb.cpp
         tests/clither/test_bezier_fit.cpp
         tests/clither/test_bezier_point.cpp
+        tests/clither/test_bmap.cpp
+        tests/clither/test_bset.cpp
         tests/clither/test_cmd.cpp
         tests/clither/test_hmap.cpp
         tests/clither/test_hmap_full.cpp
@@ -316,11 +323,11 @@ add_executable (clither
         tests/clither/test_tick.cpp
         tests/clither/test_vec.cpp
         tests/clither/test_wrap.cpp
-        tests/clither/test_bmap.cpp
-        tests/clither/test_bset.cpp
         $<$<AND:$<BOOL:${CLITHER_CLIENT}>,$<BOOL:${CLITHER_SERVER}>>:
             tests/clither/test_protocol_feedback.cpp
-            tests/clither/test_protocol_join.cpp>>
+            tests/clither/test_protocol_join.cpp>
+        $<$<BOOL:${CLITHER_SERVER_WEBSOCKETS}>:
+            tests/clither/test_ws.cpp>>
 
     $<$<BOOL:${CLITHER_BENCHMARKS}>:
         benchmarks/benchmarks.cpp

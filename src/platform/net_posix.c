@@ -13,24 +13,28 @@
 
 VEC_DEFINE(sockfd_vec, int, 8)
 
-CLITHER_STATIC_ASSERT(sizeof(struct sockaddr_in) <= NET_MAX_ADDRLEN);
-CLITHER_STATIC_ASSERT(sizeof(struct sockaddr_in6) <= NET_MAX_ADDRLEN);
-
 /* ------------------------------------------------------------------------- */
-static int set_nonblocking(int sockfd)
+int net_set_nonblock_reuse(int sockfd)
 {
-    int flags = fcntl(sockfd, F_GETFL, 0);
+    const int enable = 1;
+    int       flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1)
-    {
-        log_err("fcntl() failed for socket: %s\n", strerror(errno));
-        return -1;
-    }
+        return log_err("fcntl() failed for socket: %s\n", strerror(errno));
 
     if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
-    {
-        log_err("fcntl() failed for socket: %s\n", strerror(errno));
-        return -1;
-    }
+        return log_err("fcntl() failed for socket: %s\n", strerror(errno));
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+        return log_err(
+            "sotsocketopt(SO_REUSEADDR) failed for socket: %s\n",
+            strerror(errno));
+
+#if defined(SO_REUSEPORT)
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0)
+        return log_err(
+            "sotsocketopt(SO_REUSEPORT) failed for socket: %s\n",
+            strerror(errno));
+#endif
 
     return 0;
 }
@@ -66,6 +70,8 @@ void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr)
 /* ------------------------------------------------------------------------- */
 int net_init(void)
 {
+    CLITHER_STATIC_ASSERT(sizeof(struct sockaddr_in) <= NET_MAX_ADDRLEN);
+    CLITHER_STATIC_ASSERT(sizeof(struct sockaddr_in6) <= NET_MAX_ADDRLEN);
     return 0;
 }
 
@@ -143,7 +149,7 @@ static int net_bind(const char* bind_address, const char* port, int socktype)
             continue;
 
         /* We want non-blocking sockets */
-        if (set_nonblocking(sockfd) < 0)
+        if (net_set_nonblock_reuse(sockfd) < 0)
         {
             close(sockfd);
             continue;
@@ -223,13 +229,6 @@ static int net_connect(
         if (sockfd == -1)
             continue;
 
-        /* We want non-blocking sockets */
-        if (set_nonblocking(sockfd) < 0)
-        {
-            close(sockfd);
-            continue;
-        }
-
         /*
          * When connecting a UDP socket, we can use send() instead of sendto()
          * This way, the server address (socketaddr_storage) doens't need to be
@@ -243,6 +242,14 @@ static int net_connect(
                 ipstr.cstr,
                 port,
                 strerror(errno));
+            close(sockfd);
+            continue;
+        }
+
+        /* We want non-blocking sockets: NOTE: This needs to be done after
+         * connect(), otherwise connect() will return EINPROGRESS */
+        if (net_set_nonblock_reuse(sockfd) < 0)
+        {
             close(sockfd);
             continue;
         }
@@ -273,6 +280,11 @@ int net_connect_udp(
 {
     return net_connect(sockfds, server_address, port, SOCK_DGRAM);
 }
+int net_connect_tcp(
+    struct sockfd_vec** sockfds, const char* server_address, const char* port)
+{
+    return net_connect(sockfds, server_address, port, SOCK_STREAM);
+}
 
 /* ------------------------------------------------------------------------- */
 void net_close(int sockfd)
@@ -297,7 +309,7 @@ void net_close(int sockfd)
 
 /* ------------------------------------------------------------------------- */
 int net_sendto(
-    int sockfd, const void* buf, int len, const struct net_addr* addr)
+    int sockfd, const struct net_addr* addr, const void* buf, int len)
 {
     const struct sockaddr* sockaddr =
         (const struct sockaddr*)addr->sockaddr_storage;
@@ -311,7 +323,7 @@ int net_send(int sockfd, const void* buf, int len)
 }
 
 /* ------------------------------------------------------------------------- */
-int net_recvfrom(int sockfd, void* buf, int capacity, struct net_addr* addr)
+int net_recvfrom(int sockfd, struct net_addr* addr, void* buf, int capacity)
 {
     socklen_t addrlen_received = sizeof(addr->sockaddr_storage);
 

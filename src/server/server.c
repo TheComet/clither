@@ -69,28 +69,51 @@ static void server_client_remove(
 
 /* ------------------------------------------------------------------------- */
 static void mark_client_as_malicious_and_drop(
-    struct server*         server,
-    const struct net_addr* addr,
-    struct server_client*  client,
-    struct world*          world,
-    int                    timeout)
+    struct server*                server,
+    const struct settings_server* settings,
+    const struct net_addr*        addr,
+    struct server_client*         client,
+    struct world*                 world)
 {
-    net_addr_hmap_insert_update(&server->malicious_clients, addr, timeout);
-    server_client_remove(server, world, addr, client);
+    struct net_addr_str ipstr;
+    int*                timeout;
+    net_addr_to_str(&ipstr, addr);
+
+    switch (net_addr_hmap_emplace_or_get(
+        &server->malicious_clients, addr, &timeout))
+    {
+        case HMAP_OOM: break;
+        case HMAP_EXISTS: *timeout *= 2; break;
+        case HMAP_NEW:
+            *timeout = settings->malicious_timeout * settings->net_tick_rate;
+            break;
+    }
+    log_warn(
+        "Client %s is malicious. Disconnecting and banning for %d seconds\n",
+        ipstr.cstr,
+        *timeout / settings->net_tick_rate);
+
+    if (client != NULL)
+        server_client_remove(server, world, addr, client);
 }
 
 /* ------------------------------------------------------------------------- */
 int server_init(
     struct server* server, const char* bind_address, const char* port)
 {
-    server->udp_server = net_udp_server.create(bind_address, port);
-    if (server->udp_server == NULL)
+    server->net[0] = net_udp_server.create(bind_address, port);
+    if (server->net[0] == NULL)
         goto bind_udp_sock_failed;
+    server->inet[0] = &net_udp_server;
 
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-    server->ws_server = net_ws_server.create(bind_address, port);
-    if (server->ws_server == NULL)
+    server->net[1] = net_ws_server.create(bind_address, port);
+    if (server->net[1] == NULL)
         goto bind_tcp_sock_failed;
+    server->inet[1] = &net_ws_server;
+#else
+    server->inet[1] = NULL;
+    server->net[1] = NULL;
 #endif
 
     server_client_hmap_init(&server->clients);
@@ -102,7 +125,7 @@ int server_init(
 #if defined(CLITHER_SERVER_WEBSOCKETS)
 bind_tcp_sock_failed:
 #endif
-    net_udp_server.destroy(server->udp_server);
+    server->inet[0]->destroy(server->net[0]);
 bind_udp_sock_failed:
     return -1;
 }
@@ -115,9 +138,9 @@ void server_deinit(struct server* server)
     int                    slot;
 
 #if defined(CLITHER_SERVER_WEBSOCKETS)
-    net_ws_server.destroy(server->ws_server);
+    server->inet[1]->destroy(server->net[1]);
 #endif
-    net_udp_server.destroy(server->udp_server);
+    server->inet[0]->destroy(server->net[0]);
 
     net_addr_hmap_deinit(server->banned_clients);
     net_addr_hmap_deinit(server->malicious_clients);
@@ -156,7 +179,7 @@ static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
     struct msg*        msg = *pmsg;
 
     if (pkt->len + msg->payload_len + 2 > (int)sizeof(pkt->data))
-        return VEC_RETAIN;
+        return -1; /* Triggers a send() */
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
@@ -179,23 +202,23 @@ int server_send_pending_data(struct server* server, struct world* world)
     struct net_packet      pkt;
     struct msg**           pmsg;
     uint8_t                type;
+    int                    status;
 
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         /* Append unreliable messages first */
-        while (1)
+        pkt.len = 0;
+    packet_full:
+        status = msg_vec_retain(
+            client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
+        if (status == -1)
         {
-            pkt.len = 0;
-            msg_vec_retain(
-                client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
-            if (pkt.len == 0)
-                break;
-
             client->inet->send(client->net, addr, &pkt);
+            pkt.len = 0;
+            goto packet_full;
         }
 
         /* Reliable messages */
-        pkt.len = 0;
         vec_for_each (client->pending_msgs, pmsg)
         {
             struct msg* msg = *pmsg;
@@ -910,7 +933,7 @@ static enum process_message_result process_message(
     }
 
     mark_client_as_malicious_and_drop(
-        server, addr, client, world, settings_server->malicious_timeout);
+        server, settings_server, addr, client, world);
     return PROCESS_MESSAGE_CLIENT_DROPPED;
 }
 
@@ -952,11 +975,7 @@ static int unpack_packet(
                 ipstr.cstr);
             log_warn("Dropping rest of packet\n");
             mark_client_as_malicious_and_drop(
-                server,
-                client_addr,
-                client,
-                world,
-                settings_server->malicious_timeout);
+                server, settings_server, client_addr, client, world);
             break;
         }
 
@@ -1014,6 +1033,7 @@ int server_recv(
     struct server_client*  client;
     int                    slot;
     int*                   timeout;
+    int                    net_i;
 
     log_net("server_recv() frame=%d\n", frame_number);
 
@@ -1047,14 +1067,18 @@ int server_recv(
     }
 
     /* We may need to read more than one packet */
+    net_i = 0;
     while (1)
     {
-        switch (
-            net_udp_server.receive(server->udp_server, &client_addr, &packet))
+        switch (server->inet[net_i]->receive(
+            server->net[net_i], &client_addr, &packet))
         {
             case NET_RECEIVE_ERROR: return -1;
-            case NET_RECEIVE_NO_DATA: goto recv_udp_done;
             case NET_RECEIVE_DATA: break;
+            case NET_RECEIVE_NO_DATA:
+                if (++net_i > 1 || server->net[net_i] == NULL)
+                    return 0;
+                continue;
         }
 
         /*
@@ -1070,8 +1094,9 @@ int server_recv(
         timeout = net_addr_hmap_find(server->malicious_clients, &client_addr);
         if (timeout != NULL)
         {
-            *timeout += settings_server->malicious_timeout *
-                        settings_server->net_tick_rate;
+            struct net_addr_str ipstr;
+            net_addr_to_str(&ipstr, &client_addr);
+            *timeout *= 2;
             continue;
         }
 
@@ -1086,8 +1111,8 @@ int server_recv(
         if (unpack_packet(
                 server,
                 settings_server,
-                &net_udp_server,
-                server->udp_server,
+                server->inet[net_i],
+                server->net[net_i],
                 world,
                 settings_world,
                 client,
@@ -1098,7 +1123,6 @@ int server_recv(
             return -1;
         }
     }
-recv_udp_done:;
 
     return 0;
 }

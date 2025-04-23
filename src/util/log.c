@@ -1,12 +1,13 @@
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#    define WIN32_LEAN_AND_MEAN
+#    include <Windows.h>
 #endif
 
 static CLITHER_THREADLOCAL struct log_interface g_out_log;
@@ -290,23 +291,22 @@ void log_note(const char* fmt, ...)
 int log_err_win32(const char* fmt, ...)
 {
     va_list ap;
-    char* error;
-    DWORD dwError = GetLastError();
+    char*   error;
+    DWORD   dwError = GetLastError();
     if (FormatMessageA(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
-                | FORMAT_MESSAGE_IGNORE_INSERTS,
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL,
             dwError,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
             (LPSTR)&error,
             0,
-            NULL)
-        == 0)
+            NULL) == 0)
     {
         log_err("(Failed to get error from FormatMessage())");
         return;
     }
-    
+
     va_start(ap, fmt);
     out_log_vwrite(LOG_ERR, fmt, ap);
     va_end(ap);
@@ -338,6 +338,44 @@ int log_oom(int bytes, const char* func_name)
 {
     log_err("Failed to allocate %d bytes in %s\n", bytes, func_name);
     return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+void log_hex_ascii(const void* data, int len)
+{
+    int i;
+
+    for (i = 0; i != 16; ++i)
+        fprintf(stderr, "%c  ", "0123456789ABCDEF"[i]);
+    putc(' ', stderr);
+    for (i = 0; i != 16; ++i)
+        putc("0123456789ABCDEF"[i], stderr);
+    putc('\n', stderr);
+
+    for (i = 0; i < len;)
+    {
+        int j;
+        for (j = 0; j != 16; ++j)
+        {
+            if (i + j < len)
+                fprintf(stderr, "%02x ", ((const uint8_t*)data)[i + j]);
+            else
+                fprintf(stderr, "   ");
+        }
+
+        fprintf(stderr, " ");
+        for (j = 0; j != 16 && i + j != len; ++j)
+        {
+            uint8_t c = ((const uint8_t*)data)[i + j];
+            if (c >= 32 && c < 127) /* printable ascii */
+                putc(c, stderr);
+            else
+                putc('.', stderr);
+        }
+
+        fprintf(stderr, "\n");
+        i += 16;
+    }
 }
 
 /* ------------------------------------------------------------------------- */

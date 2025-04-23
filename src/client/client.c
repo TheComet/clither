@@ -126,7 +126,7 @@ static int append_unreliable_msgs_to_buf(struct msg** pmsg, void* user)
     struct msg*        msg = *pmsg;
 
     if (pkt->len + msg->payload_len + 2 > (int)sizeof(pkt->data))
-        return VEC_RETAIN;
+        return -1; /* Triggers a send() */
     if (msg_is_reliable(msg))
         return VEC_RETAIN;
 
@@ -146,21 +146,21 @@ int client_send_pending_data(struct client* client)
     struct net_packet pkt;
     struct msg**      pmsg;
     uint8_t           type;
+    int               status;
 
     /* Append unreliable messages first before appending reliable */
-    while (1)
+    pkt.len = 0;
+packet_full:
+    status = msg_vec_retain(
+        client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
+    if (status == -1)
     {
-        pkt.len = 0;
-        msg_vec_retain(
-            client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
-        if (pkt.len == 0)
-            break;
-
         net_udp_client.send(client->connection, &pkt);
+        pkt.len = 0;
+        goto packet_full;
     }
 
     /* Reliable messages */
-    pkt.len = 0;
     vec_for_each (client->pending_msgs, pmsg)
     {
         struct msg* msg = *pmsg;
@@ -593,7 +593,6 @@ client_recv(struct client* client, struct world* world)
         /* Don't let client time out */
         client->timeout_counter = 0;
 
-        log_net("Received UDP packet, size=%d\n", packet.len);
         result = client_recv_result_combine(
             result, unpack_packet(client, world, &packet));
 
