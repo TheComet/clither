@@ -610,7 +610,6 @@ reswitch:
             goto reswitch;
         }
 
-        /* 16-bit frame length */
         case PAYLOAD_LEN_16: {
             p->frame_length = packet->data[(*off)++] << 8;
             p->state++;
@@ -625,7 +624,6 @@ reswitch:
             goto reswitch;
         }
 
-        /* 64-bit frame length */
         case PAYLOAD_LEN_64: {
             uint8_t shift;
             p->frame_length = 0;
@@ -690,7 +688,8 @@ reswitch:
                     packet->data[(*off)++] ^ xor;
             }
 
-            if (game_packet->len == sizeof(game_packet->data))
+            if (game_packet->len == sizeof(game_packet->data) &&
+                p->frame_idx != p->frame_length)
             {
                 log_err(
                     "WebSocket frame too large (%" PRIu64 ")\n",
@@ -733,6 +732,8 @@ recv_next_connection:
 
     conn = connection_hmap_kvs_get_value(
         &server->connections->kvs, server->iter_conn_slot);
+    *addr = *connection_hmap_kvs_get_key(
+        &server->connections->kvs, server->iter_conn_slot);
 
 recv_next_chunk:
     if (conn->ws_packet_off == conn->ws_packet.len)
@@ -751,40 +752,51 @@ recv_next_chunk:
     switch (conn->state)
     {
         case STATE_CONNECTING: {
-            log_dbg("WebSocket handshake in progress...\n");
-            log_hex_ascii(conn->ws_packet.data, conn->ws_packet.len);
             switch (send_handshake_response(conn))
             {
                 case HANDSHAKE_NEED_MORE_DATA: goto recv_next_chunk;
-                case HANDSHAKE_SUCCESS:
-                    conn->state = STATE_OPEN;
+
+                case HANDSHAKE_SUCCESS: {
+                    int   socket = conn->socket;
+                    char* key = conn->http_header_parser.websocket_key;
+
+                    /* This is to support multiple connections from the same
+                     * browser (multiple tabs). We re-use the 20 byte SHA1 key
+                     */
+                    addr->len = SHA1HashSize;
+                    CLITHER_STATIC_ASSERT(
+                        SHA1HashSize <= sizeof(addr->sockaddr_storage));
+                    memcpy(addr->sockaddr_storage, key, SHA1HashSize);
+                    connection_hmap_erase_slot(
+                        server->connections, server->iter_conn_slot);
+                    conn =
+                        connection_hmap_emplace_new(&server->connections, addr);
+                    connection_init(conn, socket);
+
                     log_dbg("WebSocket handshake complete\n");
-                    goto recv_next_chunk;
-                case HANDSHAKE_ERROR:
+
+                    conn->state = STATE_OPEN;
+                    goto recv_next_connection;
+                }
+
+                case HANDSHAKE_ERROR: {
                     log_err("WebSocket handshake failed\n");
                     net_close(conn->socket);
                     connection_hmap_erase_slot(
                         server->connections, server->iter_conn_slot);
                     goto recv_next_connection;
+                }
             }
             break;
         }
 
         case STATE_OPEN: {
-            log_dbg(
-                "Parsing websocket frame, offset=%d\n", conn->ws_packet_off);
-            log_hex_ascii(conn->ws_packet.data, conn->ws_packet.len);
             switch (parse_frame(conn))
             {
                 case FRAME_NEED_MORE_DATA: goto recv_next_chunk;
 
                 case FRAME_SUCCESS:
-                    log_dbg("Successfully decoded WebSocket frame:\n");
-                    log_hex_ascii(
-                        conn->game_packet.data, conn->game_packet.len);
                     *payload_packet = conn->game_packet;
-                    *addr = *connection_hmap_kvs_get_key(
-                        &server->connections->kvs, server->iter_conn_slot);
                     return NET_RECEIVE_DATA;
 
                 case FRAME_ERROR:
@@ -809,10 +821,44 @@ static int ws_server_send(
     const struct net_addr*   addr,
     const struct net_packet* packet)
 {
-    struct connection* conn = connection_hmap_find(server->connections, addr);
-    CLITHER_DEBUG_ASSERT(conn != NULL);
+    struct connection* conn;
 
-    return net_send(conn->socket, packet->data, packet->len);
+    /* WebSocket frame header:
+     * 1 byte: FIN, RSV, opcode
+     * 1 byte: mask (no mask), payload len
+     * 2 bytes: extended payload len
+     */
+    uint8_t ws_packet[4 + sizeof(struct net_packet)];
+    int     ws_packet_header_len;
+
+    conn = connection_hmap_find(server->connections, addr);
+    if (conn == NULL)
+    {
+        log_warn("ws_server_send(): WebSocket connection was removed.\n");
+        return 0;
+    }
+
+    if (conn->state != STATE_OPEN)
+        return log_err("WebSocket connection is not open\n");
+
+    ws_packet[0] = 0x80 | 0x2; /* FIN + opcode (binary) */
+    if (packet->len > 125)
+    {
+        ws_packet[1] = 126;
+        ws_packet[2] = (packet->len >> 8) & 0xFF;
+        ws_packet[3] = packet->len & 0xFF;
+        ws_packet_header_len = 4;
+    }
+    else
+    {
+        ws_packet[1] = packet->len;
+        ws_packet_header_len = 2;
+    }
+
+    memcpy(ws_packet + ws_packet_header_len, packet->data, packet->len);
+
+    return net_send(
+        conn->socket, ws_packet, packet->len + ws_packet_header_len);
 }
 
 const struct net_server_interface net_ws_server = {

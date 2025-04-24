@@ -207,14 +207,13 @@ int server_send_pending_data(struct server* server, struct world* world)
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         /* Append unreliable messages first */
-        pkt.len = 0;
     packet_full:
+        pkt.len = 0;
         status = msg_vec_retain(
             client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
         if (status == -1)
         {
             client->inet->send(client->net, addr, &pkt);
-            pkt.len = 0;
             goto packet_full;
         }
 

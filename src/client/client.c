@@ -149,14 +149,13 @@ int client_send_pending_data(struct client* client)
     int               status;
 
     /* Append unreliable messages first before appending reliable */
-    pkt.len = 0;
 packet_full:
+    pkt.len = 0;
     status = msg_vec_retain(
         client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
     if (status == -1)
     {
         net_udp_client.send(client->connection, &pkt);
-        pkt.len = 0;
         goto packet_full;
     }
 
@@ -577,8 +576,6 @@ client_recv(struct client* client, struct world* world)
     struct client_recv_result result = client_recv_ok();
 
     CLITHER_DEBUG_ASSERT(client->connection != NULL);
-
-    log_net("client_recv() frame=%d\n", client->frame_number);
 
     /* We may need to read more than one UDP packet */
     while (1)

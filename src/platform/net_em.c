@@ -1,24 +1,33 @@
 #include "clither/platform/net.h"
 #include "clither/util/log.h"
+#include "clither/util/rb.h"
 #include "clither/util/vec.h"
 #include <assert.h>
 #include <emscripten/websocket.h>
 
 VEC_DEFINE(sockfd_vec, int, 8)
 
+RB_DECLARE(packet_rb, struct net_packet, 16)
+RB_DEFINE(packet_rb, struct net_packet, 16)
+
+struct state
+{
+    struct packet_rb* send_rb;
+    struct packet_rb* recv_rb;
+
+    unsigned connecting : 1;
+    unsigned open : 1;
+    unsigned error : 1;
+};
+
+static struct state g_state;
+
 /* ------------------------------------------------------------------------- */
 static EM_BOOL ws_open_cb(
     int event_type, const EmscriptenWebSocketOpenEvent* event, void* user_data)
 {
-    int sockfd = (int)(intptr_t)user_data;
-    log_dbg("ws_open_cb\n");
-    emscripten_websocket_send_binary(sockfd, "aaa", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "bbb", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "ccc", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "ddd", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "eee", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "fff", sizeof("aaa") - 1);
-    emscripten_websocket_send_binary(sockfd, "ggg", sizeof("aaa") - 1);
+    (void)event_type, (void)event, (void)user_data;
+    g_state.open = 1;
     return EM_TRUE;
 }
 
@@ -26,7 +35,9 @@ static EM_BOOL ws_open_cb(
 static EM_BOOL ws_close_cb(
     int event_type, const EmscriptenWebSocketCloseEvent* event, void* user_data)
 {
-    log_dbg("ws_close_cb\n");
+    (void)event_type, (void)event, (void)user_data;
+    g_state.open = 0;
+    g_state.connecting = 0;
     return EM_TRUE;
 }
 
@@ -34,7 +45,8 @@ static EM_BOOL ws_close_cb(
 static EM_BOOL ws_error_cb(
     int event_type, const EmscriptenWebSocketErrorEvent* event, void* user_data)
 {
-    log_dbg("ws_error_cb\n");
+    (void)event_type, (void)event, (void)user_data;
+    g_state.error = 1;
     return EM_TRUE;
 }
 
@@ -44,7 +56,21 @@ static EM_BOOL ws_msg_cb(
     const EmscriptenWebSocketMessageEvent* event,
     void*                                  user_data)
 {
-    log_dbg("ws_msg_cb\n");
+    struct net_packet* packet;
+    (void)event_type, (void)event, (void)user_data;
+
+    if (event->numBytes > sizeof(struct net_packet))
+    {
+        log_err("WebSocket message too large: %d\n", event->numBytes);
+        return EM_FALSE;
+    }
+
+    packet = packet_rb_emplace_realloc(&g_state.recv_rb);
+    if (packet == NULL)
+        return EM_FALSE;
+    memcpy(packet->data, event->data, event->numBytes);
+    packet->len = event->numBytes;
+
     return EM_TRUE;
 }
 
@@ -56,6 +82,13 @@ int net_init(void)
         log_err("WebSockets are not supported!\n");
         return -1;
     }
+
+    packet_rb_init(&g_state.send_rb);
+    packet_rb_init(&g_state.recv_rb);
+
+    g_state.connecting = 0;
+    g_state.open = 0;
+    g_state.error = 0;
 
     return 0;
 }
@@ -74,6 +107,7 @@ void net_log_host_ips(void)
 /* ------------------------------------------------------------------------- */
 void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr)
 {
+    (void)addr;
     str->cstr[0] = '\0';
 }
 
@@ -81,9 +115,10 @@ void net_addr_to_str(struct net_addr_str* str, const struct net_addr* addr)
 int net_connect_udp(
     struct sockfd_vec** sockfds, const char* server_address, const char* port)
 {
-    int sockfd;
-
+    int                                 sockfd;
     EmscriptenWebSocketCreateAttributes create_attr;
+    (void)port;
+
     emscripten_websocket_init_create_attributes(&create_attr);
     create_attr.url = server_address;
     create_attr.protocols = NULL;
@@ -96,7 +131,11 @@ int net_connect_udp(
         return -1;
     }
 
-    emscripten_websocket_set_onopen_callback(sockfd, (void*)sockfd, ws_open_cb);
+    g_state.error = 0;
+    g_state.connecting = 1;
+    g_state.open = 0;
+
+    emscripten_websocket_set_onopen_callback(sockfd, NULL, ws_open_cb);
     emscripten_websocket_set_onclose_callback(sockfd, NULL, ws_close_cb);
     emscripten_websocket_set_onerror_callback(sockfd, NULL, ws_error_cb);
     emscripten_websocket_set_onmessage_callback(sockfd, NULL, ws_msg_cb);
@@ -114,26 +153,67 @@ void net_close(int sockfd)
 int net_sendto(
     int sockfd, const struct net_addr* addr, const void* buf, int len)
 {
-    assert(0);
+    (void)sockfd, (void)addr, (void)buf, (void)len;
+    CLITHER_DEBUG_ASSERT(0);
     return -1;
 }
 
 /* ------------------------------------------------------------------------- */
 int net_send(int sockfd, const void* buf, int len)
 {
-    // emscripten_websocket_send_binary(sockfd, (void*)buf, len);
-    return 0;
+    if (g_state.error || g_state.connecting == 0)
+        return -1;
+
+    if (g_state.open)
+    {
+        int                i;
+        struct net_packet* packet;
+        rb_for_each (g_state.send_rb, i, packet)
+            emscripten_websocket_send_binary(sockfd, packet->data, packet->len);
+        packet_rb_clear(g_state.send_rb);
+
+        emscripten_websocket_send_binary(sockfd, (void*)buf, len);
+    }
+    else
+    {
+        struct net_packet* packet = packet_rb_emplace_realloc(&g_state.send_rb);
+        if (packet == NULL)
+            return -1;
+        memcpy(packet->data, buf, len);
+        packet->len = len;
+    }
+
+    return len;
 }
 
 /* ------------------------------------------------------------------------- */
 int net_recvfrom(int sockfd, struct net_addr* addr, void* buf, int capacity)
 {
-    assert(0);
+    (void)sockfd, (void)addr, (void)buf, (void)capacity;
+    CLITHER_DEBUG_ASSERT(0);
     return -1;
 }
 
 /* ------------------------------------------------------------------------- */
 int net_recv(int sockfd, void* buf, int capacity)
 {
-    return 0;
+    struct net_packet* packet;
+    int                len;
+    (void)sockfd;
+
+    if (g_state.error || g_state.connecting == 0)
+        return -1;
+
+    if (rb_count(g_state.recv_rb) == 0)
+        return 0;
+
+    if (capacity < (int)sizeof(packet->data))
+        return log_err("Buffer too small: %d\n", capacity);
+
+    packet = rb_peek_read(g_state.recv_rb);
+    memcpy(buf, packet->data, packet->len);
+    len = packet->len;
+    packet_rb_take(g_state.recv_rb);
+
+    return len;
 }
