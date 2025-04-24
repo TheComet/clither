@@ -9,6 +9,8 @@ project ("clither"
     VERSION 0.0.1
     LANGUAGES C)
 
+list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
+
 ###############################################################################
 # Config and options
 ###############################################################################
@@ -87,6 +89,15 @@ configure_file ("templates/config.h.in" "include/clither/config.h")
 ###############################################################################
 # Game source files
 ###############################################################################
+
+if (CLITHER_ASM_OPTIMIZATIONS)
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+        enable_language (ASM)
+    endif ()
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+        enable_language (ASM_MASM)
+    endif ()
+endif ()
 
 add_executable (clither
     "templates/config.h.in"
@@ -425,23 +436,20 @@ endif ()
 # Assets
 ###############################################################################
 
-include (ExternalProject)
-
-if (WIN32)
-    set (ASSETS_COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${PROJECT_BINARY_DIR}/clither-assets/packs ${CLITHER_BUILD_BINDIR}/packs)
-else ()
-    set (ASSETS_COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_BINARY_DIR}/clither-assets/packs ${CLITHER_BUILD_BINDIR}/packs)
+if (CLITHER_GFX)
+    include (ExternalProject)
+    ExternalProject_Add (clither-assets
+        GIT_REPOSITORY https://github.com/thecomet/clither-assets
+        GIT_TAG master
+        GIT_SHALLOW ON
+        SOURCE_DIR ${PROJECT_BINARY_DIR}/clither-assets
+        UPDATE_COMMAND ""
+        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${PROJECT_BINARY_DIR}/clither-assets/packs" "${CLITHER_BUILD_BINDIR}/packs"
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+        TEST_COMMAND "")
+    add_dependencies (clither clither-assets)
 endif ()
-ExternalProject_Add (clither-assets
-    GIT_REPOSITORY https://github.com/thecomet/clither-assets
-    GIT_TAG master
-    GIT_SHALLOW ON
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/clither-assets
-    UPDATE_COMMAND ""
-    CONFIGURE_COMMAND ${ASSETS_COMMAND}
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    TEST_COMMAND "")
 
 ###############################################################################
 # Dependencies
@@ -456,17 +464,27 @@ target_link_libraries (clither
         $<$<PLATFORM_ID:Darwin>:m>
         $<$<PLATFORM_ID:Emscripten>:websocket.js>)
 
-find_package(Threads REQUIRED)
-target_link_libraries (clither PRIVATE Threads::Threads)
+if (NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+    target_link_libraries (clither PRIVATE Threads::Threads)
+endif ()
 
 if (CLITHER_GFX)
-    set (FT_DISABLE_HARFBUZZ ON CACHE STRING "")
-    add_subdirectory ("thirdparty/freetype-2.13.3")
-    target_link_libraries (clither PRIVATE freetype)
+    find_package (Freetype REQUIRED)
+    if (NOT FREETYPE_FOUND)
+        set (FT_DISABLE_HARFBUZZ ON CACHE STRING "")
+        add_subdirectory ("thirdparty/freetype-2.13.3")
+        add_library (Freetype::Freetype ALIAS freetype)
+    endif ()
+    target_link_libraries (clither PRIVATE Freetype::Freetype)
 
-    set (HB_BUILD_SUBSET ON CACHE STRING "")
-    add_subdirectory ("thirdparty/harfbuzz-11.0.0")
-    target_link_libraries (clither PRIVATE harfbuzz)
+    find_package (HarfBuzz REQUIRED)
+    if (NOT HarfBuzz_FOUND)
+        set (HB_BUILD_SUBSET ON CACHE STRING "")
+        add_subdirectory ("thirdparty/harfbuzz-11.0.0")
+        add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
+    endif ()
+    target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
 endif ()
 
 if (CLITHER_GFX_SDL)
@@ -489,15 +507,21 @@ endif ()
 if (CLITHER_GFX_GLES2)
     # Emscripten ships with GLFW already
     if (NOT EMSCRIPTEN)
-        set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
-        set (GLFW_BUILD_TESTS OFF CACHE STRING "")
-        set (GLFW_BUILD_DOCS OFF CACHE STRING "")
-        set (GLFW_INSTALL OFF CACHE STRING "")
-        add_subdirectory ("thirdparty/glfw-3.3.8")
-        target_link_libraries (clither PRIVATE glfw)
+        find_package (GLFW3 REQUIRED)
+        if (NOT GLFW_FOUND)
+            set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
+            set (GLFW_BUILD_TESTS OFF CACHE STRING "")
+            set (GLFW_BUILD_DOCS OFF CACHE STRING "")
+            set (GLFW_INSTALL OFF CACHE STRING "")
+            add_subdirectory ("thirdparty/glfw-3.3.8")
+            add_library (GLFW::GLFW ALIAS glfw)
+        endif ()
+        target_link_libraries (clither PRIVATE GLFW::GLFW)
     endif ()
 
-    target_include_directories (clither PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
+    target_include_directories (clither
+        PRIVATE
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
 endif ()
 
 if (CLITHER_BOT_API_LUA)
@@ -533,3 +557,19 @@ endif ()
 install (
     TARGETS clither
     RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
+
+if (NOT EMSCRIPTEN AND CLITHER_GFX)
+    install (
+        DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
+        DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
+endif ()
+
+if (EMSCRIPTEN)
+    install (
+        FILES
+            "${CLITHER_BUILD_BINDIR}/clither.html"
+            "${CLITHER_BUILD_BINDIR}/clither.js"
+            "${CLITHER_BUILD_BINDIR}/clither.wasm"
+        DESTINATION
+            "${CLITHER_INSTALL_BINDIR}")
+endif ()

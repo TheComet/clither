@@ -20,8 +20,8 @@
       }
     },
     {
-      "name": "release",
-      "displayName": "Release",
+      "name": "client",
+      "displayName": "Build native client",
       "description": "Default desktop build",
       "binaryDir": "${sourceDir}/build-Release"
     },
@@ -33,9 +33,11 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_BOT_API": false,
         "CLITHER_CLIENT": false,
+        "CLITHER_DOC": false,
         "CLITHER_GFX": false,
-        "CLITHER_BOT_API": false
+        "CLITHER_TESTS": false
       }
     },
     {
@@ -43,7 +45,6 @@
       "displayName": "Web",
       "description": "Build web client",
       "binaryDir": "${sourceDir}/build-web-Release",
-      "toolchainFile": "$penv{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
