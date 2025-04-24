@@ -78,6 +78,10 @@ else ()
     set (CLITHER_POPCOUNT OFF)
 endif ()
 
+if (EMSCRIPTEN)
+    set (CLITHER_EMSCRIPTEN ON)
+endif ()
+
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################
@@ -395,9 +399,26 @@ if (EMSCRIPTEN)
                 -s USE_GLFW=3 \
                 -s ALLOW_MEMORY_GROWTH \
                 -s ASYNCIFY \
+                -s EXIT_RUNTIME=1 \
                 --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs \
                 --bind \
-                --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js")
+                --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js \
+                --shell-file ${PROJECT_SOURCE_DIR}/src/shell.html")
+
+    file (GLOB_RECURSE PackFiles
+        CONFIGURE_DEPENS "${CLITHER_BUILD_BINDIR}/packs/*")
+    add_custom_command (
+        OUTPUT "${PROJECT_BINARY_DIR}/.clither_emscripten_deps"
+        COMMAND ${CMAKE_COMMAND} -E remove "${CLITHER_BUILD_BINDIR}/clither.html"
+        COMMAND ${CMAKE_COMMAND} -E touch  "${PROJECT_BINARY_DIR}/.clither_emscripten_deps"
+        COMMENT "Forcing re-link of clither.html"
+        DEPENDS
+            "src/shell.html"
+            "src/preamble.js"
+            "${PackFiles}")
+    add_custom_target (clither_emscripten_deps
+        DEPENDS "${PROJECT_BINARY_DIR}/.clither_emscripten_deps")
+    add_dependencies (clither clither_emscripten_deps)
 endif ()
 
 ###############################################################################

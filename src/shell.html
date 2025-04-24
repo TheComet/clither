@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Clither</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #707070;
+      }
+      #status {
+        font-size: 48px;
+        font-weight: bold;
+        text-align: center;
+      }
+      #canvas {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading...</div>
+    <canvas emscripten" id="canvas" tabindex=-1></canvas>
+    <script type='text/javascript'>
+      var canvasElement = document.getElementById('canvas');
+      var statusElement = document.getElementById('status')
+
+      // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+      // application robust, you may want to override this behavior before shipping!
+      // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+      canvasElement.addEventListener("webglcontextlost", (e) => {
+        alert('WebGL context lost. You will need to reload the page.');
+        e.preventDefault();
+      }, false);
+
+      var Module = {
+        canvas: canvasElement,
+        print(...args) { console.log(...args); },
+        setStatus(text) {
+          //statusElement.innerText = text;
+        },
+        onRuntimeInitialized() {
+          statusElement.style.display = 'none';
+          canvasElement.style.display = 'block';
+        },
+        onExit: function(code) {
+          statusElement.innerText = 'Client stopped.';
+          statusElement.style.display = 'block';
+          canvasElement.style.display = 'none';
+        },
+      };
+
+      window.onerror = () => {
+        Module.setStatus = (text) => {
+          if (text) console.error('[post-exception status] ' + text);
+        };
+      };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

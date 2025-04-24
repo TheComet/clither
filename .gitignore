@@ -9,7 +9,9 @@
 # IDE files
 CMakeLists.txt.user
 *.kdev4
+/.clangd
 
 # temporary files
 *.swp
 /compile_commands.json
+

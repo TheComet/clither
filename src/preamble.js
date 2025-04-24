@@ -1,1 +1,1 @@
-Module.arguments = ['--addr', 'ws://localhost:5555', '--gfx']
+Module.arguments = ['--addr', 'ws://clither.thecomet.ch:5555', '--gfx']
