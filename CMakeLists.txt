@@ -62,7 +62,7 @@ elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
     set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
 else ()
-    message (FATAL_ERROR "Unable to detect thread local storage semantics!")
+    message (FATAL_ERROR "Builtins not yet implemented for compiler: ${CMAKE_C_COMPILER_ID}\nYou could try to add them yourself (just check CMakeLists.txt at this location)")
 endif ()
 
 include (CheckCSourceCompiles)
@@ -78,18 +78,6 @@ else ()
 endif ()
 
 configure_file ("templates/config.h.in" "include/clither/config.h")
-
-if (CLITHER_ASM_OPTIMIZATIONS)
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-        enable_language (ASM)
-    endif ()
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-        enable_language (ASM)
-    endif ()
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-    enable_language (ASM_MASM)
-    endif ()
-endif ()
 
 ###############################################################################
 # Game source files
@@ -301,6 +289,7 @@ add_executable (clither
         src/platform/net_em.c
         src/platform/signals_em.c
         src/platform/tick_em.c
+        src/platform/asm_optimizations_em.c
         src/platform/utf8_posix.c>
 
     $<$<BOOL:${CLITHER_TESTS}>:
@@ -388,7 +377,7 @@ if (WIN32)
 endif ()
 
 if (EMSCRIPTEN)
-    set_target_properties(clither
+    set_target_properties (clither
         PROPERTIES
             SUFFIX ".html"
             LINK_FLAGS "\

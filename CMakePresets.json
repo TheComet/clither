@@ -47,6 +47,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_ASM_OPTIMIZATIONS": "OFF",
         "CLITHER_BOT_API": false,
         "CLITHER_DOC": false,
         "CLITHER_LOG": false,

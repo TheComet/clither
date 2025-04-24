@@ -1,5 +1,6 @@
 #include "clither/platform/system.h"
 #include <unistd.h>
+#include <cpuid.h>
 
 int system_cpu_count(void)
 {
