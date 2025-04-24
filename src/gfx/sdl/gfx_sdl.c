@@ -308,7 +308,6 @@ gfx_sdl_unload_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     (void)gfx;
     (void)pack;
-    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -691,6 +690,12 @@ static void gfx_sdl_draw_world(
 
     SDL_RenderPresent(gfx->renderer);
 }
+/* ------------------------------------------------------------------------- */
+static void gfx_sdl_draw_debug_circle(
+    struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba)
+{
+    (void)gfx, (void)pos, (void)radius, (void)rgba;
+}
 
 /* ------------------------------------------------------------------------- */
 struct gfx_interface gfx_sdl = {
@@ -704,4 +709,5 @@ struct gfx_interface gfx_sdl = {
     gfx_sdl_poll_input,
     gfx_sdl_next_cmd,
     gfx_sdl_step_anim,
-    gfx_sdl_draw_world};
+    gfx_sdl_draw_world,
+    gfx_sdl_draw_debug_circle};
