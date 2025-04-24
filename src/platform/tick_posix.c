@@ -113,6 +113,15 @@ int tick_wait_warp(struct tick* t, int warp, int tps)
 }
 
 /* ------------------------------------------------------------------------- */
+void tick_warp(struct tick* t, int warp, int tps)
+{
+    if (warp > 0)
+        t->last += 1000000000 / tps;
+    if (warp < 0)
+        t->last -= 1000000000 / tps;
+}
+
+/* ------------------------------------------------------------------------- */
 void tick_skip(struct tick* t)
 {
     struct timespec ts;

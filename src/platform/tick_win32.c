@@ -4,8 +4,7 @@
 #include <Windows.h>
 
 /* ------------------------------------------------------------------------- */
-void
-tick_cfg(struct tick* t, int tps)
+void tick_cfg(struct tick* t, int tps)
 {
     LARGE_INTEGER freq, ticks;
     QueryPerformanceFrequency(&freq);
@@ -16,11 +15,10 @@ tick_cfg(struct tick* t, int tps)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_advance(struct tick* t)
+int tick_advance(struct tick* t)
 {
     LARGE_INTEGER freq, ticks;
-    uint64_t now, wait_until;
+    uint64_t      now, wait_until;
     QueryPerformanceCounter(&ticks);
     QueryPerformanceFrequency(&freq);
     now = ticks.QuadPart;
@@ -29,7 +27,7 @@ tick_advance(struct tick* t)
     if (now > wait_until)
     {
         int ticks_behind = (now - wait_until) / t->interval;
-        if (ticks_behind >  0)
+        if (ticks_behind > 0)
             t->last = wait_until;
         return ticks_behind;
     }
@@ -38,11 +36,10 @@ tick_advance(struct tick* t)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_wait(struct tick* t)
+int tick_wait(struct tick* t)
 {
     LARGE_INTEGER freq, ticks;
-    uint64_t now, wait_until;
+    uint64_t      now, wait_until;
     QueryPerformanceCounter(&ticks);
     QueryPerformanceFrequency(&freq);
     now = ticks.QuadPart;
@@ -71,11 +68,10 @@ tick_wait(struct tick* t)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_wait_warp(struct tick* t, int warp, int tps)
+int tick_wait_warp(struct tick* t, int warp, int tps)
 {
     LARGE_INTEGER freq, ticks;
-    uint64_t now, wait_until;
+    uint64_t      now, wait_until;
     QueryPerformanceCounter(&ticks);
     QueryPerformanceFrequency(&freq);
     now = ticks.QuadPart;
@@ -109,8 +105,16 @@ tick_wait_warp(struct tick* t, int warp, int tps)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-tick_skip(struct tick* t)
+void tick_warp(struct tick* t, int warp, int tps)
+{
+    if (warp > 0)
+        t->last += freq.QuadPart / tps;
+    if (warp < 0)
+        t->last -= freq.QuadPart / tps;
+}
+
+/* ------------------------------------------------------------------------- */
+void tick_skip(struct tick* t)
 {
     LARGE_INTEGER ticks;
     QueryPerformanceCounter(&ticks);

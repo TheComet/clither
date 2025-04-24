@@ -1,26 +1,23 @@
 #include "clither/platform/tick.h"
-
 #include <emscripten.h>
 
 /* ------------------------------------------------------------------------- */
-void
-tick_cfg(struct tick* t, int tps)
+void tick_cfg(struct tick* t, int tps)
 {
-    t->last = (uint64_t)(emscripten_get_now() * 1e6);
-    t->interval = 1e9 / tps;
+    t->last = (uint64_t)(emscripten_get_now() * 1000000);
+    t->interval = 1000000000 / tps;
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_advance(struct tick* t)
+int tick_advance(struct tick* t)
 {
-    uint64_t now = (uint64_t)(emscripten_get_now() * 1e6);
+    uint64_t now = (uint64_t)(emscripten_get_now() * 1000000);
     uint64_t wait_until = t->last + t->interval;
 
     if (now > wait_until)
     {
         int ticks_behind = (now - wait_until) / t->interval;
-        if (ticks_behind >  0)
+        if (ticks_behind > 0)
             t->last = wait_until;
         return ticks_behind;
     }
@@ -29,12 +26,11 @@ tick_advance(struct tick* t)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_wait(struct tick* t)
+int tick_wait(struct tick* t)
 {
     unsigned int delta_ms;
-    uint64_t now = (uint64_t)(emscripten_get_now() * 1e6);
-    uint64_t wait_until = t->last + t->interval;
+    uint64_t     now = (uint64_t)(emscripten_get_now() * 1000000);
+    uint64_t     wait_until = t->last + t->interval;
 
     if (now > wait_until)
     {
@@ -42,7 +38,7 @@ tick_wait(struct tick* t)
         return (now - wait_until) / t->interval;
     }
 
-    delta_ms = (unsigned int)((wait_until - now) / 1e6);
+    delta_ms = (unsigned int)((wait_until - now) / 1000000);
     emscripten_sleep(delta_ms);
 
     t->last = wait_until;
@@ -50,17 +46,16 @@ tick_wait(struct tick* t)
 }
 
 /* ------------------------------------------------------------------------- */
-int
-tick_wait_warp(struct tick* t, int warp, int tps)
+int tick_wait_warp(struct tick* t, int warp, int tps)
 {
     unsigned int delta_ms;
-    uint64_t now = (uint64_t)(emscripten_get_now() * 1e6);
-    uint64_t wait_until = t->last + t->interval;
+    uint64_t     now = (uint64_t)(emscripten_get_now() * 1000000);
+    uint64_t     wait_until = t->last + t->interval;
 
     if (warp > 0)
-        wait_until += 1e9 / tps;
+        wait_until += 1000000000 / tps;
     if (warp < 0)
-        wait_until -= 1e9 / tps;
+        wait_until -= 1000000000 / tps;
 
     if (now > wait_until)
     {
@@ -68,7 +63,7 @@ tick_wait_warp(struct tick* t, int warp, int tps)
         return (now - wait_until) / t->interval;
     }
 
-    delta_ms = (unsigned int)((wait_until - now) / 1e6);
+    delta_ms = (unsigned int)((wait_until - now) / 1000000);
     emscripten_sleep(delta_ms);
 
     t->last = wait_until;
@@ -76,8 +71,16 @@ tick_wait_warp(struct tick* t, int warp, int tps)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-tick_skip(struct tick* t)
+void tick_warp(struct tick* t, int warp, int tps)
 {
-    t->last = (uint64_t)(emscripten_get_now() * 1e6);
+    if (warp > 0)
+        t->last += 1000000000 / tps;
+    if (warp < 0)
+        t->last -= 1000000000 / tps;
+}
+
+/* ------------------------------------------------------------------------- */
+void tick_skip(struct tick* t)
+{
+    t->last = (uint64_t)(emscripten_get_now() * 1000000);
 }
