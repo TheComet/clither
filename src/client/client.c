@@ -775,7 +775,6 @@ void* client_run(
                 break;
         }
     create_new_gfx_success:;
-#    endif
 
         /* Check for resource pack changes */
         if (pack_watch != NULL && fs_watch_check(pack_watch) > 0)
@@ -795,6 +794,7 @@ void* client_run(
             }
             pack_watch = resource_pack_watch(*pack);
         }
+#    endif
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);

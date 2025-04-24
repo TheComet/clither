@@ -1,12 +1,21 @@
 { pkgs }:
+let
+  clither-server = (import ./server.nix { inherit pkgs; });
+in
 pkgs.dockerTools.buildImage {
   name = "clither";
   tag = "latest";
   copyToRoot = [
-    (import ./server.nix { inherit pkgs; })
+    clither-server
+    pkgs.bash
+    pkgs.coreutils
   ];
   config = {
-    Cmd = [ "${pkgs.stdenv.cc}/bin/bash" "-c" "echo 'Hello, world!'" ];
-    WorkingDir = "/app";
+    Cmd = [ "${clither-server}/clither" "--server" ];
+    WorkingDir = "/";
+    ExposedPorts = {
+        "5555/tcp" = {};
+        "5555/udp" = {};
+    };
   };
 }

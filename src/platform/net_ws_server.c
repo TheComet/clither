@@ -323,7 +323,11 @@ reswitch:
             static const char request[] = "get / http/";
             while (*off != packet->len && p->char_state != sizeof(request) - 1)
                 if (tolower(packet->data[(*off)++]) != request[p->char_state++])
+                {
+                    log_err("Invalid request:\n");
+                    log_hex_ascii(packet->data, packet->len);
                     return HANDSHAKE_ERROR;
+                }
             if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
 
@@ -342,7 +346,11 @@ reswitch:
                     continue;
                 }
                 if (packet->data[(*off)++] != "\r\n"[p->char_state++])
+                {
+                    log_err("Invalid request:\n");
+                    log_hex_ascii(packet->data, packet->len);
                     return HANDSHAKE_ERROR;
+                }
             }
             if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
@@ -462,7 +470,11 @@ reswitch:
                     continue;
                 }
                 if (packet->data[(*off)++] != "\r\n"[p->char_state++])
+                {
+                    log_err("Malformed HTTP header:\n");
+                    log_hex_ascii(packet->data, packet->len);
                     return HANDSHAKE_ERROR;
+                }
             }
             if (*off == packet->len)
                 return HANDSHAKE_NEED_MORE_DATA;
@@ -474,15 +486,25 @@ reswitch:
         case EXPECT_END: {
             while (*off != packet->len && p->char_state != 2)
                 if (packet->data[(*off)++] != "\r\n"[p->char_state++])
+                {
+                    log_err("HTTP header not properly terminated:\n");
+                    log_hex_ascii(packet->data, packet->len);
                     return HANDSHAKE_ERROR;
+                }
             break;
         }
     }
 
-    return (p->token_state == EXPECT_END && p->found_websocket_upgrade &&
+    if (p->token_state == EXPECT_END && p->found_websocket_upgrade &&
             p->found_connection_upgrade && p->found_websocket_key)
-               ? HANDSHAKE_SUCCESS
-               : HANDSHAKE_ERROR;
+    {
+        return HANDSHAKE_SUCCESS;
+    }
+
+    log_err("Handshake failed: token_state: %d, Upgrade: %d, Connection: %d, Sec-WebSocket-Key: %d\n",
+        p->token_state, p->found_websocket_upgrade, p->found_connection_upgrade, p->found_websocket_key);
+    log_hex_ascii(packet->data, packet->len);
+    return HANDSHAKE_ERROR;
 }
 
 static enum handshake_result send_handshake_response(struct connection* conn)
@@ -498,10 +520,14 @@ static enum handshake_result send_handshake_response(struct connection* conn)
 
     switch (parse_http_websocket_upgrade_request(conn))
     {
-        case HANDSHAKE_NEED_MORE_DATA: return HANDSHAKE_NEED_MORE_DATA;
+        case HANDSHAKE_NEED_MORE_DATA:
+            log_dbg("Handshake:\n");
+            log_hex_ascii(conn->ws_packet.data, conn->ws_packet.len);
+            return HANDSHAKE_NEED_MORE_DATA;
 
         case HANDSHAKE_ERROR: {
             net_send(conn->socket, BAD_REQUEST, sizeof(BAD_REQUEST) - 1);
+            log_note("Sending 400 Bad Request\n");
             return HANDSHAKE_ERROR;
         }
 
