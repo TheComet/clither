@@ -21,7 +21,11 @@ enum hset_status
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define HSET_CAPACITY_WARNING()                                            \
-        log_warn("hset_grow(): Close to maximum capacity!\n");
+        do                                                                     \
+        {                                                                      \
+            log_warn("hset_grow(): Close to maximum capacity!\n");             \
+            log_backtrace();                                                   \
+        } while (0)
 #else
 /* clang-format off */
 #    define HSET_CAPACITY_WARNING() do {} while (0)

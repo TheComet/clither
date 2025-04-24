@@ -26,7 +26,11 @@
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define RB_CAPACITY_WARNING()                                              \
-        log_warn("rb_resize(): Close to maximum capacity!\n");
+        do                                                                     \
+        {                                                                      \
+            log_warn("rb_resize(): Close to maximum capacity!\n");             \
+            log_backtrace();                                                   \
+        } while (0)
 #else
 /* clang-format off */
 #    define RB_CAPACITY_WARNING() do {} while (0)

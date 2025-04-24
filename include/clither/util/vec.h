@@ -21,7 +21,11 @@
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define VEC_CAPACITY_WARNING()                                             \
-        log_warn("vec_realloc(): Close to maximum capacity!\n");
+        do                                                                     \
+        {                                                                      \
+            log_warn("vec_realloc(): Close to maximum capacity!\n");           \
+            log_backtrace();                                                   \
+        } while (0)
 #else
 /* clang-format off */
 #    define VEC_CAPACITY_WARNING() do {} while (0)

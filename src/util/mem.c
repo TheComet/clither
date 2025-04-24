@@ -10,8 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BACKTRACE_OMIT_COUNT 2
-
 struct report_info
 {
     uintptr_t location;

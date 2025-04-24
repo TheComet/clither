@@ -18,7 +18,11 @@ enum hmap_status
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define HMAP_CAPACITY_WARNING()                                            \
-        log_warn("hmap_grow(): Close to maximum capacity!\n");
+        do                                                                     \
+        {                                                                      \
+            log_warn("hmap_grow(): Close to maximum capacity!\n");             \
+            log_backtrace();                                                   \
+        } while (0)
 #else
 /* clang-format off */
 #    define HMAP_CAPACITY_WARNING() do {} while (0)

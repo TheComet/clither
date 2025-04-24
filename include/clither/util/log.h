@@ -58,6 +58,11 @@ CLITHER_PRINTF_FORMAT(1, 2) void log_net(const char* fmt, ...);
 
 int  log_oom(int bytes, const char* func_name);
 void log_hex_ascii(const void* data, int len);
+#if defined(CLITHER_BACKTRACE)
+void log_backtrace(void);
+#else
+#    define log_backtrace()
+#endif
 
 /* Parser/File logging functions -------------------------------------------- */
 

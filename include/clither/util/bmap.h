@@ -19,7 +19,11 @@ enum bmap_status
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define BMAP_CAPACITY_WARNING()                                            \
-        log_warn("bmap_realloc(): Close to maximum capacity!\n");
+        do                                                                     \
+        {                                                                      \
+            log_warn("bmap_realloc(): Close to maximum capacity!\n");          \
+            log_backtrace();                                                   \
+        } while (0)
 #else
 /* clang-format off */
 #    define BMAP_CAPACITY_WARNING() do {} while (0)

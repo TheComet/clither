@@ -3,7 +3,10 @@
 #include "clither/config.h"
 
 #if defined(CLITHER_BACKTRACE)
-int backtrace_init(void);
+
+#    define BACKTRACE_OMIT_COUNT 2
+
+int  backtrace_init(void);
 void backtrace_deinit(void);
 
 /*!
@@ -13,7 +16,7 @@ void backtrace_deinit(void);
  * @note The returned array must be freed manually with FREE(returned_array).
  */
 char** backtrace_get(int* size);
-void backtrace_free(char** bt);
+void   backtrace_free(char** bt);
 #else
 #    define backtrace_init() (0)
 #    define backtrace_deinit()

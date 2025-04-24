@@ -1,3 +1,4 @@
+#include "clither/platform/backtrace.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include <errno.h>
@@ -337,6 +338,7 @@ void log_net(const char* fmt, ...)
 int log_oom(int bytes, const char* func_name)
 {
     log_err("Failed to allocate %d bytes in %s\n", bytes, func_name);
+    log_backtrace();
     return -1;
 }
 
@@ -377,6 +379,29 @@ void log_hex_ascii(const void* data, int len)
         i += 16;
     }
 }
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_BACKTRACE)
+void log_backtrace(void)
+{
+    char** bt;
+    int    bt_size, i;
+
+    if (!(bt = backtrace_get(&bt_size)))
+    {
+        fprintf(stderr, "Failed to generate backtrace\n");
+        return;
+    }
+
+    for (i = BACKTRACE_OMIT_COUNT; i < bt_size; ++i)
+    {
+        if (strstr(bt[i], "invoke_main"))
+            break;
+        fprintf(stderr, "  %s\n", bt[i]);
+    }
+    backtrace_free(bt);
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 static const char* emph_style(void)
