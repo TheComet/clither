@@ -272,7 +272,7 @@ parse_args_failed:
 asm_optimizations_failed:
     (void)mem_deinit_threadlocal();
 
-#if defined(CLITHER_EMSCRIPTEN)
+#if defined(__EMSCRIPTEN__)
     exit(retval);
 #else
     return retval;

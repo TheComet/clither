@@ -2,8 +2,8 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <process.h>
-#include <Windows.h>
-#include <DbgHelp.h>
+#include <windows.h>
+#include <dbghelp.h>
 #include <stdlib.h>
 #include <stdio.h>
 

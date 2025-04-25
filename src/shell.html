@@ -28,10 +28,10 @@
   </head>
   <body>
     <div id="status">Loading...</div>
-    <canvas emscripten" id="canvas" tabindex=-1></canvas>
+    <canvas id="canvas" tabindex=-1></canvas>
     <script type='text/javascript'>
       var canvasElement = document.getElementById('canvas');
-      var statusElement = document.getElementById('status')
+      var statusElement = document.getElementById('status');
 
       // As a default initial behavior, pop up an alert when webgl context is lost. To make your
       // application robust, you may want to override this behavior before shipping!
@@ -43,6 +43,7 @@
 
       var Module = {
         canvas: canvasElement,
+        arguments: ['--addr', 'wss://clither.thecomet.ch:5555', '--gfx'],
         print(...args) { console.log(...args); },
         setStatus(text) {
           //statusElement.innerText = text;

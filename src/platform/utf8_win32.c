@@ -2,7 +2,7 @@
 #include "clither/util/mem.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
 /* ------------------------------------------------------------------------- */
 wchar_t* utf8_to_utf16(const char* utf8, int utf8_bytes)

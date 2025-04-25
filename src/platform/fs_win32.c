@@ -2,9 +2,9 @@
 #include "clither/util/str.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <KnownFolders.h>
-#include <ShlObj.h>
+#include <windows.h>
+#include <knownfolders.h>
+#include <shlobj.h>
 
 int fs_list(
     const char* path, int (*on_entry)(const char* name, void* user), void* user)

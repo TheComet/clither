@@ -17,6 +17,7 @@ list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 
 include (CMakeDependentOption)
 
+option (CLITHER_ASSETS "Download and install assets automatically" ON)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_CAPACITY_WARNING "Enable capacity warnings for data structures" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
@@ -80,26 +81,13 @@ else ()
     set (CLITHER_POPCOUNT OFF)
 endif ()
 
-if (EMSCRIPTEN)
-    set (CLITHER_EMSCRIPTEN ON)
-endif ()
-
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################
 # Game source files
 ###############################################################################
 
-if (CLITHER_ASM_OPTIMIZATIONS)
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-        enable_language (ASM)
-    endif ()
-    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-        enable_language (ASM_MASM)
-    endif ()
-endif ()
-
-add_executable (clither
+list (APPEND ClitherSources
     "templates/config.h.in"
     "${PROJECT_BINARY_DIR}/include/clither/config.h"
 
@@ -212,146 +200,212 @@ add_executable (clither
     "src/util/sha1.c"
     "src/util/str.c"
     "src/util/strview.c"
-    "src/util/strlist.c"
+    "src/util/strlist.c")
 
-    $<$<BOOL:${CLITHER_ASM_OPTIMIZATIONS}>:
-        $<$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>>:
-            src/util/morton_gas_x86-64.s
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_gas_x86-64.s>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_gas_x86-64.s>>
-        $<$<C_COMPILER_ID:MSVC>:
-            src/util/morton_masm_x86-64.asm
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","HOTPATCH">:src/platform/asm_trampolines_masm_x86-64.asm>
-            $<$<STREQUAL:"${CLITHER_ASM_OPTIMIZATIONS}","FUNCPTR">:src/platform/asm_funcptrs_masm_x86-64.asm>>>
+if (CLITHER_ASM_OPTIMIZATIONS)
+    if (CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+        enable_language (ASM)
+        set (Flavor "gas")
+        set (Ext "s")
+    endif ()
+    if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+        enable_language (ASM_MASM)
+        set (Flavor "masm")
+        set (Ext "asm")
+    endif ()
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set (Abi "win64")
+    endif ()
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_PLATFORM_ID STREQUAL "Darwin")
+        set (Abi "sysv64")
+    endif ()
 
-    $<$<BOOL:${CLITHER_BOT_API}>:
-        src/bot/bot.c
-        $<$<BOOL:${CLITHER_BOT_API_LUA}>:
-            src/bot/lua/bot_lua.c>>
+    list (APPEND ClitherSources
+        "src/util/morton_${Flavor}_${Abi}.${Ext}"
+        "src/util/morton_${Flavor}_${Abi}.${Ext}")
 
-    $<$<BOOL:${CLITHER_CLIENT}>:
-        src/client/client.c
-        src/platform/net_udp_client.c>
+    if (CLITHER_ASM_OPTIMIZATIONS STREQUAL "FUNCPTR")
+        list (APPEND ClitherSources
+            "src/platform/asm_funcptrs_${Flavor}_${Abi}.${Ext}")
+    endif ()
+    if (CLITHER_ASM_OPTIMIZATIONS STREQUAL "HOTPATCH")
+        list (APPEND ClitherSources
+            "src/platform/asm_trampolines_${Flavor}_${Abi}.${Ext}")
+    endif ()
+endif ()
 
-    $<$<BOOL:${CLITHER_GFX}>:
-        src/gfx/gfx.c
-        $<$<BOOL:${CLITHER_GFX_SDL}>:
-            src/gfx/sdl/gfx_sdl.c>
-        $<$<BOOL:${CLITHER_GFX_GLES2}>:
-            src/gfx/gles2/gfx_gles2.c
-            src/gfx/gles2/internal/background.c
-            src/gfx/gles2/internal/food.c
-            src/gfx/gles2/internal/quad.c
-            src/gfx/gles2/internal/shader.c
-            src/gfx/gles2/internal/snake.c
-            src/gfx/gles2/internal/sprite.c
-            src/gfx/gles2/internal/sprite_shadow.c
-            src/gfx/gles2/internal/text.c
-            src/gfx/gles2/glad/src/gles2.c
-            $<$<BOOL:${CLITHER_GFX_DEBUG}>:
-                src/gfx/gles2/internal/debug.c>>
-        $<$<BOOL:${CLITHER_GFX_VULKAN}>:
-            src/gfx/vulkan/gfx_vulkan.c>>
+if (CLITHER_BOT_API)
+    list (APPEND ClitherSources "src/bot/bot.c")
+    if (CLITHER_BOT_API_LUA)
+        list (APPEND ClitherSources "src/bot/lua/bot_lua.c")
+    endif ()
+endif ()
 
-    $<$<BOOL:${CLITHER_MCD}>:
-        src/game/mcd_wifi.c>
+if (CLITHER_CLIENT)
+    list (APPEND ClitherSources
+        "src/client/client.c"
+        "src/platform/net_udp_client.c")
+endif ()
 
-    $<$<BOOL:${CLITHER_DEBUG_MEMORY}>:
-        src/util/mem.c>
+if (CLITHER_GFX)
+    list (APPEND ClitherSources "src/gfx/gfx.c")
+    if (CLITHER_GFX_SDL)
+        list (APPEND ClitherSources "src/gfx/sdl/gfx_sdl.c")
+    endif ()
+    if (CLITHER_GFX_GLES2)
+        list (APPEND ClitherSources
+            "src/gfx/gles2/gfx_gles2.c"
+            "src/gfx/gles2/glad/src/gles2.c"
+            "src/gfx/gles2/internal/background.c"
+            "src/gfx/gles2/internal/food.c"
+            "src/gfx/gles2/internal/quad.c"
+            "src/gfx/gles2/internal/shader.c"
+            "src/gfx/gles2/internal/snake.c"
+            "src/gfx/gles2/internal/sprite.c"
+            "src/gfx/gles2/internal/sprite_shadow.c"
+            "src/gfx/gles2/internal/text.c")
+        if (CLITHER_GFX_DEBUG)
+            list (APPEND ClitherSources "src/gfx/gles2/internal/debug.c")
+        endif ()
+    endif ()
+    if (CLITHER_GFX_VULKAN)
+        list (APPEND ClitherSources "src/gfx/vulkan/gfx_vulkan.c")
+    endif ()
+endif ()
 
-    $<$<BOOL:${CLITHER_SERVER}>:
-        src/server/bezier_knot_acks_bmap.c
-        src/server/snakes_in_proximity_bmap.c
-        src/server/food_in_proximity_hset.c
-        src/server/net_addr_hmap.c
-        src/server/server.c
-        src/server/server_client.c
-        src/server/server_client_hmap.c
-        src/server/server_instance.c
-        src/server/server_instance_bmap.c
-        src/platform/net_udp_server.c
-        $<$<BOOL:${CLITHER_SERVER_WEBSOCKETS}>:
-            src/platform/net_ws_server.c>>
+if (CLITHER_MCD)
+    list (APPEND ClitherSources "src/game/mcd_wifi.c")
+endif ()
 
-    $<$<PLATFORM_ID:Windows>:
-        src/platform/asm_optimizations_win32.c
-        $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_win32.c>
-        src/platform/fs_win32.c
-        src/platform/mfile_win32.c
-        src/platform/mutex_win32.c
-        src/platform/net_win32.c
-        src/platform/signals_win32.c
-        src/platform/system_win32.c
-        src/platform/thread_win32.c
-        src/platform/tick_win32.c
-        src/platform/utf8_win32.c
-        src/winmain.c>
-    $<$<PLATFORM_ID:Linux>:
-        src/platform/asm_optimizations_posix.c
-        $<$<BOOL:${CLITHER_BACKTRACE}>:src/platform/backtrace_linux.c>
-        src/platform/fs_linux.c
-        src/platform/mfile_posix.c
-        src/platform/mutex_pthread.c
-        src/platform/net_posix.c
-        src/platform/signals_posix.c
-        src/platform/system_linux.c
-        src/platform/thread_pthread.c
-        src/platform/tick_posix.c
-        src/platform/utf8_posix.c>
-    $<$<PLATFORM_ID:Darwin>:
-        src/platform/fs_linux.c
-        src/platform/mfile_posix.c
-        src/platform/mutex_pthread.c
-        src/platform/net_posix.c
-        src/platform/signals_posix.c
-        src/platform/thread_pthread.c
-        src/platform/tick_posix.c
-        src/platform/utf8_posix.c>
-    $<$<PLATFORM_ID:Emscripten>:
-        src/platform/fs_em.c
-        src/platform/mfile_posix.c
-        src/platform/net_em.c
-        src/platform/signals_em.c
-        src/platform/tick_em.c
-        src/platform/asm_optimizations_em.c
-        src/platform/utf8_posix.c>
+if (CLITHER_DEBUG_MEMORY)
+    list (APPEND ClitherSources "src/util/mem.c")
+endif ()
 
-    $<$<BOOL:${CLITHER_TESTS}>:
-        tests/tests.cpp
-        tests/src/LogHelper.cpp
-        tests/clither/test_args.cpp
-        tests/clither/test_bezier_aabb.cpp
-        tests/clither/test_bezier_fit.cpp
-        tests/clither/test_bezier_point.cpp
-        tests/clither/test_bmap.cpp
-        tests/clither/test_bset.cpp
-        tests/clither/test_cmd.cpp
-        tests/clither/test_hmap.cpp
-        tests/clither/test_hmap_full.cpp
-        tests/clither/test_hset.cpp
-        tests/clither/test_mem.cpp
-        tests/clither/test_morton.cpp
-        tests/clither/test_msg.cpp
-        tests/clither/test_q.cpp
-        tests/clither/test_rb.cpp
-        tests/clither/test_snake.cpp
-        tests/clither/test_tick.cpp
-        tests/clither/test_vec.cpp
-        tests/clither/test_wrap.cpp
-        $<$<AND:$<BOOL:${CLITHER_CLIENT}>,$<BOOL:${CLITHER_SERVER}>>:
-            tests/clither/test_protocol_feedback.cpp
-            tests/clither/test_protocol_join.cpp>
-        $<$<BOOL:${CLITHER_SERVER_WEBSOCKETS}>:
-            tests/clither/test_ws.cpp>>
+if (CLITHER_SERVER)
+    list (APPEND ClitherSources
+        "src/server/bezier_knot_acks_bmap.c"
+        "src/server/snakes_in_proximity_bmap.c"
+        "src/server/food_in_proximity_hset.c"
+        "src/server/net_addr_hmap.c"
+        "src/server/server.c"
+        "src/server/server_client.c"
+        "src/server/server_client_hmap.c"
+        "src/server/server_instance.c"
+        "src/server/server_instance_bmap.c"
+        "src/platform/net_udp_server.c")
+    if (CLITHER_SERVER_WEBSOCKETS)
+        list (APPEND ClitherSources "src/platform/net_ws_server.c")
+    endif ()
+endif ()
 
-    $<$<BOOL:${CLITHER_BENCHMARKS}>:
-        benchmarks/benchmarks.cpp
-        benchmarks/clither/bench_hashmap.cpp
-        benchmarks/clither/bench_std_unordered_map.cpp
-        benchmarks/clither/bench_std_vector.cpp
-        benchmarks/clither/bench_vec.cpp>
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    list (APPEND ClitherSources
+        "src/platform/asm_optimizations_win32.c"
+        "src/platform/fs_win32.c"
+        "src/platform/mfile_win32.c"
+        "src/platform/mutex_win32.c"
+        "src/platform/net_win32.c"
+        "src/platform/signals_win32.c"
+        "src/platform/system_win32.c"
+        "src/platform/thread_win32.c"
+        "src/platform/tick_win32.c"
+        "src/platform/utf8_win32.c"
+        "src/winmain.c")
+    if (CLITHER_BACKTRACE)
+        list (APPEND ClitherSources "src/platform/backtrace_win32.c")
+    endif ()
+endif ()
 
-        "src/main.c")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list (APPEND ClitherSources
+        "src/platform/asm_optimizations_posix.c"
+        "src/platform/fs_linux.c"
+        "src/platform/mfile_posix.c"
+        "src/platform/mutex_pthread.c"
+        "src/platform/net_posix.c"
+        "src/platform/signals_posix.c"
+        "src/platform/system_linux.c"
+        "src/platform/thread_pthread.c"
+        "src/platform/tick_posix.c"
+        "src/platform/utf8_posix.c")
+    if (CLITHER_BACKTRACE)
+        list (APPEND ClitherSources "src/platform/backtrace_linux.c")
+    endif ()
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    list (APPEND ClitherSources
+        "src/platform/asm_optimizations_posix.c"
+        "src/platform/fs_linux.c"
+        "src/platform/mfile_posix.c"
+        "src/platform/mutex_pthread.c"
+        "src/platform/net_posix.c"
+        "src/platform/signals_posix.c"
+        "src/platform/system_linux.c"
+        "src/platform/thread_pthread.c"
+        "src/platform/tick_posix.c"
+        "src/platform/utf8_posix.c")
+    if (CLITHER_BACKTRACE)
+        list (APPEND ClitherSources "src/platform/backtrace_linux.c")
+    endif ()
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    list (APPEND ClitherSources
+        "src/platform/fs_em.c"
+        "src/platform/mfile_posix.c"
+        "src/platform/net_em.c"
+        "src/platform/signals_em.c"
+        "src/platform/tick_em.c"
+        "src/platform/asm_optimizations_em.c"
+        "src/platform/utf8_posix.c")
+endif ()
+
+if (CLITHER_TESTS)
+    list (APPEND ClitherSources
+        "tests/tests.cpp"
+        "tests/src/LogHelper.cpp"
+        "tests/clither/test_args.cpp"
+        "tests/clither/test_bezier_aabb.cpp"
+        "tests/clither/test_bezier_fit.cpp"
+        "tests/clither/test_bezier_point.cpp"
+        "tests/clither/test_bmap.cpp"
+        "tests/clither/test_bset.cpp"
+        "tests/clither/test_cmd.cpp"
+        "tests/clither/test_hmap.cpp"
+        "tests/clither/test_hmap_full.cpp"
+        "tests/clither/test_hset.cpp"
+        "tests/clither/test_mem.cpp"
+        "tests/clither/test_morton.cpp"
+        "tests/clither/test_msg.cpp"
+        "tests/clither/test_q.cpp"
+        "tests/clither/test_rb.cpp"
+        "tests/clither/test_snake.cpp"
+        "tests/clither/test_tick.cpp"
+        "tests/clither/test_vec.cpp"
+        "tests/clither/test_wrap.cpp")
+    if (CLITHER_CLIENT AND CLITHER_SERVER)
+        list (APPEND ClitherSources
+            "tests/clither/test_protocol_feedback.cpp"
+            "tests/clither/test_protocol_join.cpp")
+    endif ()
+    if (CLITHER_SERVER_WEBSOCKETS)
+        list (APPEND ClitherSources "tests/clither/test_ws.cpp")
+    endif ()
+endif ()
+
+if (CLITHER_BENCHMARKS)
+    list (APPEND ClitherSources
+        "benchmarks/benchmarks.cpp"
+        "benchmarks/clither/bench_hashmap.cpp"
+        "benchmarks/clither/bench_std_unordered_map.cpp"
+        "benchmarks/clither/bench_std_vector.cpp"
+        "benchmarks/clither/bench_vec.cpp")
+endif ()
+
+add_executable (clither
+    ${ClitherSources}
+    "src/main.c")
 target_include_directories (clither
     PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -393,27 +447,58 @@ set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
 get_target_property (source_list clither SOURCES)
 source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
 
-if (WIN32)
+install (
+    TARGETS clither
+    RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
+
+if (CLITHER_BOT_API_LUA)
+    add_custom_command (
+        TARGET clither
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            "${PROJECT_SOURCE_DIR}/lua"
+            "${CLITHER_BUILD_BINDIR}/lua"
+        COMMENT "Copying lua files to build directory")
+    install (
+        DIRECTORY "${PROJECT_SOURCE_DIR}/lua/"
+        DESTINATION ${CLITHER_INSTALL_BINDIR}/lua)
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set (EXE "clither.exe")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/host.bat" "${EXE} --host --gfx")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/join.bat" "${EXE} --addr localhost --gfx")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --bot ../../lua/bot.lua")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --gfx --bot ../../lua/figure8.lua")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/host.bat" "${EXE} --host --gfx\r\n@PAUSE")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/join.bat" "${EXE} --addr localhost --gfx\r\n@PAUSE")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server\r\n@PAUSE")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --bot lua/bot.lua\r\n@PAUSE")
+    file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --gfx --bot lua/figure8.lua\r\n@PAUSE")
+    install (
+        FILES
+            "${CLITHER_BUILD_BINDIR}/host.bat"
+            "${CLITHER_BUILD_BINDIR}/join.bat"
+            "${CLITHER_BUILD_BINDIR}/server.bat"
+            "${CLITHER_BUILD_BINDIR}/bot.bat"
+            "${CLITHER_BUILD_BINDIR}/bot-simple.bat"
+        DESTINATION ${CLITHER_INSTALL_BINDIR})
 endif ()
 
 if (EMSCRIPTEN)
     set_target_properties (clither
         PROPERTIES
             SUFFIX ".html"
+            COMPILE_FLAGS "\
+                -s USE_FREETYPE=1 \
+                -s USE_HARFBUZZ=1 \
+                -s USE_ZLIB=1"
             LINK_FLAGS "\
                 -s USE_GLFW=3 \
+                -s USE_FREETYPE=1 \
+                -s USE_HARFBUZZ=1 \
+                -s USE_ZLIB=1 \
                 -s ALLOW_MEMORY_GROWTH \
                 -s ASYNCIFY \
                 -s EXIT_RUNTIME=1 \
                 --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs \
                 --bind \
-                --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js \
                 --shell-file ${PROJECT_SOURCE_DIR}/src/shell.html")
 
     file (GLOB_RECURSE PackFiles
@@ -425,18 +510,25 @@ if (EMSCRIPTEN)
         COMMENT "Forcing re-link of clither.html"
         DEPENDS
             "src/shell.html"
-            "src/preamble.js"
             "${PackFiles}")
     add_custom_target (clither_emscripten_deps
         DEPENDS "${PROJECT_BINARY_DIR}/.clither_emscripten_deps")
     add_dependencies (clither clither_emscripten_deps)
+    install (
+        FILES
+            "${CLITHER_BUILD_BINDIR}/clither.html"
+            "${CLITHER_BUILD_BINDIR}/clither.js"
+            "${CLITHER_BUILD_BINDIR}/clither.wasm"
+            "${CLITHER_BUILD_BINDIR}/clither.data"
+        DESTINATION
+            "${CLITHER_INSTALL_BINDIR}")
 endif ()
 
 ###############################################################################
 # Assets
 ###############################################################################
 
-if (CLITHER_GFX)
+if (CLITHER_ASSETS)
     include (ExternalProject)
     ExternalProject_Add (clither-assets
         GIT_REPOSITORY https://github.com/thecomet/clither-assets
@@ -449,6 +541,9 @@ if (CLITHER_GFX)
         INSTALL_COMMAND ""
         TEST_COMMAND "")
     add_dependencies (clither clither-assets)
+    install (
+        DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
+        DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
 endif ()
 
 ###############################################################################
@@ -469,8 +564,9 @@ if (NOT EMSCRIPTEN)
     target_link_libraries (clither PRIVATE Threads::Threads)
 endif ()
 
-if (CLITHER_GFX)
-    find_package (Freetype REQUIRED)
+# Emscripten has its own freetype + harfbuzz
+if (CLITHER_GFX AND NOT EMSCRIPTEN)
+    find_package (Freetype)
     if (NOT FREETYPE_FOUND)
         set (FT_DISABLE_HARFBUZZ ON CACHE STRING "")
         add_subdirectory ("thirdparty/freetype-2.13.3")
@@ -478,13 +574,13 @@ if (CLITHER_GFX)
     endif ()
     target_link_libraries (clither PRIVATE Freetype::Freetype)
 
-    find_package (HarfBuzz REQUIRED)
-    if (NOT HarfBuzz_FOUND)
-        set (HB_BUILD_SUBSET ON CACHE STRING "")
-        add_subdirectory ("thirdparty/harfbuzz-11.0.0")
-        add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
-    endif ()
-    target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
+    #find_package (HarfBuzz)
+    #if (NOT HarfBuzz_FOUND)
+    #    set (HB_BUILD_SUBSET ON CACHE STRING "")
+    #    add_subdirectory ("thirdparty/harfbuzz-11.0.0")
+    #    add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
+    #endif ()
+    #target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
 endif ()
 
 if (CLITHER_GFX_SDL)
@@ -504,21 +600,21 @@ if (CLITHER_GFX_SDL)
     target_link_libraries (clither PRIVATE SDL2_image)
 endif ()
 
-if (CLITHER_GFX_GLES2)
-    # Emscripten ships with GLFW already
-    if (NOT EMSCRIPTEN)
-        find_package (GLFW3 REQUIRED)
-        if (NOT GLFW_FOUND)
-            set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
-            set (GLFW_BUILD_TESTS OFF CACHE STRING "")
-            set (GLFW_BUILD_DOCS OFF CACHE STRING "")
-            set (GLFW_INSTALL OFF CACHE STRING "")
-            add_subdirectory ("thirdparty/glfw-3.3.8")
-            add_library (GLFW::GLFW ALIAS glfw)
-        endif ()
-        target_link_libraries (clither PRIVATE GLFW::GLFW)
+# Emscripten ships with GLFW already
+if (CLITHER_GFX_GLES2 AND NOT EMSCRIPTEN)
+    find_package (GLFW3)
+    if (NOT GLFW3_FOUND)
+        set (GLFW_BUILD_EXAMPLES OFF CACHE STRING "")
+        set (GLFW_BUILD_TESTS OFF CACHE STRING "")
+        set (GLFW_BUILD_DOCS OFF CACHE STRING "")
+        set (GLFW_INSTALL OFF CACHE STRING "")
+        add_subdirectory ("thirdparty/glfw-3.3.8")
+        add_library (GLFW3::GLFW3 ALIAS glfw)
     endif ()
+    target_link_libraries (clither PRIVATE GLFW3::GLFW3)
+endif ()
 
+if (CLITHER_GFX_GLES2)
     target_include_directories (clither
         PRIVATE
             $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/thirdparty/stb>)
@@ -543,33 +639,4 @@ endif ()
 
 if (CLITHER_DOC)
     add_subdirectory ("doc/clither-doc")
-endif ()
-
-if (CLITHER_SERVER_WEBSOCKETS)
-    #add_subdirectory ("thirdparty/wsServer")
-    #target_link_libraries (clither PRIVATE ws)
-endif ()
-
-###############################################################################
-# Install targets
-###############################################################################
-
-install (
-    TARGETS clither
-    RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
-
-if (NOT EMSCRIPTEN AND CLITHER_GFX)
-    install (
-        DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
-        DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
-endif ()
-
-if (EMSCRIPTEN)
-    install (
-        FILES
-            "${CLITHER_BUILD_BINDIR}/clither.html"
-            "${CLITHER_BUILD_BINDIR}/clither.js"
-            "${CLITHER_BUILD_BINDIR}/clither.wasm"
-        DESTINATION
-            "${CLITHER_INSTALL_BINDIR}")
 endif ()

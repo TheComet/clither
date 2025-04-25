@@ -4,7 +4,7 @@
 #include "clither/util/morton.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
 static int trampoline_hotpatch(void* trampoline, void* target, int page_size)
 {

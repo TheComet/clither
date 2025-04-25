@@ -4,16 +4,25 @@ pkgs.emscriptenStdenv.mkDerivation {
   src = ../.;
   nativeBuildInputs = with pkgs.buildPackages; [
     cmake
-    git
+    #texliveFull
   ];
-  buildInputs = with pkgs; [
-    freetype
-    harfbuzz
+  buildInputs = with pkgs.emscriptenPackages; [
   ];
   configurePhase = ''
-    emcmake cmake --preset web
+    emcmake cmake -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCLITHER_ASM_OPTIMIZATIONS=OFF \
+      -DCLITHER_ASSETS=OFF \
+      -DCLITHER_BOT_API=OFF \
+      -DCLITHER_DOC=OFF \
+      -DCLITHER_LOG=OFF \
+      -DCLITHER_SERVER=OFF \
+      -DCLITHER_TESTS=OFF
     '';
   buildPhase = ''
-    cmake --build build-web-Release --parallel $(nproc)
+    cmake --build build --parallel $(nproc)
+    '';
+  installPhase = ''
+    cmake --install build --prefix $out
     '';
 }

@@ -8,7 +8,7 @@
 
 #if defined(_WIN32)
 #    define WIN32_LEAN_AND_MEAN
-#    include <Windows.h>
+#    include <windows.h>
 #endif
 
 static CLITHER_THREADLOCAL struct log_interface g_out_log;
@@ -38,6 +38,7 @@ static void default_write_func(const char* fmt, va_list ap)
 #endif
 static char stream_is_terminal(FILE* fp)
 {
+    (void)fp;
 #if defined(_WIN32)
     return 1;
 #elif defined(__EMSCRIPTEN__)
@@ -305,14 +306,15 @@ int log_err_win32(const char* fmt, ...)
             NULL) == 0)
     {
         log_err("(Failed to get error from FormatMessage())");
-        return;
+        return -1;
     }
 
     va_start(ap, fmt);
     out_log_vwrite(LOG_ERR, fmt, ap);
     va_end(ap);
-    log_err("(%d) %s", dwError, error);
+    log_err("(%d) %s", (int)dwError, error);
     LocalFree(error);
+    return -1;
 }
 #endif
 

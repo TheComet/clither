@@ -20,14 +20,14 @@
 #    pragma GCC diagnostic pop
 #endif
 
-#include "hb.h"
+//#include "hb.h"
 
 struct font
 {
     FT_Face ft_face;
 
-    hb_font_t*   hb_font;
-    hb_buffer_t* hb_buf;
+    //hb_font_t*   hb_font;
+    //hb_buffer_t* hb_buf;
 
     GLuint texAtlas;
 };

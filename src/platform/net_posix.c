@@ -338,7 +338,7 @@ int net_recvfrom(int sockfd, struct net_addr* addr, void* buf, int capacity)
 
     if (bytes_received < 0)
     {
-        if (errno == EAGAIN)
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return 0;
         log_err("Receive call failed: %s\n", strerror(errno));
         return -1;
@@ -354,7 +354,7 @@ int net_recv(int sockfd, void* buf, int capacity)
 
     if (bytes_received < 0)
     {
-        if (errno == EAGAIN)
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return 0;
         log_err("Receive call failed: %s\n", strerror(errno));
         return -1;

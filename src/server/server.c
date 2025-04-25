@@ -1189,12 +1189,12 @@ void* server_run(const void* p)
     }
 
     server_instance_bmap_deinit(instances);
-    mem_deinit_threadlocal();
+    (void)mem_deinit_threadlocal();
 
     return (void*)0;
 
 start_default_instance_failed:
     server_instance_bmap_deinit(instances);
-    mem_deinit_threadlocal();
+    (void)mem_deinit_threadlocal();
     return (void*)-1;
 }

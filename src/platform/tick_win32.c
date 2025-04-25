@@ -1,7 +1,7 @@
 #include "clither/platform/tick.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
 /* ------------------------------------------------------------------------- */
 void tick_cfg(struct tick* t, int tps)
@@ -107,6 +107,8 @@ int tick_wait_warp(struct tick* t, int warp, int tps)
 /* ------------------------------------------------------------------------- */
 void tick_warp(struct tick* t, int warp, int tps)
 {
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
     if (warp > 0)
         t->last += freq.QuadPart / tps;
     if (warp < 0)

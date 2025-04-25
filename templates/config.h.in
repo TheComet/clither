@@ -7,7 +7,6 @@
 #cmakedefine CLITHER_DEBUG_ASSERT
 #cmakedefine CLITHER_DEBUG_ZOOM
 #cmakedefine CLITHER_DOC
-#cmakedefine CLITHER_EMSCRIPTEN
 #cmakedefine CLITHER_MCD
 #cmakedefine CLITHER_LOG
 #cmakedefine CLITHER_LOG_DEBUG
