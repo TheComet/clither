@@ -543,15 +543,18 @@ if (CLITHER_ASSETS)
         GIT_TAG master
         GIT_SHALLOW ON
         SOURCE_DIR ${PROJECT_BINARY_DIR}/clither-assets
-        UPDATE_COMMAND ""
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${PROJECT_BINARY_DIR}/clither-assets/packs" "${CLITHER_BUILD_BINDIR}/packs"
         BUILD_COMMAND ""
         INSTALL_COMMAND ""
         TEST_COMMAND "")
     add_dependencies (clither clither-assets)
-    install (
-        DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
-        DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
+
+    # Emscripten packs the assets as part of the linker step already
+    if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+        install (
+            DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
+            DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
+    endif ()
 endif ()
 
 ###############################################################################
