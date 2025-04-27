@@ -242,9 +242,10 @@ if (CLITHER_BOT_API)
 endif ()
 
 if (CLITHER_CLIENT)
-    list (APPEND ClitherSources
-        "src/client/client.c"
-        "src/platform/net_udp_client.c")
+    list (APPEND ClitherSources "src/client/client.c")
+    if (NOT EMSCRIPTEN)
+        list (APPEND ClitherSources "src/platform/net_udp_client.c")
+    endif ()
 endif ()
 
 if (CLITHER_GFX)
@@ -352,12 +353,13 @@ endif ()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     list (APPEND ClitherSources
+        "src/platform/asm_optimizations_em.c"
         "src/platform/fs_em.c"
         "src/platform/mfile_posix.c"
         "src/platform/net_em.c"
+        "src/platform/net_ws_client.c"
         "src/platform/signals_em.c"
         "src/platform/tick_em.c"
-        "src/platform/asm_optimizations_em.c"
         "src/platform/utf8_posix.c")
 endif ()
 
@@ -469,16 +471,22 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     file (WRITE "${CLITHER_BUILD_BINDIR}/host.bat" "${EXE} --host --gfx\r\n@PAUSE")
     file (WRITE "${CLITHER_BUILD_BINDIR}/join.bat" "${EXE} --addr localhost --gfx\r\n@PAUSE")
     file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server\r\n@PAUSE")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --bot lua/bot.lua\r\n@PAUSE")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --gfx --bot lua/figure8.lua\r\n@PAUSE")
     install (
         FILES
             "${CLITHER_BUILD_BINDIR}/host.bat"
             "${CLITHER_BUILD_BINDIR}/join.bat"
             "${CLITHER_BUILD_BINDIR}/server.bat"
+        DESTINATION ${CLITHER_INSTALL_BINDIR})
+
+    if (CLITHER_BOT_API_LUA)
+        file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --bot lua/bot.lua\r\n@PAUSE")
+        file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --gfx --bot lua/figure8.lua\r\n@PAUSE")
+    install (
+        FILES
             "${CLITHER_BUILD_BINDIR}/bot.bat"
             "${CLITHER_BUILD_BINDIR}/bot-simple.bat"
         DESTINATION ${CLITHER_INSTALL_BINDIR})
+    endif ()
 endif ()
 
 if (EMSCRIPTEN)

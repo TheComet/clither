@@ -80,11 +80,15 @@ set_target_properties (lua-lib PROPERTIES
     C_STANDARD 90
     OUTPUT_NAME lua)
 
-add_executable (lua
-    lua.c)
-target_link_libraries (lua PRIVATE lua-lib)
+if (LUA_INTERPRETER)
+    add_executable (lua
+        lua.c)
+    target_link_libraries (lua PRIVATE lua-lib)
+endif ()
 
-add_executable (luac
-    luac.c)
-target_link_libraries (luac PRIVATE lua-lib)
+if (LUA_COMPILER)
+    add_executable (luac
+        luac.c)
+    target_link_libraries (luac PRIVATE lua-lib)
+endif ()
 

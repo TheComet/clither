@@ -234,8 +234,7 @@ int snake_extrapolate(
     struct snake_head*          head,
     const struct snake_replica* replica,
     const struct snake_param*   param,
-    uint16_t                    frame_number,
-    uint8_t                     sim_tick_rate);
+    uint16_t                    frame_number);
 
 int snake_eat_food(
     struct snake_head*  head,

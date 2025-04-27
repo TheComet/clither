@@ -25,6 +25,8 @@
 /* ------------------------------------------------------------------------- */
 void client_init(struct client* client)
 {
+    client->inet = NULL;
+    client->connection = NULL;
     client->username = NULL;
     client->sim_tick_rate = 60;
     client->net_tick_rate = 20;
@@ -33,7 +35,6 @@ void client_init(struct client* client)
     client->snake_id = 0;
     client->warp = 0;
     client->state = CLIENT_DISCONNECTED;
-    client->connection = NULL;
 
     msg_vec_init(&client->pending_msgs);
 }
@@ -76,9 +77,15 @@ int client_connect(
         return -1;
     }
 
+#if defined(__EMSCRIPTEN__)
+    client->inet = &net_ws_client;
+#else
+    client->inet = &net_udp_client;
+#endif
+
     if (str_set_cstr(&client->username, username) != 0)
         return -1;
-    client->connection = net_udp_client.create(server_address, port);
+    client->connection = client->inet->create(server_address, port);
     if (client->connection == NULL)
         return -1;
 
@@ -97,10 +104,12 @@ void client_disconnect(struct client* client)
 
     CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED);
     CLITHER_DEBUG_ASSERT(client->connection != NULL);
+    CLITHER_DEBUG_ASSERT(client->inet != NULL);
     CLITHER_DEBUG_ASSERT(str_len(client->username) != 0);
 
-    net_udp_client.destroy(client->connection);
+    client->inet->destroy(client->connection);
     client->connection = NULL;
+    client->inet = NULL;
 
     str_deinit(client->username);
     client->username = NULL;
@@ -155,7 +164,7 @@ packet_full:
         client->pending_msgs, append_unreliable_msgs_to_buf, &pkt);
     if (status == -1)
     {
-        net_udp_client.send(client->connection, &pkt);
+        client->inet->send(client->connection, &pkt);
         goto packet_full;
     }
 
@@ -168,7 +177,7 @@ packet_full:
 
         if (pkt.len + msg->payload_len + 2 > (int)sizeof(pkt.data))
         {
-            net_udp_client.send(client->connection, &pkt);
+            client->inet->send(client->connection, &pkt);
             pkt.len = 0;
         }
 
@@ -188,7 +197,7 @@ packet_full:
         pkt.len += msg->payload_len + 2;
     }
     if (pkt.len > 0)
-        net_udp_client.send(client->connection, &pkt);
+        client->inet->send(client->connection, &pkt);
 
     /* 3 second timeout */
     client->timeout_counter++;
@@ -580,7 +589,7 @@ client_recv(struct client* client, struct world* world)
     /* We may need to read more than one UDP packet */
     while (1)
     {
-        switch (net_udp_client.receive(client->connection, &packet))
+        switch (client->inet->receive(client->connection, &packet))
         {
             case NET_RECEIVE_ERROR: return client_recv_error();
             case NET_RECEIVE_NO_DATA: return result;
@@ -623,8 +632,8 @@ static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
         &snake->head,
         &snake->remote.replica,
         &snake->param,
-        ctx->client->frame_number,
-        ctx->client->sim_tick_rate);
+        ctx->client->frame_number);
+
     /*
      * This is a failsafe for when MSG_KNOT happens to be received after
      * MSG_SNAKE_DESTROY. If the snake is extrapolated for more than 1 second,

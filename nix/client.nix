@@ -23,6 +23,8 @@ pkgs.stdenv.mkDerivation {
     "-DCMAKE_BUILD_TYPE=Release"
     "-DCLITHER_ASSETS=OFF"  # Assets come in from flake.nix
     "-DCLITHER_TESTS=OFF"
+  ] ++ pkgs.lib.optional (pkgs.stdenv.is32bit) [
+    "-DCLITHER_ASM_OPTIMIZATIONS=OFF"
   ];
 
   postInstall = ''
@@ -30,21 +32,20 @@ pkgs.stdenv.mkDerivation {
     '';
 
   postFixup = let
-    lib = pkgs.lib;
     isWindows = builtins.match ".*-windows" pkgs.stdenv.hostPlatform.system != null;
   in
-  lib.optional(pkgs.stdenv.isLinux) ''
-      # Hack so GLFW finds the X11 system libraries
-      wrapProgram $out/clither \
-        --set LD_LIBRARY_PATH "/usr/lib64"
+  pkgs.lib.optional(pkgs.stdenv.isLinux) ''
+    # Hack so GLFW finds the X11 system libraries
+    wrapProgram $out/clither \
+      --set LD_LIBRARY_PATH "/usr/lib64"
     '' ++
-  lib.optional (isWindows) ''
-      # Windows DLLs that are not system DLLs
-      cp ${pkgs.freetype}/bin/*freetype*.dll $out/
-      cp ${pkgs.windows.mcfgthreads}/bin/*mcfgthread*.dll $out/
-      cp ${pkgs.libpng}/bin/*png*.dll $out/
-      cp ${pkgs.brotli}/bin/*brotli*.dll $out/
-      cp ${pkgs.bzip2}/bin/*bz2*.dll $out/
-      cp ${pkgs.zlib}/bin/*zlib*.dll $out/
+  pkgs.lib.optional (isWindows) ''
+    # Windows DLLs that are not system DLLs
+    cp ${pkgs.freetype}/bin/*freetype*.dll $out/
+    cp ${pkgs.windows.mcfgthreads}/bin/*mcfgthread*.dll $out/
+    cp ${pkgs.libpng}/bin/*png*.dll $out/
+    cp ${pkgs.brotli}/bin/*brotli*.dll $out/
+    cp ${pkgs.bzip2}/bin/*bz2*.dll $out/
+    cp ${pkgs.zlib}/bin/*zlib*.dll $out/
     '';
 }

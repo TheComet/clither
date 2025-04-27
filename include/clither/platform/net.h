@@ -173,8 +173,11 @@ struct net_client_interface
 };
 
 extern const struct net_server_interface net_udp_server;
-extern const struct net_client_interface net_udp_client;
-
 #if defined(CLITHER_SERVER_WEBSOCKETS)
 extern const struct net_server_interface net_ws_server;
+#endif
+
+extern const struct net_client_interface net_udp_client;
+#if defined(__EMSCRIPTEN__)
+extern const struct net_client_interface net_ws_client;
 #endif

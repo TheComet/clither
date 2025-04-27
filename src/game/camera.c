@@ -39,5 +39,7 @@ void camera_update(
 #if defined(CLITHER_DEBUG_ZOOM)
     camera->debug_zoom += input->scroll * camera->debug_zoom * 0.05;
     camera->scale = qw_mul(camera->scale, camera->debug_zoom);
+#else
+    (void)input;
 #endif
 }

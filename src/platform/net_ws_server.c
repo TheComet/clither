@@ -263,15 +263,13 @@ accept_new_connections(struct net_server* server, struct net_addr* addr)
     fd = net_accept(server->socket, addr);
     if (fd <= 0)
         return fd;
-    if (net_set_nonblock_reuse(fd) < 0)
-    {
-        net_close(fd);
-        return -1;
-    }
+
+    if (net_set_nonblock_reuse(fd) != 0)
+        goto set_nonblock_failed;
 
     switch (connection_hmap_emplace_or_get(&server->connections, addr, &conn))
     {
-        case HMAP_OOM: return -1;
+        case HMAP_OOM: goto add_connection_failed;
         case HMAP_EXISTS: break;
         case HMAP_NEW: {
             connection_init(conn, fd);
@@ -280,6 +278,11 @@ accept_new_connections(struct net_server* server, struct net_addr* addr)
     }
 
     return 0;
+
+add_connection_failed:
+set_nonblock_failed:
+    net_close(fd);
+    return -1;
 }
 
 enum handshake_result
@@ -496,13 +499,18 @@ reswitch:
     }
 
     if (p->token_state == EXPECT_END && p->found_websocket_upgrade &&
-            p->found_connection_upgrade && p->found_websocket_key)
+        p->found_connection_upgrade && p->found_websocket_key)
     {
         return HANDSHAKE_SUCCESS;
     }
 
-    log_err("Handshake failed: token_state: %d, Upgrade: %d, Connection: %d, Sec-WebSocket-Key: %d\n",
-        p->token_state, p->found_websocket_upgrade, p->found_connection_upgrade, p->found_websocket_key);
+    log_err(
+        "Handshake failed: token_state: %d, Upgrade: %d, Connection: %d, "
+        "Sec-WebSocket-Key: %d\n",
+        p->token_state,
+        p->found_websocket_upgrade,
+        p->found_connection_upgrade,
+        p->found_websocket_key);
     log_hex_ascii(packet->data, packet->len);
     return HANDSHAKE_ERROR;
 }

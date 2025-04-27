@@ -754,20 +754,9 @@ int snake_extrapolate(
     struct snake_head*          head,
     const struct snake_replica* replica,
     const struct snake_param*   param,
-    uint16_t                    frame_number,
-    uint8_t                     sim_tick_rate)
+    uint16_t                    frame_number)
 {
-#define O4    4
-#define O3    3
-#define O2    2
-#define O1    1
-#define ORDER O1
     qw                  dx, dy;
-    float               T[ORDER][ORDER];
-    float               a[ORDER];
-    float               x[ORDER];
-    float               t;
-    float               t0, t1, t2, t3;
     struct bezier_knot* head_knot;
     struct bezier_knot* prev_knot;
     struct qwaabb*      segment_bb;
@@ -775,28 +764,6 @@ int snake_extrapolate(
     if (rb_count(data->bezier_knots) < 2)
         return 0;
 
-#if ORDER == O4
-    t0 = replica->head_frame_numbers[3];
-    t1 = (float)(uint16_t)(replica->head_frame_numbers[2] - t0);
-    t2 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
-    t3 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
-    if (calc_T_inv_4x4(T, t1, t2, t3) != 0)
-        return;
-#endif
-#if ORDER == O3
-    t0 = replica->head_frame_numbers[2];
-    t1 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
-    t2 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
-    if (calc_T_inv_3x3(T, t1, t2) != 0)
-        return;
-#endif
-#if ORDER == O2
-    t0 = replica->head_frame_numbers[1];
-    t1 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
-    if (calc_T_inv_2x2(T, t1) != 0)
-        return;
-#endif
-#if ORDER == O1
     dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dx = qw_rescale(dx, head->speed, 255);
     dx = qw_add(dx, snake_min_speed(param));
@@ -811,8 +778,50 @@ int snake_extrapolate(
     dy = qw_mul(dy, make_qw(frame_number - replica->head_frame_numbers[0]));
     dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
-#endif
-#if ORDER == O2
+
+    head_knot = rb_peek_write(data->bezier_knots);
+    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+    segment_bb = rb_peek_write(data->bezier_aabbs);
+
+    head_knot->pos = head->pos;
+    head_knot->angle = qa_add(head->angle, QA_PI);
+
+    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
+    snake_update_aabb(data);
+    bezier_calc_equidistant_points(
+        &data->bezier_points,
+        data->bezier_knots,
+        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+        snake_length(param));
+
+    return frame_number - replica->head_frame_numbers[0];
+}
+
+/* ------------------------------------------------------------------------- */
+int snake_extrapolate_o2(
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica,
+    const struct snake_param*   param,
+    uint16_t                    frame_number)
+{
+    float               T[2][2];
+    float               a[2];
+    float               x[2];
+    float               t;
+    float               t0, t1;
+    struct bezier_knot* head_knot;
+    struct bezier_knot* prev_knot;
+    struct qwaabb*      segment_bb;
+
+    if (rb_count(data->bezier_knots) < 2)
+        return 0;
+
+    t0 = replica->head_frame_numbers[1];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_2x2(T, t1) != 0)
+        return 0;
+
     t = (float)(uint16_t)(frame_number - t0);
     x[0] = qw_to_float(replica->head_history[1].pos.x);
     x[1] = qw_to_float(replica->head_history[0].pos.x);
@@ -825,8 +834,50 @@ int snake_extrapolate(
     a[0] = T[0][0] * x[0] + T[0][1] * x[1];
     a[1] = T[1][0] * x[0] + T[1][1] * x[1];
     head->pos.y = make_qw(a[0] + a[1] * t);
-#endif
-#if ORDER == O3
+
+    head_knot = rb_peek_write(data->bezier_knots);
+    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+    segment_bb = rb_peek_write(data->bezier_aabbs);
+
+    head_knot->pos = head->pos;
+    head_knot->angle = qa_add(head->angle, QA_PI);
+
+    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
+    snake_update_aabb(data);
+    bezier_calc_equidistant_points(
+        &data->bezier_points,
+        data->bezier_knots,
+        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+        snake_length(param));
+
+    return frame_number - replica->head_frame_numbers[0];
+}
+
+int snake_extrapolate_o3(
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica,
+    const struct snake_param*   param,
+    uint16_t                    frame_number)
+{
+    float               T[3][3];
+    float               a[3];
+    float               x[3];
+    float               t;
+    float               t0, t1, t2;
+    struct bezier_knot* head_knot;
+    struct bezier_knot* prev_knot;
+    struct qwaabb*      segment_bb;
+
+    if (rb_count(data->bezier_knots) < 2)
+        return 0;
+
+    t0 = replica->head_frame_numbers[2];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
+    t2 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_3x3(T, t1, t2) != 0)
+        return 0;
+
     t = (float)(uint16_t)(frame_number - t0);
     x[0] = qw_to_float(replica->head_history[2].pos.x);
     x[1] = qw_to_float(replica->head_history[1].pos.x);
@@ -843,8 +894,51 @@ int snake_extrapolate(
     a[1] = T[1][0] * x[0] + T[1][1] * x[1] + T[1][2] * x[2];
     a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2];
     head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t);
-#endif
-#if ORDER == O4
+
+    head_knot = rb_peek_write(data->bezier_knots);
+    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+    segment_bb = rb_peek_write(data->bezier_aabbs);
+
+    head_knot->pos = head->pos;
+    head_knot->angle = qa_add(head->angle, QA_PI);
+
+    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
+    snake_update_aabb(data);
+    bezier_calc_equidistant_points(
+        &data->bezier_points,
+        data->bezier_knots,
+        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
+        snake_length(param));
+
+    return frame_number - replica->head_frame_numbers[0];
+}
+
+int snake_extrapolate_o4(
+    struct snake_data*          data,
+    struct snake_head*          head,
+    const struct snake_replica* replica,
+    const struct snake_param*   param,
+    uint16_t                    frame_number)
+{
+    float               T[4][4];
+    float               a[4];
+    float               x[4];
+    float               t;
+    float               t0, t1, t2, t3;
+    struct bezier_knot* head_knot;
+    struct bezier_knot* prev_knot;
+    struct qwaabb*      segment_bb;
+
+    if (rb_count(data->bezier_knots) < 2)
+        return 0;
+
+    t0 = replica->head_frame_numbers[3];
+    t1 = (float)(uint16_t)(replica->head_frame_numbers[2] - t0);
+    t2 = (float)(uint16_t)(replica->head_frame_numbers[1] - t0);
+    t3 = (float)(uint16_t)(replica->head_frame_numbers[0] - t0);
+    if (calc_T_inv_4x4(T, t1, t2, t3) != 0)
+        return 0;
+
     t = (float)(uint16_t)(frame_number - t0);
     x[0] = qw_to_float(replica->head_history[3].pos.x);
     x[1] = qw_to_float(replica->head_history[2].pos.x);
@@ -865,7 +959,6 @@ int snake_extrapolate(
     a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2] + T[2][3] * x[3];
     a[3] = T[3][0] * x[0] + T[3][1] * x[1] + T[3][2] * x[2] + T[3][3] * x[3];
     head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t + a[3] * t * t * t);
-#endif
 
     head_knot = rb_peek_write(data->bezier_knots);
     prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);

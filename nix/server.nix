@@ -14,4 +14,10 @@ pkgs.stdenv.mkDerivation {
     "-DCLITHER_GFX=OFF"
     "-DCLITHER_TESTS=OFF"
   ];
+  postFixup = let
+    isWindows = builtins.match ".*-windows" pkgs.stdenv.hostPlatform.system != null;
+  in pkgs.lib.optional (isWindows) ''
+    # Windows DLLs that are not system DLLs
+    cp ${pkgs.windows.mcfgthreads}/bin/*mcfgthread*.dll $out/
+    '';
 }
