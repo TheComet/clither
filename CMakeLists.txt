@@ -550,7 +550,7 @@ if (CLITHER_ASSETS)
     add_dependencies (clither clither-assets)
 
     # Emscripten packs the assets as part of the linker step already
-    if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
         install (
             DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
             DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
