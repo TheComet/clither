@@ -17,7 +17,7 @@ list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 
 include (CMakeDependentOption)
 
-option (CLITHER_ASSETS "Download and install assets automatically" ON)
+option (CLITHER_FETCH_ASSETS "Download and install assets automatically" ON)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_CAPACITY_WARNING "Enable capacity warnings for data structures" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
@@ -536,7 +536,7 @@ endif ()
 # Assets
 ###############################################################################
 
-if (CLITHER_ASSETS)
+if (CLITHER_FETCH_ASSETS)
     include (ExternalProject)
     ExternalProject_Add (clither-assets
         GIT_REPOSITORY https://github.com/thecomet/clither-assets

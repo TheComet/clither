@@ -4,6 +4,7 @@
 A cross-platform multi-player 2D arcade game implemented in plain C89.
 
 ## How to Build
+
 The tools you will need to build this project are:
   + [CMake](http://www.cmake.org/).
   + A C89 compliant C compiler.
@@ -41,8 +42,37 @@ source ./emsdk_env.sh
 Next, configure:
 ```sh
 cd path/to/clither
-EMSDK=<path/to/emsdk> cmake --preset web
+emcmake cmake --preset web
 cmake --build build-web-Release/ --paralell $(nproc)
+```
+
+## Nix
+
+Nix is the easiest for building the server and cross compiling to windows: [https://nixos.org/download/](https://nixos.org/download/).
+
+You can install nix locally (--no-daemon). If you are worried  about cluttering
+your system with unnecessary files, don't worry. Everyting is contained  within
+the ```/nix``` directory.
+
+Once installed, you will also  want  to  create ```/etc/nix/nix.conf``` and add
+the following lines:
+```
+extra-experimental-features = nix-command flakes
+```
+
+### Build server as a docker image
+
+```sh
+nix build .#docker
+docker load < result
+docker run clither:latest
+```
+
+### Cross-compile to windows
+
+```sh
+nix build .#client-win64
+zip -r clither-win64.zip result/
 ```
 
 ## Usage

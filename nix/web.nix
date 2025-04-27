@@ -7,12 +7,13 @@ pkgs.emscriptenStdenv.mkDerivation {
     #texliveFull
   ];
   buildInputs = with pkgs.emscriptenPackages; [
+    zlib
   ];
   configurePhase = ''
     emcmake cmake -B build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCLITHER_ASM_OPTIMIZATIONS=OFF \
-      -DCLITHER_ASSETS=OFF \
+      -DCLITHER_FETCH_ASSETS=OFF \
       -DCLITHER_BOT_API=OFF \
       -DCLITHER_DOC=OFF \
       -DCLITHER_LOG=OFF \

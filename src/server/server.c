@@ -322,11 +322,14 @@ int server_queue_food_data(struct server* server, const struct world* world)
         {
             pos = morton_decode_qwpos(morton);
             if (!qwaabb_test_qwpos(bb, pos) ||
-                food_bmap_find(world->food_grid.morton, morton) == NULL)
+                !food_bmap_find(world->food_grid.morton, morton))
             {
                 if (food_in_proximity_hset_erase(
                         client->food_in_proximity, morton))
+                {
+                    msg_vec_remove_food_create(client->pending_msgs, pos);
                     server_queue(client, msg_food_destroy(pos));
+                }
             }
         }
     }
@@ -348,8 +351,8 @@ int server_update_snakes_in_range(
     /* TODO: O(n^2) */
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
-        struct qwpos  proximity_range;
         struct snake* snake;
+        struct qwpos  proximity_range;
 
         snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL);
@@ -1033,8 +1036,6 @@ int server_recv(
     int                    slot;
     int*                   timeout;
     int                    net_i;
-
-    log_net("server_recv() frame=%d\n", frame_number);
 
     /* Update timeout counters of every client that we've communicated with */
     server_client_hmap_for_each (server->clients, slot, server_addr, client)
