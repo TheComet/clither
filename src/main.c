@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
      * was specified. */
     if (args.gfx_backend >= 0 && gfx_backends[args.gfx_backend] != NULL)
     {
-        pack = resource_pack_parse("packs/synthwave");
+        pack = resource_pack_parse("packs/horror");
         if (pack == NULL)
             goto parse_resource_pack_failed;
 
