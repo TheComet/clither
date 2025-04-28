@@ -97,8 +97,9 @@ void gfx_gles2_background_deinit(struct background* bg)
 int gfx_gles2_background_load(
     struct background* bg, const struct resource_pack* pack)
 {
-    int      img_width, img_height, img_channels;
-    stbi_uc* img_data;
+    int             img_width, img_height, img_channels;
+    stbi_uc*        img_data;
+    struct strlist* textures;
 
     CLITHER_DEBUG_ASSERT(bg->program == 0);
 
@@ -128,61 +129,66 @@ int gfx_gles2_background_load(
     bg->sCol = gfx_gles2_get_uniform_location_and_warn(bg->program, "sCol");
     bg->sNM = gfx_gles2_get_uniform_location_and_warn(bg->program, "sNM");
 
-    img_data = stbi_load(
-        strlist_cstr((*vec_first(pack->sprites.background))->textures, 0),
-        &img_width,
-        &img_height,
-        &img_channels,
-        3);
-    if (img_data)
+    textures = (*vec_first(pack->sprites.background))->textures;
+    if (strlist_count(textures) > 0)
     {
-        glBindTexture(GL_TEXTURE_2D, bg->texCol);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGB,
-            img_width,
-            img_height,
-            0,
-            GL_RGB,
-            GL_UNSIGNED_BYTE,
-            img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        stbi_image_free(img_data);
+        img_data = stbi_load(
+            strlist_cstr(textures, 0),
+            &img_width,
+            &img_height,
+            &img_channels,
+            3);
+        if (img_data)
+        {
+            glBindTexture(GL_TEXTURE_2D, bg->texCol);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGB,
+                img_width,
+                img_height,
+                0,
+                GL_RGB,
+                GL_UNSIGNED_BYTE,
+                img_data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            stbi_image_free(img_data);
+        }
+        else
+            log_warn(
+                "Failed to load image \"%s\"\n", strlist_cstr(textures, 0));
     }
-    else
-        log_err(
-            "Failed to load image \"%s\"\n",
-            strlist_cstr((*vec_first(pack->sprites.background))->textures, 0));
 
-    img_data = stbi_load(
-        strlist_cstr((*vec_first(pack->sprites.background))->textures, 1),
-        &img_width,
-        &img_height,
-        &img_channels,
-        3);
-    if (img_data)
+    if (strlist_count(textures) > 1)
     {
-        glBindTexture(GL_TEXTURE_2D, bg->texNor);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGB,
-            img_width,
-            img_height,
-            0,
-            GL_RGB,
-            GL_UNSIGNED_BYTE,
-            img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        stbi_image_free(img_data);
+        img_data = stbi_load(
+            strlist_cstr(textures, 1),
+            &img_width,
+            &img_height,
+            &img_channels,
+            3);
+        if (img_data)
+        {
+            glBindTexture(GL_TEXTURE_2D, bg->texNor);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGB,
+                img_width,
+                img_height,
+                0,
+                GL_RGB,
+                GL_UNSIGNED_BYTE,
+                img_data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            stbi_image_free(img_data);
+        }
+        else
+            log_warn(
+                "Failed to load image \"%s\"\n", strlist_cstr(textures, 1));
     }
-    else
-        log_err(
-            "Failed to load image \"%s\"\n",
-            strlist_cstr((*vec_first(pack->sprites.background))->textures, 1));
 
     return 0;
 }
