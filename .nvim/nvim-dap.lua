@@ -24,7 +24,7 @@ dap.configurations.cpp = {
     request = "launch",
     program = "${workspaceFolder}/build-Debug/bin/clither",
     cwd = "${workspaceFolder}/build-Debug/bin/",
-    args = { "--addr", "localhost" },
+    args = { "--addr", "localhost", "--gfx" },
     stopOnEntry = false,
   },
   {
@@ -33,7 +33,7 @@ dap.configurations.cpp = {
     request = "launch",
     program = "${workspaceFolder}/build-Debug/bin/clither",
     cwd = "${workspaceFolder}/build-Debug/bin/",
-    args = { "--host" },
+    args = { "--host", "--gfx" },
     stopOnEntry = false,
   },
   {

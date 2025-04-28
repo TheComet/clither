@@ -157,6 +157,10 @@ int client_send_pending_data(struct client* client)
     uint8_t           type;
     int               status;
 
+    CLITHER_DEBUG_ASSERT(client->state != CLIENT_DISCONNECTED);
+    CLITHER_DEBUG_ASSERT(client->connection != NULL);
+    CLITHER_DEBUG_ASSERT(client->inet != NULL);
+
     /* Append unreliable messages first before appending reliable */
 packet_full:
     pkt.len = 0;
@@ -793,7 +797,7 @@ void* client_run(
             log_info("Resource pack changed, reloading\n");
             fs_watch_deinit(pack_watch);
 
-            new_pack = resource_pack_parse("packs/horror");
+            new_pack = resource_pack_parse("packs/synthwave");
             if (new_pack && *gfx != NULL)
             {
                 (*igfx)->unload_resource_pack(*gfx, *pack);
@@ -959,9 +963,12 @@ void* client_run(
     log_info("Stopping client\n");
 
     /* Send quit message to server to be nice */
-    client.timeout_counter = 0;
-    client_queue(&client, msg_leave());
-    client_send_pending_data(&client);
+    if (client.state == CLIENT_CONNECTED)
+    {
+        client.timeout_counter = 0;
+        client_queue(&client, msg_leave());
+        client_send_pending_data(&client);
+    }
 
     world_deinit(&world);
     if (client.state != CLIENT_DISCONNECTED)

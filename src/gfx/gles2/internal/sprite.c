@@ -91,59 +91,67 @@ void gfx_gles2_sprite_tex_load(
         return;
     }
 
-    img_data = stbi_load(
-        strlist_cstr(res->textures, 0),
-        &img_width,
-        &img_height,
-        &img_channels,
-        4);
-    if (img_data != NULL)
+    if (strlist_count(res->textures) > 0)
     {
-        glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGBA,
-            img_width,
-            img_height,
-            0,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        stbi_image_free(img_data);
+        img_data = stbi_load(
+            strlist_cstr(res->textures, 0),
+            &img_width,
+            &img_height,
+            &img_channels,
+            4);
+        if (img_data != NULL)
+        {
+            glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                img_width,
+                img_height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                img_data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            stbi_image_free(img_data);
+        }
+        else
+            log_warn(
+                "Failed to load image \"%s\"\n",
+                strlist_cstr(res->textures, 0));
     }
-    else
-        log_err(
-            "Failed to load image \"%s\"\n", strlist_cstr(res->textures, 0));
 
-    img_data = stbi_load(
-        strlist_cstr(res->textures, 1),
-        &img_width,
-        &img_height,
-        &img_channels,
-        4);
-    if (img_data != NULL)
+    if (strlist_count(res->textures) > 1)
     {
-        glBindTexture(GL_TEXTURE_2D, tex->texNM);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGBA,
-            img_width,
-            img_height,
-            0,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            img_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(img_data);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        img_data = stbi_load(
+            strlist_cstr(res->textures, 1),
+            &img_width,
+            &img_height,
+            &img_channels,
+            4);
+        if (img_data != NULL)
+        {
+            glBindTexture(GL_TEXTURE_2D, tex->texNM);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                img_width,
+                img_height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                img_data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            stbi_image_free(img_data);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        else
+            log_warn(
+                "Failed to load image \"%s\"\n",
+                strlist_cstr(res->textures, 1));
     }
-    else
-        log_err(
-            "Failed to load image \"%s\"\n", strlist_cstr(res->textures, 1));
 
     tex->tile_x = res->tile_x;
     tex->tile_y = res->tile_y;

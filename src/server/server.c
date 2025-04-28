@@ -765,6 +765,7 @@ static enum process_message_result process_message(
 
             granularity =
                 settings_server->sim_tick_rate / settings_server->net_tick_rate;
+            granularity = 1; /* XXX: Let's see how this affects latency */
 
             /*
              * Measure how many frames are in the client's command

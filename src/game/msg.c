@@ -2,6 +2,7 @@
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/wrap.h"
+#include "clither/platform/net.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include <assert.h>
@@ -651,16 +652,19 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
     CLITHER_DEBUG_ASSERT(cmd_queue_count(cmdq) > 0);
     first_frame_number = cmd_queue_frame_begin(cmdq);
 
-    /*
-     * The largest message payload we limit ourselves to is 255 bytes.
-     * It doesn't really make sense to send more than a full second of inputs.
+    /* One UDP packet can hold up to 508 bytes of payload. Assuming 12-bits per
+     * command worst case, that means ~338 commands per packet. However, the
+     * "payload_len" field is only 1 byte, so the actual limit of commands is
+     * 255 / 12 * 8 - 8 = 162 commands.
      */
+#define MAX_COMMANDS_PER_MSG 162
     for (send_idx = 0; send_idx < cmd_queue_count(cmdq);
-         send_idx += 100, first_frame_number += 100)
+         send_idx += MAX_COMMANDS_PER_MSG,
+        first_frame_number += MAX_COMMANDS_PER_MSG)
     {
         send_count = cmd_queue_count(cmdq) - send_idx;
-        if (send_count > 100)
-            send_count = 100;
+        if (send_count > MAX_COMMANDS_PER_MSG)
+            send_count = MAX_COMMANDS_PER_MSG;
 
         /*
          * command structure: 19 bits
@@ -688,7 +692,7 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
         m->payload[2] = (uint8_t)(send_count - 1);
 
         /* First command structure */
-        c = cmd_queue_peek(cmdq, 0);
+        c = cmd_queue_peek(cmdq, send_idx);
         m->payload[3] = c->angle;
         m->payload[4] = c->speed;
         m->payload[5] = c->action; /* 3 bits */
@@ -735,8 +739,8 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
 
         for (i = 1; i < send_count; i++)
         {
-            const struct cmd* prev = cmd_queue_peek(cmdq, i - 1);
-            const struct cmd* next = cmd_queue_peek(cmdq, i);
+            const struct cmd* prev = cmd_queue_peek(cmdq, send_idx + i - 1);
+            const struct cmd* next = cmd_queue_peek(cmdq, send_idx + i);
 
             if (next->action == prev->action)
                 CLEAR_NEXT_BIT(); /* Indicate nothing has changed */
@@ -757,8 +761,8 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
         for (i = 1; i < send_count; ++i)
         {
             uint8_t           da, dv;
-            const struct cmd* prev = cmd_queue_peek(cmdq, i - 1);
-            const struct cmd* next = cmd_queue_peek(cmdq, i);
+            const struct cmd* prev = cmd_queue_peek(cmdq, send_idx + i - 1);
+            const struct cmd* next = cmd_queue_peek(cmdq, send_idx + i);
             int               da_i32 = next->angle - prev->angle + 3;
             int               dv_i32 = next->speed - prev->speed + 15;
             if (da_i32 > 128)

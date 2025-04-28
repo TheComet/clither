@@ -28,7 +28,7 @@ GLuint gfx_gles2_load_shader_type(const char* code, GLint length, GLenum type)
         {
             char* info = mem_alloc(sizeof(char) * info_len);
             glGetShaderInfoLog(shader, info_len, NULL, info);
-            log_err("Failed to compile shader\n%s", info);
+            log_err("glCompileShader() error:\n%s", info);
             mem_free(info);
         }
 
@@ -69,7 +69,10 @@ GLuint gfx_gles2_load_shader(
                                           : GL_FRAGMENT_SHADER);
         mfile_unmap(&source);
         if (shader == 0)
+        {
+            log_err("Failed to load shader \"%s\"\n", fname);
             goto load_shaders_failed;
+        }
 
         glAttachShader(program, shader);
         glDeleteShader(shader);

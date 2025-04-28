@@ -6,6 +6,7 @@ extern "C" {
 #include "clither/game/cmd.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
+#include "clither/platform/net.h"
 }
 
 #define NAME test_msg
@@ -86,6 +87,52 @@ TEST_F(NAME, compress_multiple_controls)
     EXPECT_THAT(cmd_queue_find_or_predict(&rb, 23), Eq(c3));
 
     cmd_queue_deinit(&rb);
+}
+
+TEST_F(NAME, compress_multiple_controls_spanning_multiple_messages)
+{
+    struct cmd_queue rb;
+    cmd_queue_init(&rb);
+
+    const int MAX_CMDS = 162;
+    for (int i = 0; i != MAX_CMDS; ++i)
+    {
+        struct cmd c;
+        c.angle = 25 + i;
+        c.speed = 8 + i;
+        c.action = i % 3;
+        cmd_queue_put(&rb, c, 20 + i);
+    }
+
+    struct msg_vec* msgs;
+    msg_vec_init(&msgs);
+    msg_commands(&msgs, &rb);
+    cmd_queue_clear(&rb);
+
+    struct msg** pmsg;
+    vec_for_each (msgs, pmsg)
+    {
+        uint16_t    first_frame, last_frame;
+        struct msg* m = *pmsg;
+        ASSERT_THAT(
+            msg_commands_unpack_into(
+                &rb, m->payload, m->payload_len, 15, &first_frame, &last_frame),
+            Eq(0));
+        msg_free(m);
+    }
+
+    ASSERT_THAT(cmd_queue_count(&rb), Eq(MAX_CMDS));
+    for (int i = 0; i != MAX_CMDS; ++i)
+    {
+        struct cmd c;
+        c.angle = 25 + i;
+        c.speed = 8 + i;
+        c.action = i % 3;
+        ASSERT_THAT(cmd_queue_find_or_predict(&rb, 20 + i), Eq(c));
+    }
+
+    cmd_queue_deinit(&rb);
+    msg_vec_deinit(msgs);
 }
 
 TEST_F(NAME, parse_join_request_payload_too_small)

@@ -44,6 +44,7 @@ cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF 
 option (CLITHER_DEBUG_MEMORY "Enable tracking malloc/realloc/free calls to detect memory leaks" OFF)
 cmake_dependent_option (CLITHER_BACKTRACE "Enable generating backtraces to every malloc/realloc call, making it easy to find where memory leaks occur" OFF "CLITHER_DEBUG_MEMORY" OFF)
 cmake_dependent_option (CLITHER_HEX_DUMP "Enable printing out hex dumps of the unfreed memory regions" OFF "CLITHER_DEBUG_MEMORY" OFF)
+set (CLITHER_HEX_DUMP_SIZE "256" CACHE STRING "Maximum size in bytes of the hex dump of the unfreed memory regions")
 set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (depth) when generating backtraces")
 
 option (CLITHER_SERVER "Build the server component. Requires threads." ON)
