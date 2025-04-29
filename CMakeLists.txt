@@ -493,9 +493,9 @@ endif ()
 
 if (EMSCRIPTEN)
     if (CLITHER_DEBUG_PREAMBLEJS)
-        set (preamblejs "${PROJECT_SOURCE_DIR}/src/preamble_debug.js")
+        set (preamble "${PROJECT_SOURCE_DIR}/src/preamble_debug.js")
     else ()
-        set (preamblejs "${PROJECT_BINARY_DIR}/src/preamble.js")
+        set (preamble "${PROJECT_SOURCE_DIR}/src/preamble.js")
     endif ()
 
     set_target_properties (clither
