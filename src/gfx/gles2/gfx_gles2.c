@@ -10,6 +10,7 @@
 #include "clither/game/world.h"
 #include "clither/gfx/gfx.h"
 #include "clither/util/log.h"
+#include "clither/util/tracker.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -18,6 +19,43 @@ enum
 {
     SHADOW_MAP_SIZE_FACTOR = 4
 };
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_DEBUG_MEMORY)
+void gfx_track_tex(struct gfx_tracker* tracker, GLuint tex)
+{
+    tracker_track(tracker->tex, (void*)(uintptr_t)tex, 0);
+}
+void gfx_track_buf(struct gfx_tracker* tracker, GLuint buf)
+{
+    tracker_track(tracker->buf, (void*)(uintptr_t)buf, 0);
+}
+void gfx_track_fbo(struct gfx_tracker* tracker, GLuint fbo)
+{
+    tracker_track(tracker->fbo, (void*)(uintptr_t)fbo, 0);
+}
+void gfx_track_shader(struct gfx_tracker* tracker, GLuint shader)
+{
+    tracker_track(tracker->shader, (void*)(uintptr_t)shader, 0);
+}
+
+void gfx_untrack_tex(struct gfx_tracker* tracker, GLuint tex)
+{
+    tracker_untrack(tracker->tex, (void*)(uintptr_t)tex);
+}
+void gfx_untrack_buf(struct gfx_tracker* tracker, GLuint buf)
+{
+    tracker_untrack(tracker->buf, (void*)(uintptr_t)buf);
+}
+void gfx_untrack_fbo(struct gfx_tracker* tracker, GLuint fbo)
+{
+    tracker_untrack(tracker->fbo, (void*)(uintptr_t)fbo);
+}
+void gfx_untrack_shader(struct gfx_tracker* tracker, GLuint shader)
+{
+    tracker_untrack(tracker->shader, (void*)(uintptr_t)shader);
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 static void error_callback(int error_code, const char* error_msg)
@@ -87,40 +125,15 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     gfx->height = height;
     glViewport(0, 0, width, height);
 
-    /* Resize shadow framebuffer */
-    glDeleteTextures(1, &gfx->background.texShadow);
-    glGenTextures(1, &gfx->background.texShadow);
-    glBindTexture(GL_TEXTURE_2D, gfx->background.texShadow);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGB,
-        width / SHADOW_MAP_SIZE_FACTOR,
-        height / SHADOW_MAP_SIZE_FACTOR,
-        0,
-        GL_RGB,
-        GL_UNSIGNED_BYTE,
-        NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, gfx->background.fbo);
-    glFramebufferTexture2D(
-        GL_FRAMEBUFFER,
-        GL_COLOR_ATTACHMENT0,
-        GL_TEXTURE_2D,
-        gfx->background.texShadow,
-        0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gfx_gles2_background_resize(
+        &gfx->background, width, height, SHADOW_MAP_SIZE_FACTOR);
 }
 
+/* ------------------------------------------------------------------------- */
 static int
 gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
-    if (gfx_gles2_background_load(&gfx->background, pack) < 0)
+    if (gfx_gles2_background_load(&gfx->background, GFX_TRACKER(gfx), pack) < 0)
         goto bg_load_failed;
     if (gfx_gles2_sprite_shadow_load(&gfx->sprite_shadow_mat, pack) < 0)
         goto sprite_shadow_load_failed;
@@ -151,11 +164,12 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 sprite_mat_load_failed:
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
 sprite_shadow_load_failed:
-    gfx_gles2_background_unload(&gfx->background);
+    gfx_gles2_background_unload(&gfx->background, GFX_TRACKER(gfx));
 bg_load_failed:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_unload_resource_pack(
     struct gfx* gfx, const struct resource_pack* pack)
 {
@@ -177,9 +191,10 @@ static void gfx_gles2_unload_resource_pack(
 
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
-    gfx_gles2_background_unload(&gfx->background);
+    gfx_gles2_background_unload(&gfx->background, GFX_TRACKER(gfx));
 }
 
+/* ------------------------------------------------------------------------- */
 static int gfx_gles2_global_init(void)
 {
     glfwSetErrorCallback(error_callback);
@@ -192,12 +207,14 @@ static int gfx_gles2_global_init(void)
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
     glfwSetErrorCallback(NULL);
 }
 
+/* ------------------------------------------------------------------------- */
 static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 {
     FT_Error    ft_error;
@@ -228,6 +245,21 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
 
+#if defined(CLITHER_DEBUG_MEMORY)
+    gfx->tracker.tex = tracker_create();
+    if (gfx->tracker.tex == NULL)
+        goto tracker_tex_create_failed;
+    gfx->tracker.buf = tracker_create();
+    if (gfx->tracker.buf == NULL)
+        goto tracker_buf_create_failed;
+    gfx->tracker.fbo = tracker_create();
+    if (gfx->tracker.fbo == NULL)
+        goto tracker_fbo_create_failed;
+    gfx->tracker.shader = tracker_create();
+    if (gfx->tracker.shader == NULL)
+        goto tracker_shader_create_failed;
+#endif
+
     ft_error = FT_Init_FreeType(&gfx->ft_lib);
     if (ft_error)
     {
@@ -241,7 +273,11 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glViewport(0, 0, fbwidth, fbheight);
 
     gfx_gles2_background_init(
-        &gfx->background, fbwidth, fbheight, SHADOW_MAP_SIZE_FACTOR);
+        &gfx->background,
+        GFX_TRACKER(gfx),
+        fbwidth,
+        fbheight,
+        SHADOW_MAP_SIZE_FACTOR);
     gfx_gles2_quad_mesh_init(&gfx->quad_mesh);
     gfx_gles2_sprite_shadow_init(&gfx->sprite_shadow_mat);
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
@@ -268,7 +304,18 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     return gfx;
 
+    FT_Done_FreeType(gfx->ft_lib);
 ft_init_failed:
+#if defined(CLITHER_DEBUG_MEMORY)
+    tracker_destroy(gfx->tracker.shader);
+tracker_shader_create_failed:
+    tracker_destroy(gfx->tracker.fbo);
+tracker_fbo_create_failed:
+    tracker_destroy(gfx->tracker.buf);
+tracker_buf_create_failed:
+    tracker_destroy(gfx->tracker.tex);
+tracker_tex_create_failed:
+#endif
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
@@ -276,6 +323,7 @@ create_window_failed:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_destroy(struct gfx* gfx)
 {
 #if defined(CLITHER_GFX_DEBUG)
@@ -289,7 +337,14 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
-    gfx_gles2_background_deinit(&gfx->background);
+    gfx_gles2_background_deinit(&gfx->background, GFX_TRACKER(gfx));
+
+#if defined(CLITHER_DEBUG_MEMORY)
+    tracker_destroy(gfx->tracker.shader);
+    tracker_destroy(gfx->tracker.fbo);
+    tracker_destroy(gfx->tracker.buf);
+    tracker_destroy(gfx->tracker.tex);
+#endif
 
     FT_Done_FreeType(gfx->ft_lib);
 
@@ -297,6 +352,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     mem_free(gfx);
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 {
     glfwPollEvents();
@@ -307,6 +363,7 @@ static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
         input->quit = 1;
 }
 
+/* ------------------------------------------------------------------------- */
 static struct cmd gfx_gles2_next_cmd(
     const struct gfx*    gfx,
     const struct input*  input,
@@ -409,7 +466,7 @@ static void gfx_gles2_draw_world(
     gfx_gles2_draw_food_shadows(
         &world->food_grid, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
 
-    gfx_gles2_draw_background(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+    gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
     gfx_gles2_draw_food(&world->food_grid, gfx, camera, &ar);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)

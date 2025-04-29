@@ -6,6 +6,7 @@ struct connection
     int timeout_counter;
 };
 
+/* ------------------------------------------------------------------------- */
 struct connection_hmap_kvs
 {
     struct net_addr*   keys;
@@ -110,12 +111,14 @@ HMAP_DEFINE_FULL(
     16,
     70)
 
+/* ------------------------------------------------------------------------- */
 struct net_server
 {
     struct connection_hmap* connections;
     int                     socket;
 };
 
+/* ------------------------------------------------------------------------- */
 static struct net_server*
 udp_server_create(const char* address, const char* port)
 {
@@ -137,6 +140,7 @@ alloc_server_failed:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------- */
 static void udp_server_destroy(struct net_server* server)
 {
     connection_hmap_deinit(server->connections);
@@ -144,12 +148,14 @@ static void udp_server_destroy(struct net_server* server)
     mem_free(server);
 }
 
+/* ------------------------------------------------------------------------- */
 static void
 udp_server_disconnect(struct net_server* server, const struct net_addr* addr)
 {
     connection_hmap_erase(server->connections, addr);
 }
 
+/* ------------------------------------------------------------------------- */
 static int udp_server_receive(
     struct net_server* server, struct net_addr* addr, struct net_packet* packet)
 {
@@ -172,6 +178,7 @@ static int udp_server_receive(
     return NET_RECEIVE_DATA;
 }
 
+/* ------------------------------------------------------------------------- */
 static int udp_server_send(
     struct net_server*       server,
     const struct net_addr*   addr,
@@ -180,6 +187,7 @@ static int udp_server_send(
     return net_sendto(server->socket, addr, packet->data, packet->len);
 }
 
+/* ------------------------------------------------------------------------- */
 const struct net_server_interface net_udp_server = {
     udp_server_create,
     udp_server_destroy,

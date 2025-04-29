@@ -1,5 +1,6 @@
 #include "clither/platform/fs.h"
 #include "clither/util/log.h"
+#include "clither/util/mem.h"
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -60,12 +61,14 @@ struct fs_watch* fs_watch_init(void)
         log_err("inotify_init() failed: %s\n", strerror(errno));
         return NULL;
     }
+    mem_track_fd(fd);
     return (struct fs_watch*)(intptr_t)fd;
 }
 
 void fs_watch_deinit(struct fs_watch* w)
 {
     int fd = (int)(intptr_t)w;
+    mem_untrack_fd(fd);
     close(fd);
 }
 

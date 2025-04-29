@@ -6,6 +6,7 @@ struct aspect_ratio;
 struct camera;
 struct gfx;
 struct resource_pack;
+struct gfx_tracker;
 struct world;
 
 struct background
@@ -25,17 +26,28 @@ struct background
 };
 
 int gfx_gles2_background_init(
+    struct background*  bg,
+    struct gfx_tracker* track,
+    int                 fbwidth,
+    int                 fbheight,
+    int                 shadow_map_size_factor);
+void gfx_gles2_background_deinit(
+    struct background* bg, struct gfx_tracker* track_tex);
+
+void gfx_gles2_background_resize(
     struct background* bg,
     int                fbwidth,
     int                fbheight,
     int                shadow_map_size_factor);
-void gfx_gles2_background_deinit(struct background* bg);
 
 int gfx_gles2_background_load(
-    struct background* bg, const struct resource_pack* pack);
-void gfx_gles2_background_unload(struct background* bg);
+    struct background*          bg,
+    struct gfx_tracker*         track,
+    const struct resource_pack* pack);
+void gfx_gles2_background_unload(
+    struct background* bg, struct gfx_tracker* track);
 
-void gfx_gles2_draw_background(
+void gfx_gles2_background_draw(
     const struct world*        world,
     const struct gfx*          gfx,
     const struct camera*       camera,

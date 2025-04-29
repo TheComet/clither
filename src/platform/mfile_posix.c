@@ -4,8 +4,8 @@
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include <errno.h>
-#include <string.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -68,8 +68,8 @@ int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     /* file descriptor no longer required */
     close(fd);
 
-    mem_track_allocation(mf->address);
     mf->size = (int)stbuf.st_size;
+    mem_track_allocation(mf->address, mf->size);
     return 0;
 
 mmap_failed:
@@ -122,8 +122,8 @@ int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
     /* file descriptor no longer required */
     close(fd);
 
-    mem_track_allocation(mf->address);
     mf->size = size;
+    mem_track_allocation(mf->address, mf->size);
     return 0;
 
 mmap_failed:
@@ -143,8 +143,8 @@ int mfile_map_mem(struct mfile* mf, int size)
         return -1;
     }
 
-    mem_track_allocation(mf->address);
     mf->size = size;
+    mem_track_allocation(mf->address, mf->size);
     return 0;
 }
 

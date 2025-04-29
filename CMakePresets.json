@@ -2,12 +2,11 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "debug",
-      "displayName": "Debug",
+      "name": "client",
+      "displayName": "Client",
       "description": "Default desktop build for debugging",
-      "binaryDir": "${sourceDir}/build-Debug",
+      "binaryDir": "${sourceDir}/build-client",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "CLITHER_CAPACITY_WARNING": true,
         "CLITHER_DEBUG_ASSERT": true,
@@ -20,23 +19,20 @@
       }
     },
     {
-      "name": "client",
-      "displayName": "Build native client",
-      "description": "Default desktop build",
-      "binaryDir": "${sourceDir}/build-Release"
-    },
-    {
       "name": "server",
       "displayName": "Server",
       "description": "Build only server component",
-      "binaryDir": "${sourceDir}/build-server-Release",
+      "binaryDir": "${sourceDir}/build-server",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_CAPACITY_WARNING": true,
+        "CLITHER_DEBUG_ASSERT": true,
+        "CLITHER_DEBUG_MEMORY": true,
         "CLITHER_BOT_API": false,
         "CLITHER_CLIENT": false,
         "CLITHER_DOC": false,
         "CLITHER_GFX": false,
+        "CLITHER_LOG_DEBUG": true,
         "CLITHER_TESTS": false
       }
     },
@@ -44,9 +40,8 @@
       "name": "web",
       "displayName": "Web",
       "description": "Build web client",
-      "binaryDir": "${sourceDir}/build-web-Release",
+      "binaryDir": "${sourceDir}/build-web",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "CLITHER_ASM_OPTIMIZATIONS": "OFF",
         "CLITHER_BOT_API": false,

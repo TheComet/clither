@@ -52,11 +52,15 @@ static void      write_str(const char* fmt, va_list ap)
     vsprintf(log_output.text.data() + off, fmt, ap);
     log_output.text.resize(log_output.text.size() - 1);
 }
+static void flush_str(void)
+{
+}
 
 LogHelper::LogHelper()
 {
     struct log_interface i = {
         /*write=*/write_str,
+        /*flush=*/flush_str,
         /*prefix=*/"",
         /*set_color=*/"",
         /*clear_color=*/"",

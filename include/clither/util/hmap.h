@@ -483,6 +483,10 @@ enum hmap_status
     {                                                                          \
         H             h;                                                       \
         int##bits##_t slot;                                                    \
+                                                                               \
+        if (hmap == NULL)                                                      \
+            return NULL;                                                       \
+                                                                               \
         /* We use two reserved values for hashes. The hash function could      \
          * produce them, which would mess up collision resolution */           \
         h = hash_func(key);                                                    \

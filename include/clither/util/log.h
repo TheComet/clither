@@ -8,6 +8,7 @@ struct log_interface
 {
     CLITHER_PRINTF_FORMAT(1, 0)
     void (*write)(const char* fmt, va_list ap);
+    void (*flush)(void);
     const char* prefix;
     const char* set_color;
     const char* clear_color;

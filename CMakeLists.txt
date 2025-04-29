@@ -159,6 +159,7 @@ list (APPEND ClitherSources
     "include/clither/util/strspan.h"
     "include/clither/util/strview.h"
     "include/clither/util/strlist.h"
+    "include/clither/util/tracker.h"
 
     "include/clither/server/bezier_knot_acks_bmap.h"
     "include/clither/server/food_in_proximity_hset.h"
@@ -281,7 +282,9 @@ if (CLITHER_MCD)
 endif ()
 
 if (CLITHER_DEBUG_MEMORY)
-    list (APPEND ClitherSources "src/util/mem.c")
+    list (APPEND ClitherSources
+        "src/util/mem.c"
+        "src/util/tracker.c")
 endif ()
 
 if (CLITHER_SERVER)
@@ -527,7 +530,7 @@ if (EMSCRIPTEN)
         COMMENT "Forcing re-link of clither.html"
         DEPENDS
             "src/shell.html"
-            "${preamblejs}"
+            "${preamble}"
             "${PackFiles}")
     add_custom_target (clither_emscripten_deps
         DEPENDS "${PROJECT_BINARY_DIR}/.clither_emscripten_deps")
@@ -595,13 +598,13 @@ if (CLITHER_GFX AND NOT EMSCRIPTEN)
     endif ()
     target_link_libraries (clither PRIVATE Freetype::Freetype)
 
-    #find_package (HarfBuzz)
-    #if (NOT HarfBuzz_FOUND)
-    #    set (HB_BUILD_SUBSET ON CACHE STRING "")
-    #    add_subdirectory ("thirdparty/harfbuzz-11.0.0")
-    #    add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
-    #endif ()
-    #target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
+    find_package (HarfBuzz)
+    if (NOT HarfBuzz_FOUND)
+        set (HB_BUILD_SUBSET ON CACHE STRING "")
+        add_subdirectory ("thirdparty/harfbuzz-11.0.0")
+        add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
+    endif ()
+    target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
 endif ()
 
 if (CLITHER_GFX_SDL)

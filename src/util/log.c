@@ -30,6 +30,9 @@ enum log_severity
 static void default_write_func(const char* fmt, va_list ap)
 {
     vfprintf(stderr, fmt, ap);
+}
+static void default_flush_func(void)
+{
     fflush(stderr);
 }
 
@@ -51,6 +54,7 @@ static char stream_is_terminal(FILE* fp)
 void log_init(void)
 {
     g_out_log.write = default_write_func;
+    g_out_log.flush = default_flush_func;
     g_out_log.prefix = "";
     g_out_log.set_color = "";
     g_out_log.clear_color = "";
@@ -350,11 +354,11 @@ void log_hex_ascii(const void* data, int len)
     int i;
 
     for (i = 0; i != 16; ++i)
-        fprintf(stderr, "%c  ", "0123456789ABCDEF"[i]);
-    putc(' ', stderr);
+        out_log_write("%c  ", "0123456789ABCDEF"[i]);
+    out_log_write(" ");
     for (i = 0; i != 16; ++i)
-        putc("0123456789ABCDEF"[i], stderr);
-    putc('\n', stderr);
+        out_log_write("%c", "0123456789ABCDEF"[i]);
+    out_log_write("\n");
 
     for (i = 0; i < len;)
     {
@@ -362,22 +366,22 @@ void log_hex_ascii(const void* data, int len)
         for (j = 0; j != 16; ++j)
         {
             if (i + j < len)
-                fprintf(stderr, "%02x ", ((const uint8_t*)data)[i + j]);
+                out_log_write("%02x ", ((const uint8_t*)data)[i + j]);
             else
-                fprintf(stderr, "   ");
+                out_log_write("   ");
         }
 
-        fprintf(stderr, " ");
+        out_log_write(" ");
         for (j = 0; j != 16 && i + j != len; ++j)
         {
             uint8_t c = ((const uint8_t*)data)[i + j];
             if (c >= 32 && c < 127) /* printable ascii */
-                putc(c, stderr);
+                out_log_write("%c", c);
             else
-                putc('.', stderr);
+                out_log_write(".");
         }
 
-        fprintf(stderr, "\n");
+        out_log_write("\n");
         i += 16;
     }
 }
@@ -391,7 +395,7 @@ void log_backtrace(void)
 
     if (!(bt = backtrace_get(&bt_size)))
     {
-        fprintf(stderr, "Failed to generate backtrace\n");
+        out_log_write("Failed to generate backtrace\n");
         return;
     }
 
@@ -399,7 +403,7 @@ void log_backtrace(void)
     {
         if (strstr(bt[i], "invoke_main"))
             break;
-        fprintf(stderr, "  %s\n", bt[i]);
+        out_log_write("  %s\n", bt[i]);
     }
     backtrace_free(bt);
 }
@@ -442,16 +446,10 @@ void log_vflc(
             l1++, c1 = 1;
     }
 
-    fprintf(
-        stderr,
-        "%s%s:%d:%d:%s ",
-        emph_style(),
-        filename,
-        l1,
-        c1,
-        reset_style());
-    fprintf(stderr, "%serror:%s ", error_style(), reset_style());
-    vfprintf(stderr, fmt, ap);
+    out_log_write(
+        "%s%s:%d:%d:%s ", emph_style(), filename, l1, c1, reset_style());
+    out_log_write("%serror:%s ", error_style(), reset_style());
+    g_out_log.write(fmt, ap);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -537,55 +535,55 @@ void log_excerpt(const char* source, struct strspan loc)
     line = l1;
     for (i = 0; i != block.len;)
     {
-        fprintf(stderr, "%*d | ", gutter_indent - 1, line);
+        out_log_write("%*d | ", gutter_indent - 1, line);
 
         if (i >= loc.off - block.off && i <= loc.off - block.off + loc.len)
-            fprintf(stderr, "%s", underline_style());
+            out_log_write("%s", underline_style());
 
         indent = 0;
         while (i != block.len)
         {
             if (i == loc.off - block.off)
-                fprintf(stderr, "%s", underline_style());
+                out_log_write("%s", underline_style());
             if (i == loc.off - block.off + loc.len)
-                fprintf(stderr, "%s", reset_style());
+                out_log_write("%s", reset_style());
 
             if (indent++ >= max_indent)
-                putc(source[block.off + i], stderr);
+                out_log_write("%c", source[block.off + i]);
 
             if (source[block.off + i++] == '\n')
             {
                 if (i >= loc.off - block.off &&
                     i <= loc.off - block.off + loc.len)
-                    fprintf(stderr, "%s", reset_style());
+                    out_log_write("%s", reset_style());
                 break;
             }
         }
         line++;
     }
-    fprintf(stderr, "%s\n", reset_style());
+    out_log_write("%s\n", reset_style());
 
     /* print underline */
     if (c2 > c1)
     {
-        fprintf(stderr, "%*s|%*s", gutter_indent, "", c1, "");
-        fprintf(stderr, "%s", underline_style());
-        putc('^', stderr);
+        out_log_write("%*s|%*s", gutter_indent, "", c1, "");
+        out_log_write("%s", underline_style());
+        out_log_write("%c", '^');
         for (i = c1 + 1; i < c2; ++i)
-            putc('~', stderr);
-        fprintf(stderr, "%s", reset_style());
+            out_log_write("%c", '~');
+        out_log_write("%s", reset_style());
     }
     else
     {
         int col, max_col;
 
-        fprintf(stderr, "%*s| ", gutter_indent, "");
-        fprintf(stderr, "%s", underline_style());
+        out_log_write("%*s| ", gutter_indent, "");
+        out_log_write("%s", underline_style());
         for (i = 1; i < c2; ++i)
-            putc('~', stderr);
+            out_log_write("%c", '~');
         for (; i < c1; ++i)
-            putc(' ', stderr);
-        putc('^', stderr);
+            out_log_write("%c", ' ');
+        out_log_write("%c", '^');
 
         /* Have to find length of the longest line */
         col = 1, max_col = 1;
@@ -600,9 +598,9 @@ void log_excerpt(const char* source, struct strspan loc)
         max_col -= max_indent;
 
         for (i = c1 + 1; i < max_col; ++i)
-            putc('~', stderr);
-        fprintf(stderr, "%s", reset_style());
+            out_log_write("%c", '~');
+        out_log_write("%s", reset_style());
     }
 
-    putc('\n', stderr);
+    out_log_write("%c", '\n');
 }

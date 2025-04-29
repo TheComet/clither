@@ -1,4 +1,5 @@
 #include "./quad.h"
+#include "clither/util/log.h"
 #include <stddef.h> /* NULL */
 
 /* clang-format off */

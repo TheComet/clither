@@ -182,6 +182,8 @@ static int net_bind(const char* bind_address, const char* port, int socktype)
         socktype == SOCK_DGRAM ? "UDP" : "TCP",
         ipstr.cstr,
         port);
+
+    mem_track_fd(sockfd);
     return sockfd;
 }
 
@@ -259,6 +261,7 @@ static int net_connect(
             socktype == SOCK_DGRAM ? "UDP" : "TCP",
             ipstr.cstr,
             port);
+        mem_track_fd(sockfd);
         sockfd_vec_push(sockfds, sockfd);
     }
     freeaddrinfo(candidates);
@@ -304,6 +307,7 @@ void net_close(int sockfd)
             ? ntohs(((struct sockaddr_in6*)&addr)->sin6_port)
             : 0);
 #endif
+    mem_untrack_fd(sockfd);
     close(sockfd);
 }
 
@@ -373,7 +377,7 @@ int net_host_tcp(const char* bind_address, const char* port)
     if (listen(fd, 1) < 0)
     {
         log_err("listen() failed: %s\n", strerror(errno));
-        close(fd);
+        net_close(fd);
         return -1;
     }
     return fd;
