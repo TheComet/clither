@@ -21,6 +21,7 @@ option (CLITHER_FETCH_ASSETS "Download and install assets automatically" ON)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_CAPACITY_WARNING "Enable capacity warnings for data structures" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
+option (CLITHER_DEBUG_PREAMBLEJS "Use the debug version of preamble.js (required to test local builds)" ON)
 option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" OFF)
@@ -491,6 +492,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif ()
 
 if (EMSCRIPTEN)
+    if (CLITHER_DEBUG_PREAMBLEJS)
+        set (preamblejs "${PROJECT_SOURCE_DIR}/src/preamble_debug.js")
+    else ()
+        set (preamblejs "${PROJECT_BINARY_DIR}/src/preamble.js")
+    endif ()
+
     set_target_properties (clither
         PROPERTIES
             SUFFIX ".html"
@@ -508,6 +515,7 @@ if (EMSCRIPTEN)
                 -s EXIT_RUNTIME=1 \
                 --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs \
                 --bind \
+                --pre-js ${preamble} \
                 --shell-file ${PROJECT_SOURCE_DIR}/src/shell.html")
 
     file (GLOB_RECURSE PackFiles
@@ -519,6 +527,7 @@ if (EMSCRIPTEN)
         COMMENT "Forcing re-link of clither.html"
         DEPENDS
             "src/shell.html"
+            "${preamblejs}"
             "${PackFiles}")
     add_custom_target (clither_emscripten_deps
         DEPENDS "${PROJECT_BINARY_DIR}/.clither_emscripten_deps")
