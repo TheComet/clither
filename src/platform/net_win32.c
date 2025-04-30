@@ -360,7 +360,7 @@ int net_host_tcp(const char* bind_address, const char* port)
     if (listen(fd, 1) < 0)
     {
         log_err("listen() failed: %d\n", WSAGetLastError());
-        close(fd);
+        net_close(fd);
         return -1;
     }
     return fd;
