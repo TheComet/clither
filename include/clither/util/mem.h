@@ -6,13 +6,15 @@
 #if !defined(CLITHER_DEBUG_MEMORY)
 /* clang-format off */
 #   include <stdlib.h>
-#   define mem_init_threadlocal()    (0)
-#   define mem_deinit_threadlocal()  (0)
-#   define mem_alloc                 malloc
-#   define mem_free                  free
-#   define mem_realloc               realloc
-#   define mem_track_allocation(p)   do {} while (0)
-#   define mem_track_deallocation(p) do {} while (0)
+#   define mem_init_threadlocal()     (0)
+#   define mem_deinit_threadlocal()   (0)
+#   define mem_alloc                  malloc
+#   define mem_free                   free
+#   define mem_realloc                realloc
+#   define mem_track_allocation(p, s) do {} while (0)
+#   define mem_track_deallocation(p)  do {} while (0)
+#   define mem_track_fd(fd)           do {} while (0)
+#   define mem_untrack_fd(fd)         do {} while (0)
 /* clang-format on */
 #else
 
