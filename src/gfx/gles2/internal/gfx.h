@@ -31,7 +31,18 @@ void gfx_untrack_buf(struct gfx_tracker* tracker, GLuint buf);
 void gfx_untrack_fbo(struct gfx_tracker* tracker, GLuint fbo);
 void gfx_untrack_shader(struct gfx_tracker* tracker, GLuint shader);
 #else
+/* clang-format off */
 #    define GFX_TRACKER(gfx) NULL
+#    define gfx_track_tex(tracker, tex) do {} while (0)
+#    define gfx_track_buf(tracker, buf) do {} while (0)
+#    define gfx_track_fbo(tracker, fbo) do {} while (0)
+#    define gfx_track_shader(tracker, shader) do {} while (0)
+
+#    define gfx_untrack_tex(tracker, tex) do {} while (0)
+#    define gfx_untrack_buf(tracker, buf) do {} while (0)
+#    define gfx_untrack_fbo(tracker, fbo) do {} while (0)
+#    define gfx_untrack_shader(tracker, shader) do {} while (0)
+/* clang-format on */
 #endif
 
 struct gfx
