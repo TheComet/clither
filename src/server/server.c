@@ -372,11 +372,7 @@ int server_update_snakes_in_range(
                 snake_bmap_find(world->snakes, other_client->snake_id);
             CLITHER_DEBUG_ASSERT(other_snake != NULL);
 
-            other_aabb = other_snake->data.bb;
-            other_aabb.x1 = qw_sub(other_aabb.x1, proximity_range.x);
-            other_aabb.y1 = qw_sub(other_aabb.y1, proximity_range.y);
-            other_aabb.x2 = qw_add(other_aabb.x2, proximity_range.x);
-            other_aabb.y2 = qw_add(other_aabb.y2, proximity_range.y);
+            other_aabb = qwaabb_pad(other_snake->data.bb, proximity_range);
 
             /* Want to make sure to remove snakes that died, or somehow ended up
              * in the list even though they are held. */
@@ -441,21 +437,37 @@ find_client_for_snake_id(const struct server* server, uint16_t snake_id)
 
     return NULL;
 }
-static int
-snake_head_collided(struct qwpos victim_head_pos, const struct snake* attacker)
+
+/* ------------------------------------------------------------------------- */
+static int snake_head_collided(
+    struct qwpos victim_head_pos, const struct snake* attacker, qw scale)
 {
-    int16_t        bb_idx;
-    struct qwaabb* bb;
+    int16_t      bb_idx;
+    struct qwpos pad = make_qwposqw(
+        qw_mul(SNAKE_PART_SPACING, scale / 2),
+        qw_mul(SNAKE_PART_SPACING, scale / 2));
 
-    if (qwaabb_test_qwpos(attacker->data.bb, victim_head_pos))
-        return 1;
+    if (!qwaabb_test_qwpos(qwaabb_pad(attacker->data.bb, pad), victim_head_pos))
+        return 0;
 
-    rb_for_each (attacker->data.bezier_aabbs, bb_idx, bb)
-        if (qwaabb_test_qwpos(*bb, victim_head_pos))
-            return 1;
+    for (bb_idx = 0; bb_idx != rb_count(attacker->data.bezier_aabbs); ++bb_idx)
+    {
+        const struct qwaabb* pbb = rb_peek(attacker->data.bezier_aabbs, bb_idx);
+        if (qwaabb_test_qwpos(qwaabb_pad(*pbb, pad), victim_head_pos))
+            break;
+    }
+    if (bb_idx == rb_count(attacker->data.bezier_aabbs))
+        return 0;
 
-    return 0;
+    return bezier_test_radius(
+        rb_peek(attacker->data.bezier_knots, bb_idx),
+        rb_peek(attacker->data.bezier_knots, bb_idx + 1),
+        victim_head_pos,
+        pad.x);
+    return 1;
 }
+
+/* ------------------------------------------------------------------------- */
 int server_kill_snake_checks(struct server* server, struct world* world)
 {
     int                    slot;
@@ -487,7 +499,10 @@ int server_kill_snake_checks(struct server* server, struct world* world)
             if (snake_is_held(victim_snake) || snake_is_dead(victim_snake))
                 continue;
 
-            if (snake_head_collided(victim_snake->head.pos, attacker_snake))
+            if (snake_head_collided(
+                    victim_snake->head.pos,
+                    attacker_snake,
+                    snake_scale(&victim_snake->param)))
                 goto kill_snake;
         }
         continue;

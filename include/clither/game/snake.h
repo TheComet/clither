@@ -4,6 +4,8 @@
 #include "clither/game/cmd_queue.h"
 #include "clither/game/snake_param.h"
 
+#define SNAKE_PART_SPACING make_qw2(1, 6)
+
 struct food_grid;
 
 struct snake_head

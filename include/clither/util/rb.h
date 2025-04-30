@@ -252,6 +252,10 @@
          (idx) < (((rb)->write - (rb)->read) & ((rb)->capacity - 1))),         \
      &(rb)->data[((rb)->read + (idx)) & ((rb)->capacity - 1)])
 
+#define rb_peek_idx(rb, idx)                                                   \
+    (CLITHER_DEBUG_ASSERT(rb_is_idx_valid_data(rb, idx)),                      \
+     &(rb)->data[(idx) & ((rb)->capacity - 1)])
+
 #define rb_peek_read(rb)                                                       \
     (CLITHER_DEBUG_ASSERT((rb) && (rb)->read != (rb)->write),                  \
      &(rb)->data[(rb)->read])

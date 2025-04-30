@@ -15,8 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SNAKE_PART_SPACING make_qw2(1, 6)
-
 /* ------------------------------------------------------------------------- */
 void snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 {

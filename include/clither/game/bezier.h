@@ -87,6 +87,12 @@ int bezier_calc_equidistant_points(
     qw                           spacing,
     qw                           snake_length);
 
+int bezier_test_radius(
+    const struct bezier_knot* head,
+    const struct bezier_knot* tail,
+    struct qwpos              pos,
+    qw                        radius);
+
 static int
 bezier_knots_equal(const struct bezier_knot* a, const struct bezier_knot* b)
 {

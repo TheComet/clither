@@ -118,49 +118,6 @@ static q16_16 q16_16_div(q16_16 a, q16_16 b)
 #define qw_rescale(q, num, den) ((int64_t)(q) * (num) / (den))
 #define q16_16_to_qw(q16)       qw_rescale(q16, 1 << QW_Q, 1 << Q16_16_Q)
 
-static struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
-{
-    struct qwaabb bb;
-    bb.x1 = make_qw(x1);
-    bb.y1 = make_qw(y1);
-    bb.x2 = make_qw(x2);
-    bb.y2 = make_qw(y2);
-    return bb;
-}
-
-static struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
-{
-    struct qwaabb bb;
-    bb.x1 = x1;
-    bb.y1 = y1;
-    bb.x2 = x2;
-    bb.y2 = y2;
-    return bb;
-}
-
-static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
-{
-    if (a.x1 > b.x1)
-        a.x1 = b.x1;
-    if (a.x2 < b.x2)
-        a.x2 = b.x2;
-    if (a.y1 > b.y1)
-        a.y1 = b.y1;
-    if (a.y2 < b.y2)
-        a.y2 = b.y2;
-    return a;
-}
-
-static int qwaabb_test_qwpos(struct qwaabb bb, const struct qwpos p)
-{
-    return p.x >= bb.x1 && p.x <= bb.x2 && p.y >= bb.y1 && p.y <= bb.y2;
-}
-
-static int qwaabb_test_qwaabb(struct qwaabb a, struct qwaabb b)
-{
-    return a.x1 <= b.x2 && a.x2 >= b.x1 && a.y1 <= b.y2 && a.y2 >= b.y1;
-}
-
 static qw qw_add(qw a, qw b)
 {
     return a + b;
@@ -244,6 +201,58 @@ static qw qw_sqrt(qw q)
 {
     /* TODO */
     return make_qw(sqrt(qw_to_float(q)));
+}
+
+static struct qwaabb make_qwaabbi(int x1, int y1, int x2, int y2)
+{
+    struct qwaabb bb;
+    bb.x1 = make_qw(x1);
+    bb.y1 = make_qw(y1);
+    bb.x2 = make_qw(x2);
+    bb.y2 = make_qw(y2);
+    return bb;
+}
+
+static struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
+{
+    struct qwaabb bb;
+    bb.x1 = x1;
+    bb.y1 = y1;
+    bb.x2 = x2;
+    bb.y2 = y2;
+    return bb;
+}
+
+static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
+{
+    if (a.x1 > b.x1)
+        a.x1 = b.x1;
+    if (a.x2 < b.x2)
+        a.x2 = b.x2;
+    if (a.y1 > b.y1)
+        a.y1 = b.y1;
+    if (a.y2 < b.y2)
+        a.y2 = b.y2;
+    return a;
+}
+
+static struct qwaabb qwaabb_pad(struct qwaabb bb, struct qwpos p)
+{
+    bb.x1 = qw_sub(bb.x1, p.x);
+    bb.y1 = qw_sub(bb.y1, p.y);
+    bb.x2 = qw_add(bb.x2, p.x);
+    bb.y2 = qw_add(bb.y2, p.y);
+    return bb;
+}
+
+static int qwaabb_test_qwpos(struct qwaabb bb, const struct qwpos p)
+{
+    return p.x >= bb.x1 && p.x <= bb.x2 && p.y >= bb.y1 && p.y <= bb.y2;
+}
+
+static int qwaabb_test_qwaabb(struct qwaabb a, struct qwaabb b)
+{
+    return a.x1 <= b.x2 && a.x2 >= b.x1 && a.y1 <= b.y2 && a.y2 >= b.y1;
 }
 
 static struct spos make_spos(int x, int y)

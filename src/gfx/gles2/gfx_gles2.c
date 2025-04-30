@@ -293,7 +293,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glEnable(GL_DEPTH_TEST);
+    /*glEnable(GL_DEPTH_TEST);*/
 
     input_init(&gfx->input_buffer);
 

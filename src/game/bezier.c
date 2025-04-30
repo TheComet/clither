@@ -721,3 +721,40 @@ int bezier_calc_equidistant_points(
 
     return 0;
 }
+
+int bezier_test_radius(
+    const struct bezier_knot* head,
+    const struct bezier_knot* tail,
+    struct qwpos              pos,
+    qw                        radius)
+{
+    qw           Ax[4], Ay[4], dx, dy, dist, t_step, t;
+    struct qwpos off;
+
+    /*
+     * Calculating coefficients far away from 0,0 results in precision issues,
+     * so we translate everything to 0,0 first and do the collision checks
+     * there.
+     */
+    off = head->pos;
+    pos.x = qw_sub(pos.x, off.x);
+    pos.y = qw_sub(pos.y, off.x);
+    calc_coeff(Ax, Ay, head, tail, off);
+
+    dx = qw_sub(head->pos.x, tail->pos.x);
+    dy = qw_sub(head->pos.y, tail->pos.y);
+    dist = qw_sqrt(qw_add(qw_mul(dx, dx), qw_mul(dy, dy)));
+    t_step = qw_mul(make_qw(0.05), qw_div(radius, dist));
+
+    for (t = make_qw(0); t <= make_qw(1); t += t_step)
+    {
+        struct qwpos p = bezier_xy(Ax, Ay, t);
+        dx = qw_sub(p.x, pos.x);
+        dy = qw_sub(p.y, pos.y);
+        dist = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        if (dist < radius * radius)
+            return 1;
+    }
+
+    return 0;
+}
