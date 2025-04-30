@@ -30,6 +30,7 @@ struct tracker
 };
 
 /* ------------------------------------------------------------------------- */
+#if defined(CLITHER_BACKTRACE)
 static void print_backtrace(const struct data* data)
 {
     int i;
@@ -40,6 +41,7 @@ static void print_backtrace(const struct data* data)
         log_raw("  %s\n", data->backtrace[i]);
     }
 }
+#endif
 
 /* ------------------------------------------------------------------------- */
 struct tracker* tracker_create(void)

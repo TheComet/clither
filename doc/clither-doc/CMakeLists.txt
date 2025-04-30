@@ -39,10 +39,6 @@ add_custom_command (OUTPUT ${FINAL_PDF}
 add_custom_target (clither-doc ALL
     DEPENDS ${FINAL_PDF})
 
-if (TARGET clither)
-    add_dependencies (clither clither-doc)
-endif ()
-
 install (
     FILES ${FINAL_PDF}
     DESTINATION ${CLITHER_INSTALL_DOCDIR})
