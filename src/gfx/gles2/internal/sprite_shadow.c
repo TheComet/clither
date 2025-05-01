@@ -59,24 +59,7 @@ void gfx_gles2_sprite_shadow_prepare_draw(
 {
     const GLint nmUnits[4] = {0, 1, 2, 3};
 
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
+    gfx_gles2_quad_mesh_prepare_draw(mesh);
 
     glUseProgram(mat->program);
     glUniform2f(mat->uAspectRatio, ar->scale_x, ar->scale_y);
@@ -93,14 +76,10 @@ void gfx_gles2_sprite_shadow_prepare_draw(
 void gfx_gles2_sprite_shadow_end_draw(GLint gfx_width, GLint gfx_height)
 {
     glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, gfx_width, gfx_height);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glUseProgram(0);
+    gfx_gles2_quad_mesh_end_draw();
 }
 
 void gfx_gles2_sprite_shadow_bind_textures(const struct sprite_tex* tex)
@@ -148,5 +127,5 @@ void gfx_gles2_sprite_shadow_update_uniforms(
 
 void gfx_gles2_sprite_shadow_draw(void)
 {
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    gfx_gles2_quad_mesh_draw();
 }

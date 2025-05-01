@@ -5,7 +5,6 @@
 #include "clither/game/resource_sprite_vec.h"
 #include "clither/game/world.h"
 #include "clither/util/strlist.h"
-#include "clither/util/tracker.h"
 #include "stb_image.h"
 
 int gfx_gles2_background_init(
@@ -264,17 +263,7 @@ void gfx_gles2_background_draw(
     const struct aspect_ratio* ar,
     int                        shadow_map_size_factor)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, gfx->quad_mesh.vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gfx->quad_mesh.ibo);
-
+    gfx_gles2_quad_mesh_prepare_draw(&gfx->quad_mesh);
     glUseProgram(gfx->background.program);
     glBindTexture(GL_TEXTURE_2D, gfx->background.texShadow);
     glActiveTexture(GL_TEXTURE1);
@@ -305,14 +294,13 @@ void gfx_gles2_background_draw(
     glUniform1i(gfx->background.sCol, 1);
     glUniform1i(gfx->background.sNM, 2);
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    gfx_gles2_quad_mesh_draw();
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
+    gfx_gles2_quad_mesh_end_draw();
 }

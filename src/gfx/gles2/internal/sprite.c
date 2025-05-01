@@ -178,39 +178,11 @@ void gfx_gles2_sprite_prepare_draw(
     const struct sprite_mat*   mat,
     const struct aspect_ratio* ar)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
-
+    gfx_gles2_quad_mesh_prepare_draw(mesh);
     glUseProgram(mat->program);
     glUniform2f(mat->uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform1i(mat->sCol, 0);
     glUniform1i(mat->sNM, 1);
-}
-
-void gfx_gles2_sprite_end_draw(void)
-{
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void gfx_gles2_sprite_bind_textures(const struct sprite_tex* tex)
@@ -219,6 +191,15 @@ void gfx_gles2_sprite_bind_textures(const struct sprite_tex* tex)
     glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, tex->texNM);
+}
+
+void gfx_gles2_sprite_end_draw(void)
+{
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    gfx_gles2_quad_mesh_end_draw();
 }
 
 void gfx_gles2_sprite_update_uniforms(
@@ -255,7 +236,7 @@ void gfx_gles2_sprite_update_uniforms(
 
 void gfx_gles2_sprite_draw(void)
 {
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    gfx_gles2_quad_mesh_draw();
 }
 
 void gfx_gles2_step_sprite_anim(struct sprite_tex* tex, int sim_tick_rate)

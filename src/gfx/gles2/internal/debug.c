@@ -132,7 +132,7 @@ static void draw_circle(
         ((circle->rgba >> 16) & 0xFF) / 255.0f,
         ((circle->rgba >> 8) & 0xFF) / 255.0f);
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
+    gfx_gles2_quad_mesh_draw();
 }
 
 void gfx_gles2_debug_draw(
@@ -143,25 +143,7 @@ void gfx_gles2_debug_draw(
 {
     const struct debug_circle* circle;
 
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
-
+    gfx_gles2_quad_mesh_prepare_draw(mesh);
     glUseProgram(debug->mat.program);
     glUniform2f(debug->mat.uAspectRatio, ar->scale_x, ar->scale_y);
 
@@ -169,8 +151,7 @@ void gfx_gles2_debug_draw(
         draw_circle(&debug->mat, circle, camera);
 
     glUseProgram(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gfx_gles2_quad_mesh_end_draw();
 
     debug_circle_vec_clear(debug->circles);
 }

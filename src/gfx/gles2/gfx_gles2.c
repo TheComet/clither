@@ -278,7 +278,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
         fbwidth,
         fbheight,
         SHADOW_MAP_SIZE_FACTOR);
-    gfx_gles2_quad_mesh_init(&gfx->quad_mesh);
+    gfx_gles2_quad_mesh_init(&gfx->quad_mesh, GFX_TRACKER(gfx));
     gfx_gles2_sprite_shadow_init(&gfx->sprite_shadow_mat);
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
     gfx_gles2_sprite_tex_init(&gfx->food);
@@ -292,8 +292,6 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /*glEnable(GL_DEPTH_TEST);*/
 
     input_init(&gfx->input_buffer);
 
@@ -338,7 +336,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_sprite_tex_deinit(&gfx->food);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
-    gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
+    gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh, GFX_TRACKER(gfx));
     gfx_gles2_background_deinit(&gfx->background, GFX_TRACKER(gfx));
 
 #if defined(CLITHER_DEBUG_MEMORY)

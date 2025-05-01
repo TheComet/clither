@@ -1,43 +1,62 @@
+#include "./gfx.h"
 #include "./quad.h"
 #include "clither/util/log.h"
 #include <stddef.h> /* NULL */
 
 /* clang-format off */
-const struct vertex gfx_gles2_quad_vertices[4] = {
-    {{-1, -1}, {0, 1}},
-    {{-1,  1}, {0, 0}},
-    {{ 1, -1}, {1, 1}},
-    {{ 1,  1}, {1, 0}}};
-const GLushort gfx_gles2_quad_indices[6] = {0, 2, 1, 1, 3, 2};
-const char* gfx_gles2_quad_attr_bindings[3] = {
+const struct vertex gfx_gles2_quad_vertices[6] = {
+    {{-1, -1}},
+    {{-1,  1}},
+    {{ 1,  1}},
+    {{-1, -1}},
+    {{ 1,  1}},
+    {{ 1, -1}}
+};
+const char* gfx_gles2_quad_attr_bindings[2] = {
     "vPosition",
-    "vTexCoord",
     NULL};
 /* clang-format on */
 
-void gfx_gles2_quad_mesh_init(struct quad_mesh* sm)
+void gfx_gles2_quad_mesh_init(struct quad_mesh* mesh, struct gfx_tracker* track)
 {
-    glGenBuffers(1, &sm->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, sm->vbo);
+    glGenBuffers(1, &mesh->vbo);
+    gfx_track_buf(track, mesh->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
     glBufferData(
         GL_ARRAY_BUFFER,
         sizeof(gfx_gles2_quad_vertices),
         gfx_gles2_quad_vertices,
         GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glGenBuffers(1, &sm->ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sm->ibo);
-    glBufferData(
-        GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(gfx_gles2_quad_indices),
-        gfx_gles2_quad_indices,
-        GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-void gfx_gles2_quad_mesh_deinit(struct quad_mesh* sm)
+void gfx_gles2_quad_mesh_deinit(
+    struct quad_mesh* mesh, struct gfx_tracker* track)
 {
-    glDeleteBuffers(1, &sm->ibo);
-    glDeleteBuffers(1, &sm->vbo);
+    gfx_untrack_buf(track, mesh->vbo);
+    glDeleteBuffers(1, &mesh->vbo);
+}
+
+void gfx_gles2_quad_mesh_prepare_draw(const struct quad_mesh* mesh)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
+}
+
+void gfx_gles2_quad_mesh_end_draw(void)
+{
+    glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void gfx_gles2_quad_mesh_draw(void)
+{
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
