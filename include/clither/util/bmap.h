@@ -3,6 +3,7 @@
 
 #include "clither/util/log.h" /* log_oom */
 #include "clither/util/mem.h" /* mem_realloc, mem_free */
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h> /* NULL */
 #include <string.h> /* memmove */
@@ -14,8 +15,11 @@ enum bmap_status
     BMAP_NEW = 1
 };
 
-#define BMAP_RETAIN 0
-#define BMAP_ERASE  1
+enum
+{
+    BMAP_RETAIN,
+    BMAP_ERASE
+};
 
 #if defined(CLITHER_CAPACITY_WARNING)
 #    define BMAP_CAPACITY_WARNING()                                            \
@@ -152,13 +156,20 @@ enum bmap_status
      *   - Any negative value to abort iterating and return an error.          \
      * @param[in] user A user defined pointer that gets passed in to the       \
      * callback function. Can be whatever you want.                            \
-     * @return Returns 0 if iteration was successful. If the callback function \
-     * returns a negative value, then this function will return the same       \
-     * negative value. This allows propagating errors from within the callback \
-     * function.                                                               \
+     * @return Returns the number of elements that were erased. Can obviously  \
+     * also be 0. If the callback function returns a negative value, then this \
+     * function will return the same negative value. This allows propagating   \
+     * errors from within the callback function.                               \
      */                                                                        \
     int prefix##_retain(                                                       \
         struct prefix* v,                                                      \
+        int (*on_element)(K key, V * value, void* user),                       \
+        void* user);                                                           \
+                                                                               \
+    int prefix##_retain_range(                                                 \
+        struct prefix* v,                                                      \
+        int##bits##_t  lower_bound,                                            \
+        int##bits##_t  upper_bound,                                            \
         int (*on_element)(K key, V * value, void* user),                       \
         void* user);                                                           \
                                                                                \
@@ -413,10 +424,22 @@ enum bmap_status
         int (*on_element)(K key, V * value, void* user),                       \
         void* user)                                                            \
     {                                                                          \
+        return prefix##_retain_range(                                          \
+            bmap, 0, bmap_count(bmap), on_element, user);                      \
+    }                                                                          \
+                                                                               \
+    int prefix##_retain_range(                                                 \
+        struct prefix* bmap,                                                   \
+        int##bits##_t  lower_bound,                                            \
+        int##bits##_t  upper_bound,                                            \
+        int (*on_element)(K key, V * value, void* user),                       \
+        void* user)                                                            \
+    {                                                                          \
         int##bits##_t i;                                                       \
-        if (bmap == NULL)                                                      \
-            return 0;                                                          \
-        for (i = 0; i != bmap->count; ++i)                                     \
+        int           erased = 0;                                              \
+        CLITHER_DEBUG_ASSERT(lower_bound <= upper_bound);                      \
+        CLITHER_DEBUG_ASSERT(upper_bound <= bmap_count(bmap));                 \
+        for (i = lower_bound; i != upper_bound; ++i)                           \
         {                                                                      \
             int result = on_element(                                           \
                 kvs_get_key(bmap, i), kvs_get_value(bmap, i), user);           \
@@ -425,10 +448,11 @@ enum bmap_status
             if (result != BMAP_RETAIN)                                         \
             {                                                                  \
                 kvs_erase(bmap, i);                                            \
-                --i;                                                           \
+                --i, --upper_bound;                                            \
+                ++erased;                                                      \
             }                                                                  \
         }                                                                      \
-        return 0;                                                              \
+        return erased;                                                         \
     }                                                                          \
                                                                                \
     V* prefix##_find(struct prefix* bmap, K key)                               \

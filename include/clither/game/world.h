@@ -3,16 +3,16 @@
 #include "clither/game/food.h"
 #include "clither/game/q.h"
 
+struct food_bmap;
+struct settings_world;
 struct snake_bmap;
 struct snake_data;
 struct snake_param;
-struct food_grid;
-struct settings_world;
 
 struct world
 {
     struct snake_bmap* snakes;
-    struct food_grid   food_grid;
+    struct food_bmap*  food_bmap;
     uint32_t           rng;
     int                food_count;
     qw                 inner_radius;

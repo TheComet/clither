@@ -517,8 +517,8 @@ static struct client_recv_result process_message(
         case MSG_KNOT_ACK: break;
 
         case MSG_FOOD_CREATE: {
-            food_grid_add_food(
-                &world->food_grid, pp.food_create.pos, pp.food_create.dir);
+            food_bmap_create_food(
+                &world->food_bmap, pp.food_create.pos, pp.food_create.dir);
             client_queue(client, msg_food_create_ack(pp.food_create.pos));
             return client_recv_ok();
         }
@@ -526,7 +526,7 @@ static struct client_recv_result process_message(
 
         case MSG_FOOD_DESTROY: {
             uint64_t morton = morton_encode_qwpos(pp.food_destroy.pos);
-            food_grid_remove_food(&world->food_grid, morton);
+            food_bmap_erase(world->food_bmap, morton);
             client_queue(client, msg_food_destroy_ack(pp.food_destroy.pos));
             return client_recv_ok();
         }
@@ -888,7 +888,7 @@ void* client_run(
                 cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
 
                 /* Update snake */
-                snake_eat_food(&snake->head, &snake->param, &world.food_grid);
+                snake_eat_food(&snake->head, &snake->param, world.food_bmap);
                 snake_remove_stale_segments_with_rollback_constraint(
                     &snake->data,
                     &snake->remote.ack,

@@ -20,7 +20,7 @@ static uint64_t rng(struct world* w)
 void world_init(struct world* world)
 {
     snake_bmap_init(&world->snakes);
-    food_grid_init(&world->food_grid);
+    food_bmap_init(&world->food_bmap);
 
     world->food_count = 0;
     world->rng = 1;
@@ -39,7 +39,7 @@ void world_deinit(struct world* world)
     bmap_for_each (world->snakes, idx, uid, snake)
         (void)uid, snake_deinit(snake);
     snake_bmap_deinit(world->snakes);
-    food_grid_deinit(&world->food_grid);
+    food_bmap_deinit(world->food_bmap);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -141,7 +141,7 @@ void world_remove_snake(struct world* world, uint16_t snake_id)
 int world_respawn_food(struct world* w)
 {
     int tries = 1024 * 64;
-    while (food_grid_food_count(&w->food_grid) < w->food_count && --tries)
+    while (bmap_count(w->food_bmap) < w->food_count && --tries)
     {
         struct qwpos pos, dir;
         qa           a = (qa)(rng(w));
@@ -150,7 +150,7 @@ int world_respawn_food(struct world* w)
         r = qw_rescale(r, w->inner_radius, 1 << 31);
         pos = make_qwposqw(qw_mul(qa_cos(phi), r), qw_mul(qa_sin(phi), r));
         dir = make_qwposqw(qa_cos(a), qa_sin(a));
-        if (food_grid_add_food(&w->food_grid, pos, dir) != 0)
+        if (food_bmap_create_food(&w->food_bmap, pos, dir) != 0)
             return -1;
     }
 
@@ -176,7 +176,7 @@ int world_spawn_food_corpse(
             struct qwpos dir = make_qwposqw(qa_cos(a), qa_sin(a));
             struct qwpos pos =
                 make_qwposqw(qw_add(p->pos.x, dx), qw_add(p->pos.y, dy));
-            if (food_grid_add_food(&w->food_grid, pos, dir) != 0)
+            if (food_bmap_create_food(&w->food_bmap, pos, dir) != 0)
                 return -1;
         }
 

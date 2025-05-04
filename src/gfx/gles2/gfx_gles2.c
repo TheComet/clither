@@ -86,6 +86,24 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
         case GLFW_KEY_F1:
             gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
             break;
+        case GLFW_KEY_1:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.boost = 1;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.boost = 0;
+            break;
+        case GLFW_KEY_2:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.shoot = 1;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.shoot = 0;
+            break;
+        case GLFW_KEY_3:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.split = 1;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.split = 0;
+            break;
     }
 }
 
@@ -464,10 +482,10 @@ static void gfx_gles2_draw_world(
             snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
     }
     gfx_gles2_draw_food_shadows(
-        &world->food_grid, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+        world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
 
     gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
-    gfx_gles2_draw_food(&world->food_grid, gfx, camera, &ar);
+    gfx_gles2_draw_food(world->food_bmap, gfx, camera, &ar);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
     {

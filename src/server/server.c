@@ -259,6 +259,21 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
+static int queue_food_data_in_bb(uint64_t morton, struct food* food, void* user)
+{
+    struct server_client* client = user;
+    switch (food_in_proximity_hset_insert(&client->food_in_proximity, morton))
+    {
+        case HMAP_OOM: return -1;
+        case HMAP_NEW:
+            server_queue(
+                client,
+                msg_food_create(morton_decode_qwpos(morton), food->dir));
+        case HMAP_EXISTS: break;
+    }
+
+    return BMAP_RETAIN;
+}
 int server_queue_food_data(struct server* server, const struct world* world)
 {
     int                    slot;
@@ -268,52 +283,31 @@ int server_queue_food_data(struct server* server, const struct world* world)
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
         const struct snake* snake;
-        const struct food*  food;
         struct qwpos        pos;
         struct qwaabb       bb;
-        struct qwpos        lower_pos, upper_pos;
-        uint64_t            lower_morton, upper_morton, morton;
-        int32_t             lower_idx, upper_idx, idx;
+        uint64_t            morton;
+        int32_t             idx;
         struct qwpos        range;
         (void)addr;
 
+        /* Add all food pieces within range to the "ack" list. We quantize the
+         * food position to a coarser grid (0xFFF). This has the effect of
+         * sending "chunks" of food as the snake moves, instead of sending each
+         * food individually. This reduces the number of network messages and
+         * makes it easier to compress the messages, because we can pack more
+         * food pieces per message. */
         snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL);
         range = snake_calculate_visible_range(snake);
-
-        lower_pos = make_qwposqw(
-            qw_sub(snake->head.pos.x, range.x),
-            qw_sub(snake->head.pos.y, range.y));
-        upper_pos = make_qwposqw(
-            qw_add(snake->head.pos.x, range.x),
-            qw_add(snake->head.pos.y, range.y));
-        lower_morton = morton_encode_qwpos(lower_pos);
-        upper_morton = morton_encode_qwpos(upper_pos);
-        lower_idx =
-            food_bmap_lower_bound(world->food_grid.morton, lower_morton);
-        upper_idx =
-            food_bmap_lower_bound(world->food_grid.morton, upper_morton);
-        bb = make_qwaabbqw(lower_pos.x, lower_pos.y, upper_pos.x, upper_pos.y);
-
-        /* Add all food pieces within range to the "ack" list */
-        bmap_for_each_range (
-            world->food_grid.morton, idx, morton, food, lower_idx, upper_idx)
+        bb = make_qwaabbqw(
+            qw_sub(snake->head.pos.x, range.x) & ~0xFFF,
+            qw_sub(snake->head.pos.y, range.y) & ~0xFFF,
+            qw_add(snake->head.pos.x, range.x) & ~0xFFF,
+            qw_add(snake->head.pos.y, range.y) & ~0xFFF);
+        if (food_bmap_for_each_in_bb(
+                world->food_bmap, bb, queue_food_data_in_bb, client) != 0)
         {
-            (void)food;
-            pos = morton_decode_qwpos(morton);
-            if (!qwaabb_test_qwpos(bb, pos))
-                continue;
-            switch (food_in_proximity_hset_insert(
-                &client->food_in_proximity, morton))
-            {
-                case HMAP_OOM: return -1;
-                case HMAP_NEW:
-                    server_queue(
-                        client,
-                        msg_food_create(
-                            morton_decode_qwpos(morton), food->dir));
-                case HMAP_EXISTS: break;
-            }
+            return -1;
         }
 
         /* Remove food pieces that go out of range, or were removed from the
@@ -322,7 +316,7 @@ int server_queue_food_data(struct server* server, const struct world* world)
         {
             pos = morton_decode_qwpos(morton);
             if (!qwaabb_test_qwpos(bb, pos) ||
-                !food_bmap_find(world->food_grid.morton, morton))
+                !food_bmap_find(world->food_bmap, morton))
             {
                 if (food_in_proximity_hset_erase(
                         client->food_in_proximity, morton))

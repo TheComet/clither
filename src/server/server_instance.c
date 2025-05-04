@@ -78,7 +78,7 @@ void* server_instance_run(const void* args)
                 continue;
 
             cmd = cmd_queue_take_or_predict(&snake->cmdq, frame_number);
-            snake_eat_food(&snake->head, &snake->param, &world.food_grid);
+            snake_eat_food(&snake->head, &snake->param, world.food_bmap);
             snake_remove_stale_segments(
                 &snake->data,
                 snake_step(

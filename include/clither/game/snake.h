@@ -6,7 +6,7 @@
 
 #define SNAKE_PART_SPACING make_qw2(1, 6)
 
-struct food_grid;
+struct food_bmap;
 
 struct snake_head
 {
@@ -241,4 +241,4 @@ int snake_extrapolate(
 int snake_eat_food(
     struct snake_head*  head,
     struct snake_param* param,
-    struct food_grid*   food_grid);
+    struct food_bmap*   food_bmap);

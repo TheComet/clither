@@ -851,6 +851,7 @@ int snake_extrapolate_o2(
     return frame_number - replica->head_frame_numbers[0];
 }
 
+/* ------------------------------------------------------------------------- */
 int snake_extrapolate_o3(
     struct snake_data*          data,
     struct snake_head*          head,
@@ -911,6 +912,7 @@ int snake_extrapolate_o3(
     return frame_number - replica->head_frame_numbers[0];
 }
 
+/* ------------------------------------------------------------------------- */
 int snake_extrapolate_o4(
     struct snake_data*          data,
     struct snake_head*          head,
@@ -976,53 +978,25 @@ int snake_extrapolate_o4(
     return frame_number - replica->head_frame_numbers[0];
 }
 
+/* ------------------------------------------------------------------------- */
+static int remove_food_in_radius(uint64_t morton, struct food* food, void* user)
+{
+    struct snake_param* param = user;
+    (void)morton;
+    snake_param_update(param, param->upgrades, param->food_eaten + food->value);
+    return BMAP_ERASE;
+}
 int snake_eat_food(
     struct snake_head*  head,
     struct snake_param* param,
-    struct food_grid*   food_grid)
+    struct food_bmap*   food_bmap)
 {
-    struct qwaabb bb;
-    struct qwpos  mouth_pos;
-    struct food*  food;
-    qw            mouth_radius, mouth_radius_sq;
-    int32_t       lower_idx, upper_idx, idx;
-    uint64_t      morton;
-    int           snake_params_updated = 0;
-
     /* The "mouth" is a circle leading the head position. The distance and
      * radius depends on the snake's size as well as its upgrades */
-    mouth_radius = make_qw(0.15);
-    mouth_radius = qw_mul(mouth_radius, snake_scale(param));
-    mouth_radius_sq = qw_mul(mouth_radius, mouth_radius);
-    mouth_pos.x =
-        qw_add(head->pos.x, qw_mul(qa_cos(head->angle), mouth_radius));
-    mouth_pos.y =
-        qw_add(head->pos.y, qw_mul(qa_sin(head->angle), mouth_radius));
-
-    bb = make_qwaabbqw(
-        mouth_pos.x - mouth_radius,
-        mouth_pos.y - mouth_radius,
-        mouth_pos.x + mouth_radius,
-        mouth_pos.y + mouth_radius);
-    lower_idx = food_bmap_lower_bound(
-        food_grid->morton, morton_encode_qwpos(make_qwposqw(bb.x1, bb.y1)));
-    upper_idx = food_bmap_lower_bound(
-        food_grid->morton, morton_encode_qwpos(make_qwposqw(bb.x2, bb.y2)));
-    bmap_for_each_range (
-        food_grid->morton, idx, morton, food, lower_idx, upper_idx)
-    {
-        struct qwpos food_pos = morton_decode_qwpos(morton);
-        qw           dx = qw_sub(mouth_pos.x, food_pos.x);
-        qw           dy = qw_sub(mouth_pos.y, food_pos.y);
-        qw           dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-        if (dist_sq > mouth_radius_sq)
-            continue;
-
-        snake_param_update(
-            param, param->upgrades, param->food_eaten + food->value);
-        food_grid_remove_food(food_grid, morton);
-        snake_params_updated = 1;
-    }
-
-    return snake_params_updated;
+    qw           mouth_radius = qw_mul(make_qw(0.15), snake_scale(param));
+    struct qwpos mouth_pos = make_qwposqw(
+        qw_add(head->pos.x, qw_mul(qa_cos(head->angle), mouth_radius)),
+        qw_add(head->pos.y, qw_mul(qa_sin(head->angle), mouth_radius)));
+    return food_bmap_for_each_in_radius(
+        food_bmap, mouth_pos, mouth_radius, remove_food_in_radius, param);
 }

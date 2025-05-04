@@ -1,10 +1,10 @@
 #include "./gfx.h"
-#include "clither/util/bmap.h"
 #include "clither/game/food.h"
+#include "clither/util/bmap.h"
 #include "clither/util/morton.h"
 
 void gfx_gles2_draw_food_shadows(
-    const struct food_grid*    food_grid,
+    const struct food_bmap*    food_bmap,
     const struct gfx*          gfx,
     const struct camera*       camera,
     const struct aspect_ratio* ar,
@@ -23,7 +23,7 @@ void gfx_gles2_draw_food_shadows(
         gfx->height,
         shadow_map_size_factor);
     gfx_gles2_sprite_shadow_bind_textures(&gfx->food);
-    bmap_for_each (food_grid->morton, idx, morton, food)
+    bmap_for_each (food_bmap, idx, morton, food)
     {
         gfx_gles2_sprite_shadow_update_uniforms(
             &gfx->sprite_shadow_mat,
@@ -39,7 +39,7 @@ void gfx_gles2_draw_food_shadows(
 }
 
 void gfx_gles2_draw_food(
-    const struct food_grid*    food_grid,
+    const struct food_bmap*    food_bmap,
     const struct gfx*          gfx,
     const struct camera*       camera,
     const struct aspect_ratio* ar)
@@ -50,7 +50,7 @@ void gfx_gles2_draw_food(
 
     gfx_gles2_sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
     gfx_gles2_sprite_bind_textures(&gfx->food);
-    bmap_for_each (food_grid->morton, idx, morton, food)
+    bmap_for_each (food_bmap, idx, morton, food)
     {
         gfx_gles2_sprite_update_uniforms(
             &gfx->sprite_mat,

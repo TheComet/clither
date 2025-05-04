@@ -498,7 +498,7 @@ TEST_F(NAME, retain_empty)
     EXPECT_THAT(
         obj_bmap_retain(
             obj_bmap,
-            [](int16_t, obj*, void* counter)
+            [](int16_t, obj*, void* counter) -> int
             {
                 ++*(int*)counter;
                 return BMAP_RETAIN;
@@ -519,7 +519,7 @@ TEST_F(NAME, retain_all)
     EXPECT_THAT(
         obj_bmap_retain(
             obj_bmap,
-            [](int16_t, obj*, void* counter)
+            [](int16_t, obj*, void* counter) -> int
             {
                 ++*(int*)counter;
                 return BMAP_RETAIN;

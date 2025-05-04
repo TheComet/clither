@@ -63,83 +63,68 @@ static void dumpstack(lua_State* L)
     }
 }
 
-static int clither_food_grid_for_each_in_radius(lua_State* L)
+static int on_food_in_radius(uint64_t morton, struct food* food, void* user)
 {
-    const struct food* food;
-    struct food_grid*  food_grid;
-    struct qwpos       lower_pos, upper_pos, pos;
-    uint64_t           lower_morton, upper_morton, morton;
-    int64_t            lower_idx, upper_idx;
-    int32_t            idx;
-    qw                 radius, x, y, dx, dy, r_sq;
+    lua_State*   L = user;
+    struct qwpos pos = morton_decode_qwpos(morton);
+
+    lua_pushvalue(L, 4);
+    lua_newtable(L);
+    {
+        lua_newtable(L);
+        {
+            lua_pushnumber(L, qw_to_float(pos.x));
+            lua_setfield(L, -2, "x");
+            lua_pushnumber(L, qw_to_float(pos.y));
+            lua_setfield(L, -2, "y");
+
+            lua_setfield(L, -2, "pos");
+        }
+        lua_newtable(L);
+        {
+            lua_pushnumber(L, qw_to_float(food->dir.x));
+            lua_setfield(L, -2, "x");
+            lua_pushnumber(L, qw_to_float(food->dir.y));
+            lua_setfield(L, -2, "y");
+
+            lua_setfield(L, -2, "dir");
+        }
+        lua_pushnumber(L, qw_to_float(food->value));
+        lua_setfield(L, -2, "value");
+    }
+
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+        return lua_error(L);
+
+    return BMAP_RETAIN;
+}
+static int clither_food_bmap_for_each_in_radius(lua_State* L)
+{
+    struct food_bmap* food_bmap;
+    struct qwpos      pos;
+    qw                radius;
 
     luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
     luaL_checktype(L, 2, LUA_TTABLE);
     luaL_checknumber(L, 3);
     luaL_checktype(L, 4, LUA_TFUNCTION);
 
-    food_grid = lua_touserdata(L, 1);
+    food_bmap = lua_touserdata(L, 1);
 
     {
         lua_pushstring(L, "x");
         lua_rawget(L, 2);
-        x = make_qw(lua_tonumber(L, -1));
+        pos.x = make_qw(lua_tonumber(L, -1));
         lua_pop(L, 1);
 
         lua_pushstring(L, "y");
         lua_rawget(L, 2);
-        y = make_qw(lua_tonumber(L, -1));
+        pos.y = make_qw(lua_tonumber(L, -1));
         lua_pop(L, 1);
     }
 
     radius = make_qw(lua_tonumber(L, 3));
-    r_sq = qw_mul(radius, radius);
-
-    lower_pos.x = qw_sub(x, radius);
-    lower_pos.y = qw_sub(y, radius);
-    upper_pos.x = qw_add(x, radius);
-    upper_pos.y = qw_add(y, radius);
-    lower_morton = morton_encode_qwpos(lower_pos);
-    upper_morton = morton_encode_qwpos(upper_pos);
-    lower_idx = food_bmap_lower_bound(food_grid->morton, lower_morton);
-    upper_idx = food_bmap_lower_bound(food_grid->morton, upper_morton);
-    bmap_for_each_range (
-        food_grid->morton, idx, morton, food, lower_idx, upper_idx)
-    {
-        pos = morton_decode_qwpos(morton);
-        dx = qw_sub(pos.x, x);
-        dy = qw_sub(pos.y, y);
-        if (qw_mul(dx, dx) + qw_mul(dy, dy) > r_sq)
-            continue;
-
-        lua_pushvalue(L, 4);
-        lua_newtable(L);
-        {
-            lua_newtable(L);
-            {
-                lua_pushnumber(L, qw_to_float(pos.x));
-                lua_setfield(L, -2, "x");
-                lua_pushnumber(L, qw_to_float(pos.y));
-                lua_setfield(L, -2, "y");
-
-                lua_setfield(L, -2, "pos");
-            }
-            lua_newtable(L);
-            {
-                lua_pushnumber(L, qw_to_float(food->dir.x));
-                lua_setfield(L, -2, "x");
-                lua_pushnumber(L, qw_to_float(food->dir.y));
-                lua_setfield(L, -2, "y");
-
-                lua_setfield(L, -2, "dir");
-            }
-            lua_pushnumber(L, qw_to_float(food->value));
-            lua_setfield(L, -2, "value");
-        }
-
-        if (lua_pcall(L, 1, 0, 0) != LUA_OK)
-            return lua_error(L);
-    }
+    food_bmap_for_each_in_radius(food_bmap, pos, radius, on_food_in_radius, L);
 
     return 0;
 }
@@ -205,10 +190,10 @@ int luaopen_clither(lua_State* L)
     {
         lua_newtable(L);
         {
-            lua_pushcfunction(L, clither_food_grid_for_each_in_radius);
+            lua_pushcfunction(L, clither_food_bmap_for_each_in_radius);
             lua_setfield(L, -2, "for_each_in_radius");
         }
-        lua_setfield(L, -2, "food_grid");
+        lua_setfield(L, -2, "food");
 
         lua_newtable(L);
         {
@@ -282,7 +267,7 @@ static struct bot* bot_lua_create(
         lua_pushnumber(bot->L, 0);
         lua_setfield(bot->L, -2, "ring_end");
         lua_pushlightuserdata(bot->L, NULL);
-        lua_setfield(bot->L, -2, "food_grid");
+        lua_setfield(bot->L, -2, "food");
     }
     lua_settable(bot->L, LUA_REGISTRYINDEX);
 
@@ -415,8 +400,8 @@ static int bot_lua_next_cmd(
         lua_pushnumber(L, qw_to_float(world->ring_end));
         lua_rawset(L, -3);
 
-        lua_pushstring(L, "food_grid");
-        lua_pushlightuserdata(L, (void*)&world->food_grid);
+        lua_pushstring(L, "food");
+        lua_pushlightuserdata(L, (void*)world->food_bmap);
         lua_rawset(L, -3);
     }
 
