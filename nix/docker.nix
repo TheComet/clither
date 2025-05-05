@@ -1,15 +1,11 @@
-{ pkgs }:
+{ pkgs, settings }:
 let
-  clither-server = (import ./server.nix { inherit pkgs; });
+  clither-server = (import ./server.nix { inherit pkgs settings; });
 in
 pkgs.dockerTools.buildImage {
   name = "clither";
   tag = "latest";
-  copyToRoot = [
-    clither-server
-    pkgs.bash
-    pkgs.coreutils
-  ];
+  copyToRoot = [ clither-server ];
   config = {
     Cmd = [ "${clither-server}/clither" "--server" ];
     WorkingDir = "/";

@@ -23,7 +23,7 @@
       packages.${system} = 
       let
         client = import ./nix/client.nix { inherit pkgs clither-assets; };
-        docker = import ./nix/docker.nix { inherit pkgs; };
+        docker = import ./nix/docker.nix { inherit pkgs settings; };
         server = import ./nix/server.nix { inherit pkgs settings; };
         web    = import ./nix/web.nix    { inherit pkgs; };
 
