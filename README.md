@@ -68,6 +68,14 @@ docker load < result
 docker run clither:latest
 ```
 
+To include a custom settings.ini file:
+
+```sh
+nix build .#docker --override-input settings path:./path/to/settings.ini
+docker load < result
+docker run clither:latest
+```
+
 ### Cross-compile to windows
 
 ```sh

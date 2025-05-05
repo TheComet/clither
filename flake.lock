@@ -35,7 +35,21 @@
     "root": {
       "inputs": {
         "clither-assets": "clither-assets",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "settings": "settings"
+      }
+    },
+    "settings": {
+      "flake": false,
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-XCt4RvlNmzQKwLetEEC7TtslzdoqPRswjVqlP0NoPzY=",
+        "path": ".",
+        "type": "path"
+      },
+      "original": {
+        "path": ".",
+        "type": "path"
       }
     }
   },

@@ -27,7 +27,8 @@ void* server_instance_run(const void* args)
     static const char* colors[] = {
         COL_N_CYAN, COL_N_MAGENTA, COL_N_BLUE, COL_N_GREEN, COL_N_RED};
 
-    mem_init_threadlocal();
+    if (mem_init_threadlocal() != 0)
+        goto mem_init_failed;
     log_init();
 
     /* Change log prefix and color for server log messages */
@@ -126,5 +127,6 @@ void* server_instance_run(const void* args)
 server_init_failed:
 world_spawn_food_failed:
     world_deinit(&world);
+mem_init_failed:
     return (void*)-1;
 }

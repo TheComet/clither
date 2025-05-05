@@ -38,7 +38,8 @@ int main(int argc, char* argv[])
 #endif
     int retval = -1;
 
-    mem_init_threadlocal();
+    if (mem_init_threadlocal() != 0)
+        goto mem_init_failed;
     log_init();
     if (asm_optimizations_init() != 0)
         goto asm_optimizations_failed;
@@ -271,6 +272,7 @@ parse_resource_pack_failed:
 parse_args_failed:
 asm_optimizations_failed:
     (void)mem_deinit_threadlocal();
+mem_init_failed:
 
 #if defined(__EMSCRIPTEN__)
     exit(retval);

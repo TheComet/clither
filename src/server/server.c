@@ -1143,7 +1143,8 @@ void* server_run(const void* p)
     struct server_instance_bmap* instances;
     const struct settings*       settings = p;
 
-    mem_init_threadlocal();
+    if (mem_init_threadlocal() != 0)
+        goto mem_init_failed;
     log_init();
 
     /* Change log prefix and color for server log messages */
@@ -1206,6 +1207,7 @@ void* server_run(const void* p)
 
 start_default_instance_failed:
     server_instance_bmap_deinit(instances);
+mem_init_failed:
     (void)mem_deinit_threadlocal();
     return (void*)-1;
 }

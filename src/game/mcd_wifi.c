@@ -64,7 +64,8 @@ void* run_mcd_wifi(const void* p)
     struct tick                tick;
     const struct settings_mcd* settings = p;
 
-    mem_init_threadlocal();
+    if (mem_init_threadlocal() != 0)
+        goto mem_init_failed;
     log_init();
 
     /* Change log prefix and color for server log messages */
@@ -215,5 +216,6 @@ connect_server_failed:
     net_close(ctx.client_fd);
 bind_client_fd_failed:
     mem_deinit_threadlocal();
+mem_init_failed:
     return (void*)-1;
 }
