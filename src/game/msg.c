@@ -3,6 +3,7 @@
 #include "clither/game/msg_vec.h"
 #include "clither/game/wrap.h"
 #include "clither/platform/net.h"
+#include "clither/util/clz.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include <assert.h>
@@ -402,84 +403,31 @@ int msg_parse_payload(
             return type;
         }
 
-        case MSG_FOOD_CREATE: {
-            qa a;
-            if (payload_len < 7)
-            {
-                log_warn("MSG_FOOD_CREATE: Payload is too small\n");
-                return -1;
-            }
-
-            pp->food_create.pos.x =
-                (payload[0] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[0] << 16) |
-                (payload[1] << 8) | (payload[2] << 0);
-            pp->food_create.pos.y =
-                (payload[3] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[3] << 16) |
-                (payload[4] << 8) | (payload[5] << 0);
-
-            a = u8_to_qa(payload[6]);
-            pp->food_create.dir.x = qa_cos(a);
-            pp->food_create.dir.y = qa_sin(a);
-
-            return type;
-        }
-
-        case MSG_FOOD_CREATE_ACK: {
-            if (payload_len < 2)
-            {
-                log_warn("MSG_FOOD_CREATE_ACK: Payload is too small\n");
-                return -1;
-            }
-
-            pp->food_create_ack.pos.x =
-                (payload[0] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[0] << 16) |
-                (payload[1] << 8) | (payload[2] << 0);
-            pp->food_create_ack.pos.y =
-                (payload[3] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[3] << 16) |
-                (payload[4] << 8) | (payload[5] << 0);
-
-            return type;
-        }
-
+        case MSG_FOOD_CREATE:
         case MSG_FOOD_DESTROY: {
-            if (payload_len < 2)
+            if (payload_len < 6)
             {
-                log_warn("MSG_FOOD_DESTROY: Payload is too small\n");
+                log_warn("MSG_FOOD_CREATE/DESTROY: Payload is too small\n");
                 return -1;
             }
 
-            pp->food_create_ack.pos.x =
-                (payload[0] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[0] << 16) |
-                (payload[1] << 8) | (payload[2] << 0);
-            pp->food_create_ack.pos.y =
-                (payload[3] & 0x80
-                     ? 0xFF << 24
-                     : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
-                (payload[3] << 16) |
-                (payload[4] << 8) | (payload[5] << 0);
+            if (payload_len > 6 && payload_len < 9)
+            {
+                log_warn("MSG_FOOD_CREATE/DESTROY: Payload is too small\n");
+                return -1;
+            }
+
+            pp->food_create.state.bit = 0;
+            pp->food_create.state.idx = 0;
 
             return type;
         }
 
+        case MSG_FOOD_CREATE_ACK:
         case MSG_FOOD_DESTROY_ACK: {
             if (payload_len < 2)
             {
-                log_warn("MSG_FOOD_DESTROY_ACK: Payload is too small\n");
+                log_warn("MSG_FOOD_CREATE/DESTROY_ACK: Payload is too small\n");
                 return -1;
             }
 
@@ -1212,40 +1160,6 @@ struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx)
 }
 
 /* ------------------------------------------------------------------------- */
-struct msg* msg_food_create(struct qwpos pos, struct qwpos dir)
-{
-    qa          a;
-    struct msg* m = msg_alloc(
-        MSG_FOOD_CREATE,
-        10,
-        6 +     /* world position (2x 24-bit qwpos) */
-            1); /* angle */
-    if (m == NULL)
-        return NULL;
-
-    m->payload[0] = (pos.x >> 16) & 0xFF;
-    m->payload[1] = (pos.x >> 8) & 0xFF;
-    m->payload[2] = pos.x & 0xFF;
-
-    m->payload[3] = (pos.y >> 16) & 0xFF;
-    m->payload[4] = (pos.y >> 8) & 0xFF;
-    m->payload[5] = pos.y & 0xFF;
-
-    a = make_qa(atan2(qw_to_float(dir.y), qw_to_float(dir.x)));
-    m->payload[6] = qa_to_u8(a);
-
-    log_net(
-        "MSG_FOOD_CREATE: pos=[%.2f,%.2f], dir=[%.2f,%.2f], angle=%.2f\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y),
-        qw_to_float(dir.x),
-        qw_to_float(dir.y),
-        qa_to_float(a));
-
-    return m;
-}
-
-/* ------------------------------------------------------------------------- */
 struct msg* msg_food_create_ack(struct qwpos pos)
 {
     struct msg* m = msg_alloc(
@@ -1263,30 +1177,6 @@ struct msg* msg_food_create_ack(struct qwpos pos)
 
     log_net(
         "MSG_FOOD_CREATE_ACK: pos=[%.2f,%.2f]\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y));
-
-    return m;
-}
-
-/* ------------------------------------------------------------------------- */
-struct msg* msg_food_destroy(struct qwpos pos)
-{
-    struct msg* m = msg_alloc(
-        MSG_FOOD_DESTROY, 10, 6); /* world position (2x 24-bit qwpos) */
-    if (m == NULL)
-        return NULL;
-
-    m->payload[0] = (pos.x >> 16) & 0xFF;
-    m->payload[1] = (pos.x >> 8) & 0xFF;
-    m->payload[2] = pos.x & 0xFF;
-
-    m->payload[3] = (pos.y >> 16) & 0xFF;
-    m->payload[4] = (pos.y >> 8) & 0xFF;
-    m->payload[5] = pos.y & 0xFF;
-
-    log_net(
-        "MSG_FOOD_DESTROY: pos=[%.2f,%.2f]\n",
         qw_to_float(pos.x),
         qw_to_float(pos.y));
 
@@ -1315,4 +1205,174 @@ struct msg* msg_food_destroy_ack(struct qwpos pos)
         qw_to_float(pos.y));
 
     return m;
+}
+
+/* ------------------------------------------------------------------------- */
+static struct msg*
+msg_food_empty(enum msg_type type, struct qwaabb bb, struct msg_food_state* s)
+{
+    qw dx = qw_sub(bb.x2, bb.x1);
+    qw dy = qw_sub(bb.y2, bb.y1);
+
+    struct msg* m = msg_alloc(type, 10, 255);
+    if (m == NULL)
+        return NULL;
+
+    s->xbits = dx > 0 ? 32 - CLITHER_CLZ(dx) : 0;
+    s->ybits = dy > 0 ? 32 - CLITHER_CLZ(dy) : 0;
+    s->pos.x = bb.x1;
+    s->pos.y = bb.y1;
+    s->bit = 0;
+
+    m->payload[0] = (bb.x1 >> 16) & 0xFF;
+    m->payload[1] = (bb.x1 >> 8) & 0xFF;
+    m->payload[2] = bb.x1 & 0xFF;
+
+    m->payload[3] = (bb.y1 >> 16) & 0xFF;
+    m->payload[4] = (bb.y1 >> 8) & 0xFF;
+    m->payload[5] = bb.y1 & 0xFF;
+
+    m->payload_len = 6;
+
+    return m;
+}
+struct msg* msg_food_create(struct qwaabb bb, struct msg_food_state* s)
+{
+    return msg_food_empty(MSG_FOOD_CREATE, bb, s);
+}
+struct msg* msg_food_destroy(struct qwaabb bb, struct msg_food_state* s)
+{
+    return msg_food_empty(MSG_FOOD_DESTROY, bb, s);
+}
+
+/* ------------------------------------------------------------------------- */
+static int msg_food_add_coord(
+    struct msg* m, qw coord, int8_t bits, struct msg_food_state* s)
+{
+    qw mask;
+    CLITHER_DEBUG_ASSERT(bits > 0);
+
+    for (mask = (1 << (bits - 1)); mask; mask = mask >> 1)
+    {
+        if (coord & mask)
+            m->payload[m->payload_len - 1] |= (1 << s->bit);
+        if (++s->bit == 8)
+        {
+            s->bit = 0;
+            if (m->payload_len == 255)
+                return 0;
+            m->payload[m->payload_len++] = 0;
+        }
+    }
+
+    return 1;
+}
+int msg_food_add(struct msg* m, struct qwpos pos, struct msg_food_state* s)
+{
+    uint8_t payload_len = m->payload_len;
+
+    if (s->xbits == 0 && s->ybits == 0)
+    {
+        /* The bounding box already contains all of the information */
+        return 1;
+    }
+
+    /* Prepare initial byte */
+    if (m->payload_len == 6)
+    {
+        m->payload[6] = s->xbits;
+        m->payload[7] = s->ybits;
+        m->payload[8] = 0;
+        m->payload_len = 9;
+    }
+
+    if (!msg_food_add_coord(m, qw_sub(pos.x, s->pos.x), s->xbits, s) ||
+        !msg_food_add_coord(m, qw_sub(pos.y, s->pos.y), s->ybits, s))
+    {
+        m->payload_len = payload_len;
+        return 0;
+    }
+
+    return 1;
+}
+
+/* ------------------------------------------------------------------------- */
+static int msg_food_unpack_coord(
+    const uint8_t*         msg_data,
+    uint8_t                msg_len,
+    qw*                    coord,
+    int8_t                 bits,
+    struct msg_food_state* s)
+{
+    qw mask;
+    *coord = 0;
+
+    for (mask = (1 << (bits - 1)); mask; mask = mask >> 1)
+    {
+        if (msg_data[s->idx] & (1 << s->bit))
+            *coord |= mask;
+        if (++s->bit == 8)
+        {
+            s->bit = 0;
+            if (++s->idx == msg_len)
+                return 0;
+        }
+    }
+
+    return 1;
+}
+int msg_food_unpack_next(
+    const uint8_t*         msg_data,
+    uint8_t                msg_len,
+    struct qwpos*          pos,
+    struct msg_food_state* s)
+{
+    if (s->idx == 0)
+    {
+        CLITHER_DEBUG_ASSERT(msg_len >= 6);
+        s->pos.x =
+            (msg_data[0] & 0x80
+                 ? 0xFF << 24
+                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+            (msg_data[0] << 16) |
+            (msg_data[1] << 8) | (msg_data[2] << 0);
+        s->pos.y =
+            (msg_data[3] & 0x80
+                 ? 0xFF << 24
+                 : 0) | /* Don't forget to sign extend 24-bit to 32-bit */
+            (msg_data[3] << 16) |
+            (msg_data[4] << 8) | (msg_data[5] << 0);
+        s->idx = 6;
+    }
+
+    if (msg_len == 6)
+    {
+        if (s->idx == 6)
+        {
+            *pos = s->pos;
+            s->idx = 7;
+            return 1;
+        }
+        if (s->idx == 7)
+            return 0;
+    }
+
+    if (s->idx == 6)
+    {
+        s->xbits = msg_data[6];
+        s->ybits = msg_data[7];
+
+        s->idx = 8;
+    }
+
+    if (!msg_food_unpack_coord(msg_data, msg_len, &pos->x, s->xbits, s) ||
+        !msg_food_unpack_coord(msg_data, msg_len, &pos->y, s->ybits, s))
+    {
+        return 0;
+    }
+
+    pos->x = qw_add(pos->x, s->pos.x);
+    pos->y = qw_add(pos->y, s->pos.y);
+
+    return 1;
 }

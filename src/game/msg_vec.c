@@ -76,55 +76,45 @@ void msg_vec_remove_snake_destroy(struct msg_vec* msgq, uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
-static int retain_food_create(struct msg** pmsg, void* user)
+static int retain_food(enum msg_type msg_type, struct msg** pmsg, void* user)
 {
-    int                  parse_result;
+    int                  result;
     union parsed_payload pp;
+    struct qwpos         create_pos;
     struct qwpos*        pos = (struct qwpos*)user;
     struct msg*          msg = *pmsg;
 
-    if (msg->type != MSG_FOOD_CREATE)
+    if (msg->type != msg_type)
         return VEC_RETAIN;
 
-    parse_result =
-        msg_parse_payload(&pp, MSG_FOOD_CREATE, msg->payload, msg->payload_len);
-    CLITHER_DEBUG_ASSERT(parse_result == MSG_FOOD_CREATE);
-    (void)parse_result;
-    if (pp.food_create.pos.x == pos->x && pp.food_create.pos.y == pos->y)
+    /* Parse the first food position from the message. This position is used to
+     * identify all food pieces in the message. */
+    result = msg_parse_payload(&pp, msg_type, msg->payload, msg->payload_len);
+    CLITHER_DEBUG_ASSERT(result == msg_type);
+    result = msg_food_unpack_next(
+        msg->payload, msg->payload_len, &create_pos, &pp.food_create.state);
+    CLITHER_DEBUG_ASSERT(result == 1);
+    (void)result;
+
+    if (create_pos.x == pos->x && create_pos.y == pos->y)
     {
         msg_free(msg);
         return VEC_ERASE;
     }
 
     return VEC_RETAIN;
+}
+static int retain_food_create(struct msg** pmsg, void* user)
+{
+    return retain_food(MSG_FOOD_CREATE, pmsg, user);
+}
+static int retain_food_destroy(struct msg** pmsg, void* user)
+{
+    return retain_food(MSG_FOOD_DESTROY, pmsg, user);
 }
 void msg_vec_remove_food_create(struct msg_vec* msgq, struct qwpos pos)
 {
     msg_vec_retain(msgq, retain_food_create, &pos);
-}
-
-/* ------------------------------------------------------------------------- */
-static int retain_food_destroy(struct msg** pmsg, void* user)
-{
-    int                  parse_result;
-    union parsed_payload pp;
-    struct qwpos*        pos = (struct qwpos*)user;
-    struct msg*          msg = *pmsg;
-
-    if (msg->type != MSG_FOOD_DESTROY)
-        return VEC_RETAIN;
-
-    parse_result = msg_parse_payload(
-        &pp, MSG_FOOD_DESTROY, msg->payload, msg->payload_len);
-    CLITHER_DEBUG_ASSERT(parse_result == MSG_FOOD_DESTROY);
-    (void)parse_result;
-    if (pp.food_destroy.pos.x == pos->x && pp.food_destroy.pos.y == pos->y)
-    {
-        msg_free(msg);
-        return VEC_ERASE;
-    }
-
-    return VEC_RETAIN;
 }
 void msg_vec_remove_food_destroy(struct msg_vec* msgq, struct qwpos pos)
 {

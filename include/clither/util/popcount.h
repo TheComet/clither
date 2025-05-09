@@ -3,11 +3,8 @@
 #include "clither/config.h"
 #include <stdint.h>
 
-#if defined(CLITHER_POPCOUNT)
-#   define popcnt(x) CLITHER_POPCOUNT
-#else
-static inline uint32_t
-popcnt(uint32_t value)
+#if !defined(CLITHER_POPCOUNT)
+static uint32_t CLITHER_POPCOUNT(uint32_t value)
 {
     uint32_t count = 0;
     while (value)

@@ -22,7 +22,8 @@ int food_bmap_create_food(
 struct predicate_bb_ctx
 {
     struct qwaabb bb;
-    int (*callback)(uint64_t morton, struct food* food, void* user);
+    int (*callback)(
+        uint64_t morton, struct qwpos pos, struct food* food, void* user);
     void* user;
 };
 static int predicate_bb(uint64_t morton, struct food* food, void* user)
@@ -30,13 +31,14 @@ static int predicate_bb(uint64_t morton, struct food* food, void* user)
     struct predicate_bb_ctx* ctx = user;
     struct qwpos             pos = morton_decode_qwpos(morton);
     if (qwaabb_test_qwpos(ctx->bb, pos))
-        return ctx->callback(morton, food, ctx->user);
+        return ctx->callback(morton, pos, food, ctx->user);
     return BMAP_RETAIN;
 }
 int food_bmap_for_each_in_bb(
     struct food_bmap* food_bmap,
     struct qwaabb     bb,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(
+        uint64_t morton, struct qwpos pos, struct food* food, void* user),
     void* user)
 {
     struct predicate_bb_ctx ctx;
@@ -48,6 +50,11 @@ int food_bmap_for_each_in_bb(
     struct qwpos upper_pos = make_qwposqw(bb.x2, bb.y2);
     uint64_t     upper_morton = morton_encode_qwpos(upper_pos);
     int32_t      upper_idx = food_bmap_lower_bound(food_bmap, upper_morton);
+
+    /* bb is inclusive, but upper_idx is exclusve */
+    upper_idx++;
+    if (upper_idx > bmap_count(food_bmap))
+        upper_idx = bmap_count(food_bmap);
 
     ctx.bb = bb;
     ctx.callback = callback;

@@ -517,17 +517,35 @@ static struct client_recv_result process_message(
         case MSG_KNOT_ACK: break;
 
         case MSG_FOOD_CREATE: {
-            food_bmap_create_food(
-                &world->food_bmap, pp.food_create.pos, pp.food_create.dir);
-            client_queue(client, msg_food_create_ack(pp.food_create.pos));
+            struct qwpos food_pos;
+            int          first = 0;
+            while (msg_food_unpack_next(
+                msg_data, msg_len, &food_pos, &pp.food_create.state))
+            {
+                if (first++ == 0)
+                    client_queue(client, msg_food_create_ack(food_pos));
+
+                food_bmap_create_food(
+                    &world->food_bmap, food_pos, make_qwposi(0, 1));
+            }
             return client_recv_ok();
         }
         case MSG_FOOD_CREATE_ACK: break;
 
         case MSG_FOOD_DESTROY: {
-            uint64_t morton = morton_encode_qwpos(pp.food_destroy.pos);
-            food_bmap_erase(world->food_bmap, morton);
-            client_queue(client, msg_food_destroy_ack(pp.food_destroy.pos));
+            struct qwpos food_pos;
+            uint64_t     morton;
+            int          first = 0;
+            while (msg_food_unpack_next(
+                msg_data, msg_len, &food_pos, &pp.food_create.state))
+            {
+                if (first++ == 0)
+                    client_queue(client, msg_food_create_ack(food_pos));
+
+                morton = morton_encode_qwpos(food_pos);
+                food_bmap_erase(world->food_bmap, morton);
+            }
+
             return client_recv_ok();
         }
         case MSG_FOOD_DESTROY_ACK: break;

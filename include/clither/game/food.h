@@ -19,7 +19,8 @@ int food_bmap_create_food(
 int food_bmap_for_each_in_bb(
     struct food_bmap* food_bmap,
     struct qwaabb     bb,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(
+        uint64_t morton, struct qwpos pos, struct food* food, void* user),
     void* user);
 
 int food_bmap_for_each_in_radius(

@@ -15,6 +15,13 @@ using namespace testing;
 
 struct NAME : Test, LogHelper
 {
+    void TearDown() override
+    {
+        if (m)
+            msg_free(m);
+    }
+
+    msg* m = nullptr;
 };
 
 bool operator==(const struct cmd& a, const struct cmd& b)
@@ -592,4 +599,62 @@ TEST_F(NAME, parse_knot)
     EXPECT_THAT(pp.knot.len_backwards, Eq(0x20));
     EXPECT_THAT(pp.knot.len_forwards, Eq(0x21));
     EXPECT_THAT(pp.knot.snake_id, Eq(0xAABB));
+}
+
+TEST_F(NAME, single_food)
+{
+    qwpos  pos_in = {0x123456, 0x654321};
+    qwaabb bb = {0x123456, 0x654321, 0x123456, 0x654321};
+
+    msg_food_state state;
+    m = msg_food_create(bb, &state);
+    ASSERT_THAT(msg_food_add(m, pos_in, &state), Eq(1));
+
+    parsed_payload pp;
+    qwpos          pos_out;
+    ASSERT_THAT(
+        msg_parse_payload(&pp, m->type, m->payload, m->payload_len),
+        Eq(MSG_FOOD_CREATE));
+    ASSERT_THAT(
+        msg_food_unpack_next(
+            m->payload, m->payload_len, &pos_out, &pp.food_create.state),
+        Eq(1));
+    ASSERT_THAT(pos_out.x, Eq(pos_in.x));
+    ASSERT_THAT(pos_out.y, Eq(pos_in.y));
+}
+
+TEST_F(NAME, multiple_food)
+{
+    msg_food_state     state;
+    std::vector<qwpos> food_positions;
+    qwaabb             bb = {0, 0, 0, 0};
+    for (int i = 0; i != 30; ++i)
+    {
+        qwpos pos = {5 - i * 3, 3 - i * 3};
+        food_positions.push_back(pos);
+        if (i == 0)
+            bb = make_qwaabbqw(pos.x, pos.y, pos.x, pos.y);
+        else
+            bb = qwaabb_include_point(bb, pos);
+    }
+
+    m = msg_food_create(bb, &state);
+    for (const auto& pos_in : food_positions)
+        ASSERT_THAT(msg_food_add(m, pos_in, &state), Eq(1));
+
+    parsed_payload pp;
+    ASSERT_THAT(
+        msg_parse_payload(&pp, m->type, m->payload, m->payload_len),
+        Eq(MSG_FOOD_CREATE));
+
+    int   count = 0;
+    qwpos pos_out;
+    while (msg_food_unpack_next(
+        m->payload, m->payload_len, &pos_out, &pp.food_create.state))
+    {
+        EXPECT_THAT(pos_out.x, Eq(food_positions[count].x)) << count;
+        EXPECT_THAT(pos_out.y, Eq(food_positions[count].y)) << count;
+        count++;
+    }
+    ASSERT_THAT(count, Eq(food_positions.size()));
 }

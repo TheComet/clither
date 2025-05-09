@@ -259,16 +259,47 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
-static int queue_food_data_in_bb(uint64_t morton, struct food* food, void* user)
+struct queue_food_data_in_bb_ctx
 {
-    struct server_client* client = user;
-    switch (food_in_proximity_hset_insert(&client->food_in_proximity, morton))
+    struct server_client* client;
+    struct msg*           food_msg;
+    struct qwaabb         bb;
+    struct msg_food_state msg_state;
+};
+static int queue_food_data_calculate_bb(
+    uint64_t morton, struct qwpos pos, struct food* food, void* user)
+{
+    struct queue_food_data_in_bb_ctx* ctx = user;
+    (void)food;
+
+    if (!food_in_proximity_hset_find(ctx->client->food_in_proximity, morton))
+    {
+        if (ctx->bb.x1 == ctx->bb.x2 && ctx->bb.y1 == ctx->bb.y2)
+            ctx->bb = make_qwaabbqw(pos.x, pos.y, pos.x, pos.y);
+        else
+            ctx->bb = qwaabb_include_point(ctx->bb, pos);
+    }
+
+    return BMAP_RETAIN;
+}
+static int queue_food_data_in_bb(
+    uint64_t morton, struct qwpos pos, struct food* food, void* user)
+{
+    struct queue_food_data_in_bb_ctx* ctx = user;
+    (void)food;
+
+    switch (
+        food_in_proximity_hset_insert(&ctx->client->food_in_proximity, morton))
     {
         case HMAP_OOM: return -1;
         case HMAP_NEW:
-            server_queue(
-                client,
-                msg_food_create(morton_decode_qwpos(morton), food->dir));
+            if (ctx->food_msg == NULL)
+                ctx->food_msg = msg_food_create(ctx->bb, &ctx->msg_state);
+            if (!msg_food_add(ctx->food_msg, pos, &ctx->msg_state))
+            {
+                server_queue(ctx->client, ctx->food_msg);
+                ctx->food_msg = NULL;
+            }
         case HMAP_EXISTS: break;
     }
 
@@ -282,12 +313,13 @@ int server_queue_food_data(struct server* server, const struct world* world)
 
     server_client_hmap_for_each (server->clients, slot, addr, client)
     {
-        const struct snake* snake;
-        struct qwpos        pos;
-        struct qwaabb       bb;
-        uint64_t            morton;
-        int32_t             idx;
-        struct qwpos        range;
+        const struct snake*              snake;
+        struct qwpos                     pos;
+        uint64_t                         morton;
+        int32_t                          idx;
+        struct qwpos                     range;
+        struct qwaabb                    bb;
+        struct queue_food_data_in_bb_ctx ctx;
         (void)addr;
 
         /* Add all food pieces within range to the "ack" list. We quantize the
@@ -296,6 +328,7 @@ int server_queue_food_data(struct server* server, const struct world* world)
          * food individually. This reduces the number of network messages and
          * makes it easier to compress the messages, because we can pack more
          * food pieces per message. */
+
         snake = snake_bmap_find(world->snakes, client->snake_id);
         CLITHER_DEBUG_ASSERT(snake != NULL);
         range = snake_calculate_visible_range(snake);
@@ -304,28 +337,53 @@ int server_queue_food_data(struct server* server, const struct world* world)
             qw_sub(snake->head.pos.y, range.y) & ~0xFFF,
             qw_add(snake->head.pos.x, range.x) & ~0xFFF,
             qw_add(snake->head.pos.y, range.y) & ~0xFFF);
+
+        /* Calculate bb containing all food pieces we're going to send */
+        ctx.client = client;
+        ctx.bb = make_qwaabbqw(0, 0, 0, 0);
+        food_bmap_for_each_in_bb(
+            world->food_bmap, bb, queue_food_data_calculate_bb, &ctx);
+
+        /* Compress all food pieces in the bounding box into messages and queue
+         * them */
+        ctx.food_msg = NULL;
         if (food_bmap_for_each_in_bb(
-                world->food_bmap, bb, queue_food_data_in_bb, client) != 0)
+                world->food_bmap, ctx.bb, queue_food_data_in_bb, &ctx) != 0)
         {
             return -1;
         }
+        if (ctx.food_msg != NULL)
+            server_queue(client, ctx.food_msg);
 
         /* Remove food pieces that go out of range, or were removed from the
          * world */
+        ctx.food_msg = NULL;
         hset_for_each (client->food_in_proximity, idx, morton)
         {
             pos = morton_decode_qwpos(morton);
-            if (!qwaabb_test_qwpos(bb, pos) ||
-                !food_bmap_find(world->food_bmap, morton))
+            if (qwaabb_test_qwpos(ctx.bb, pos) &&
+                food_bmap_find(world->food_bmap, morton))
             {
-                if (food_in_proximity_hset_erase(
-                        client->food_in_proximity, morton))
-                {
-                    msg_vec_remove_food_create(client->pending_msgs, pos);
-                    server_queue(client, msg_food_destroy(pos));
-                }
+                continue;
+            }
+
+            if (!food_in_proximity_hset_erase(
+                    client->food_in_proximity, morton))
+            {
+                continue;
+            }
+
+            msg_vec_remove_food_create(client->pending_msgs, pos);
+            if (ctx.food_msg == NULL)
+                ctx.food_msg = msg_food_create(ctx.bb, &ctx.msg_state);
+            if (!msg_food_add(ctx.food_msg, pos, &ctx.msg_state))
+            {
+                server_queue(client, ctx.food_msg);
+                ctx.food_msg = NULL;
             }
         }
+        if (ctx.food_msg != NULL)
+            server_queue(client, ctx.food_msg);
     }
 
     return 0;

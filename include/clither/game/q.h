@@ -223,7 +223,7 @@ static struct qwaabb make_qwaabbqw(qw x1, qw y1, qw x2, qw y2)
     return bb;
 }
 
-static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
+static struct qwaabb qwaabb_combine(struct qwaabb a, struct qwaabb b)
 {
     if (a.x1 > b.x1)
         a.x1 = b.x1;
@@ -234,6 +234,19 @@ static struct qwaabb qwaabb_union(struct qwaabb a, struct qwaabb b)
     if (a.y2 < b.y2)
         a.y2 = b.y2;
     return a;
+}
+
+static struct qwaabb qwaabb_include_point(struct qwaabb bb, struct qwpos p)
+{
+    if (bb.x1 > p.x)
+        bb.x1 = p.x;
+    if (bb.x2 < p.x)
+        bb.x2 = p.x;
+    if (bb.y1 > p.y)
+        bb.y1 = p.y;
+    if (bb.y2 < p.y)
+        bb.y2 = p.y;
+    return bb;
 }
 
 static struct qwaabb qwaabb_pad(struct qwaabb bb, struct qwpos p)

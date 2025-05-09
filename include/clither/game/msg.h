@@ -8,7 +8,7 @@ struct food;
 struct snake;
 struct msg_vec;
 
-enum msg_type
+enum __attribute__((packed)) msg_type
 {
     MSG_JOIN_REQUEST,
     MSG_JOIN_ACCEPT,
@@ -47,6 +47,14 @@ struct msg
     enum msg_type type;
     uint8_t       payload_len;
     uint8_t       payload[1];
+};
+
+struct msg_food_state
+{
+    int8_t       xbits, ybits;
+    int8_t       bit;
+    uint8_t      idx;
+    struct qwpos pos;
 };
 
 union parsed_payload
@@ -155,8 +163,7 @@ union parsed_payload
 
     struct
     {
-        struct qwpos pos;
-        struct qwpos dir;
+        struct msg_food_state state;
     } food_create;
 
     struct
@@ -166,7 +173,7 @@ union parsed_payload
 
     struct
     {
-        struct qwpos pos;
+        struct msg_food_state state;
     } food_destroy;
 
     struct
@@ -248,7 +255,19 @@ struct msg* msg_knot(
     uint8_t      len_forwards);
 struct msg* msg_knot_ack(uint16_t snake_id, int16_t knot_idx);
 
-struct msg* msg_food_create(struct qwpos pos, struct qwpos dir);
+/*!
+ * Compresses as many food pieces into a message as possible. The bounding box
+ * serves as a hint for delta compression and must contain all of the food
+ * pieces added.
+ */
+struct msg* msg_food_create(struct qwaabb bb, struct msg_food_state* s);
+struct msg* msg_food_destroy(struct qwaabb bb, struct msg_food_state* s);
+int msg_food_add(struct msg* m, struct qwpos pos, struct msg_food_state* s);
+int msg_food_unpack_next(
+    const uint8_t*         msg_data,
+    uint8_t                msg_len,
+    struct qwpos*          pos,
+    struct msg_food_state* s);
+
 struct msg* msg_food_create_ack(struct qwpos pos);
-struct msg* msg_food_destroy(struct qwpos pos);
 struct msg* msg_food_destroy_ack(struct qwpos pos);

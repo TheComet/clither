@@ -203,7 +203,7 @@ static void snake_update_aabb(struct snake_data* data)
     for (i = 1; i < rb_count(data->bezier_aabbs); ++i)
     {
         struct qwaabb aabb = *rb_peek(data->bezier_aabbs, i);
-        data->bb = qwaabb_union(data->bb, aabb);
+        data->bb = qwaabb_combine(data->bb, aabb);
     }
 }
 
