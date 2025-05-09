@@ -1,0 +1,47 @@
+client {
+    str[256] username = "Snake :D"  // Default username
+    str[256] connect_addr = "localhost" // Address to connect to
+    str[6]   connect_port = "5555"    // Port to connect to
+    str[32]  log_prefix = "Client: " // Prefix for log messages
+}
+
+server {
+    // Total number of clients allowed to join the server
+    u16[1-65535] max_players = 600
+    // How many seconds to wait for a client before disconnecting them
+    u16[1-120]   client_timeout = 5
+    // How many seconds to keep a client on the malicious list.
+    u16[1-65535] malicious_timeout = 60
+    // Limits the user name length
+    u8[1-255]    max_username_len = 32
+    // Simulation update speed in Hz
+    u8[1-120]    sim_tick_rate = 60
+    // Network update speed in Hz. Should be smaller or equal to the simulation
+    // update rate.
+    u8[1-120]    net_tick_rate = 20
+    str[256]     bind_addr = ""          // Address to bind server to
+    str[6]       bind_port = "5555"      // Port to bind server to
+    str[32]      log_prefix = "Server: " // Prefix for log messages
+}
+
+world {
+    u32 food_coount = 10 // Number of food items in the world
+}
+
+gfx {
+    int width = 1280                // Window width
+    int height = 720                // Window height
+    u[0-2] backend = 0              // Select default graphics backend
+    bool fullscreen = false         // Fullscreen mode
+}
+
+mcd {
+    int[0-2000] latency_ms = 0             // Latency in milliseconds
+    int[0-200]  loss_percent = 0           // Packet loss in percent
+    int[0-200]  dup_percent = 0            // Duplicate packets in percent
+    int[0-200]  reorder_percent = 0        // Reorder packets in percent
+    str[256]    bind_addr = ""             // Address to bind server to
+    str[6]      bind_port = "5554"         // Port to bind server to
+    str[256]    connect_addr = "localhost" // Address to connect to
+    str[6]      connect_port = "5554"      // Port to connect to
+}
