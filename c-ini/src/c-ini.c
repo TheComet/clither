@@ -28,12 +28,6 @@ struct str_view
     int off, len;
 };
 
-static struct str_view empty_str_view(void)
-{
-    struct str_view str = {0, 0};
-    return str;
-}
-
 static int str_equal(struct str_view s1, struct str_view s2, const char* data)
 {
     if (s1.len != s2.len)
@@ -95,19 +89,6 @@ static void print_vflc(
         reset_style());
     fprintf(stderr, "%serror:%s ", error_style(), reset_style());
     vfprintf(stderr, fmt, ap);
-}
-
-static void print_flc(
-    const char*     filename,
-    const char*     source,
-    struct str_view loc,
-    const char*     fmt,
-    ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    print_vflc(filename, source, loc, fmt, ap);
-    va_end(ap);
 }
 
 static void print_excerpt(const char* source, struct str_view loc)
@@ -270,7 +251,7 @@ static int print_loc_error(
     va_start(ap, fmt);
     print_vflc(filename, source, loc, fmt, ap);
     va_end(ap);
-    print_excerpt(filename, source, loc);
+    print_excerpt(source, loc);
     return -1;
 }
 
@@ -897,6 +878,7 @@ enum token
     TOK_RBRACKET = ']',
     TOK_MINUS = '-',
     TOK_EQUALS = '=',
+    TOK_NEWLINE = '\n',
     TOK_COMMENT = 256,
     TOK_IDENTIFIER,
     TOK_STRING,
@@ -1004,6 +986,7 @@ enum token scan_next(struct parser* p)
         SCAN_CHAR(']')
         SCAN_CHAR('-')
         SCAN_CHAR('=')
+        SCAN_CHAR('\n')
 #undef SCAN_CHAR
 
         /* Integer literal [0-9]+ */
@@ -1223,6 +1206,8 @@ static int parse_data_type(struct parser* p, struct data_type* dt)
                 "Range specifier on boolean types makes no "
                 "sense\n");
     }
+
+    return tok;
 }
 
 static int parse_section(struct parser* p)
@@ -1249,7 +1234,7 @@ static int parse_section(struct parser* p)
     }
 }
 
-static int parse(struct parser* p, struct root* root, const char* data)
+static int parse(struct parser* p, struct root* root)
 {
     enum token tok;
     while (1)
@@ -1268,9 +1253,9 @@ static int parse(struct parser* p, struct root* root, const char* data)
                 if (parse_section(p) != '}')
                     return print_parser_error(
                         p,
-                        "Missing closing '}' for section \"%.*s\"\n",
+                        "Missing closing '}' for section '%.*s'\n",
                         section.len,
-                        data + section.off);
+                        p->data + section.off);
                 break;
             }
 
@@ -1343,7 +1328,7 @@ int main(int argc, char** argv)
     }
 
     parser_init(&parser, &mf, cfg.input_fname);
-    if (parse(&parser, &root, &cfg) != 0)
+    if (parse(&parser, &root) != 0)
         return -1;
 
     ms = mstream_init_writeable();
