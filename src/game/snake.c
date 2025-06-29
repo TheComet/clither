@@ -28,8 +28,8 @@ static int snake_data_init(
     struct snake_data* data, struct qwpos spawn_pos, const char* name)
 {
     struct qwpos_vec**  trail;
-    struct bezier_knot* h1;
-    struct bezier_knot* h2;
+    struct bezier_knot* knot1;
+    struct bezier_knot* knot2;
     struct qwaabb*      aabb;
 
     str_init(&data->name);
@@ -58,14 +58,14 @@ static int snake_data_init(
      * convention all snakes start out facing to the right, but maybe this can
      * be changed in the future.
      */
-    h1 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
-    if (h1 == NULL)
-        goto emplace_h1_failed;
-    bezier_knot_init(h1, spawn_pos, make_qa(0), 0, 0);
-    h2 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
-    if (h2 == NULL)
-        goto emplace_h2_failed;
-    bezier_knot_init(h2, spawn_pos, make_qa(0), 0, 0);
+    knot1 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
+    if (knot1 == NULL)
+        goto emplace_knot1_failed;
+    bezier_knot_init(knot1, spawn_pos, QA_PI, 0, 0);
+    knot2 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
+    if (knot2 == NULL)
+        goto emplace_knot2_failed;
+    bezier_knot_init(knot2, spawn_pos, make_qa(0), 0, 0);
 
     /*
      * Create the curve's bounding box and also set the entire snake's bounding
@@ -80,8 +80,8 @@ static int snake_data_init(
     return 0;
 
 emplace_aabb_failed:
-emplace_h2_failed:
-emplace_h1_failed:
+emplace_knot2_failed:
+emplace_knot1_failed:
 push_spawn_pos_failed:
     while (rb_count(data->head_trails) > 0)
         qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
@@ -979,7 +979,7 @@ int snake_extrapolate_o4(
 }
 
 /* ------------------------------------------------------------------------- */
-static int remove_food_in_radius(uint64_t morton, struct food* food, void* user)
+static int remove_food_in_radius(morton morton, struct food* food, void* user)
 {
     struct snake_param* param = user;
     (void)morton;

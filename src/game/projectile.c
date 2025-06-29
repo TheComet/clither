@@ -1,7 +1,7 @@
 #include "clither/game/projectile.h"
 #include "clither/util/morton.h"
 
-BMAP_DEFINE(projectile_bmap, uint64_t, struct projectile, 16)
+BMAP_DEFINE(projectile_bmap, morton, struct projectile, 16)
 
 /* ------------------------------------------------------------------------- */
 int projectile_bmap_add(
@@ -10,7 +10,7 @@ int projectile_bmap_add(
     struct qwpos             dir,
     int16_t                  life)
 {
-    uint64_t           m = morton_encode_qwpos(pos);
+    morton             m = morton_encode_qwpos(pos);
     struct projectile* projectile;
     switch (projectile_bmap_emplace_new(projectiles, m, &projectile))
     {
@@ -26,11 +26,11 @@ int projectile_bmap_add(
 struct predicate_bb_ctx
 {
     struct qwaabb bb;
-    int (*callback)(uint64_t morton, struct projectile* projectile, void* user);
+    int (*callback)(morton morton, struct projectile* projectile, void* user);
     void* user;
 };
 static int
-predicate_bb(uint64_t morton, struct projectile* projectile, void* user)
+predicate_bb(morton morton, struct projectile* projectile, void* user)
 {
     struct predicate_bb_ctx* ctx = user;
     struct qwpos             pos = morton_decode_qwpos(morton);
@@ -41,17 +41,17 @@ predicate_bb(uint64_t morton, struct projectile* projectile, void* user)
 int projectile_grid_for_each_in_bb(
     struct projectile_bmap* projectiles,
     struct qwaabb           bb,
-    int (*callback)(uint64_t morton, struct projectile* projectile, void* user),
+    int (*callback)(morton morton, struct projectile* projectile, void* user),
     void* user)
 {
     struct predicate_bb_ctx ctx;
 
     struct qwpos lower_pos = make_qwposqw(bb.x1, bb.y1);
-    uint64_t     lower_morton = morton_encode_qwpos(lower_pos);
+    morton       lower_morton = morton_encode_qwpos(lower_pos);
     int32_t lower_idx = projectile_bmap_lower_bound(projectiles, lower_morton);
 
     struct qwpos upper_pos = make_qwposqw(bb.x2, bb.y2);
-    uint64_t     upper_morton = morton_encode_qwpos(upper_pos);
+    morton       upper_morton = morton_encode_qwpos(upper_pos);
     int32_t upper_idx = projectile_bmap_lower_bound(projectiles, upper_morton);
 
     ctx.bb = bb;

@@ -63,7 +63,7 @@ static void dumpstack(lua_State* L)
     }
 }
 
-static int on_food_in_radius(uint64_t morton, struct food* food, void* user)
+static int on_food_in_radius(morton morton, struct food* food, void* user)
 {
     lua_State*   L = user;
     struct qwpos pos = morton_decode_qwpos(morton);

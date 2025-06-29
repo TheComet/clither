@@ -259,7 +259,7 @@ int server_send_pending_data(struct server* server, struct world* world)
 }
 
 /* ------------------------------------------------------------------------- */
-static int queue_food_data_in_bb(uint64_t morton, struct food* food, void* user)
+static int queue_food_data_in_bb(morton morton, struct food* food, void* user)
 {
     struct server_client* client = user;
     switch (food_in_proximity_hset_insert(&client->food_in_proximity, morton))
@@ -285,7 +285,7 @@ int server_queue_food_data(struct server* server, const struct world* world)
         const struct snake* snake;
         struct qwpos        pos;
         struct qwaabb       bb;
-        uint64_t            morton;
+        morton              morton;
         int32_t             idx;
         struct qwpos        range;
         (void)addr;
@@ -916,7 +916,7 @@ static enum process_message_result process_message(
         }
 
         case MSG_FOOD_CREATE_ACK: {
-            uint64_t morton = morton_encode_qwpos(pp.food_create_ack.pos);
+            morton morton = morton_encode_qwpos(pp.food_create_ack.pos);
             msg_vec_remove_food_create(
                 client->pending_msgs, pp.food_create_ack.pos);
             /* Ensure the food exists in the ack'd list, just in case

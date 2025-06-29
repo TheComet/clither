@@ -2,6 +2,7 @@
 
 #include "clither/game/q.h"
 #include "clither/util/bmap.h"
+#include "clither/util/morton.h"
 
 struct food
 {
@@ -11,7 +12,7 @@ struct food
     uint8_t value;
 };
 
-BMAP_DECLARE(food_bmap, uint64_t, struct food, 32)
+BMAP_DECLARE(food_bmap, morton, struct food, 32)
 
 int food_bmap_create_food(
     struct food_bmap** food_bmap, struct qwpos pos, struct qwpos dir);
@@ -19,12 +20,12 @@ int food_bmap_create_food(
 int food_bmap_for_each_in_bb(
     struct food_bmap* food_bmap,
     struct qwaabb     bb,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(morton morton, struct food* food, void* user),
     void* user);
 
 int food_bmap_for_each_in_radius(
     struct food_bmap* food_bmap,
     struct qwpos      pos,
     qw                radius,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(morton morton, struct food* food, void* user),
     void* user);

@@ -2,6 +2,7 @@
 /build*
 /.cache
 /result
+__pycache__
 
 # GDB
 .gdbinit

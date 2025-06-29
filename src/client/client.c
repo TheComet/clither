@@ -525,7 +525,7 @@ static struct client_recv_result process_message(
         case MSG_FOOD_CREATE_ACK: break;
 
         case MSG_FOOD_DESTROY: {
-            uint64_t morton = morton_encode_qwpos(pp.food_destroy.pos);
+            morton morton = morton_encode_qwpos(pp.food_destroy.pos);
             food_bmap_erase(world->food_bmap, morton);
             client_queue(client, msg_food_destroy_ack(pp.food_destroy.pos));
             return client_recv_ok();

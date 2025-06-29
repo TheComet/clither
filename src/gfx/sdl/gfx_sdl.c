@@ -625,7 +625,7 @@ static void gfx_sdl_step_anim(struct gfx* gfx, int sim_tick_rate)
 static void gfx_sdl_draw_food(
     struct gfx* gfx, const struct world* world, const struct camera* camera)
 {
-    uint64_t     lower_m, upper_m;
+    morton       lower_m, upper_m;
     int32_t      lower_i, upper_i;
     int32_t      i;
     struct qwpos head_p;

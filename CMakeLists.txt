@@ -390,6 +390,8 @@ if (CLITHER_TESTS)
         "tests/clither/test_q.cpp"
         "tests/clither/test_rb.cpp"
         "tests/clither/test_snake.cpp"
+        "tests/clither/test_strlist.cpp"
+        "tests/clither/test_strview.cpp"
         "tests/clither/test_tick.cpp"
         "tests/clither/test_vec.cpp"
         "tests/clither/test_wrap.cpp")

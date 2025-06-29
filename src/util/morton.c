@@ -56,12 +56,12 @@ static int32_t combine48s(uint64_t x)
     return (int32_t)x;
 }
 
-uint64_t morton_encode_qwpos_generic(struct qwpos p)
+morton morton_encode_qwpos_generic(struct qwpos p)
 {
     return distribute48s(p.x) | (distribute48s(p.y) << 1);
 }
 
-struct qwpos morton_decode_qwpos_generic(uint64_t m)
+struct qwpos morton_decode_qwpos_generic(morton m)
 {
     int32_t x = combine48s(m);
     int32_t y = combine48s(m >> 1);

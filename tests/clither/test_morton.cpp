@@ -76,6 +76,8 @@ TEST_F(NAME, from_qwpos_negative)
     // 11111100 -> 0xFC
     // 11110000 -> 0xF0
     // 11000000 -> 0xC0
+    morton m = morton_encode_qwpos(make_qwposqw(-1, -1));
+    (void)m;
     EXPECT_THAT(morton_encode_qwpos(make_qwposqw(-1, -1)), Eq(0x3FFFFFFFFFFF));
     EXPECT_THAT(morton_encode_qwpos(make_qwposqw(-2, -2)), Eq(0x3FFFFFFFFFFC));
     EXPECT_THAT(morton_encode_qwpos(make_qwposqw(-4, -4)), Eq(0x3FFFFFFFFFF0));

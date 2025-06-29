@@ -343,7 +343,8 @@ static qa qa_mul(qa a, qa b)
     /* Rounding; mid values are rounded up */
     temp += QA_K;
     /* Correct by dividing by base and saturate result */
-    return qa_sat16(temp >> QA_Q);
+    /*return qa_sat16(temp >> QA_Q);*/
+    return temp >> QA_Q;
 }
 
 static qw qa_cos(qa q)

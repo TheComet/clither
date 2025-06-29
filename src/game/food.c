@@ -1,13 +1,13 @@
 #include "clither/game/food.h"
 #include "clither/util/morton.h"
 
-BMAP_DEFINE(food_bmap, uint64_t, struct food, 32)
+BMAP_DEFINE(food_bmap, morton, struct food, 32)
 
 /* ------------------------------------------------------------------------- */
 int food_bmap_create_food(
     struct food_bmap** food_bmap, struct qwpos pos, struct qwpos dir)
 {
-    uint64_t     m = morton_encode_qwpos(pos);
+    morton       m = morton_encode_qwpos(pos);
     struct food* new_food;
     switch (food_bmap_emplace_new(food_bmap, m, &new_food))
     {
@@ -22,10 +22,10 @@ int food_bmap_create_food(
 struct predicate_bb_ctx
 {
     struct qwaabb bb;
-    int (*callback)(uint64_t morton, struct food* food, void* user);
+    int (*callback)(morton morton, struct food* food, void* user);
     void* user;
 };
-static int predicate_bb(uint64_t morton, struct food* food, void* user)
+static int predicate_bb(morton morton, struct food* food, void* user)
 {
     struct predicate_bb_ctx* ctx = user;
     struct qwpos             pos = morton_decode_qwpos(morton);
@@ -36,17 +36,17 @@ static int predicate_bb(uint64_t morton, struct food* food, void* user)
 int food_bmap_for_each_in_bb(
     struct food_bmap* food_bmap,
     struct qwaabb     bb,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(morton morton, struct food* food, void* user),
     void* user)
 {
     struct predicate_bb_ctx ctx;
 
     struct qwpos lower_pos = make_qwposqw(bb.x1, bb.y1);
-    uint64_t     lower_morton = morton_encode_qwpos(lower_pos);
+    morton       lower_morton = morton_encode_qwpos(lower_pos);
     int32_t      lower_idx = food_bmap_lower_bound(food_bmap, lower_morton);
 
     struct qwpos upper_pos = make_qwposqw(bb.x2, bb.y2);
-    uint64_t     upper_morton = morton_encode_qwpos(upper_pos);
+    morton       upper_morton = morton_encode_qwpos(upper_pos);
     int32_t      upper_idx = food_bmap_lower_bound(food_bmap, upper_morton);
 
     ctx.bb = bb;
@@ -61,10 +61,10 @@ struct predicate_radius_ctx
 {
     struct qwpos pos;
     qw           radius_sq;
-    int (*callback)(uint64_t morton, struct food* food, void* user);
+    int (*callback)(morton morton, struct food* food, void* user);
     void* user;
 };
-static int predicate_radius(uint64_t morton, struct food* food, void* user)
+static int predicate_radius(morton morton, struct food* food, void* user)
 {
     struct predicate_radius_ctx* ctx = user;
     struct qwpos                 pos = morton_decode_qwpos(morton);
@@ -79,20 +79,20 @@ int food_bmap_for_each_in_radius(
     struct food_bmap* food_bmap,
     struct qwpos      pos,
     qw                radius,
-    int (*callback)(uint64_t morton, struct food* food, void* user),
+    int (*callback)(morton morton, struct food* food, void* user),
     void* user)
 {
     struct predicate_radius_ctx ctx;
 
     struct qwpos lower_pos =
         make_qwposqw(qw_sub(pos.x, radius), qw_sub(pos.y, radius));
-    uint64_t lower_morton = morton_encode_qwpos(lower_pos);
-    int32_t  lower_idx = food_bmap_lower_bound(food_bmap, lower_morton);
+    morton  lower_morton = morton_encode_qwpos(lower_pos);
+    int32_t lower_idx = food_bmap_lower_bound(food_bmap, lower_morton);
 
     struct qwpos upper_pos =
         make_qwposqw(qw_add(pos.x, radius), qw_add(pos.y, radius));
-    uint64_t upper_morton = morton_encode_qwpos(upper_pos);
-    int32_t  upper_idx = food_bmap_lower_bound(food_bmap, upper_morton);
+    morton  upper_morton = morton_encode_qwpos(upper_pos);
+    int32_t upper_idx = food_bmap_lower_bound(food_bmap, upper_morton);
 
     ctx.pos = pos;
     ctx.radius_sq = qw_mul(radius, radius);

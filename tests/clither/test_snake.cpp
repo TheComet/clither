@@ -85,13 +85,13 @@ TEST(NAME, roll_back_over_frame_boundary)
 
     /* Make sure we have 7 bezier segments */
     ASSERT_THAT(rb_count(client.data.head_trails), Eq(7));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Eq(10));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 1)), Eq(36));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Eq(41));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 1)), Eq(33));
     ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 2)), Eq(33));
     ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 3)), Eq(33));
     ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 4)), Eq(33));
     ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 5)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 6)), Eq(29));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 6)), Eq(1));
     ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(8));
 
     ASSERT_THAT(rb_count(server.data.head_trails), Eq(1));

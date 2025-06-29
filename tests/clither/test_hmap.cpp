@@ -18,116 +18,116 @@ const uintptr_t KEY3 = 3333;
 const uintptr_t KEY4 = 4444;
 
 #define API
-HMAP_DECLARE(API, hmap_test, uintptr_t, float, 32)
-HMAP_DEFINE(API, hmap_test, uintptr_t, float, 32);
+HMAP_DECLARE(API, my_hmap, uintptr_t, float, 32)
+HMAP_DEFINE(API, my_hmap, uintptr_t, float, 32);
 } // namespace
 
 struct NAME : Test
 {
-    void SetUp() override { hmap_test_init(&hmap_test); }
-    void TearDown() override { hmap_test_deinit(hmap_test); }
+    void SetUp() override { my_hmap_init(&hmap); }
+    void TearDown() override { my_hmap_deinit(hmap); }
 
-    struct hmap_test* hmap_test;
+    struct my_hmap* hmap;
 };
 
 TEST_F(NAME, null_hmap_is_set)
 {
-    EXPECT_THAT(hmap_test, IsNull());
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
-    EXPECT_THAT(hmap_capacity(hmap_test), Eq(0));
+    EXPECT_THAT(hmap, IsNull());
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
+    EXPECT_THAT(hmap_capacity(hmap), Eq(0));
 }
 
 TEST_F(NAME, deinit_null_hmap_works)
 {
-    hmap_test_deinit(hmap_test);
+    my_hmap_deinit(hmap);
 }
 
 TEST_F(NAME, insert_increases_slots_used)
 {
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(1));
-    EXPECT_THAT(hmap_capacity(hmap_test), Eq(MIN_CAPACITY));
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(hmap_count(hmap), Eq(1));
+    EXPECT_THAT(hmap_capacity(hmap), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, erase_decreases_slots_used)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
-    EXPECT_THAT(hmap_capacity(hmap_test), Eq(MIN_CAPACITY));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
+    EXPECT_THAT(hmap_capacity(hmap), Eq(MIN_CAPACITY));
 }
 
 TEST_F(NAME, insert_same_key_twice_only_works_once)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 7.6f), Eq(-1));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(1));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 7.6f), Eq(-1));
+    EXPECT_THAT(hmap_count(hmap), Eq(1));
 }
 
 TEST_F(NAME, insert_or_get_returns_inserted_value)
 {
     float  f = 0.0f;
     float* p = &f;
-    EXPECT_THAT(hmap_test_emplace_or_get(&hmap_test, KEY1, &p), HMAP_NEW);
+    EXPECT_THAT(my_hmap_emplace_or_get(&hmap, KEY1, &p), HMAP_NEW);
     *p = 5.6f;
     p = &f;
-    EXPECT_THAT(hmap_test_emplace_or_get(&hmap_test, KEY1, &p), HMAP_EXISTS);
+    EXPECT_THAT(my_hmap_emplace_or_get(&hmap, KEY1, &p), HMAP_EXISTS);
     EXPECT_THAT(f, Eq(0.0f));
     EXPECT_THAT(p, Pointee(5.6f));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(1));
+    EXPECT_THAT(hmap_count(hmap), Eq(1));
 }
 
 TEST_F(NAME, erasing_same_key_twice_only_works_once)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), IsNull());
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), Pointee(5.6f));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), IsNull());
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
 }
 
 TEST_F(NAME, insert_ab_erase_ba)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(2));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hmap), Eq(2));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY2), Pointee(3.4f));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), Pointee(5.6f));
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
 }
 
 TEST_F(NAME, insert_ab_erase_ab)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(2));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY2), Pointee(3.4f));
-    EXPECT_THAT(hmap_count(hmap_test), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(hmap_count(hmap), Eq(2));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), Pointee(5.6f));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY2), Pointee(3.4f));
+    EXPECT_THAT(hmap_count(hmap), Eq(0));
 }
 
 TEST_F(NAME, insert_ab_find_ab)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hmap_test_find(hmap_test, KEY1), Pointee(5.6f));
-    EXPECT_THAT(hmap_test_find(hmap_test, KEY2), Pointee(3.4f));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(my_hmap_find(hmap, KEY1), Pointee(5.6f));
+    EXPECT_THAT(my_hmap_find(hmap, KEY2), Pointee(3.4f));
 }
 
 TEST_F(NAME, insert_ab_erase_a_find_b)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY1), NotNull());
-    EXPECT_THAT(hmap_test_find(hmap_test, KEY2), Pointee(3.4f));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY1), NotNull());
+    EXPECT_THAT(my_hmap_find(hmap, KEY2), Pointee(3.4f));
 }
 
 TEST_F(NAME, insert_ab_erase_b_find_a)
 {
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY1, 5.6f), Eq(0));
-    EXPECT_THAT(hmap_test_insert_new(&hmap_test, KEY2, 3.4f), Eq(0));
-    EXPECT_THAT(hmap_test_erase(hmap_test, KEY2), NotNull());
-    EXPECT_THAT(hmap_test_find(hmap_test, KEY1), Pointee(5.6f));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY1, 5.6f), Eq(0));
+    EXPECT_THAT(my_hmap_insert_new(&hmap, KEY2, 3.4f), Eq(0));
+    EXPECT_THAT(my_hmap_erase(hmap, KEY2), NotNull());
+    EXPECT_THAT(my_hmap_find(hmap, KEY1), Pointee(5.6f));
 }
 
 TEST_F(NAME, rehash_test)
@@ -137,14 +137,14 @@ TEST_F(NAME, rehash_test)
     for (int i = 0; i != MIN_CAPACITY * 128; ++i, value += 1.5f)
     {
         key = i;
-        ASSERT_THAT(hmap_test_insert_new(&hmap_test, key, value), Eq(0));
+        ASSERT_THAT(my_hmap_insert_new(&hmap, key, value), Eq(0));
     }
 
     value = 0;
     for (int i = 0; i != MIN_CAPACITY * 128; ++i, value += 1.5f)
     {
         key = i;
-        EXPECT_THAT(hmap_test_erase(hmap_test, key), Pointee(value)) << i;
+        EXPECT_THAT(my_hmap_erase(hmap, key), Pointee(value)) << i;
     }
 }
 
@@ -154,7 +154,7 @@ TEST_F(NAME, foreach_empty)
     uintptr_t key;
     float*    value;
     int       counter = 0;
-    hmap_for_each (hmap_test, slot, key, value)
+    hmap_for_each (hmap, slot, key, value)
         (void)slot, (void)key, (void)value, counter++;
     EXPECT_THAT(counter, Eq(0));
 }
@@ -162,17 +162,17 @@ TEST_F(NAME, foreach_empty)
 TEST_F(NAME, foreach)
 {
     for (int i = 0; i != 16; ++i)
-        hmap_test_insert_new(&hmap_test, i, float(i));
+        my_hmap_insert_new(&hmap, i, float(i));
 
-    hmap_test_erase(hmap_test, 5);
-    hmap_test_erase(hmap_test, 8);
-    hmap_test_erase(hmap_test, 14);
-    hmap_test_erase(hmap_test, 3);
-    hmap_test_erase(hmap_test, 11);
-    hmap_test_erase(hmap_test, 6);
+    my_hmap_erase(hmap, 5);
+    my_hmap_erase(hmap, 8);
+    my_hmap_erase(hmap, 14);
+    my_hmap_erase(hmap, 3);
+    my_hmap_erase(hmap, 11);
+    my_hmap_erase(hmap, 6);
 
     for (int i = 16; i != 20; ++i)
-        hmap_test_insert_new(&hmap_test, i, float(i));
+        my_hmap_insert_new(&hmap, i, float(i));
 
     std::unordered_map<float, int> expected_values = {
         {0.0f, 0},
@@ -194,10 +194,10 @@ TEST_F(NAME, foreach)
     int       slot;
     uintptr_t key;
     float*    value;
-    hmap_for_each (hmap_test, slot, key, value)
+    hmap_for_each (hmap, slot, key, value)
         (void)slot, (void)key, expected_values[*value] += 1;
 
-    EXPECT_THAT(hmap_count(hmap_test), Eq(14));
+    EXPECT_THAT(hmap_count(hmap), Eq(14));
     EXPECT_THAT(expected_values.size(), Eq(14));
     for (auto it = expected_values.begin(); it != expected_values.end(); ++it)
         EXPECT_THAT(it->second, Eq(1)) << it->first;

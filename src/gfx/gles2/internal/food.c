@@ -11,7 +11,7 @@ void gfx_gles2_draw_food_shadows(
     int                        shadow_map_size_factor)
 {
     int32_t            idx;
-    uint64_t           morton;
+    morton             morton;
     const struct food* food;
 
     gfx_gles2_sprite_shadow_prepare_draw(
@@ -45,7 +45,7 @@ void gfx_gles2_draw_food(
     const struct aspect_ratio* ar)
 {
     int32_t            idx;
-    uint64_t           morton;
+    morton             morton;
     const struct food* food;
 
     gfx_gles2_sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
