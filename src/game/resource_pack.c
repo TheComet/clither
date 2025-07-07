@@ -741,6 +741,7 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
         goto alloc_pack_failed;
     resource_pack_init(pack);
 
+    pack->path = pack_path;
     if (str_set_cstr(&pack->pack_ini, pack_path) != 0)
         goto open_pack_ini_failed;
     if (str_join_path_cstr(&pack->pack_ini, "pack.ini") != 0)
@@ -782,4 +783,3 @@ struct fs_watch* resource_pack_watch(struct resource_pack* pack)
 
     return watch;
 }
-

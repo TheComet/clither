@@ -1,7 +1,6 @@
 #pragma once
 
 #include "clither/config.h"
-#include <stdint.h>
 
 enum mode
 {
@@ -46,7 +45,8 @@ struct args
     int         mcd_latency, mcd_loss, mcd_dup, mcd_reorder;
 #endif
 #if defined(CLITHER_GFX)
-    int gfx_backend;
+    const char* pack;
+    int         gfx_backend;
 #endif
     enum mode mode;
 };

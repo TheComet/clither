@@ -39,6 +39,7 @@ struct resource_text
 
 struct resource_pack
 {
+    const char* path;
     struct str* pack_ini;
     struct
     {

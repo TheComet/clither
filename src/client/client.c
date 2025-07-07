@@ -797,7 +797,7 @@ void* client_run(
             log_info("Resource pack changed, reloading\n");
             fs_watch_deinit(pack_watch);
 
-            new_pack = resource_pack_parse("packs/horror");
+            new_pack = resource_pack_parse((*pack)->path);
             if (new_pack && *gfx != NULL)
             {
                 (*igfx)->unload_resource_pack(*gfx, *pack);

@@ -109,6 +109,8 @@ static int print_help(const char* prog_name)
 
 #if defined(CLITHER_GFX)
     log_raw(
+        "  " ARG2 "-p" RESET "," ARG1 " --pack" RESET " <" ARG2 "path" RESET ">     Load a resource pack.\n");
+    log_raw(
         "  " ARG2 "-g" RESET "," ARG1 " --gfx" RESET " [" ARG2 "index" RESET "]     Opens  a window for rendering  the game. This option is\n"
         "                        implicitly active unless --bot or --server is specified\n"
         "                          Currently available backends:\n");
@@ -163,6 +165,7 @@ static int print_help(const char* prog_name)
     log_raw("  " RED "-b" RESET "," RED " --bot " RESET "<" RED "script" RESET ">    (Recompile with -DCLITHER_BOT_API=ON)\n");
 #endif
 #if !defined(CLITHER_GFX)
+    log_raw("     " RED " --pack " RESET "<" RED "path" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
     log_raw("     " RED " --gfx " RESET "[" RED "index" RESET "]     (Recompile with -DCLITHER_GFX=ON)\n");
 #endif
 #if !defined(CLITHER_LOG)
@@ -250,6 +253,7 @@ int args_parse(struct args* a, int argc, char* argv[])
     a->bot_script = NULL;
 #endif
 #if defined(CLITHER_GFX)
+    a->pack = "packs/horror";
     a->gfx_backend = -1;
 #endif
 #if defined(CLITHER_MCD)
@@ -352,6 +356,17 @@ int args_parse(struct args* a, int argc, char* argv[])
                 }
 #endif
 #if defined(CLITHER_GFX)
+                else if (strcmp(arg, "pack") == 0)
+                {
+                    ++i;
+                    if (i >= argc || !*argv[i])
+                    {
+                        log_err(
+                            "Missing argument for --pack <path>\n");
+                        return -1;
+                    }
+                    a->pack = argv[i];
+                }
                 else if (strcmp(arg, "gfx") == 0)
                 {
                     int count;
