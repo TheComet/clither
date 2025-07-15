@@ -48,7 +48,7 @@ static int print_help(const char* prog_name)
 #endif
 
 #if defined(CLITHER_SERVER)
-    log_raw("  " ARG2 "-s" RESET "," ARG1 " --server" RESET "          Run in  headless  mode.  This only  starts  the  server\n");
+    log_raw("  " ARG2 "-s" RESET "," ARG1 " --server" RESET "          Run in  headless  mode.  This only  starts  the server.\n");
 #endif
 
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
@@ -63,7 +63,7 @@ static int print_help(const char* prog_name)
         "  " ARG2 "-u" RESET "," ARG1 " --username" RESET " <" ARG2 "name" RESET "> Username to use when connecting to a server.\n");
 #endif
 
-#if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER)
+#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
     log_raw(
         "  " ARG2 "-a" RESET "," ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server  address to  connect to. Can  be a URL  or an IP\n"
         "                        address. If used together with --host or --server, then\n"
@@ -156,22 +156,22 @@ static int print_help(const char* prog_name)
 #endif
 #if !defined(CLITHER_CLIENT)
     log_raw(
-        "  " RED "-u" RESET "," RED " --username" RESET " <" RED "name" RESET "> (Recompile with -DCLITHER_CLIENT=ON)\n");
+        "  " RED "-u" RESET "," RED " --username" RESET "        (Recompile with -DCLITHER_CLIENT=ON)\n");
 #endif
 #if !defined(CLITHER_MCD)
-    log_raw("     " RED " --mcd " RESET "<" RED "latency" RESET "> <" RED "loss" RESET "> <" RED "dup" RESET "> <" RED "reorder" RESET "> (Recompile with -DCLITHER_MCD=ON)\n");
+    log_raw("     " RED " --mcd " RESET "            (Recompile with -DCLITHER_MCD=ON)\n");
 #endif
 #if !defined(CLITHER_BOT_API)
-    log_raw("  " RED "-b" RESET "," RED " --bot " RESET "<" RED "script" RESET ">    (Recompile with -DCLITHER_BOT_API=ON)\n");
+    log_raw("  " RED "-b" RESET "," RED " --bot " RESET "            (Recompile with -DCLITHER_BOT_API=ON)\n");
 #endif
 #if !defined(CLITHER_GFX)
-    log_raw("     " RED " --pack " RESET "<" RED "path" RESET ">     (Recompile with -DCLITHER_GFX=ON)\n");
-    log_raw("     " RED " --gfx " RESET "[" RED "index" RESET "]     (Recompile with -DCLITHER_GFX=ON)\n");
+    log_raw("     " RED " --pack " RESET "           (Recompile with -DCLITHER_GFX=ON)\n");
+    log_raw("     " RED " --gfx " RESET "            (Recompile with -DCLITHER_GFX=ON)\n");
 #endif
 #if !defined(CLITHER_LOG)
-    log_raw("  " RED "-l" RESET "," RED " --log " RESET "<" RED "file" RESET ">      (Recompile with -DCLITHER_LOG=ON)\n");
-    log_raw("     " RED " --netlog " RESET "<" RED "file" RESET ">   (Recompile with -DCLITHER_LOG=ON)\n");
-    log_raw("     " RED " --prefix " RESET "<" RED "name" RESET ">   (Recompile with -DCLITHER_LOG=ON)\n");
+    log_raw("  " RED "-l" RESET "," RED " --log " RESET "            (Recompile with -DCLITHER_LOG=ON)\n");
+    log_raw("     " RED " --netlog " RESET "         (Recompile with -DCLITHER_LOG=ON)\n");
+    log_raw("     " RED " --prefix " RESET "         (Recompile with -DCLITHER_LOG=ON)\n");
 #endif
 
     /*

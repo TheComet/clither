@@ -60,7 +60,7 @@ void gfx_untrack_shader(struct gfx_tracker* tracker, GLuint shader)
 /* ------------------------------------------------------------------------- */
 static void error_callback(int error_code, const char* error_msg)
 {
-    log_warn("GLFW Error %d: %s\n", error_code, error_msg);
+    log_err("GLFW Error %d: %s\n", error_code, error_msg);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -239,11 +239,15 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     int         fbwidth, fbheight;
     struct gfx* gfx = mem_alloc(sizeof *gfx);
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(
-        GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE); /* Required for GL ES */
+    /* It appears GLFW will automatically use OpenGL ES 2.0 if necessary, and
+     * use regular OpenGL for desktop. This is fine so far.
+     *
+     *   glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+     *   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+     *   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+     *   glfwWindowHint(
+     *     GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE); // Required for GL ES
+     */
 
     gfx->window =
         glfwCreateWindow(initial_width, initial_height, "Clither", NULL, NULL);

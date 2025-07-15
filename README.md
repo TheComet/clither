@@ -17,14 +17,12 @@ using MSYS then you can use regular CMD (or bash).
 
 The general procedure is as follows:
   + cd into the source directory of clither (where this README is located).
-  + Make a new directory called *build*.
-  + cd into that directory with your command prompt/terminal/whatever.
-  + Type ```cmake ..``` (Two dots are important)
+  + Type ```cmake --preset client```
 
-This will configure the project for your platform. Linux/Mac users now type *make* to build.
-
-If you're on Windows, there will now be Visual Studio project files, inside the *build*
+If you're on Windows, there will now be Visual Studio project files, inside the *build-client*
 directory. So go in there and open them up.
+
+Mac/Linux users can type ```cmake --build build-client --parallel $(nproc)``` to compile the project.
 
 ## Emscripten
 
@@ -43,8 +41,24 @@ Next, configure:
 ```sh
 cd path/to/clither
 emcmake cmake --preset web
-cmake --build build-web-Release/ --paralell $(nproc)
+cmake --build build-web-Release/ --parallel $(nproc)
 ```
+
+To run the client, you need to serve the files in the bin/ directory. For example, using python:
+```sh
+cd build-web-Release/bin
+python3 -m http.server 8000
+```
+
+The client will try to connect to a dedicated clither server. This means for local testing, you will also need to start a server:
+```sh
+cmake --preset server
+cmake --build build-server --parallel $(nproc)
+cd build-server/bin
+./clither --host
+```
+
+Then open your browser and go to [http://localhost:8000/clither.html](http://localhost:8000/clither.html).
 
 ## Nix
 
