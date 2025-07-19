@@ -4,6 +4,7 @@
 
 #cmakedefine CLITHER_BENCHMARKS
 #cmakedefine CLITHER_CAPACITY_WARNING
+#cmakedefine CLITHER_DEBUG
 #cmakedefine CLITHER_DEBUG_ASSERT
 #cmakedefine CLITHER_DEBUG_ZOOM
 #cmakedefine CLITHER_DOC

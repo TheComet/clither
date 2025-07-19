@@ -1,5 +1,30 @@
 #include "clither/platform/tick.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+
+/* ------------------------------------------------------------------------- */
+#if defined(CLITHER_DEBUG)
+int is_debugger_present(void)
+{
+    char  line[256];
+    int   tracer_pid = 0;
+    FILE* f = fopen("/proc/self/status", "r");
+    if (f == NULL)
+        return 0;
+
+    while (fgets(line, sizeof(line), f))
+        if (strncmp(line, "TracerPid:", 10) == 0)
+        {
+            tracer_pid = atoi(line + 10);
+            break;
+        }
+
+    fclose(f);
+    return tracer_pid != 0;
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 void tick_cfg(struct tick* t, int tps)
@@ -43,8 +68,16 @@ int tick_wait(struct tick* t)
 
     if (now > wait_until)
     {
+        int ticks_behind = (now - wait_until) / t->interval;
         t->last = wait_until;
-        return (now - wait_until) / t->interval;
+#if defined(CLITHER_DEBUG)
+        if (ticks_behind > 10 && is_debugger_present())
+        {
+            t->last = now;
+            ticks_behind = 0;
+        }
+#endif
+        return ticks_behind;
     }
 
     /* Context switch on linux takes about ~1us */
@@ -86,8 +119,16 @@ int tick_wait_warp(struct tick* t, int warp, int tps)
 
     if (now > wait_until)
     {
+        int ticks_behind = (now - wait_until) / t->interval;
         t->last = wait_until;
-        return (now - wait_until) / t->interval;
+#if defined(CLITHER_DEBUG)
+        if (ticks_behind > 10 && is_debugger_present())
+        {
+            t->last = now;
+            ticks_behind = 0;
+        }
+#endif
+        return ticks_behind;
     }
 
     /* Context switch on linux takes about ~1us */

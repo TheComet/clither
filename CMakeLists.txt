@@ -84,6 +84,10 @@ else ()
     set (CLITHER_POPCOUNT OFF)
 endif ()
 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set (CLITHER_DEBUG ON)
+endif ()
+
 configure_file ("templates/config.h.in" "include/clither/config.h")
 
 ###############################################################################
