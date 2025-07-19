@@ -41,21 +41,24 @@ Next, configure:
 ```sh
 cd path/to/clither
 emcmake cmake --preset web
-cmake --build build-web-Release/ --parallel $(nproc)
+cmake --build build-web/ --parallel $(nproc)
 ```
 
-To run the client, you need to serve the files in the bin/ directory. For example, using python:
+To run the client, you need to serve  the  files  in  the  bin/  directory. For
+example, using python:
 ```sh
 cd build-web-Release/bin
 python3 -m http.server 8000
 ```
 
-The client will try to connect to a dedicated clither server. This means for local testing, you will also need to start a server:
+The client  will  try to connect to a dedicated clither server. By default, the
+port will be 5555. This means for local testing, you will also  need to start a
+server.
 ```sh
 cmake --preset server
 cmake --build build-server --parallel $(nproc)
 cd build-server/bin
-./clither --host
+./clither --server
 ```
 
 Then open your browser and go to [http://localhost:8000/clither.html](http://localhost:8000/clither.html).

@@ -1,3 +1,5 @@
+import gdb
+
 class rb_PrettyPrinter:
     def __init__(self, rb):
         self.rb = rb

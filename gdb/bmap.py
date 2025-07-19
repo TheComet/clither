@@ -8,8 +8,9 @@ class bmap_PrettyPrinter:
         return "map"
 
     def to_string(self):
-        count = int(self.bmap["count"])
-        capacity = int(self.bmap["capacity"])
+        bmap = self.bmap.dereference()
+        count = int(bmap["count"])
+        capacity = int(bmap["capacity"])
         return f"bmap(count={count}, capacity={capacity})"
 
     def children(self):

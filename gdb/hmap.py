@@ -8,8 +8,9 @@ class hmap_PrettyPrinter:
         return "map"
 
     def to_string(self):
-        count = int(self.hmap["count"])
-        capacity = int(self.hmap["capacity"])
+        hmap = self.hmap.dereference()
+        count = int(hmap["count"])
+        capacity = int(hmap["capacity"])
         return f"hmap(count={count}, capacity={capacity})"
 
     def children(self):

@@ -12,6 +12,7 @@ from hmap import hmap_PrettyPrinter
 from q import qw_PrettyPrinter, q16_16_PrettyPrinter, qa_PrettyPrinter, qwpos_PrettyPrinter, qwaabb_PrettyPrinter
 from morton import morton_PrettyPrinter
 from cmd import cmd_PrettyPrinter
+from s import s_PrettyPrinter
 from strspan import strspan_PrettyPrinter
 from strview import strview_PrettyPrinter
 from strlist import strlist_PrettyPrinter
@@ -25,6 +26,8 @@ def factories(val):
         return bmap_PrettyPrinter(val)
     if str(val.type).endswith("_hmap *"):
         return hmap_PrettyPrinter(val)
+    if str(val.type).endswith("str *"):
+        return s_PrettyPrinter(val)
     if str(val.type) == "strspan":
         return strspan_PrettyPrinter(val)
     if str(val.type) == "strview":

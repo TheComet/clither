@@ -79,7 +79,7 @@ struct snake_data
      */
     struct bezier_point_vec* bezier_points;
 
-    struct snake_splits_rb* splits;
+    struct snake_split_rb* splits;
 
     /* AABB of the entire snake */
     struct qwaabb bb;

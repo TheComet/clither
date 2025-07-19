@@ -1,3 +1,5 @@
+import gdb
+
 class vec_PrettyPrinter:
     def __init__(self, vec):
         self.vec = vec
