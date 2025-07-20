@@ -1,6 +1,7 @@
 #include "clither/platform/net.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
+#include "clither/util/tracker.h"
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
@@ -183,7 +184,7 @@ static int net_bind(const char* bind_address, const char* port, int socktype)
         ipstr.cstr,
         port);
 
-    mem_track_fd(sockfd);
+    track_fd(sockfd);
     return sockfd;
 }
 
@@ -261,7 +262,7 @@ static int net_connect(
             socktype == SOCK_DGRAM ? "UDP" : "TCP",
             ipstr.cstr,
             port);
-        mem_track_fd(sockfd);
+        track_fd(sockfd);
         sockfd_vec_push(sockfds, sockfd);
     }
     freeaddrinfo(candidates);
@@ -307,7 +308,7 @@ void net_close(int sockfd)
             ? ntohs(((struct sockaddr_in6*)&addr)->sin6_port)
             : 0);
 #endif
-    mem_untrack_fd(sockfd);
+    untrack_fd(sockfd);
     close(sockfd);
 }
 

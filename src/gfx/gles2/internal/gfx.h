@@ -12,36 +12,26 @@
 #endif
 
 #if defined(CLITHER_DEBUG_MEMORY)
-#    define GFX_TRACKER(gfx) (&(gfx)->tracker)
-struct tracker;
-struct gfx_tracker
-{
-    struct tracker* tex;
-    struct tracker* buf;
-    struct tracker* fbo;
-    struct tracker* shader;
-};
-void gfx_track_tex(struct gfx_tracker* tracker, GLuint tex);
-void gfx_track_buf(struct gfx_tracker* tracker, GLuint buf);
-void gfx_track_fbo(struct gfx_tracker* tracker, GLuint fbo);
-void gfx_track_shader(struct gfx_tracker* tracker, GLuint shader);
+void gfx_track_tex(GLuint tex);
+void gfx_track_buf(GLuint buf);
+void gfx_track_fbo(GLuint fbo);
+void gfx_track_shader(GLuint shader);
 
-void gfx_untrack_tex(struct gfx_tracker* tracker, GLuint tex);
-void gfx_untrack_buf(struct gfx_tracker* tracker, GLuint buf);
-void gfx_untrack_fbo(struct gfx_tracker* tracker, GLuint fbo);
-void gfx_untrack_shader(struct gfx_tracker* tracker, GLuint shader);
+void gfx_untrack_tex(GLuint tex);
+void gfx_untrack_buf(GLuint buf);
+void gfx_untrack_fbo(GLuint fbo);
+void gfx_untrack_shader(GLuint shader);
 #else
 /* clang-format off */
-#    define GFX_TRACKER(gfx) NULL
-#    define gfx_track_tex(tracker, tex) do {} while (0)
-#    define gfx_track_buf(tracker, buf) do {} while (0)
-#    define gfx_track_fbo(tracker, fbo) do {} while (0)
-#    define gfx_track_shader(tracker, shader) do {} while (0)
+#    define gfx_track_tex(tex) do {} while (0)
+#    define gfx_track_buf(buf) do {} while (0)
+#    define gfx_track_fbo(fbo) do {} while (0)
+#    define gfx_track_shader(shader) do {} while (0)
 
-#    define gfx_untrack_tex(tracker, tex) do {} while (0)
-#    define gfx_untrack_buf(tracker, buf) do {} while (0)
-#    define gfx_untrack_fbo(tracker, fbo) do {} while (0)
-#    define gfx_untrack_shader(tracker, shader) do {} while (0)
+#    define gfx_untrack_tex(tex) do {} while (0)
+#    define gfx_untrack_buf(buf) do {} while (0)
+#    define gfx_untrack_fbo(fbo) do {} while (0)
+#    define gfx_untrack_shader(shader) do {} while (0)
 /* clang-format on */
 #endif
 
@@ -50,17 +40,9 @@ struct gfx
     struct GLFWwindow* window;
     int                width, height;
 
-#if defined(CLITHER_DEBUG_MEMORY)
-    struct gfx_tracker tracker;
-#endif
-
     FT_Library  ft_lib;
     struct font font;
     struct text text;
-
-#if defined(CLITHER_GFX_DEBUG)
-    struct debug debug;
-#endif
 
     struct input input_buffer;
 
@@ -73,6 +55,11 @@ struct gfx
     struct sprite_tex        head0_gather;
     struct sprite_tex        body0_base;
     struct sprite_tex        tail0_base;
+
+#if defined(CLITHER_GFX_DEBUG)
+    struct debug debug;
+#endif
+
 };
 
 struct aspect_ratio

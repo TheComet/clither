@@ -1,8 +1,8 @@
+#include "clither/util/tracker.h"
 #define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 #include "clither/platform/mfile.h"
 #include "clither/util/log.h"
-#include "clither/util/mem.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -69,7 +69,7 @@ int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     close(fd);
 
     mf->size = (int)stbuf.st_size;
-    mem_track_allocation(mf->address, mf->size);
+    track_mem(mf->address, mf->size);
     return 0;
 
 mmap_failed:
@@ -123,7 +123,7 @@ int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
     close(fd);
 
     mf->size = size;
-    mem_track_allocation(mf->address, mf->size);
+    track_mem(mf->address, mf->size);
     return 0;
 
 mmap_failed:
@@ -144,12 +144,12 @@ int mfile_map_mem(struct mfile* mf, int size)
     }
 
     mf->size = size;
-    mem_track_allocation(mf->address, mf->size);
+    track_mem(mf->address, mf->size);
     return 0;
 }
 
 void mfile_unmap(struct mfile* mf)
 {
-    mem_track_deallocation(mf->address);
+    untrack_mem(mf->address);
     munmap(mf->address, (size_t)mf->size);
 }

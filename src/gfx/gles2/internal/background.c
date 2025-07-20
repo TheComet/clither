@@ -8,17 +8,16 @@
 #include "stb_image.h"
 
 int gfx_gles2_background_init(
-    struct background*  bg,
-    struct gfx_tracker* track,
-    int                 fbwidth,
-    int                 fbheight,
-    int                 shadow_map_size_factor)
+    struct background* bg,
+    int                fbwidth,
+    int                fbheight,
+    int                shadow_map_size_factor)
 {
     memset(bg, 0, sizeof *bg);
 
     /* Set up shadow framebuffer */
     glGenTextures(1, &bg->texShadow);
-    gfx_track_tex(track, bg->texShadow);
+    gfx_track_tex(bg->texShadow);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
     glTexImage2D(
         GL_TEXTURE_2D,
@@ -37,7 +36,7 @@ int gfx_gles2_background_init(
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenFramebuffers(1, &bg->fbo);
-    gfx_track_fbo(track, bg->fbo);
+    gfx_track_fbo(bg->fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
     glFramebufferTexture2D(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
@@ -50,7 +49,7 @@ int gfx_gles2_background_init(
 
     /* Prepare background textures */
     glGenTextures(1, &bg->texCol);
-    gfx_track_tex(track, bg->texCol);
+    gfx_track_tex(bg->texCol);
     glBindTexture(GL_TEXTURE_2D, bg->texCol);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -60,7 +59,7 @@ int gfx_gles2_background_init(
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &bg->texNor);
-    gfx_track_tex(track, bg->texNor);
+    gfx_track_tex(bg->texNor);
     glBindTexture(GL_TEXTURE_2D, bg->texNor);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -89,24 +88,23 @@ incomplete_shadow_framebuffer:
     return -1;
 }
 
-void gfx_gles2_background_deinit(
-    struct background* bg, struct gfx_tracker* track)
+void gfx_gles2_background_deinit(struct background* bg)
 {
-    gfx_untrack_tex(track, bg->texNor);
+    gfx_untrack_tex(bg->texNor);
     glDeleteTextures(1, &bg->texNor);
 
-    gfx_untrack_tex(track, bg->texCol);
+    gfx_untrack_tex(bg->texCol);
     glDeleteTextures(1, &bg->texCol);
 
-    gfx_untrack_fbo(track, bg->fbo);
+    gfx_untrack_fbo(bg->fbo);
     glDeleteFramebuffers(1, &bg->fbo);
 
-    gfx_untrack_tex(track, bg->texShadow);
+    gfx_untrack_tex(bg->texShadow);
     glDeleteTextures(1, &bg->texShadow);
 
     if (bg->program != 0)
     {
-        gfx_untrack_shader(track, bg->program);
+        gfx_untrack_shader(bg->program);
         glDeleteProgram(bg->program);
     }
 }
@@ -137,9 +135,7 @@ void gfx_gles2_background_resize(
 }
 
 int gfx_gles2_background_load(
-    struct background*          bg,
-    struct gfx_tracker*         track,
-    const struct resource_pack* pack)
+    struct background* bg, const struct resource_pack* pack)
 {
     int             img_width, img_height, img_channels;
     stbi_uc*        img_data;
@@ -158,7 +154,7 @@ int gfx_gles2_background_load(
         pack->shaders.glsl.background, gfx_gles2_quad_attr_bindings);
     if (bg->program == 0)
         return -1;
-    gfx_track_shader(track, bg->program);
+    gfx_track_shader(bg->program);
 
     bg->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(bg->program, "uAspectRatio");
@@ -237,12 +233,11 @@ int gfx_gles2_background_load(
     return 0;
 }
 
-void gfx_gles2_background_unload(
-    struct background* bg, struct gfx_tracker* track)
+void gfx_gles2_background_unload(struct background* bg)
 {
     if (bg->program != 0)
     {
-        gfx_untrack_shader(track, bg->program);
+        gfx_untrack_shader(bg->program);
         glDeleteProgram(bg->program);
         bg->program = 0;
     }

@@ -7,6 +7,7 @@
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
+#include "clither/util/tracker.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -64,7 +65,7 @@ void* run_mcd_wifi(const void* p)
     struct tick                tick;
     const struct settings_mcd* settings = p;
 
-    if (mem_init_threadlocal() != 0)
+    if (trackers_init_tls() != 0)
         goto mem_init_failed;
     log_init();
 
@@ -207,7 +208,7 @@ exit_mcd:;
     sockfd_vec_deinit(ctx.server_fds);
     net_close(ctx.client_fd);
 
-    mem_deinit_threadlocal();
+    trackers_deinit_tls();
 
     return (void*)0;
 
@@ -215,7 +216,7 @@ connect_server_failed:
     sockfd_vec_deinit(ctx.server_fds);
     net_close(ctx.client_fd);
 bind_client_fd_failed:
-    mem_deinit_threadlocal();
+    trackers_deinit_tls();
 mem_init_failed:
     return (void*)-1;
 }

@@ -22,6 +22,7 @@
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
+#include "clither/util/tracker.h"
 #include <stdlib.h> /* atoi */
 #include <string.h> /* memcpy */
 
@@ -1143,7 +1144,7 @@ void* server_run(const void* p)
     struct server_instance_bmap* instances;
     const struct settings*       settings = p;
 
-    if (mem_init_threadlocal() != 0)
+    if (trackers_init_tls() != 0)
         goto mem_init_failed;
     log_init();
 
@@ -1201,13 +1202,13 @@ void* server_run(const void* p)
     }
 
     server_instance_bmap_deinit(instances);
-    (void)mem_deinit_threadlocal();
+    trackers_deinit_tls();
 
     return (void*)0;
 
 start_default_instance_failed:
     server_instance_bmap_deinit(instances);
+    trackers_deinit_tls();
 mem_init_failed:
-    (void)mem_deinit_threadlocal();
     return (void*)-1;
 }

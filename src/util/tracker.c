@@ -1,6 +1,7 @@
 #include "clither/platform/backtrace.h"
 #include "clither/util/hmap.h"
 #include "clither/util/mem.h"
+#include "clither/util/str.h"
 #include "clither/util/tracker.h"
 #include <inttypes.h>
 
@@ -25,6 +26,7 @@ HMAP_DEFINE_HASH(
 
 struct tracker
 {
+    struct str*          name;
     struct tracker_hmap* hmap;
     int                  tracks, untracks;
 };
@@ -44,18 +46,30 @@ static void print_backtrace(const struct data* data)
 #endif
 
 /* ------------------------------------------------------------------------- */
-struct tracker* tracker_create(void)
+struct tracker* tracker_create(const char* name)
 {
     struct tracker* t = mem_alloc(sizeof *t);
     if (t == NULL)
-        return NULL;
+        goto alloc_tracker_failed;
 
+    str_init(&t->name);
     tracker_hmap_init(&t->hmap);
+
+    if (str_set_cstr(&t->name, name) != 0)
+        goto set_name_failed;
+
     return t;
+
+set_name_failed:
+    tracker_hmap_deinit(t->hmap);
+    str_deinit(t->name);
+    mem_free(t);
+alloc_tracker_failed:
+    return NULL;
 }
 
 /* ------------------------------------------------------------------------- */
-int tracker_destroy(struct tracker* t)
+void tracker_destroy(struct tracker* t)
 {
     int          slot;
     uintptr_t    p;
@@ -64,7 +78,10 @@ int tracker_destroy(struct tracker* t)
     hmap_for_each (t->hmap, slot, p, data)
     {
         (void)slot;
-        log_err("Un-freed resource 0x%" PRIxPTR ", size %d\n", p, data->size);
+        log_err("Un-freed %s 0x%" PRIxPTR, str_cstr(t->name), p);
+        if (data->size)
+            log_raw(", size %d", data->size);
+        log_raw("\n");
 #if defined(CLITHER_BACKTRACE)
         print_backtrace(data);
         backtrace_free(data->backtrace);
@@ -84,9 +101,8 @@ int tracker_destroy(struct tracker* t)
 #endif
 
     tracker_hmap_deinit(t->hmap);
+    str_deinit(t->name);
     mem_free(t);
-
-    return t->tracks - t->untracks;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -108,11 +124,12 @@ void tracker_track(struct tracker* t, void* p, int size)
 
         case HMAP_EXISTS: {
             log_err(
-                "Double track! This is usually caused by calling "
-                "tracker_track() on the same resource twice.\n");
+                "Double track on %s! This is usually caused by "
+                "calling tracker_track() on the same resource twice.\n",
+                str_cstr(t->name));
 #if defined(CLITHER_BACKTRACE)
             log_backtrace();
-            log_err("Resource was previously tracked at:\n");
+            log_err("%s was previously tracked at:\n", str_cstr(t->name));
             print_backtrace(data);
 #endif
             break;
@@ -121,7 +138,7 @@ void tracker_track(struct tracker* t, void* p, int size)
 }
 
 /* ------------------------------------------------------------------------- */
-int tracker_untrack(struct tracker* t, void* p)
+void tracker_untrack(struct tracker* t, void* p)
 {
     struct data* data;
     ++t->untracks;
@@ -129,16 +146,83 @@ int tracker_untrack(struct tracker* t, void* p)
     data = tracker_hmap_erase(t->hmap, (uintptr_t)p);
     if (data == NULL)
     {
-        log_err("Untracking a resource that was never tracked.\n");
+        log_err("Untracking a %s that was never tracked.\n", str_cstr(t->name));
 #if defined(CLITHER_BACKTRACE)
         log_backtrace();
 #endif
-        return 0;
+        return;
     }
 
 #if defined(CLITHER_BACKTRACE)
     if (data->backtrace)
         backtrace_free(data->backtrace);
 #endif
-    return data->size;
+}
+
+/* ------------------------------------------------------------------------- */
+static CLITHER_THREADLOCAL int             g_ignore_malloc;
+static CLITHER_THREADLOCAL struct tracker* g_tracker_mem;
+static CLITHER_THREADLOCAL struct tracker* g_tracker_fd;
+
+/* ------------------------------------------------------------------------- */
+int trackers_init_tls(void)
+{
+    g_ignore_malloc = 1;
+    g_tracker_mem = tracker_create("memory allocation");
+    if (g_tracker_mem == NULL)
+        goto tracker_mem_create_failed;
+    g_ignore_malloc = 0;
+    track_mem(g_tracker_mem, sizeof *g_tracker_mem);
+    track_mem(g_tracker_mem->name, str_len(g_tracker_mem->name));
+
+    g_tracker_fd = tracker_create("file descriptor");
+    if (g_tracker_fd == NULL)
+        goto tracker_fd_create_failed;
+
+    return 0;
+
+tracker_fd_create_failed:
+    tracker_destroy(g_tracker_mem);
+tracker_mem_create_failed:
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+void trackers_deinit_tls(void)
+{
+    tracker_destroy(g_tracker_fd);
+
+    untrack_mem(g_tracker_mem->name);
+    untrack_mem(g_tracker_mem);
+    g_ignore_malloc = 1;
+    tracker_destroy(g_tracker_mem);
+    g_ignore_malloc = 0;
+}
+
+void track_mem(void* p, int size)
+{
+    if (!g_ignore_malloc)
+    {
+        g_ignore_malloc = 1;
+        tracker_track(g_tracker_mem, p, size);
+        g_ignore_malloc = 0;
+    }
+}
+void track_fd(int fd)
+{
+    tracker_track(g_tracker_fd, (void*)(intptr_t)fd, 0);
+}
+
+void untrack_mem(void* p)
+{
+    if (!g_ignore_malloc)
+    {
+        g_ignore_malloc = 1;
+        tracker_untrack(g_tracker_mem, p);
+        g_ignore_malloc = 0;
+    }
+}
+void untrack_fd(int fd)
+{
+    tracker_untrack(g_tracker_fd, (void*)(intptr_t)fd);
 }

@@ -13,6 +13,7 @@
 #include "clither/server/server.h"
 #include "clither/tests.h"
 #include "clither/util/log.h"
+#include "clither/util/tracker.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,7 @@ int main(int argc, char* argv[])
 #endif
     int retval = -1;
 
-    if (mem_init_threadlocal() != 0)
+    if (trackers_init_tls() != 0)
         goto mem_init_failed;
     log_init();
     if (asm_optimizations_init() != 0)
@@ -271,7 +272,7 @@ parse_resource_pack_failed:
     signals_remove();
 parse_args_failed:
 asm_optimizations_failed:
-    (void)mem_deinit_threadlocal();
+    trackers_deinit_tls();
 mem_init_failed:
 
 #if defined(__EMSCRIPTEN__)

@@ -6,34 +6,11 @@
 #if !defined(CLITHER_DEBUG_MEMORY)
 /* clang-format off */
 #   include <stdlib.h>
-#   define mem_init_threadlocal()     (0)
-#   define mem_deinit_threadlocal()   (0)
 #   define mem_alloc                  malloc
 #   define mem_free                   free
 #   define mem_realloc                realloc
-#   define mem_track_allocation(p, s) do {} while (0)
-#   define mem_track_deallocation(p)  do {} while (0)
-#   define mem_track_fd(fd)           do {} while (0)
-#   define mem_untrack_fd(fd)         do {} while (0)
 /* clang-format on */
 #else
-
-/*!
- * @brief Initializes memory tracking. This is called by odbutil_init().
- *
- * In release mode this does nothing. In debug mode it will initialize
- * memory reports and backtraces, if enabled.
- */
-int mem_init_threadlocal(void);
-
-/*!
- * @brief De-initializes memory tracking. This is called from odbutil_deinit().
- *
- * In release mode this does nothing. In debug mode this will output the memory
- * report and print backtraces, if enabled.
- * @return Returns the number of memory leaks.
- */
-int mem_deinit_threadlocal(void);
 
 /*!
  * @brief Does the same thing as a normal call to malloc(), but does some
@@ -53,9 +30,4 @@ void* mem_realloc(void* ptr, int new_size);
  */
 void mem_free(void*);
 
-void mem_track_allocation(void* p, int size);
-int  mem_track_deallocation(void* p);
-
-void mem_track_fd(int fd);
-void mem_untrack_fd(int fd);
 #endif

@@ -22,39 +22,70 @@ enum
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_DEBUG_MEMORY)
-void gfx_track_tex(struct gfx_tracker* tracker, GLuint tex)
+struct tracker_gfx
 {
-    tracker_track(tracker->tex, (void*)(uintptr_t)tex, 0);
-}
-void gfx_track_buf(struct gfx_tracker* tracker, GLuint buf)
+    struct tracker* tex;
+    struct tracker* buf;
+    struct tracker* fbo;
+    struct tracker* shader;
+};
+
+static struct tracker_gfx g_tracker_gfx;
+
+static int tracker_gfx_init(void)
 {
-    tracker_track(tracker->buf, (void*)(uintptr_t)buf, 0);
-}
-void gfx_track_fbo(struct gfx_tracker* tracker, GLuint fbo)
-{
-    tracker_track(tracker->fbo, (void*)(uintptr_t)fbo, 0);
-}
-void gfx_track_shader(struct gfx_tracker* tracker, GLuint shader)
-{
-    tracker_track(tracker->shader, (void*)(uintptr_t)shader, 0);
+    g_tracker_gfx.tex = tracker_create("GL Texture");
+    if (g_tracker_gfx.tex == NULL)
+        goto tracker_tex_create_failed;
+    g_tracker_gfx.buf = tracker_create("GL Buffer");
+    if (g_tracker_gfx.buf == NULL)
+        goto tracker_buf_create_failed;
+    g_tracker_gfx.fbo = tracker_create("GL Framebuffer");
+    if (g_tracker_gfx.fbo == NULL)
+        goto tracker_fbo_create_failed;
+    g_tracker_gfx.shader = tracker_create("GL Shader");
+    if (g_tracker_gfx.shader == NULL)
+        goto tracker_shader_create_failed;
+
+    return 0;
+
+tracker_shader_create_failed:
+    tracker_destroy(g_tracker_gfx.fbo);
+tracker_fbo_create_failed:
+    tracker_destroy(g_tracker_gfx.buf);
+tracker_buf_create_failed:
+    tracker_destroy(g_tracker_gfx.tex);
+tracker_tex_create_failed:
+    return -1;
 }
 
-void gfx_untrack_tex(struct gfx_tracker* tracker, GLuint tex)
+static void tracker_gfx_deinit(void)
 {
-    tracker_untrack(tracker->tex, (void*)(uintptr_t)tex);
+    tracker_destroy(g_tracker_gfx.shader);
+    tracker_destroy(g_tracker_gfx.fbo);
+    tracker_destroy(g_tracker_gfx.buf);
+    tracker_destroy(g_tracker_gfx.tex);
 }
-void gfx_untrack_buf(struct gfx_tracker* tracker, GLuint buf)
-{
-    tracker_untrack(tracker->buf, (void*)(uintptr_t)buf);
-}
-void gfx_untrack_fbo(struct gfx_tracker* tracker, GLuint fbo)
-{
-    tracker_untrack(tracker->fbo, (void*)(uintptr_t)fbo);
-}
-void gfx_untrack_shader(struct gfx_tracker* tracker, GLuint shader)
-{
-    tracker_untrack(tracker->shader, (void*)(uintptr_t)shader);
-}
+
+/* clang-format off */
+void gfx_track_tex(GLuint tex)
+    {tracker_track(g_tracker_gfx.tex, (void*)(uintptr_t)tex, 0);}
+void gfx_track_buf(GLuint buf)
+    {tracker_track(g_tracker_gfx.buf, (void*)(uintptr_t)buf, 0);}
+void gfx_track_fbo(GLuint fbo)
+    {tracker_track(g_tracker_gfx.fbo, (void*)(uintptr_t)fbo, 0);}
+void gfx_track_shader(GLuint shader)
+    {tracker_track(g_tracker_gfx.shader, (void*)(uintptr_t)shader, 0);}
+
+void gfx_untrack_tex(GLuint tex)
+    {tracker_untrack(g_tracker_gfx.tex, (void*)(uintptr_t)tex);}
+void gfx_untrack_buf(GLuint buf)
+    {tracker_untrack(g_tracker_gfx.buf, (void*)(uintptr_t)buf);}
+void gfx_untrack_fbo(GLuint fbo)
+    {tracker_untrack(g_tracker_gfx.fbo, (void*)(uintptr_t)fbo);}
+void gfx_untrack_shader(GLuint shader)
+    {tracker_untrack(g_tracker_gfx.shader, (void*)(uintptr_t)shader);}
+/* clang-format on */
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -151,7 +182,7 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 static int
 gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
-    if (gfx_gles2_background_load(&gfx->background, GFX_TRACKER(gfx), pack) < 0)
+    if (gfx_gles2_background_load(&gfx->background, pack) < 0)
         goto bg_load_failed;
     if (gfx_gles2_sprite_shadow_load(&gfx->sprite_shadow_mat, pack) < 0)
         goto sprite_shadow_load_failed;
@@ -182,7 +213,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 sprite_mat_load_failed:
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
 sprite_shadow_load_failed:
-    gfx_gles2_background_unload(&gfx->background, GFX_TRACKER(gfx));
+    gfx_gles2_background_unload(&gfx->background);
 bg_load_failed:
     return -1;
 }
@@ -209,20 +240,33 @@ static void gfx_gles2_unload_resource_pack(
 
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
-    gfx_gles2_background_unload(&gfx->background, GFX_TRACKER(gfx));
+    gfx_gles2_background_unload(&gfx->background);
 }
 
 /* ------------------------------------------------------------------------- */
 static int gfx_gles2_global_init(void)
 {
+#if defined(CLITHER_DEBUG_MEMORY)
+    if (tracker_gfx_init() < 0)
+        goto tracker_gfx_init_failed;
+#endif
+
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
     {
         log_err("Failed to initialize GLFW\n");
-        return -1;
+        goto glfw_init_failed;
     }
 
     return 0;
+
+glfw_init_failed:
+    glfwSetErrorCallback(NULL);
+#if defined(CLITHER_DEBUG_MEMORY)
+    tracker_gfx_deinit();
+tracker_gfx_init_failed:
+#endif
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -230,6 +274,7 @@ static void gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
     glfwSetErrorCallback(NULL);
+    tracker_gfx_deinit();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -267,21 +312,6 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
 
-#if defined(CLITHER_DEBUG_MEMORY)
-    gfx->tracker.tex = tracker_create();
-    if (gfx->tracker.tex == NULL)
-        goto tracker_tex_create_failed;
-    gfx->tracker.buf = tracker_create();
-    if (gfx->tracker.buf == NULL)
-        goto tracker_buf_create_failed;
-    gfx->tracker.fbo = tracker_create();
-    if (gfx->tracker.fbo == NULL)
-        goto tracker_fbo_create_failed;
-    gfx->tracker.shader = tracker_create();
-    if (gfx->tracker.shader == NULL)
-        goto tracker_shader_create_failed;
-#endif
-
     ft_error = FT_Init_FreeType(&gfx->ft_lib);
     if (ft_error)
     {
@@ -295,22 +325,14 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glViewport(0, 0, fbwidth, fbheight);
 
     gfx_gles2_background_init(
-        &gfx->background,
-        GFX_TRACKER(gfx),
-        fbwidth,
-        fbheight,
-        SHADOW_MAP_SIZE_FACTOR);
-    gfx_gles2_quad_mesh_init(&gfx->quad_mesh, GFX_TRACKER(gfx));
+        &gfx->background, fbwidth, fbheight, SHADOW_MAP_SIZE_FACTOR);
+    gfx_gles2_quad_mesh_init(&gfx->quad_mesh);
     gfx_gles2_sprite_shadow_init(&gfx->sprite_shadow_mat);
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
     gfx_gles2_sprite_tex_init(&gfx->food);
     gfx_gles2_sprite_tex_init(&gfx->head0_base);
     gfx_gles2_sprite_tex_init(&gfx->head0_gather);
     gfx_gles2_sprite_tex_init(&gfx->body0_base);
-
-#if defined(CLITHER_GFX_DEBUG)
-    gfx_gles2_debug_init(&gfx->debug);
-#endif
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -324,20 +346,14 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glfwSetScrollCallback(gfx->window, scroll_callback);
     glfwSetFramebufferSizeCallback(gfx->window, framebuffer_size_callback);
 
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_init(&gfx->debug);
+#endif
+
     return gfx;
 
     FT_Done_FreeType(gfx->ft_lib);
 ft_init_failed:
-#if defined(CLITHER_DEBUG_MEMORY)
-    tracker_destroy(gfx->tracker.shader);
-tracker_shader_create_failed:
-    tracker_destroy(gfx->tracker.fbo);
-tracker_fbo_create_failed:
-    tracker_destroy(gfx->tracker.buf);
-tracker_buf_create_failed:
-    tracker_destroy(gfx->tracker.tex);
-tracker_tex_create_failed:
-#endif
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
@@ -358,15 +374,8 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_sprite_tex_deinit(&gfx->food);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
-    gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh, GFX_TRACKER(gfx));
-    gfx_gles2_background_deinit(&gfx->background, GFX_TRACKER(gfx));
-
-#if defined(CLITHER_DEBUG_MEMORY)
-    tracker_destroy(gfx->tracker.shader);
-    tracker_destroy(gfx->tracker.fbo);
-    tracker_destroy(gfx->tracker.buf);
-    tracker_destroy(gfx->tracker.tex);
-#endif
+    gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
+    gfx_gles2_background_deinit(&gfx->background);
 
     FT_Done_FreeType(gfx->ft_lib);
 

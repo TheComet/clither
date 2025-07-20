@@ -9,7 +9,7 @@
 #include "clither/util/bmap.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
-#include "clither/util/mem.h"
+#include "clither/util/tracker.h"
 #include <stdio.h>  /* sprintf */
 #include <stdlib.h> /* atoi */
 
@@ -27,7 +27,7 @@ void* server_instance_run(const void* args)
     static const char* colors[] = {
         COL_N_CYAN, COL_N_MAGENTA, COL_N_BLUE, COL_N_GREEN, COL_N_RED};
 
-    if (mem_init_threadlocal() != 0)
+    if (trackers_init_tls() != 0)
         goto mem_init_failed;
     log_init();
 
@@ -120,13 +120,14 @@ void* server_instance_run(const void* args)
     server_deinit(&server);
     world_deinit(&world);
 
-    (void)mem_deinit_threadlocal();
+    trackers_deinit_tls();
 
     return (void*)0;
 
 server_init_failed:
 world_spawn_food_failed:
     world_deinit(&world);
+    trackers_deinit_tls();
 mem_init_failed:
     return (void*)-1;
 }
