@@ -27,6 +27,7 @@ def iter_knots(rb):
 
 def plot_bezier_knots(rb, color):
     knots = list(iter_knots(rb))
+    handle = None
     for tail, head in zip(knots[:-1], knots[1:]):
         p0 = head[0], head[1]
         p1 = head[0] + cos(head[2]) * head[3],\
@@ -50,41 +51,49 @@ def plot_bezier_knots(rb, color):
         t = np.linspace(0, 1, 50)
         x = (Ax[0] + Ax[1]*t + Ax[2]*t**2 + Ax[3]*t**3)
         y = (Ay[0] + Ay[1]*t + Ay[2]*t**2 + Ay[3]*t**3)
-        plt.plot(x, y, label="Bezier Curve", color=color)
+        plt.plot(x, y, color=color)
         plt.plot([p0[0], p1[0]], [p0[1], p1[1]], color=color, linewidth=0.5)
-        plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color=color, linewidth=0.5)
+        handle, = plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color=color, linewidth=0.5)
+    return handle
 
 def plot_head_trail(vec, color):
     count = vec["count"]
     data = vec["data"]
+    x, y = list(), list()
     for i in range(count):
         point = data[i]
-        x = qw_to_float(point["x"])
-        y = qw_to_float(point["y"])
-        plt.scatter(x, y, color=color)
+        x.append(qw_to_float(point["x"]))
+        y.append(qw_to_float(point["y"]))
+    handle = plt.scatter(x, y, color=color)
+    return handle
 
 def plot_head_trails(vec_rb, color):
+    handle = None
     read = vec_rb["read"]
     write = vec_rb["write"]
     capacity = vec_rb["capacity"]
     while read != write:
-        plot_head_trail(vec_rb["data"][read], color=color)
+        handle = plot_head_trail(vec_rb["data"][read], color=color)
         read = (read + 1) % capacity
+    return handle
 
 def plot_aabb(qwaabb, color):
     x1 = qw_to_float(qwaabb["x1"])
     y1 = qw_to_float(qwaabb["y1"])
     x2 = qw_to_float(qwaabb["x2"])
     y2 = qw_to_float(qwaabb["y2"])
-    plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], color=color, linewidth=0.5)
+    handle, = plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], color=color, linewidth=0.5)
+    return handle
 
 def plot_bezier_aabbs(qwaabb_rb, color):
+    handle = None
     read = qwaabb_rb["read"]
     write = qwaabb_rb["write"]
     capacity = qwaabb_rb["capacity"]
     while read != write:
-        plot_aabb(qwaabb_rb["data"][read], color=color)
+        handle = plot_aabb(qwaabb_rb["data"][read], color=color)
         read = (read + 1) % capacity
+    return handle
 
 color_table = (
     ("#FF8080", "#FFA0A0"),
@@ -100,7 +109,9 @@ class Plot(gdb.Command):
         super(Plot, self).__init__("plot", gdb.COMMAND_USER)
 
     def invoke(self, arg, from_tty):
-        values = (gdb.parse_and_eval(x) for x in arg.split())
+        handle = None
+        exprs = arg.split()
+        values = (gdb.parse_and_eval(x) for x in exprs)
         for i, val in enumerate(values):
             colors = color_table[i % len(color_table)]
             if str(val.type).endswith("snake *"):
@@ -109,7 +120,7 @@ class Plot(gdb.Command):
                 plot_bezier_knots(val["data"]["bezier_knots"], colors[0])
                 plot_head_trails(val["data"]["head_trails"], colors[0])
                 plot_bezier_aabbs(val["data"]["bezier_aabbs"], colors[1])
-                plot_aabb(val["data"]["bb"], colors[1])
+                handle = plot_aabb(val["data"]["bb"], colors[1])
 
             if str(val.type).endswith("snake_data *"):
                 val = val.dereference()
@@ -117,20 +128,27 @@ class Plot(gdb.Command):
                 plot_bezier_knots(val["bezier_knots"], colors[0])
                 plot_head_trails(val["head_trails"], colors[0])
                 plot_bezier_aabbs(val["bezier_aabbs"], colors[1])
-                plot_aabb(val["bb"], colors[1])
+                handle = plot_aabb(val["bb"], colors[1])
 
             if str(val.type).endswith("bezier_knot_rb *"):
-                plot_bezier_knots(val, colors[0])
+                handle = plot_bezier_knots(val, colors[0])
 
             if str(val.type).endswith("qwpos_vec_rb *"):
-                plot_head_trails(val, colors[0])
+                handle = plot_head_trails(val, colors[0])
 
             if str(val.type).endswith("qwpos_vec *"):
-                plot_head_trail(val, colors[0])
+                handle = plot_head_trail(val, colors[0])
 
             if str(val.type).endswith("qwaabb_rb *"):
-                plot_bezier_aabbs(val, colors[1])
+                handle = plot_bezier_aabbs(val, colors[1])
 
+            if str(val.type).endswith("qwaabb"):
+                handle = plot_aabb(val, colors[1])
+
+            if handle is not None:
+                handle.set_label(exprs[i])
+
+        plt.legend()
         plt.gca().set_aspect('equal', adjustable='box')
         plt.show()
 
