@@ -8,12 +8,16 @@ class hmap_PrettyPrinter:
         return "map"
 
     def to_string(self):
+        if int(self.hmap) == 0:
+            return "hmap(0)"
         hmap = self.hmap.dereference()
         count = int(hmap["count"])
         capacity = int(hmap["capacity"])
         return f"hmap(count={count}, capacity={capacity})"
 
     def children(self):
+        if int(self.hmap) == 0:
+            return
         hmap = self.hmap.dereference()
         hashes = hmap["hashes"].address
         capacity = int(hmap["capacity"])

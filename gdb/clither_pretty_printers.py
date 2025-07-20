@@ -16,6 +16,7 @@ from s import s_PrettyPrinter
 from strspan import strspan_PrettyPrinter
 from strview import strview_PrettyPrinter
 from strlist import strlist_PrettyPrinter
+from resource import resource_snake_PrettyPrinter, resource_sprite_PrettyPrinter, resource_pack_PrettyPrinter
 
 def factories(val):
     if str(val.type).endswith("_rb *"):
@@ -32,7 +33,7 @@ def factories(val):
         return strspan_PrettyPrinter(val)
     if str(val.type) == "strview":
         return strview_PrettyPrinter(val)
-    if str(val.type) == "strlist *":
+    if str(val.type).endswith("strlist *"):
         return strlist_PrettyPrinter(val)
     if str(val.type) == "qw":
         return qw_PrettyPrinter(val)
@@ -48,6 +49,13 @@ def factories(val):
         return morton_PrettyPrinter(val)
     if str(val.type) == "cmd":
         return cmd_PrettyPrinter(val)
+    if str(val.type).endswith("resource_snake_part *"):
+        return resource_snake_PrettyPrinter(val)
+    if str(val.type).endswith("resource_sprite *"):
+        return resource_sprite_PrettyPrinter(val)
+    if str(val.type).endswith("resource_pack *"):
+        return resource_pack_PrettyPrinter(val)
+
 
 gdb.pretty_printers.append(factories)
 

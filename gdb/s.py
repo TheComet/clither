@@ -5,6 +5,8 @@ class s_PrettyPrinter:
         self.s = s
 
     def to_string(self):
+        if int(self.s) == 0:
+            return "str(0) = \"\""
         str_impl = self.s.cast(gdb.lookup_type("struct str_impl").pointer()).dereference()
         count = str_impl["count"] - 1
         capacity = str_impl["capacity"]

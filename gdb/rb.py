@@ -8,6 +8,8 @@ class rb_PrettyPrinter:
         return "array"
 
     def to_string(self):
+        if int(self.rb) == 0:
+            return "rb(0)"
         rb = self.rb.dereference()
         read = rb["read"]
         write = rb["write"]
@@ -15,6 +17,8 @@ class rb_PrettyPrinter:
         return f"rb(read={read}, write={write}, capacity={capacity})"
 
     def children(self):
+        if int(self.rb) == 0:
+            return
         rb = self.rb.dereference()
         read = rb["read"]
         write = rb["write"]
