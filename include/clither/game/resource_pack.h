@@ -34,7 +34,10 @@ struct resource_snake_part
 
 struct resource_text
 {
-    struct str* font; /*! Font face filename to use for text rendering */
+    struct str* font_file; /*! Font face filename to use for text rendering */
+    int         size;
+    int         device_hdpi;
+    int         device_vdpi;
 };
 
 struct resource_pack

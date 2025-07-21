@@ -182,6 +182,12 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 static int
 gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
+    if (gfx_gles2_font_load(&gfx->font, &pack->text) < 0)
+        goto font_load_failed;
+    if (gfx_gles2_text_mat_load(&gfx->text_mat, pack) < 0)
+        goto text_mat_load_failed;
+    gfx_gles2_text_shape(&gfx->font, &gfx->text, "Hello World");
+
     if (gfx_gles2_background_load(&gfx->background, pack) < 0)
         goto bg_load_failed;
     if (gfx_gles2_sprite_shadow_load(&gfx->sprite_shadow_mat, pack) < 0)
@@ -215,6 +221,10 @@ sprite_mat_load_failed:
 sprite_shadow_load_failed:
     gfx_gles2_background_unload(&gfx->background);
 bg_load_failed:
+    gfx_gles2_text_mat_unload(&gfx->text_mat);
+text_mat_load_failed:
+    gfx_gles2_font_unload(&gfx->font);
+font_load_failed:
     return -1;
 }
 
@@ -241,6 +251,9 @@ static void gfx_gles2_unload_resource_pack(
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
     gfx_gles2_background_unload(&gfx->background);
+
+    gfx_gles2_text_mat_unload(&gfx->text_mat);
+    gfx_gles2_font_unload(&gfx->font);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -280,7 +293,6 @@ static void gfx_gles2_global_deinit(void)
 /* ------------------------------------------------------------------------- */
 static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 {
-    FT_Error    ft_error;
     int         fbwidth, fbheight;
     struct gfx* gfx = mem_alloc(sizeof *gfx);
 
@@ -312,17 +324,17 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     log_info("Using GLFW version %s\n", glfwGetVersionString());
     log_info("OpenGL version %s\n", glGetString(GL_VERSION));
 
-    ft_error = FT_Init_FreeType(&gfx->ft_lib);
-    if (ft_error)
-    {
-        log_err("Failed to initialize FreeType library.\n");
-        goto ft_init_failed;
-    }
-
     glfwGetFramebufferSize(gfx->window, &fbwidth, &fbheight);
     gfx->width = fbwidth;
     gfx->height = fbheight;
     glViewport(0, 0, fbwidth, fbheight);
+
+    input_init(&gfx->input_buffer);
+
+    if (gfx_gles2_font_init(&gfx->font) != 0)
+        goto font_init_failed;
+    gfx_gles2_text_mat_init(&gfx->text_mat);
+    gfx_gles2_text_init(&gfx->text);
 
     gfx_gles2_background_init(
         &gfx->background, fbwidth, fbheight, SHADOW_MAP_SIZE_FACTOR);
@@ -337,8 +349,6 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    input_init(&gfx->input_buffer);
-
     glfwSetWindowUserPointer(gfx->window, gfx);
     glfwSetKeyCallback(gfx->window, key_callback);
     glfwSetMouseButtonCallback(gfx->window, mouse_button_callback);
@@ -352,8 +362,10 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     return gfx;
 
-    FT_Done_FreeType(gfx->ft_lib);
-ft_init_failed:
+    gfx_gles2_text_deinit(&gfx->text);
+    gfx_gles2_text_mat_deinit(&gfx->text_mat);
+    gfx_gles2_font_deinit(&gfx->font);
+font_init_failed:
 load_gles2_ext_failed:
     glfwDestroyWindow(gfx->window);
 create_window_failed:
@@ -377,7 +389,9 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
     gfx_gles2_background_deinit(&gfx->background);
 
-    FT_Done_FreeType(gfx->ft_lib);
+    gfx_gles2_text_deinit(&gfx->text);
+    gfx_gles2_text_mat_deinit(&gfx->text_mat);
+    gfx_gles2_font_deinit(&gfx->font);
 
     glfwDestroyWindow(gfx->window);
     mem_free(gfx);

@@ -72,7 +72,10 @@ static void resource_pack_init(struct resource_pack* pack)
     resource_snake_part_vec_init(&pack->sprites.heads);
     resource_snake_part_vec_init(&pack->sprites.bodies);
     resource_snake_part_vec_init(&pack->sprites.tails);
-    str_init(&pack->text.font);
+    str_init(&pack->text.font_file);
+    pack->text.size = 16;
+    pack->text.device_hdpi = 72;
+    pack->text.device_vdpi = 72;
 }
 
 static void resource_pack_deinit(struct resource_pack* pack)
@@ -80,7 +83,7 @@ static void resource_pack_deinit(struct resource_pack* pack)
     struct resource_snake_part* snake_part;
     struct resource_sprite**    sprite;
 
-    str_deinit(pack->text.font);
+    str_deinit(pack->text.font_file);
 
     vec_for_each (pack->sprites.tails, snake_part)
         resource_snake_part_deinit(snake_part);
@@ -458,9 +461,9 @@ enum token parse_section_text(
                         return parser_error(p, "Expected '=' after key\n");
                     if (scan_next_token(p) != TOK_STRING)
                         return parser_error(p, "Expected a string value\n");
-                    if (str_set_cstr(&text->font, path_prefix) != 0)
+                    if (str_set_cstr(&text->font_file, path_prefix) != 0)
                         return -1;
-                    if (str_join_path(&text->font, p->value.string) != 0)
+                    if (str_join_path(&text->font_file, p->value.string) != 0)
                         return -1;
                     break;
                 }

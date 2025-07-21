@@ -40,11 +40,11 @@ struct gfx
     struct GLFWwindow* window;
     int                width, height;
 
-    FT_Library  ft_lib;
-    struct font font;
-    struct text text;
-
     struct input input_buffer;
+
+    struct font     font;
+    struct text_mat text_mat;
+    struct text     text;
 
     struct background        background;
     struct quad_mesh         quad_mesh;
@@ -59,7 +59,6 @@ struct gfx
 #if defined(CLITHER_GFX_DEBUG)
     struct debug debug;
 #endif
-
 };
 
 struct aspect_ratio

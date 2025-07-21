@@ -58,6 +58,9 @@ struct tracker* tracker_create(const char* name)
     if (str_set_cstr(&t->name, name) != 0)
         goto set_name_failed;
 
+    t->tracks = 0;
+    t->untracks = 0;
+
     return t;
 
 set_name_failed:
@@ -95,7 +98,7 @@ void tracker_destroy(struct tracker* t)
 #if defined(CLITHER_BACKTRACE)
     if (t->tracks != t->untracks)
     {
-        log_err("Call to tracker_destroy():\n");
+        log_note("Call to tracker_destroy():\n");
         log_backtrace();
     }
 #endif

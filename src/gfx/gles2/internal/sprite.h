@@ -21,6 +21,12 @@ struct sprite_mat
     GLuint sNM;
 };
 
+void gfx_gles2_sprite_mat_init(struct sprite_mat* mat);
+void gfx_gles2_sprite_mat_deinit(struct sprite_mat* mat);
+int  gfx_gles2_sprite_mat_load(
+     struct sprite_mat* mat, const struct resource_pack* pack);
+void gfx_gles2_sprite_mat_unload(struct sprite_mat* mat);
+
 struct sprite_tex
 {
     GLuint  texDiffuse;
@@ -29,12 +35,6 @@ struct sprite_tex
     int8_t  tile_x, tile_y, tile_count, fps, anim_frame;
     float   sim_time;
 };
-
-void gfx_gles2_sprite_mat_init(struct sprite_mat* mat);
-void gfx_gles2_sprite_mat_deinit(struct sprite_mat* mat);
-int  gfx_gles2_sprite_mat_load(
-     struct sprite_mat* mat, const struct resource_pack* pack);
-void gfx_gles2_sprite_mat_unload(struct sprite_mat* mat);
 
 void gfx_gles2_sprite_tex_init(struct sprite_tex* tex);
 void gfx_gles2_sprite_tex_deinit(struct sprite_tex* tex);
