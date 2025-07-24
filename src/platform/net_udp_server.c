@@ -43,15 +43,18 @@ alloc_keys_failed:
     return -1;
 }
 
-static void connection_hmap_kvs_free(struct connection_hmap_kvs* kvs)
+static void
+connection_hmap_kvs_free(struct connection_hmap_kvs* kvs, int16_t capacity)
 {
+    (void)capacity;
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
 
-static void connection_hmap_kvs_free_old(struct connection_hmap_kvs* kvs)
+static void
+connection_hmap_kvs_free_old(struct connection_hmap_kvs* kvs, int16_t capacity)
 {
-    connection_hmap_kvs_free(kvs);
+    connection_hmap_kvs_free(kvs, capacity);
 }
 
 static hash32 connection_hmap_kvs_hash(const struct net_addr* key)

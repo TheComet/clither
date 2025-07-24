@@ -73,7 +73,7 @@ static void resource_pack_init(struct resource_pack* pack)
     resource_snake_part_vec_init(&pack->sprites.bodies);
     resource_snake_part_vec_init(&pack->sprites.tails);
     str_init(&pack->text.font_file);
-    pack->text.size = 16;
+    pack->text.size = 72;
     pack->text.device_hdpi = 72;
     pack->text.device_vdpi = 72;
 }
@@ -465,6 +465,18 @@ enum token parse_section_text(
                         return -1;
                     if (str_join_path(&text->font_file, p->value.string) != 0)
                         return -1;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "size"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_INTEGER)
+                        return parser_error(
+                            p,
+                            "Expected an integer value. Example: size = 72\n");
+                    text->size = p->value.integer_literal;
                     break;
                 }
 

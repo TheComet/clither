@@ -22,15 +22,18 @@ static int net_addr_hmap_kvs_alloc(
     return 0;
 }
 
-static void net_addr_hmap_kvs_free(struct net_addr_hmap_kvs* kvs)
+static void
+net_addr_hmap_kvs_free(struct net_addr_hmap_kvs* kvs, int16_t capacity)
 {
+    (void)capacity;
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
 
-static void net_addr_hmap_kvs_free_old(struct net_addr_hmap_kvs* kvs)
+static void
+net_addr_hmap_kvs_free_old(struct net_addr_hmap_kvs* kvs, int16_t capacity)
 {
-    net_addr_hmap_kvs_free(kvs);
+    net_addr_hmap_kvs_free(kvs, capacity);
 }
 
 static hash32 net_addr_hmap_kvs_hash(const struct net_addr* key)

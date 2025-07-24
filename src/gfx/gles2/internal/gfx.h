@@ -35,6 +35,8 @@ void gfx_untrack_shader(GLuint shader);
 /* clang-format on */
 #endif
 
+struct gfx_text_hmap;
+
 struct gfx
 {
     struct GLFWwindow* window;
@@ -42,9 +44,8 @@ struct gfx
 
     struct input input_buffer;
 
-    struct font     font;
-    struct text_mat text_mat;
-    struct text     text;
+    struct font           font;
+    struct gfx_text_hmap* text_hmap;
 
     struct background        background;
     struct quad_mesh         quad_mesh;

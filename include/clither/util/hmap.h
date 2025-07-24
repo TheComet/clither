@@ -170,14 +170,18 @@ enum hmap_status
                                                                                \
         return 0;                                                              \
     }                                                                          \
-    static void prefix##_kvs_free(struct prefix##_kvs* kvs)                    \
+    static void prefix##_kvs_free(                                             \
+        struct prefix##_kvs* kvs, int##bits##_t capacity)                      \
     {                                                                          \
+        (void)capacity;                                                        \
         mem_free(kvs->values);                                                 \
         mem_free(kvs->keys);                                                   \
     }                                                                          \
-    static void prefix##_kvs_free_old(struct prefix##_kvs* kvs)                \
+    static void prefix##_kvs_free_old(                                         \
+        struct prefix##_kvs* kvs, int##bits##_t capacity)                      \
     {                                                                          \
-        prefix##_kvs_free(kvs);                                                \
+        (void)capacity;                                                        \
+        prefix##_kvs_free(kvs, capacity);                                      \
     }                                                                          \
     static K prefix##_kvs_get_key(                                             \
         const struct prefix##_kvs* kvs, int##bits##_t slot)                    \
@@ -249,8 +253,9 @@ enum hmap_status
         int (*alloc)(                                                          \
             struct prefix##_kvs*, struct prefix##_kvs*, int##bits##_t) =       \
             kvs_alloc;                                                         \
-        void (*free_old)(struct prefix##_kvs*) = kvs_free_old;                 \
-        void (*free_)(struct prefix##_kvs*) = kvs_free;                        \
+        void (*free_old)(struct prefix##_kvs*, int##bits##_t capacity) =       \
+            kvs_free_old;                                                      \
+        void (*free_)(struct prefix##_kvs*, int##bits##_t) = kvs_free;         \
         K(*get_key)                                                            \
         (const struct prefix##_kvs*, int##bits##_t) = kvs_get_key;             \
         void (*set_key)(struct prefix##_kvs*, int##bits##_t, K) = kvs_set_key; \
@@ -271,7 +276,7 @@ enum hmap_status
                                                                                \
         if (hmap != NULL)                                                      \
         {                                                                      \
-            kvs_free(&hmap->kvs);                                              \
+            kvs_free(&hmap->kvs, hmap->capacity);                              \
             mem_free(hmap);                                                    \
         }                                                                      \
     }                                                                          \
@@ -330,7 +335,7 @@ enum hmap_status
         /* Free old hashmap */                                                 \
         if (*hmap != NULL)                                                     \
         {                                                                      \
-            kvs_free_old(&(*hmap)->kvs);                                       \
+            kvs_free_old(&(*hmap)->kvs, old_cap);                              \
             mem_free(*hmap);                                                   \
         }                                                                      \
         *hmap = new_hmap;                                                      \

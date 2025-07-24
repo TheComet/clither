@@ -21,15 +21,18 @@ static int server_client_hmap_kvs_alloc(
     return 0;
 }
 
-static void server_client_hmap_kvs_free(struct server_client_hmap_kvs* kvs)
+static void server_client_hmap_kvs_free(
+    struct server_client_hmap_kvs* kvs, int16_t capacity)
 {
+    (void)capacity;
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
 
-static void server_client_hmap_kvs_free_old(struct server_client_hmap_kvs* kvs)
+static void server_client_hmap_kvs_free_old(
+    struct server_client_hmap_kvs* kvs, int16_t capacity)
 {
-    server_client_hmap_kvs_free(kvs);
+    server_client_hmap_kvs_free(kvs, capacity);
 }
 
 static hash32 server_client_hmap_kvs_hash(const struct net_addr* key)

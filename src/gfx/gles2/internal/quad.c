@@ -4,7 +4,7 @@
 #include <stddef.h> /* NULL */
 
 /* clang-format off */
-const struct vertex gfx_gles2_quad_vertices[6] = {
+const struct quad_vertex gfx_gles2_quad_vertices[6] = {
     {{-1, -1}},
     {{-1,  1}},
     {{ 1,  1}},
@@ -45,8 +45,8 @@ void gfx_gles2_quad_mesh_prepare_draw(const struct quad_mesh* mesh)
         2,
         GL_FLOAT,
         GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
+        sizeof(struct quad_vertex),
+        (void*)offsetof(struct quad_vertex, pos));
 }
 
 void gfx_gles2_quad_mesh_end_draw(void)

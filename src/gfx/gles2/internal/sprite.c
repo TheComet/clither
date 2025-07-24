@@ -210,11 +210,16 @@ void gfx_gles2_sprite_update_uniforms(
     qw                       scale,
     const struct camera*     camera)
 {
-    int          tile_x, tile_y;
-    struct qwpos pos_cameraSpace;
+    int tile_x, tile_y;
+    struct
+    {
+        GLfloat x, y;
+    } pos_cameraSpace;
 
-    pos_cameraSpace.x = qw_mul(qw_sub(pos.x, camera->pos.x), camera->scale);
-    pos_cameraSpace.y = qw_mul(qw_sub(pos.y, camera->pos.y), camera->scale);
+    pos_cameraSpace.x = qw_to_float(pos.x) - qw_to_float(camera->pos.x);
+    pos_cameraSpace.y = qw_to_float(pos.y) - qw_to_float(camera->pos.y);
+    pos_cameraSpace.y *= qw_to_float(camera->scale);
+    pos_cameraSpace.x *= qw_to_float(camera->scale);
 
     tile_x = tex->anim_frame % tex->tile_x;
     tile_y = (tex->anim_frame / tex->tile_x) % tex->tile_y;
@@ -222,8 +227,8 @@ void gfx_gles2_sprite_update_uniforms(
     glUniform1f(mat->uSize, tex->scale * qw_to_float(scale));
     glUniform3f(
         mat->uPosCameraSpace,
-        qw_to_float(pos_cameraSpace.x),
-        qw_to_float(pos_cameraSpace.y),
+        pos_cameraSpace.x,
+        pos_cameraSpace.y,
         qw_to_float(camera->scale));
     glUniform2f(mat->uDir, qw_to_float(dir.x), qw_to_float(dir.y));
     glUniform4f(

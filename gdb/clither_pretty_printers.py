@@ -60,3 +60,4 @@ def factories(val):
 gdb.pretty_printers.append(factories)
 
 import plot
+import img

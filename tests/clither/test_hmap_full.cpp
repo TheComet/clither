@@ -51,13 +51,15 @@ static int test_storage_alloc(
     kvs->values = (float*)mem_alloc(sizeof(*kvs->values) * capacity);
     return 0;
 }
-static void test_storage_free_old(struct hmap_test_kvs* kvs)
+static void test_storage_free_old(struct hmap_test_kvs* kvs, int32_t capacity)
 {
+    (void)capacity;
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }
-static void test_storage_free(struct hmap_test_kvs* kvs)
+static void test_storage_free(struct hmap_test_kvs* kvs, int32_t capacity)
 {
+    (void)capacity;
     mem_free(kvs->values);
     mem_free(kvs->keys);
 }

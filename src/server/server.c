@@ -22,6 +22,7 @@
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
+#include "clither/util/str.h"
 #include "clither/util/tracker.h"
 #include <stdlib.h> /* atoi */
 #include <string.h> /* memcpy */
@@ -42,6 +43,7 @@ static void server_client_remove(
     int16_t               idx;
     struct net_addr       other_addr;
     struct server_client* other_client;
+    const struct snake*   snake;
 
     /* Other clients might still have this client in their proximity list. If
      * so, we need to remove this client and also send MSG_SNAKE_DESTROY so all
@@ -62,6 +64,9 @@ static void server_client_remove(
         if (other_client != client)
             server_queue(other_client, msg_snake_destroy(client->snake_id));
     }
+
+    snake = snake_bmap_find(world->snakes, client->snake_id);
+    log_info("%s left the game\n", str_cstr(snake->data.name));
 
     world_remove_snake(world, client->snake_id);
     server_client_deinit(client);
@@ -698,6 +703,7 @@ static enum process_message_result process_message(
             {
                 struct snake* snake;
                 uint16_t      snake_id;
+                log_info("%s joined the game\n", pp.join_request.username);
                 log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
                 client = server_client_hmap_emplace_new(&server->clients, addr);

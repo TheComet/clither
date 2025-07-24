@@ -9,7 +9,9 @@
 #include "clither/game/snake_bmap.h"
 #include "clither/game/world.h"
 #include "clither/gfx/gfx.h"
+#include "clither/util/hmap_str.h"
 #include "clither/util/log.h"
+#include "clither/util/str.h"
 #include "clither/util/tracker.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -19,6 +21,9 @@ enum
 {
     SHADOW_MAP_SIZE_FACTOR = 4
 };
+
+HMAP_DECLARE_STR(static, gfx_text_hmap, struct text, 16)
+HMAP_DEFINE_STR(static, gfx_text_hmap, struct text, 16)
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_DEBUG_MEMORY)
@@ -182,11 +187,8 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 static int
 gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
-    if (gfx_gles2_font_load(&gfx->font, &pack->text) < 0)
+    if (gfx_gles2_font_load(&gfx->font, pack) < 0)
         goto font_load_failed;
-    if (gfx_gles2_text_mat_load(&gfx->text_mat, pack) < 0)
-        goto text_mat_load_failed;
-    gfx_gles2_text_shape(&gfx->font, &gfx->text, "Hello World");
 
     if (gfx_gles2_background_load(&gfx->background, pack) < 0)
         goto bg_load_failed;
@@ -221,8 +223,6 @@ sprite_mat_load_failed:
 sprite_shadow_load_failed:
     gfx_gles2_background_unload(&gfx->background);
 bg_load_failed:
-    gfx_gles2_text_mat_unload(&gfx->text_mat);
-text_mat_load_failed:
     gfx_gles2_font_unload(&gfx->font);
 font_load_failed:
     return -1;
@@ -252,7 +252,6 @@ static void gfx_gles2_unload_resource_pack(
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
     gfx_gles2_background_unload(&gfx->background);
 
-    gfx_gles2_text_mat_unload(&gfx->text_mat);
     gfx_gles2_font_unload(&gfx->font);
 }
 
@@ -333,8 +332,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     if (gfx_gles2_font_init(&gfx->font) != 0)
         goto font_init_failed;
-    gfx_gles2_text_mat_init(&gfx->text_mat);
-    gfx_gles2_text_init(&gfx->text);
+    gfx_text_hmap_init(&gfx->text_hmap);
 
     gfx_gles2_background_init(
         &gfx->background, fbwidth, fbheight, SHADOW_MAP_SIZE_FACTOR);
@@ -362,8 +360,6 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     return gfx;
 
-    gfx_gles2_text_deinit(&gfx->text);
-    gfx_gles2_text_mat_deinit(&gfx->text_mat);
     gfx_gles2_font_deinit(&gfx->font);
 font_init_failed:
 load_gles2_ext_failed:
@@ -376,6 +372,10 @@ create_window_failed:
 /* ------------------------------------------------------------------------- */
 static void gfx_gles2_destroy(struct gfx* gfx)
 {
+    int16_t      slot;
+    struct str*  str;
+    struct text* text;
+
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_deinit(&gfx->debug);
 #endif
@@ -389,8 +389,9 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
     gfx_gles2_background_deinit(&gfx->background);
 
-    gfx_gles2_text_deinit(&gfx->text);
-    gfx_gles2_text_mat_deinit(&gfx->text_mat);
+    hmap_for_each (gfx->text_hmap, slot, str, text)
+        (void)slot, (void)str, gfx_gles2_text_deinit(text);
+    gfx_text_hmap_deinit(gfx->text_hmap);
     gfx_gles2_font_deinit(&gfx->font);
 
     glfwDestroyWindow(gfx->window);
@@ -482,6 +483,8 @@ static void gfx_gles2_draw_world(
     int16_t             idx;
     uint16_t            snake_id;
     const struct snake* snake;
+    const struct str*   str;
+    struct text*        text;
 
     struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
@@ -520,6 +523,40 @@ static void gfx_gles2_draw_world(
         if (snake_is_dead(snake))
             continue;
         gfx_gles2_draw_snake(snake, gfx, camera, &ar);
+    }
+
+    hmap_for_each (gfx->text_hmap, idx, str, text)
+        (void)idx, (void)str, text->was_used = 0;
+
+    bmap_for_each (world->snakes, idx, snake_id, snake)
+    {
+        const char* name = str_cstr(snake->data.name);
+        switch (gfx_text_hmap_emplace_or_get(&gfx->text_hmap, name, &text))
+        {
+            case HMAP_OOM: continue;
+            case HMAP_EXISTS: break;
+            case HMAP_NEW:
+                if (gfx_gles2_text_init(text) != 0)
+                    continue;
+                gfx_gles2_text_shape(text, &gfx->font, name);
+                break;
+        }
+
+        gfx_gles2_text_prepare_draw(text, &gfx->font, &ar);
+        gfx_gles2_text_draw(
+            text, &gfx->font, snake->head.pos, 0, 0.1, 0.15, camera);
+        text->was_used = 1;
+    }
+    gfx_gles2_text_end_draw();
+
+    hmap_for_each (gfx->text_hmap, idx, str, text)
+    {
+        (void)str;
+        if (text->was_used == 0)
+        {
+            gfx_gles2_text_deinit(text);
+            gfx_text_hmap_erase_slot(gfx->text_hmap, idx);
+        }
     }
 
 #if defined(CLITHER_GFX_DEBUG)
