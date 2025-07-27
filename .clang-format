@@ -50,6 +50,7 @@ ForEachMacros: [
     hset_for_each_full,
     net_addr_hmap_for_each,
     rb_for_each,
+    rb_for_each_r,
     server_client_hmap_for_each,
     strlist_for_each,
     vec_for_each,

@@ -80,11 +80,13 @@ void bezier_calc_segment(
     const struct bezier_knot* tail)
 {
     /* Calculate bezier control points */
+    const struct qwpos head_dir =
+        make_qwposqw(qa_cos(head->angle), qa_sin(head->angle));
     const struct qwpos p3 = make_qwposqw(
         qw_sub(tail->pos.x, head->pos.x), qw_sub(tail->pos.y, head->pos.y));
     const struct qwpos p1 = make_qwposqw(
-        qw_rescale(qa_cos(head->angle), head->len_backwards, 255),
-        qw_rescale(qa_sin(head->angle), head->len_backwards, 255));
+        qw_rescale(head_dir.x, head->len_backwards, 255),
+        qw_rescale(head_dir.y, head->len_backwards, 255));
     const struct qwpos p2 = make_qwposqw(
         qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
         qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)));
@@ -111,6 +113,41 @@ void bezier_calc_segment(
     seg->p[2] =
         make_qwposqw(qw_add(head->pos.x, p2.x), qw_add(head->pos.y, p2.y));
     seg->p[3] = tail->pos;
+
+    /* HACK: This is slightly stupid. The head angle is stored as a fallback in
+     * case the segment is 0 in length. Avoids an issue with flickering sprites
+     * when rendering. */
+    seg->fallback_tangent = head_dir;
+}
+
+/* ------------------------------------------------------------------------- */
+qw bezier_segment_calc_length(const struct bezier_segment* segment, qw t_step)
+{
+    qw           t, dx, dy, dist_sq, dist;
+    qw           length = make_qw(0);
+    struct qwpos last = make_qwposi(0, 0);
+
+    for (t = t_step; t < make_qw(1); t = qw_add(t, t_step))
+    {
+        struct qwpos pos = bezier_xy(segment, t);
+
+        dx = qw_sub(pos.x, last.x);
+        dy = qw_sub(pos.y, last.y);
+        dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        dist = qw_sqrt(dist_sq);
+        length = qw_add(length, dist);
+        last = pos;
+    }
+
+    last.x = qw_add(last.x, segment->p[0].x);
+    last.y = qw_add(last.y, segment->p[0].y);
+    dx = qw_sub(segment->p[3].x, last.x);
+    dy = qw_sub(segment->p[3].y, last.y);
+    dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+    dist = qw_sqrt(dist_sq);
+    length = qw_add(length, dist);
+
+    return length;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -256,8 +293,16 @@ struct qwpos bezier_tangent(const struct bezier_segment* segment, const qw t)
     const qw cy = qw_mul(coeff[1].y, 2 * t);
     const qw dy = qw_mul(coeff[2].y, 3 * t2);
 
-    return qwpos_normalize(
-        make_qwposqw(-qw_add(qw_add(bx, cx), dx), -qw_add(qw_add(by, cy), dy)));
+    struct qwpos tangent = qwpos_normalize(
+        make_qwposqw(qw_add(qw_add(bx, cx), dx), qw_add(qw_add(by, cy), dy)));
+
+    /* HACK: This is slightly stupid. The head angle is stored as a fallback in
+     * case the segment is 0 in length. Avoids an issue with flickering sprites
+     * when rendering. */
+    if (tangent.x == 0 && tangent.y == 0)
+        tangent = segment->fallback_tangent;
+
+    return make_qwposqw(-tangent.x, -tangent.y);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -626,24 +671,29 @@ void bezier_sample_begin(
     qw                              snake_length)
 {
     it->segments = segments;
-    it->segment_idx = rb_count(segments) - 1;
+    it->segment_idx = 0;
 
     it->spacing_sq = qw_mul(spacing, spacing);
     it->total_spacing = make_qw(0);
     it->snake_length = snake_length;
     it->t = make_qw(0);
-    it->last_t = make_qw(0);
 
     if (rb_count(segments) == 0)
-        it->t = -1; /* no segments */
-    else
-        it->pos = rb_peek(segments, it->segment_idx)->p[0];
+    {
+        it->t = -1;
+        return;
+    }
+    it->segment_idx = rb_count(segments) - 1;
+    it->pos = rb_peek(segments, it->segment_idx)->p[0];
 }
 void bezier_sample_next(struct bezier_sample* it)
 {
-    qw                           t_step, dist_sq, dx, dy;
+    qw                           t_step, t_last, dist_sq, dx, dy;
     struct qwpos                 next;
     const struct bezier_segment* segment;
+
+    /* t_last is reset if we advance to the next segment (again:) */
+    t_last = it->t;
 
 again:
     segment = rb_peek(it->segments, it->segment_idx);
@@ -663,13 +713,13 @@ again:
         it->t = dist_sq > it->spacing_sq /* overshot? */
                     ? qw_sub(it->t, t_step)
                     : qw_add(it->t, t_step);
+        if (it->t <= t_last)
+            it->t = t_last + 1;
         if (it->t >= make_qw(1))
         {
             /* t=1 means we'd be on the next curve segment */
             it->t = make_qw(1) - 1;
         }
-        if (it->t < it->last_t)
-            it->t = it->last_t;
     }
 
     /* The point must be on the next segment */
@@ -678,7 +728,6 @@ again:
         it->pos = make_qwposqw(
             qw_add(it->pos.x, segment->p[0].x),
             qw_add(it->pos.y, segment->p[0].y));
-        it->last_t = 0;
 
         if (it->segment_idx == 0)
         {
@@ -686,6 +735,7 @@ again:
             return;
         }
         it->segment_idx--;
+        t_last = 0;
         goto again;
     }
 
@@ -695,7 +745,7 @@ again:
     it->total_spacing = qw_add(it->total_spacing, qw_sqrt(dist_sq));
     if (it->total_spacing >= it->snake_length)
     {
-        it->t = -1; /* no more points */
+        it->t = -1;
         return;
     }
 }

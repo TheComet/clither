@@ -285,3 +285,9 @@
     for (i = (rb) ? (rb)->read : 0;                                            \
          i != ((rb) ? (rb)->write : 0) && ((elem = &(rb)->data[i]) || 1);      \
          i = (i + 1) & ((rb)->capacity - 1))
+
+#define rb_for_each_r(rb, i, elem)                                             \
+    for (i = ((rb) ? (rb)->write : 0);                                         \
+         i != ((rb) ? (rb)->read : 0) &&                                       \
+         ((elem = &(rb)->data[(i - 1) & ((rb)->capacity - 1)]) || 1);          \
+         i = (i - 1) & ((rb)->capacity - 1))

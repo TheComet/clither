@@ -57,6 +57,7 @@ struct gfx
     struct sprite_tex        head0_gather;
     struct sprite_tex        body0_base;
     struct sprite_tex        tail0_base;
+    GLfloat                  part_spacing;
 
     struct spine spine;
 

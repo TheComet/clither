@@ -89,6 +89,8 @@ struct snake_data
      */
     struct qwaabb_rb* segment_bbs;
 
+    struct qwpos_vec* samples;
+
     struct snake_split_rb* splits;
 
     /* AABB of the entire snake */

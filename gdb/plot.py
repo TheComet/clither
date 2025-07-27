@@ -35,25 +35,43 @@ def plot_knots(rb, color):
         p2 = tail[0] - cos(tail[2]) * tail[4],\
              tail[1] - sin(tail[2]) * tail[4]
         p3 = tail[0], tail[1]
-        Ax = (
-            p0[0],
-            3*p1[0] - 3*p0[0],
-            3*p2[0] - 6*p1[0] + 3*p0[0],
-            p3[0] - 3*p2[0] + 3*p1[0] - p0[0]
-        )
-        Ay = (
-            p0[1],
-            3*p1[1] - 3*p0[1],
-            3*p2[1] - 6*p1[1] + 3*p0[1],
-            p3[1] - 3*p2[1] + 3*p1[1] - p0[1]
-        )
+        handle, = plt.plot([p0[0], p1[0]], [p0[1], p1[1]], color=color, linewidth=0.5)
+        plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color=color, linewidth=0.5)
+        plt.scatter(p0[0], p0[1], color=color, marker=",")
+        plt.scatter(p3[0], p3[1], color=color, marker=",")
+        plt.scatter(p1[0], p1[1], color=color, marker=",", s=10)
+        plt.scatter(p2[0], p2[1], color=color, marker=",", s=10)
+    return handle
 
-        t = np.linspace(0, 1, 50)
-        x = (Ax[0] + Ax[1]*t + Ax[2]*t**2 + Ax[3]*t**3)
-        y = (Ay[0] + Ay[1]*t + Ay[2]*t**2 + Ay[3]*t**3)
-        plt.plot(x, y, color=color)
-        plt.plot([p0[0], p1[0]], [p0[1], p1[1]], color=color, linewidth=0.5)
-        handle, = plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color=color, linewidth=0.5)
+def plot_segment(segment, color):
+    p = segment["p"]
+    A = segment["coeff"]
+    px = [qw_to_float(p[i]["x"]) for i in range(4)]
+    py = [qw_to_float(p[i]["y"]) for i in range(4)]
+    Ax = [qw_to_float(A[i]["x"]) for i in range(3)]
+    Ay = [qw_to_float(A[i]["y"]) for i in range(3)]
+
+    t = np.linspace(0, 1, 50)
+    x = (Ax[0]*t + Ax[1]*t**2 + Ax[2]*t**3) + px[0]
+    y = (Ay[0]*t + Ay[1]*t**2 + Ay[2]*t**3) + py[0]
+    handle, = plt.plot(x, y, color=color)
+    plt.plot([px[0], px[1]], [py[0], py[1]], color=color, linewidth=0.5)
+    plt.plot([px[2], px[3]], [py[2], py[3]], color=color, linewidth=0.5)
+    plt.scatter(px[0], py[0], color=color, marker=",")
+    plt.scatter(px[3], py[3], color=color, marker=",")
+    plt.scatter(px[1], py[1], color=color, marker=",", s=10)
+    plt.scatter(px[2], py[2], color=color, marker=",", s=10)
+    return handle
+
+def plot_segments(rb, color):
+    handle = None
+    read = rb["read"]
+    write = rb["write"]
+    capacity = rb["capacity"]
+    while read != write:
+        segment = rb["data"][read]
+        handle = plot_segment(segment, color=color)
+        read = (read + 1) % capacity
     return handle
 
 def plot_head_trail(vec, color):
@@ -85,23 +103,23 @@ def plot_aabb(qwaabb, color):
     handle, = plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], color=color, linewidth=0.5)
     return handle
 
-def plot_segment_bbs(segment_rb, color):
+def plot_segment_bbs(qwaabb_rb, color):
     handle = None
-    read = segment_rb["read"]
-    write = segment_rb["write"]
-    capacity = segment_rb["capacity"]
+    read = qwaabb_rb["read"]
+    write = qwaabb_rb["write"]
+    capacity = qwaabb_rb["capacity"]
     while read != write:
-        handle = plot_aabb(segment_rb["data"][read]["bb"], color=color)
+        handle = plot_aabb(qwaabb_rb["data"][read], color=color)
         read = (read + 1) % capacity
     return handle
 
 color_table = (
-    ("#FF8080", "#FFA0A0"),
-    ("#80FF80", "#A0FFA0"),
-    ("#8080FF", "#A0A0FF"),
-    ("#80FFFF", "#A0FFFF"),
-    ("#FF8000", "#FFA000"),
-    ("#FF80FF", "#FFA0FF"),
+    ("#FF6060", "#FF8080", "#C02020"),
+    ("#FF8000", "#FFA000", "#C07010"),
+    ("#FF60FF", "#FFA0FF", "#C020C0"),
+    ("#6060FF", "#A0A0FF", "#2020C0"),
+    ("#60FFFF", "#A0FFFF", "#20C0C0"),
+    ("#60FF60", "#A0FFA0", "#20C020"),
 )
 
 class Plot(gdb.Command):
@@ -117,21 +135,31 @@ class Plot(gdb.Command):
             if str(val.type).endswith("snake *"):
                 val = val.dereference()
             if str(val.type).endswith("snake"):
-                plot_knots(val["data"]["knots"], colors[0])
                 plot_trails(val["data"]["trails"], colors[0])
-                #plot_segment_bbs(val["data"]["segment_bbs"], colors[1])
+                plot_knots(val["data"]["knots"], colors[2])
+                plot_segments(val["data"]["segments"], colors[2])
+                plot_segment_bbs(val["data"]["segment_bbs"], colors[1])
                 handle = plot_aabb(val["data"]["bb"], colors[1])
 
             if str(val.type).endswith("snake_data *"):
                 val = val.dereference()
             if str(val.type).endswith("snake_data"):
-                plot_knots(val["knots"], colors[0])
                 plot_trails(val["trails"], colors[0])
-                #plot_segment_bbs(val["segment_bbs"], colors[1])
+                plot_knots(val["knots"], colors[2])
+                plot_segments(val["segments"], colors[2])
+                plot_segment_bbs(val["segment_bbs"], colors[1])
                 handle = plot_aabb(val["bb"], colors[1])
 
             if str(val.type).endswith("bezier_knot_rb *"):
-                handle = plot_knots(val, colors[0])
+                handle = plot_knots(val, colors[2])
+
+            if str(val.type).endswith("bezier_segment_rb *"):
+                handle = plot_segments(val, colors[2])
+
+            if str(val.type).endswith("bezier_segment *"):
+                val = val.dereference()
+            if str(val.type).endswith("bezier_segment"):
+                handle = plot_segment(val, colors[2])
 
             if str(val.type).endswith("qwpos_vec_rb *"):
                 handle = plot_trails(val, colors[0])
@@ -139,8 +167,8 @@ class Plot(gdb.Command):
             if str(val.type).endswith("qwpos_vec *"):
                 handle = plot_head_trail(val, colors[0])
 
-            #if str(val.type).endswith("bezier_segment_rb *"):
-            #    handle = plot_segment_bbs(val, colors[1])
+            if str(val.type).endswith("qwaabb_rb *"):
+                handle = plot_segment_bbs(val, colors[1])
 
             if str(val.type).endswith("qwaabb"):
                 handle = plot_aabb(val, colors[1])
@@ -149,7 +177,8 @@ class Plot(gdb.Command):
                 handle.set_label(exprs[i])
 
         plt.legend()
-        plt.gca().set_aspect('equal', adjustable='box')
+        #plt.gca().set_aspect('equal', adjustable='box')
+        plt.gca().set_facecolor("#011627")
         plt.show()
 
 Plot()

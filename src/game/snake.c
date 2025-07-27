@@ -120,6 +120,8 @@ static int snake_data_init(
     if (add_new_segment(data, spawn_pos, make_qa(QA_PI)) != 0)
         goto add_segment_failed;
 
+    qwpos_vec_init(&data->samples);
+
     return 0;
 
 add_segment_failed:
@@ -137,6 +139,7 @@ set_name_failed:
 /* ------------------------------------------------------------------------- */
 static void snake_data_deinit(struct snake_data* data)
 {
+    qwpos_vec_deinit(data->samples);
     qwaabb_rb_deinit(data->segment_bbs);
     bezier_segment_rb_deinit(data->segments);
     bezier_knot_rb_deinit(data->knots);
@@ -311,17 +314,20 @@ update_curve_from_head(struct snake_data* data, const struct snake_head* head)
 
 /* ------------------------------------------------------------------------- */
 static int measure_unused_segments(
-    const struct snake_data* data, const struct snake_param* param)
+    struct snake_data* data, const struct snake_param* param)
 {
     struct bezier_sample sample;
 
     /* By sampling the curve from head to tail for the total length of the
      * snake, we can determine the number of segments that can be removed. */
+    qwpos_vec_clear(data->samples);
     for (bezier_sample_begin(
              &sample, data->segments, SNAKE_PART_SPACING, snake_length(param));
          !bezier_sample_end(&sample);
          bezier_sample_next(&sample))
     {
+        struct qwpos* pos = qwpos_vec_emplace(&data->samples);
+        *pos = sample.pos;
     }
     return bezier_sample_segments_left(&sample);
 }

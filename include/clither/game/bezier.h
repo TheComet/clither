@@ -36,6 +36,7 @@ struct bezier_segment
      * It is recommended to perform calculations in local space and transform
      * the result back to world space by adding p[0] to the result. Calculating
      * far away from 0,0 results in fixed point overflow issues. */
+    struct qwpos fallback_tangent;
 };
 
 void bezier_knot_init(
@@ -49,6 +50,9 @@ void bezier_calc_segment(
     struct bezier_segment*    segment,
     const struct bezier_knot* head,
     const struct bezier_knot* tail);
+
+qw bezier_segment_calc_length(
+    const struct bezier_segment* segment, qw t_step);
 
 void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment);
 
@@ -90,7 +94,6 @@ struct bezier_sample
     qw total_spacing;
     qw snake_length;
     qw t;
-    qw last_t;
 };
 void bezier_sample_begin(
     struct bezier_sample*           it,

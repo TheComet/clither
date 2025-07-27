@@ -65,7 +65,7 @@ TEST(NAME, roll_back_over_frame_boundary)
 
     uint16_t frame_number = 65535 - 10;
     uint16_t mispredict_frame = frame_number + 4;
-    for (int i = 0; i < 50; ++i)
+    for (int i = 0; i < 120; ++i)
     {
         c.angle += 2;
         cmd_queue_put(&client.cmdq, c, frame_number);

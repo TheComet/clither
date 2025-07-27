@@ -99,6 +99,7 @@ void gfx_gles2_sprite_tex_load(
 
     strlist_for_each (res->textures, i, tex_filename)
     {
+        log_dbg("Loading texture \"%s\"\n", tex_filename);
         img_data =
             stbi_load(tex_filename, &img_width, &img_height, &img_channels, 4);
         if (img_data == NULL)

@@ -241,6 +241,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
             gfx_gles2_sprite_tex_load(
                 &gfx->body0_base, &sprite->layer[RESOURCE_LAYER_BASE]);
         }
+        gfx->part_spacing = snake->part_spacing;
 
         spine = resource_spine_hmap_find(pack->spines, str_view(snake->spine));
         if (spine != NULL)
@@ -406,6 +407,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_sprite_tex_init(&gfx->head0_base);
     gfx_gles2_sprite_tex_init(&gfx->head0_gather);
     gfx_gles2_sprite_tex_init(&gfx->body0_base);
+    gfx->part_spacing = 0.15;
 
     gfx_gles2_spine_init(&gfx->spine);
 
@@ -590,8 +592,8 @@ static void gfx_gles2_draw_world(
         (void)snake_id;
         if (snake_is_dead(snake))
             continue;
-        gfx_gles2_draw_snake(snake, gfx, camera, &ar);
         gfx_gles2_draw_snake_spine(snake, gfx, camera, &ar);
+        gfx_gles2_draw_snake(snake, gfx, camera, &ar);
     }
 
     hmap_for_each (gfx->text_hmap, idx, str, text)

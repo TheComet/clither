@@ -2,6 +2,7 @@
 #include "./shader.h"
 #include "./spine.h"
 #include "clither/game/bezier.h"
+#include "clither/game/bezier_segment_rb.h"
 #include "clither/game/camera.h"
 #include "clither/game/resource_pack.h"
 #include "clither/util/strlist.h"
@@ -31,9 +32,9 @@ static void spine_vertices_init(void)
     int i;
     for (i = 0; i <= QUADS; ++i)
     {
-        GLfloat x = -1.0f + (2.0f * i) / QUADS;
-        spine_vertices[i * 2 + 0] = vertex(x, -1.0f);
-        spine_vertices[i * 2 + 1] = vertex(x, 1.0f);
+        GLfloat x = (GLfloat)i / QUADS;
+        spine_vertices[i * 2 + 0] = vertex(x, -1);
+        spine_vertices[i * 2 + 1] = vertex(x, 1);
     }
 }
 
@@ -51,6 +52,8 @@ void gfx_gles2_spine_init(struct spine* spine)
     spine->uCoeff = INVALID_UNIFORM_LOCATION;
     spine->uWidth = INVALID_UNIFORM_LOCATION;
     spine->uAspectRatio = INVALID_UNIFORM_LOCATION;
+    spine->uHeadPosition = INVALID_UNIFORM_LOCATION;
+    spine->uScroll = INVALID_UNIFORM_LOCATION;
 
     spine->width = 1.0;
 
@@ -97,12 +100,18 @@ int gfx_gles2_spine_load(
     if (spine->program == 0)
         return -1;
     gfx_track_shader(spine->program);
+
     spine->uCoeff =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uCoeff");
     spine->uWidth =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uWidth");
     spine->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uAspectRatio");
+    spine->uHeadPosition = gfx_gles2_get_uniform_location_and_warn(
+        spine->program, "uHeadPosition");
+    spine->uScroll =
+        gfx_gles2_get_uniform_location_and_warn(spine->program, "uScroll");
+
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
     {
         char uniform_name[16] = "sTexX";
@@ -125,8 +134,8 @@ int gfx_gles2_spine_load(
         gfx_track_tex(spine->tex[i]);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, spine->tex[i]);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexImage2D(
@@ -183,50 +192,16 @@ void gfx_gles2_spine_prepare_draw(const struct spine* spine)
 
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_spine_draw(
-    const struct spine*        spine,
-    const struct bezier_knot*  head,
-    const struct bezier_knot*  tail,
-    qw                         scale,
-    const struct camera*       camera,
-    const struct aspect_ratio* ar)
+    const struct spine*             spine,
+    const struct bezier_segment_rb* segments,
+    qw                              snake_scale,
+    const struct camera*            camera,
+    const struct aspect_ratio*      ar)
 {
-    struct
-    {
-        GLfloat x, y;
-    } p0, p1, p2, p3, A[4];
-
-    p0.x = qw_to_float(head->pos.x) - qw_to_float(camera->pos.x);
-    p0.y = qw_to_float(head->pos.y) - qw_to_float(camera->pos.y);
-    p3.x = qw_to_float(tail->pos.x) - qw_to_float(camera->pos.x);
-    p3.y = qw_to_float(tail->pos.y) - qw_to_float(camera->pos.y);
-
-    p1.x = p0.x + cos(qa_to_float(head->angle)) * head->len_backwards / 255.0;
-    p1.y = p0.y + sin(qa_to_float(head->angle)) * head->len_backwards / 255.0;
-    p2.x = p3.x - cos(qa_to_float(tail->angle)) * tail->len_forwards / 255.0;
-    p2.y = p3.y - sin(qa_to_float(tail->angle)) * tail->len_forwards / 255.0;
-
-    p0.x *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_x;
-    p0.y *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_y;
-    p1.x *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_x;
-    p1.y *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_y;
-    p2.x *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_x;
-    p2.y *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_y;
-    p3.x *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_x;
-    p3.y *= qw_to_float(camera->scale) * qw_to_float(scale) / ar->scale_y;
-
-    A[0].x = p0.x;
-    A[1].x = 3 * p1.x - 3 * p0.x;
-    A[2].x = 3 * p2.x - 6 * p1.x + 3 * p0.x;
-    A[3].x = p3.x - 3 * p2.x + 3 * p1.x - p0.x;
-
-    A[0].y = p0.y;
-    A[1].y = 3 * p1.y - 3 * p0.y;
-    A[2].y = 3 * p2.y - 6 * p1.y + 3 * p0.y;
-    A[3].y = p3.y - 3 * p2.y + 3 * p1.y - p0.y;
-
-    glUniform1f(spine->uWidth, qw_to_float(scale) * spine->width);
-    glUniform2fv(spine->uCoeff, 4, (GLfloat*)A);
-    glUniform2f(spine->uAspectRatio, ar->scale_x, ar->scale_y);
+    int                          i, c;
+    const struct bezier_segment* segment;
+    GLfloat                      coeff[6];
+    GLfloat                      scroll = 0.0f;
 
     glBindBuffer(GL_ARRAY_BUFFER, spine->vbo);
     glEnableVertexAttribArray(0);
@@ -238,7 +213,43 @@ void gfx_gles2_spine_draw(
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, pos));
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 6 * QUADS);
+    glUniform1f(spine->uWidth, spine->width * qw_to_float(snake_scale));
+    glUniform3f(
+        spine->uAspectRatio,
+        ar->scale_x,
+        ar->scale_y,
+        qw_to_float(camera->scale));
+
+    rb_for_each_r (segments, i, segment)
+    {
+        GLfloat dx =
+            qw_to_float(segment->p[3].x) - qw_to_float(segment->p[0].x);
+        GLfloat dy =
+            qw_to_float(segment->p[3].y) - qw_to_float(segment->p[0].y);
+        GLfloat length = sqrtf(dx * dx + dy * dy);
+        GLfloat width = spine->width * qw_to_float(snake_scale);
+        GLfloat bezier_aspect = length / width;
+        GLfloat tex_width = 1024;
+        GLfloat tex_height = 160;
+        GLfloat tex_aspect = tex_height / tex_width;
+        GLfloat head_x =
+            qw_to_float(segment->p[0].x) - qw_to_float(camera->pos.x);
+        GLfloat head_y =
+            qw_to_float(segment->p[0].y) - qw_to_float(camera->pos.y);
+        for (c = 0; c != 3; c++)
+        {
+            coeff[c * 2 + 0] = qw_to_float(segment->coeff[c].x);
+            coeff[c * 2 + 1] = qw_to_float(segment->coeff[c].y);
+        }
+
+        glUniform2f(spine->uHeadPosition, head_x, head_y);
+        glUniform2fv(spine->uCoeff, 3, coeff);
+        glUniform2f(spine->uScroll, scroll, bezier_aspect * tex_aspect);
+
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 2 * QUADS + 2);
+
+        scroll += bezier_aspect * tex_aspect;
+    }
 
     glDisableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);

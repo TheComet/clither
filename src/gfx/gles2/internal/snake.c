@@ -78,18 +78,13 @@ void gfx_gles2_draw_snake_spine(
     const struct camera*       camera,
     const struct aspect_ratio* ar)
 {
-    int i;
-
     gfx_gles2_spine_prepare_draw(&gfx->spine);
-
-    for (i = rb_count(snake->data.knots) - 2; i >= 0; --i)
-        gfx_gles2_spine_draw(
-            &gfx->spine,
-            rb_peek(snake->data.knots, i + 1),
-            rb_peek(snake->data.knots, i + 0),
-            snake_scale(&snake->param),
-            camera,
-            ar);
+    gfx_gles2_spine_draw(
+        &gfx->spine,
+        snake->data.segments,
+        snake_scale(&snake->param),
+        camera,
+        ar);
     gfx_gles2_spine_end_draw();
 }
 
@@ -108,29 +103,44 @@ void gfx_gles2_draw_snake(
         bezier_sample_begin(
              &sample,
              snake->data.segments,
-             make_qw2(1, 4),
+             make_qw(gfx->part_spacing),
              snake_length(&snake->param));
          !bezier_sample_end(&sample);
          i++, bezier_sample_next(&sample))
     {
         const struct bezier_segment* segment = bezier_sample_segment(&sample);
-        gfx_gles2_sprite_update_uniforms(
-            &gfx->sprite_mat,
-            &gfx->body0_base,
-            sample.pos,
-            bezier_tangent(segment, sample.t),
-            snake_scale(&snake->param),
-            camera);
-
+        const struct qwpos           dir = bezier_tangent(segment, sample.t);
         if (i == 0)
         {
+            gfx_gles2_sprite_update_uniforms(
+                &gfx->sprite_mat,
+                &gfx->head0_base,
+                sample.pos,
+                dir,
+                snake_scale(&snake->param),
+                camera);
             gfx_gles2_sprite_bind_textures(&gfx->head0_base);
             gfx_gles2_sprite_draw();
+
+            gfx_gles2_sprite_update_uniforms(
+                &gfx->sprite_mat,
+                &gfx->head0_base,
+                sample.pos,
+                dir,
+                snake_scale(&snake->param),
+                camera);
             gfx_gles2_sprite_bind_textures(&gfx->head0_gather);
             gfx_gles2_sprite_draw();
         }
         else
         {
+            gfx_gles2_sprite_update_uniforms(
+                &gfx->sprite_mat,
+                &gfx->body0_base,
+                sample.pos,
+                dir,
+                snake_scale(&snake->param),
+                camera);
             gfx_gles2_sprite_bind_textures(&gfx->body0_base);
             gfx_gles2_sprite_draw();
         }
