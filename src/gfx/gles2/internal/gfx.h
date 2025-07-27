@@ -2,6 +2,7 @@
 
 #include "./background.h"
 #include "./quad.h"
+#include "./spine.h"
 #include "./sprite.h"
 #include "./sprite_shadow.h"
 #include "./text.h"
@@ -56,6 +57,8 @@ struct gfx
     struct sprite_tex        head0_gather;
     struct sprite_tex        body0_base;
     struct sprite_tex        tail0_base;
+
+    struct spine spine;
 
 #if defined(CLITHER_GFX_DEBUG)
     struct debug debug;

@@ -65,7 +65,7 @@ TEST(NAME, roll_back_over_frame_boundary)
 
     uint16_t frame_number = 65535 - 10;
     uint16_t mispredict_frame = frame_number + 4;
-    for (int i = 0; i < 200; ++i)
+    for (int i = 0; i < 50; ++i)
     {
         c.angle += 2;
         cmd_queue_put(&client.cmdq, c, frame_number);
@@ -84,23 +84,23 @@ TEST(NAME, roll_back_over_frame_boundary)
     mispredict_frame++;
 
     /* Make sure we have 7 bezier segments */
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(7));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Eq(41));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 1)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 2)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 3)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 4)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 5)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 6)), Eq(1));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(8));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(7));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 0)), Eq(41));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 1)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 2)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 3)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 4)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 5)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 6)), Eq(1));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(8));
 
-    ASSERT_THAT(rb_count(server.data.head_trails), Eq(1));
-    ASSERT_THAT(vec_count(*rb_peek(server.data.head_trails, 0)), Eq(7));
-    ASSERT_THAT(rb_count(server.data.bezier_knots), Eq(2));
+    ASSERT_THAT(rb_count(server.data.trails), Eq(1));
+    ASSERT_THAT(vec_count(*rb_peek(server.data.trails, 0)), Eq(7));
+    ASSERT_THAT(rb_count(server.data.knots), Eq(2));
 
     /* Make sure sim agrees up to mispredicted frame */
-    struct qwpos_vec* client_pts = *rb_peek(client.data.head_trails, 0);
-    struct qwpos_vec* server_pts = *rb_peek(server.data.head_trails, 0);
+    struct qwpos_vec* client_pts = *rb_peek(client.data.trails, 0);
+    struct qwpos_vec* server_pts = *rb_peek(server.data.trails, 0);
     ASSERT_THAT(vec_get(client_pts, 5)->x, Eq(vec_get(server_pts, 5)->x));
     ASSERT_THAT(vec_get(client_pts, 5)->y, Eq(vec_get(server_pts, 5)->y));
     ASSERT_THAT(vec_get(client_pts, 6)->x, Ne(vec_get(server_pts, 6)->x));
@@ -119,9 +119,9 @@ TEST(NAME, roll_back_over_frame_boundary)
         mispredict_frame,
         60);
 
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(7));
-    client_pts = *rb_peek(client.data.head_trails, 0);
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(8));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(7));
+    client_pts = *rb_peek(client.data.trails, 0);
+    ASSERT_THAT(rb_count(client.data.knots), Eq(8));
 
     struct cmd c_prev = c;
     c = cmd_default();
@@ -200,31 +200,31 @@ TEST(NAME, roll_back_with_server_packet_loss)
     mispredict_frame++;
 
     // Make sure we have 7 bezier segments
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(7));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Eq(10));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 1)), Eq(36));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 2)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 3)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 4)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 5)), Eq(33));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 6)), Eq(29));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(8));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(7));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 0)), Eq(10));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 1)), Eq(36));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 2)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 3)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 4)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 5)), Eq(33));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 6)), Eq(29));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(8));
 
-    ASSERT_THAT(rb_count(server.data.head_trails), Eq(1));
-    ASSERT_THAT(vec_count(*rb_peek(server.data.head_trails, 0)), Eq(10));
-    ASSERT_THAT(rb_count(server.data.bezier_knots), Eq(2));
+    ASSERT_THAT(rb_count(server.data.trails), Eq(1));
+    ASSERT_THAT(vec_count(*rb_peek(server.data.trails, 0)), Eq(10));
+    ASSERT_THAT(rb_count(server.data.knots), Eq(2));
 
-    print_head_trails(server.data.head_trails);
+    print_head_trails(server.data.trails);
 
     /* Make sure sim agrees up to mispredicted frame */
-    struct qwpos_vec* client_pts = *rb_peek(client.data.head_trails, 0);
-    struct qwpos_vec* server_pts = *rb_peek(server.data.head_trails, 0);
+    struct qwpos_vec* client_pts = *rb_peek(client.data.trails, 0);
+    struct qwpos_vec* server_pts = *rb_peek(server.data.trails, 0);
     ASSERT_THAT(vec_get(client_pts, 5)->x, Eq(vec_get(server_pts, 5)->x));
     ASSERT_THAT(vec_get(client_pts, 5)->y, Eq(vec_get(server_pts, 5)->y));
     ASSERT_THAT(vec_get(client_pts, 6)->x, Ne(vec_get(server_pts, 6)->x));
     ASSERT_THAT(vec_get(client_pts, 6)->y, Ne(vec_get(server_pts, 6)->y));
 
-    print_head_trails(client.data.head_trails);
+    print_head_trails(client.data.trails);
 
     /* Everything is set up so that "mispredict_frame" is the last frame on
      * which the simulation will match up. Going from mispredict_frame to
@@ -239,11 +239,11 @@ TEST(NAME, roll_back_with_server_packet_loss)
         mispredict_frame + 4,
         60);
 
-    print_head_trails(client.data.head_trails);
+    print_head_trails(client.data.trails);
 
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(7));
-    client_pts = *rb_peek(client.data.head_trails, 0);
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(8));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(7));
+    client_pts = *rb_peek(client.data.trails, 0);
+    ASSERT_THAT(rb_count(client.data.knots), Eq(8));
 
     struct cmd c_mispredict = c;
     c = cmd_default();
@@ -311,17 +311,17 @@ TEST(NAME, roll_back_to_first_frame)
         frame_number++;
     }
 
-    ASSERT_THAT(rb_count(client.data.head_trails), Ge(1));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Ge(2));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Ge(2));
+    ASSERT_THAT(rb_count(client.data.trails), Ge(1));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 0)), Ge(2));
+    ASSERT_THAT(rb_count(client.data.knots), Ge(2));
 
-    ASSERT_THAT(rb_count(server.data.head_trails), Ge(1));
-    ASSERT_THAT(vec_count(*rb_peek(server.data.head_trails, 0)), Ge(2));
-    ASSERT_THAT(rb_count(server.data.bezier_knots), Ge(2));
+    ASSERT_THAT(rb_count(server.data.trails), Ge(1));
+    ASSERT_THAT(vec_count(*rb_peek(server.data.trails, 0)), Ge(2));
+    ASSERT_THAT(rb_count(server.data.knots), Ge(2));
 
     /* Make sure sim agrees up to mispredicted frame */
-    struct qwpos_vec* client_pts = *rb_peek(client.data.head_trails, 0);
-    struct qwpos_vec* server_pts = *rb_peek(server.data.head_trails, 0);
+    struct qwpos_vec* client_pts = *rb_peek(client.data.trails, 0);
+    struct qwpos_vec* server_pts = *rb_peek(server.data.trails, 0);
     ASSERT_THAT(vec_get(client_pts, 0)->x, Eq(vec_get(server_pts, 0)->x));
     ASSERT_THAT(vec_get(client_pts, 0)->y, Eq(vec_get(server_pts, 0)->y));
     ASSERT_THAT(vec_get(client_pts, 1)->y, Ne(vec_get(server_pts, 1)->y));
@@ -369,12 +369,12 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     }
 
     // Make sure we have 7 bezier segments
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(4));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 0)), Eq(10));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 1)), Eq(36));
-    ASSERT_THAT(vec_count(*rb_peek(client.data.head_trails, 2)), Eq(32));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(3));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(4));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(3));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 0)), Eq(10));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 1)), Eq(36));
+    ASSERT_THAT(vec_count(*rb_peek(client.data.trails, 2)), Eq(32));
 
     // Reset same conditions for stepping server snake
     c = cmd_default();
@@ -396,15 +396,15 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
             frame_number,
             60);
 
-        ASSERT_THAT(rb_count(client.data.head_trails), Eq(3));
-        ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(4));
-        ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
+        ASSERT_THAT(rb_count(client.data.trails), Eq(3));
+        ASSERT_THAT(rb_count(client.data.knots), Eq(4));
+        ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(3));
         // If this is ever false, it means the bounding box of the curve does
         // not contain the acknowledged head position. The method used to
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0),
+                *rb_peek(client.data.segment_bbs, 0),
                 client.remote.ack.head.pos),
             IsTrue());
     }
@@ -412,9 +412,9 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     // within the bounding box
     snake_remove_stale_segments_with_rollback_constraint(
         &client.data, &client.remote.ack, 1);
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(4));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(3));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(4));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(3));
 
     // Next step should remove the segment
     c.angle += 2;
@@ -430,18 +430,18 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         60);
     frame_number++;
 
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(4));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(3));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(3));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(4));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(3));
     ASSERT_THAT(
         qwaabb_test_qwpos(
-            *rb_peek(client.data.bezier_aabbs, 0), client.remote.ack.head.pos),
+            *rb_peek(client.data.segment_bbs, 0), client.remote.ack.head.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
         &client.data, &client.remote.ack, 1);
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(2));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(3));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(2));
 
     // ------------------------------------------------------------------------
     // Step ack'd head up until 1 point before the end of the 2nd segment
@@ -459,15 +459,15 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
             frame_number,
             60);
 
-        ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
-        ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
-        ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
+        ASSERT_THAT(rb_count(client.data.trails), Eq(2));
+        ASSERT_THAT(rb_count(client.data.knots), Eq(3));
+        ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(2));
         // If this is ever false, it means the bounding box of the curve does
         // not contain the acknowledged head position. The method used to
         // calculate the AABB is therefore incorrect.
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0),
+                *rb_peek(client.data.segment_bbs, 0),
                 client.remote.ack.head.pos),
             IsTrue());
     }
@@ -475,9 +475,9 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
     // within the bounding box
     snake_remove_stale_segments_with_rollback_constraint(
         &client.data, &client.remote.ack, 1);
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(2));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(3));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(2));
 
     // Next step should remove the segment
     c.angle += 2;
@@ -493,18 +493,18 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
         60);
     frame_number++;
 
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(2));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(3));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(2));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(2));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(3));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(2));
     ASSERT_THAT(
         qwaabb_test_qwpos(
-            *rb_peek(client.data.bezier_aabbs, 0), client.remote.ack.head.pos),
+            *rb_peek(client.data.segment_bbs, 0), client.remote.ack.head.pos),
         IsFalse());
     snake_remove_stale_segments_with_rollback_constraint(
         &client.data, &client.remote.ack, 1);
-    ASSERT_THAT(rb_count(client.data.head_trails), Eq(1));
-    ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(2));
-    ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(1));
+    ASSERT_THAT(rb_count(client.data.trails), Eq(1));
+    ASSERT_THAT(rb_count(client.data.knots), Eq(2));
+    ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(1));
 
     // ------------------------------------------------------------------------
     // Step ack'd head up until 1 point before the end of the 3nd segment
@@ -522,12 +522,12 @@ TEST(NAME, ackd_head_is_never_outside_aabb)
             frame_number,
             60);
 
-        ASSERT_THAT(rb_count(client.data.head_trails), Eq(1));
-        ASSERT_THAT(rb_count(client.data.bezier_knots), Eq(2));
-        ASSERT_THAT(rb_count(client.data.bezier_aabbs), Eq(1));
+        ASSERT_THAT(rb_count(client.data.trails), Eq(1));
+        ASSERT_THAT(rb_count(client.data.knots), Eq(2));
+        ASSERT_THAT(rb_count(client.data.segment_bbs), Eq(1));
         ASSERT_THAT(
             qwaabb_test_qwpos(
-                *rb_peek(client.data.bezier_aabbs, 0),
+                *rb_peek(client.data.segment_bbs, 0),
                 client.remote.ack.head.pos),
             IsTrue());
     }

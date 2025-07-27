@@ -1,12 +1,13 @@
 #include "clither/game/bezier.h"
 #include "clither/game/bezier_knot_rb.h"
-#include "clither/game/bezier_point_vec.h"
+#include "clither/game/bezier_segment_rb.h"
 #include "clither/game/food.h"
 #include "clither/game/q.h"
 #include "clither/game/qwaabb_rb.h"
 #include "clither/game/qwpos_vec.h"
 #include "clither/game/qwpos_vec_rb.h"
 #include "clither/game/snake.h"
+#include "clither/game/snake_split_rb.h"
 #include "clither/game/wrap.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
@@ -14,6 +15,77 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ------------------------------------------------------------------------- */
+static int
+add_new_segment(struct snake_data* data, struct qwpos pos, qa forward_angle)
+{
+    struct qwpos_vec**     trail;
+    struct bezier_knot*    knot;
+    struct bezier_segment* segment;
+    struct qwaabb*         bb;
+
+    /*
+     * Create new trail, which is the list of points the curve is fitted
+     * to. This grows as the head moves forwards. Add the current head position
+     * now, because we will want the start position of the curve to line up
+     * with the end position of the previous curve.
+     */
+    trail = qwpos_vec_rb_emplace_realloc(&data->trails);
+    if (trail == NULL)
+        goto emplace_trail_failed;
+    qwpos_vec_init(trail);
+    qwpos_vec_push(trail, pos);
+
+    /* Add a new bezier knot. Since there is only one datapoint, the curve
+     * is completely defined by the current head position. */
+    knot = bezier_knot_rb_emplace_realloc(&data->knots);
+    if (knot == NULL)
+        goto emplace_knot_failed;
+    bezier_knot_init(knot, pos, qa_add(forward_angle, QA_PI), 0, 0);
+
+    /* Create a new segment using the new knot and previous knot */
+    segment = bezier_segment_rb_emplace_realloc(&data->segments);
+    if (segment == NULL)
+        goto emplace_segment_failed;
+    bezier_calc_segment(
+        segment, knot, rb_peek(data->knots, rb_count(data->knots) - 2));
+
+    /* Add a new bounding box */
+    bb = qwaabb_rb_emplace_realloc(&data->segment_bbs);
+    if (bb == NULL)
+        goto emplace_bb_failed;
+    *bb = make_qwaabbqw(pos.x, pos.y, pos.x, pos.y);
+
+    return 0;
+
+emplace_bb_failed:
+    bezier_segment_rb_take(data->segments);
+emplace_segment_failed:
+    bezier_knot_rb_take(data->knots);
+emplace_knot_failed:
+    qwpos_vec_deinit(qwpos_vec_rb_take(data->trails));
+emplace_trail_failed:
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+static void snake_remove_segment_from_tail(struct snake_data* data)
+{
+    qwpos_vec_deinit(qwpos_vec_rb_take(data->trails));
+    bezier_knot_rb_take(data->knots);
+    bezier_segment_rb_take(data->segments);
+    qwaabb_rb_take(data->segment_bbs);
+}
+
+/* ------------------------------------------------------------------------- */
+static void remove_segment_from_head(struct snake_data* data)
+{
+    qwpos_vec_deinit(qwpos_vec_rb_takew(data->trails));
+    bezier_knot_rb_takew(data->knots);
+    bezier_segment_rb_takew(data->segments);
+    qwaabb_rb_takew(data->segment_bbs);
+}
 
 /* ------------------------------------------------------------------------- */
 void snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
@@ -27,69 +99,36 @@ void snake_head_init(struct snake_head* head, struct qwpos spawn_pos)
 static int snake_data_init(
     struct snake_data* data, struct qwpos spawn_pos, const char* name)
 {
-    struct qwpos_vec**  trail;
-    struct bezier_knot* knot1;
-    struct bezier_knot* knot2;
-    struct qwaabb*      aabb;
+    struct bezier_knot* knot;
 
     str_init(&data->name);
     if (str_set_cstr(&data->name, name) != 0)
         goto set_name_failed;
 
-    qwpos_vec_rb_init(&data->head_trails);
-    bezier_knot_rb_init(&data->bezier_knots);
-    qwaabb_rb_init(&data->bezier_aabbs);
-    bezier_point_vec_init(&data->bezier_points);
+    qwpos_vec_rb_init(&data->trails);
+    bezier_knot_rb_init(&data->knots);
+    bezier_segment_rb_init(&data->segments);
+    qwaabb_rb_init(&data->segment_bbs);
+    snake_split_rb_init(&data->splits);
 
-    /*
-     * Create the initial trail, which is the list of points the curve
-     * is fitted to. This grows as the head moves forwards. Add the spawn pos
-     * now, as we want the curve to begin there.
-     */
-    trail = qwpos_vec_rb_emplace_realloc(&data->head_trails);
-    if (trail == NULL)
-        goto emplace_trail_failed;
-    qwpos_vec_init(trail);
-    if (qwpos_vec_push(trail, spawn_pos) != 0)
-        goto push_spawn_pos_failed;
+    /* Need to create the initial knot before we can add a new segment */
+    knot = bezier_knot_rb_emplace_realloc(&data->knots);
+    if (knot == NULL)
+        goto emplace_knot_failed;
+    bezier_knot_init(knot, spawn_pos, QA_PI, 0, 0);
 
-    /*
-     * Create the first bezier segment, which consists of two knots. By
-     * convention all snakes start out facing to the right, but maybe this can
-     * be changed in the future.
-     */
-    knot1 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
-    if (knot1 == NULL)
-        goto emplace_knot1_failed;
-    bezier_knot_init(knot1, spawn_pos, QA_PI, 0, 0);
-    knot2 = bezier_knot_rb_emplace_realloc(&data->bezier_knots);
-    if (knot2 == NULL)
-        goto emplace_knot2_failed;
-    bezier_knot_init(knot2, spawn_pos, make_qa(0), 0, 0);
-
-    /*
-     * Create the curve's bounding box and also set the entire snake's bounding
-     * box.
-     */
-    aabb = qwaabb_rb_emplace_realloc(&data->bezier_aabbs);
-    if (aabb == NULL)
-        goto emplace_aabb_failed;
-    data->bb = *aabb =
-        make_qwaabbqw(spawn_pos.x, spawn_pos.y, spawn_pos.x, spawn_pos.y);
+    if (add_new_segment(data, spawn_pos, make_qa(QA_PI)) != 0)
+        goto add_segment_failed;
 
     return 0;
 
-emplace_aabb_failed:
-emplace_knot2_failed:
-emplace_knot1_failed:
-push_spawn_pos_failed:
-    while (rb_count(data->head_trails) > 0)
-        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
-emplace_trail_failed:
-    bezier_point_vec_deinit(data->bezier_points);
-    qwaabb_rb_deinit(data->bezier_aabbs);
-    bezier_knot_rb_deinit(data->bezier_knots);
-    qwpos_vec_rb_deinit(data->head_trails);
+add_segment_failed:
+emplace_knot_failed:
+    qwpos_vec_rb_deinit(data->trails);
+    snake_split_rb_deinit(data->splits);
+    qwaabb_rb_deinit(data->segment_bbs);
+    bezier_segment_rb_deinit(data->segments);
+    bezier_knot_rb_deinit(data->knots);
     str_deinit(data->name);
 set_name_failed:
     return -1;
@@ -98,12 +137,12 @@ set_name_failed:
 /* ------------------------------------------------------------------------- */
 static void snake_data_deinit(struct snake_data* data)
 {
-    bezier_point_vec_deinit(data->bezier_points);
-    qwaabb_rb_deinit(data->bezier_aabbs);
-    bezier_knot_rb_deinit(data->bezier_knots);
-    while (rb_count(data->head_trails) > 0)
-        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
-    qwpos_vec_rb_deinit(data->head_trails);
+    qwaabb_rb_deinit(data->segment_bbs);
+    bezier_segment_rb_deinit(data->segments);
+    bezier_knot_rb_deinit(data->knots);
+    while (rb_count(data->trails) > 0)
+        qwpos_vec_deinit(qwpos_vec_rb_take(data->trails));
+    qwpos_vec_rb_deinit(data->trails);
     str_deinit(data->name);
 }
 
@@ -192,30 +231,23 @@ void snake_step_head(
 }
 
 /* ------------------------------------------------------------------------- */
-/*!
- * \brief Recalculates the AABB of the entire curve/snake by merging the AABBs
- * of each segment.
- */
-static void snake_update_aabb(struct snake_data* data)
+static void update_snake_aabb(struct snake_data* data)
 {
     int i;
-    data->bb = *rb_peek(data->bezier_aabbs, 0);
-    for (i = 1; i < rb_count(data->bezier_aabbs); ++i)
+    data->bb = *rb_peek(data->segment_bbs, 0);
+    for (i = 1; i < rb_count(data->segment_bbs); ++i)
     {
-        struct qwaabb aabb = *rb_peek(data->bezier_aabbs, i);
-        data->bb = qwaabb_union(data->bb, aabb);
+        struct qwaabb bb = *rb_peek(data->segment_bbs, i);
+        data->bb = qwaabb_union(data->bb, bb);
     }
 }
 
 /* ------------------------------------------------------------------------- */
-/*!
- * \brief Updates the front-most segment of the curve (the head).
- */
-static void snake_update_head_trail_aabb(struct snake_data* data)
+static void update_head_trail_aabb(struct snake_data* data)
 {
     int                     i;
-    struct qwaabb*          bb = rb_peek_write(data->bezier_aabbs);
-    const struct qwpos_vec* trail = *rb_peek_write(data->head_trails);
+    struct qwaabb*          bb = rb_peek_write(data->segment_bbs);
+    const struct qwpos_vec* trail = *rb_peek_write(data->trails);
     const struct qwpos*     p = vec_get(trail, 0);
 
     /*
@@ -245,20 +277,29 @@ static void snake_update_head_trail_aabb(struct snake_data* data)
 }
 
 /* ------------------------------------------------------------------------- */
-static int snake_update_curve_from_head(
-    struct snake_data* data, const struct snake_head* head)
+static void update_head_segment(struct snake_data* data)
+{
+    bezier_calc_segment(
+        rb_peek(data->segments, rb_count(data->segments) - 1),
+        rb_peek(data->knots, rb_count(data->knots) - 1),
+        rb_peek(data->knots, rb_count(data->knots) - 2));
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+update_curve_from_head(struct snake_data* data, const struct snake_head* head)
 {
     struct qwpos_vec** trail;
     double             error_squared;
 
     /* Append new position to the trail */
-    trail = rb_peek_write(data->head_trails);
+    trail = rb_peek_write(data->trails);
     qwpos_vec_push(trail, head->pos);
 
     /* Fit current bezier segment to trail */
     error_squared = bezier_fit_trail(
-        rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 1),
-        rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2),
+        rb_peek(data->knots, rb_count(data->knots) - 1),
+        rb_peek(data->knots, rb_count(data->knots) - 2),
         *trail);
 
     /*
@@ -269,34 +310,20 @@ static int snake_update_curve_from_head(
 }
 
 /* ------------------------------------------------------------------------- */
-static void
-snake_add_new_segment(struct snake_data* data, const struct snake_head* head)
+static int measure_unused_segments(
+    const struct snake_data* data, const struct snake_param* param)
 {
-    /*
-     * Create new trail, which is the list of points the curve is fitted
-     * to. This grows as the head moves forwards. Add the current head position
-     * now, because we will want the start position of the curve to line up
-     * with the end position of the previous curve.
-     */
-    struct qwpos_vec** trail = qwpos_vec_rb_emplace_realloc(&data->head_trails);
-    qwpos_vec_init(trail);
-    qwpos_vec_push(trail, head->pos);
+    struct bezier_sample sample;
 
-    /*
-     * Add a new bezier knot. Since there is only one datapoint, the curve
-     * is completely defined by the current head position.
-     */
-    bezier_knot_init(
-        bezier_knot_rb_emplace_realloc(&data->bezier_knots),
-        head->pos,
-        qa_add(head->angle, QA_PI),
-        0,
-        0);
-
-    /* Add a new bounding box, which is also defined by the current head
-     * position */
-    *qwaabb_rb_emplace_realloc(&data->bezier_aabbs) =
-        make_qwaabbqw(head->pos.x, head->pos.y, head->pos.x, head->pos.y);
+    /* By sampling the curve from head to tail for the total length of the
+     * snake, we can determine the number of segments that can be removed. */
+    for (bezier_sample_begin(
+             &sample, data->segments, SNAKE_PART_SPACING, snake_length(param));
+         !bezier_sample_end(&sample);
+         bezier_sample_next(&sample))
+    {
+    }
+    return bezier_sample_segments_left(&sample);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -310,65 +337,54 @@ int snake_step(
     int need_new_segment;
 
     snake_step_head(head, param, command, sim_tick_rate);
-    need_new_segment = snake_update_curve_from_head(data, head);
+    need_new_segment = update_curve_from_head(data, head);
 
     /*
      * Have to call these after updating curve data, because only then is the
      * point trail updated (and this is required for AABBs)
      */
-    snake_update_head_trail_aabb(data);
-    snake_update_aabb(data);
+    update_head_trail_aabb(data);
+    update_head_segment(data);
 
     if (need_new_segment)
-        snake_add_new_segment(data, head);
+        if (add_new_segment(data, head->pos, head->angle) != 0)
+            return -1;
 
-    bezier_squeeze_step(data->bezier_knots, sim_tick_rate);
-
-    /* This function returns the number of segments that are superfluous. */
-    return bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
+    update_snake_aabb(data);
+    return measure_unused_segments(data, param);
 }
 
 /* ------------------------------------------------------------------------- */
 void snake_remove_stale_segments(struct snake_data* data, int stale_segments)
 {
-    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
+    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->trails));
 
     while (stale_segments--)
-    {
-        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
-        bezier_knot_rb_take(data->bezier_knots);
-        qwaabb_rb_take(data->bezier_aabbs);
-    }
+        snake_remove_segment_from_tail(data);
 
-    snake_update_aabb(data);
+    update_snake_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
 void snake_remove_stale_segments_with_rollback_constraint(
     struct snake_data* data, const struct snake_ack* ack, int stale_segments)
 {
-    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->head_trails));
+    CLITHER_DEBUG_ASSERT(stale_segments < rb_count(data->trails));
 
     while (stale_segments--)
     {
         /*
-         * If at any point the acknowledged head position is on a curve segment
-         * that we want to remove, abort, because this curve segment is still
-         * required for rollback.
+         * If at any point the acknowledged head position is on a curve
+         * segment that we want to remove, abort, because this curve segment
+         * is still required for rollback.
          */
-        if (qwaabb_test_qwpos(*rb_peek_read(data->bezier_aabbs), ack->head.pos))
+        if (qwaabb_test_qwpos(*rb_peek_read(data->segment_bbs), ack->head.pos))
             break;
 
-        qwpos_vec_deinit(qwpos_vec_rb_take(data->head_trails));
-        bezier_knot_rb_take(data->bezier_knots);
-        qwaabb_rb_take(data->bezier_aabbs);
+        snake_remove_segment_from_tail(data);
     }
 
-    snake_update_aabb(data);
+    update_snake_aabb(data);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -387,7 +403,8 @@ void snake_ack_frame(
     if (cmd_queue_count(cmdq) == 0)
     {
         log_warn(
-            "snake_ack_frame(): Command buffer of snake \"%s\" is empty. Can't "
+            "snake_ack_frame(): Command buffer of snake \"%s\" is empty. "
+            "Can't "
             "step.\n",
             str_cstr(data->name));
         return;
@@ -400,7 +417,8 @@ void snake_ack_frame(
         u16_gt_wrap(frame_number, predicted_frame))
     {
         log_warn(
-            "snake_ack_frame(): Frame number is outside of the command buffer "
+            "snake_ack_frame(): Frame number is outside of the command "
+            "buffer "
             "range! Something is very wrong.\n"
             "  frame_number=%d\n"
             "  last_ackd_frame=%d\n"
@@ -412,26 +430,25 @@ void snake_ack_frame(
     }
 
     /*
-     * It's possible the authoritative head position we receive from the server
-     * goes through some packet loss, so may have to catch up.
+     * It's possible the authoritative head position we receive from the
+     * server goes through some packet loss, so may have to catch up.
      */
     while (u16_le_wrap(last_ackd_frame, frame_number))
     {
-        /* "last_ackd_frame" refers to the next frame to simulate on the ack'd
-         * head */
+        /* "last_ackd_frame" refers to the next frame to simulate on the
+         * ack'd head */
         struct cmd command = cmd_queue_take_or_predict(cmdq, last_ackd_frame);
         snake_step_head(&ack->head, param, command, sim_tick_rate);
         last_ackd_frame++;
     }
 
     /*
-     * Our simulation of the last acknowledged head position diverges from the
-     * server's head position. This means the predicted head position is also
-     * incorrect.
+     * Our simulation of the last acknowledged head position diverges from
+     * the server's head position. This means the predicted head position is
+     * also incorrect.
      */
     if (snake_heads_are_equal(&ack->head, authoritative_head) == 0)
     {
-        int               knots_to_squeeze;
         struct qwpos_vec* trail;
         uint16_t          frame;
         int               i;
@@ -462,19 +479,17 @@ void snake_ack_frame(
          * share the same position, so when removing a bezier segment, two
          * points need to be removed.
          */
-        CLITHER_DEBUG_ASSERT(rb_count(data->head_trails) > 0);
-        trail = *rb_peek_write(data->head_trails);
+        CLITHER_DEBUG_ASSERT(rb_count(data->trails) > 0);
+        trail = *rb_peek_write(data->trails);
         while (u16_gt_wrap(predicted_frame, frame_number))
         {
             qwpos_vec_pop(trail);
             if (vec_count(trail) == 0)
             {
-                qwpos_vec_deinit(qwpos_vec_rb_takew(data->head_trails));
-                bezier_knot_rb_takew(data->bezier_knots);
-                qwaabb_rb_takew(data->bezier_aabbs);
+                remove_segment_from_head(data);
 
                 /* Remove duplicate point */
-                trail = *rb_peek_write(data->head_trails);
+                trail = *rb_peek_write(data->trails);
                 qwpos_vec_pop(trail);
             }
 
@@ -482,48 +497,34 @@ void snake_ack_frame(
         }
 
         /*
-         * Restore head positions to authoritative state, which counts as the
-         * first "step" forwards
+         * Restore head positions to authoritative state, which counts as
+         * the first "step" forwards
          */
         ack->head = *authoritative_head;
         *predicted_head = *authoritative_head;
-        knots_to_squeeze = 0;
-        if (snake_update_curve_from_head(data, predicted_head))
+        if (update_curve_from_head(data, predicted_head))
         {
-            snake_update_head_trail_aabb(data);
-            snake_add_new_segment(data, predicted_head);
-            knots_to_squeeze++;
+            update_head_trail_aabb(data);
+            update_head_segment(data);
+            add_new_segment(data, predicted_head->pos, predicted_head->angle);
         }
 
         /* Simulate head forwards again */
         cmd_queue_for_each (cmdq, i, frame, command)
         {
             snake_step_head(predicted_head, param, *command, sim_tick_rate);
-            if (snake_update_curve_from_head(data, predicted_head))
+            if (update_curve_from_head(data, predicted_head))
             {
-                snake_update_head_trail_aabb(data);
-                snake_add_new_segment(data, predicted_head);
-                knots_to_squeeze++;
+                update_head_trail_aabb(data);
+                update_head_segment(data);
+                add_new_segment(
+                    data, predicted_head->pos, predicted_head->angle);
             }
-
-            /*
-             * The snake's bezier knots are "squeezed" over time. Only have
-             * to re-squeeze the knots that were recreated during forwards
-             * simulation.
-             */
-            bezier_squeeze_n_recent_step(
-                data->bezier_knots, knots_to_squeeze, sim_tick_rate);
         }
 
-        snake_update_head_trail_aabb(data);
-        snake_update_aabb(data);
-
-        /* TODO: distance is a function of the snake's length */
-        bezier_calc_equidistant_points(
-            &data->bezier_points,
-            data->bezier_knots,
-            qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-            snake_length(param));
+        update_head_trail_aabb(data);
+        update_head_segment(data);
+        update_snake_aabb(data);
     }
 }
 
@@ -563,15 +564,11 @@ int snake_create_or_update_knot(
     uint8_t            len_backwards,
     uint8_t            len_forwards)
 {
-    if (grow_bezier_knot_rb_for_knot_idx(&data->bezier_knots, knot_idx) != 0)
+    if (grow_bezier_knot_rb_for_knot_idx(&data->knots, knot_idx) != 0)
         return -1;
 
     bezier_knot_init(
-        &data->bezier_knots->data[knot_idx],
-        pos,
-        angle,
-        len_backwards,
-        len_forwards);
+        &data->knots->data[knot_idx], pos, angle, len_backwards, len_forwards);
 
     return 0;
 }
@@ -585,41 +582,64 @@ int snake_update_bezier_extents(
     uint8_t            second_len_forwards)
 {
     int16_t i;
+    char    do_full_recalculation;
     CLITHER_DEBUG_ASSERT(rb_read >= 0);
     CLITHER_DEBUG_ASSERT(rb_write >= 0);
-    if (rb_read >= rb_capacity(data->bezier_knots) ||
-        rb_write >= rb_capacity(data->bezier_knots))
+    if (rb_read >= rb_capacity(data->knots) ||
+        rb_write >= rb_capacity(data->knots))
     {
-        return 0;
+        return -1;
     }
 
-    data->bezier_knots->read = rb_read;
-    data->bezier_knots->write = rb_write;
+    do_full_recalculation = 0;
+    if (data->knots->read != rb_read || data->knots->write != rb_write)
+        do_full_recalculation = 1;
+
+    data->knots->read = rb_read;
+    data->knots->write = rb_write;
+
+    /* May need to recalculate all segments and bounding boxes */
+    if (do_full_recalculation)
+    {
+        bezier_segment_rb_clear(data->segments);
+        qwaabb_rb_clear(data->segment_bbs);
+
+        for (i = 0; i < rb_count(data->knots) - 2; ++i)
+        {
+            struct bezier_segment*    segment;
+            struct qwaabb*            bb;
+            const struct bezier_knot* head = rb_peek(data->knots, i + 1);
+            const struct bezier_knot* tail = rb_peek(data->knots, i + 0);
+            segment = bezier_segment_rb_emplace_realloc(&data->segments);
+            if (segment == NULL)
+                return -1;
+            bezier_calc_segment(segment, head, tail);
+
+            bb = qwaabb_rb_emplace_realloc(&data->segment_bbs);
+            if (bb == NULL)
+                return -1;
+            bezier_calc_aabb(bb, segment);
+        }
+    }
 
     /* The "len_forwards" property of the second knot (the one that
-     * follows the head) and the "len_backwards" property of the head knot are
-     * constantly changing. */
-    if (rb_count(data->bezier_knots) > 1)
+     * follows the head) and the "len_backwards" property of the head knot
+     * are constantly changing. */
+    if (rb_count(data->knots) > 1)
     {
-        struct bezier_knot* head_knot = rb_peek_write(data->bezier_knots);
+        struct bezier_knot* head_knot = rb_peek_write(data->knots);
         struct bezier_knot* second_knot =
-            rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
+            rb_peek(data->knots, rb_count(data->knots) - 2);
+        struct bezier_segment* segment = rb_peek_write(data->segments);
+        struct qwaabb*         bb = rb_peek_write(data->segment_bbs);
+
         head_knot->len_backwards = head_len_backwards;
         second_knot->len_forwards = second_len_forwards;
+        bezier_calc_segment(segment, head_knot, second_knot);
+        bezier_calc_aabb(bb, segment);
     }
 
-    /* Create individual bounding boxes for all segments we've collected. There
-     * will be one less bounding box than there are segments. */
-    qwaabb_rb_clear(data->bezier_aabbs);
-    for (i = 0; i < rb_count(data->bezier_knots) - 1; ++i)
-    {
-        const struct bezier_knot* knot1 = rb_peek(data->bezier_knots, i);
-        const struct bezier_knot* knot2 = rb_peek(data->bezier_knots, i + 1);
-        struct qwaabb* bb = qwaabb_rb_emplace_realloc(&data->bezier_aabbs);
-        if (bb == NULL)
-            return -1;
-        bezier_calc_aabb(bb, knot1, knot2);
-    }
+    update_snake_aabb(data);
 
     return 0;
 }
@@ -644,9 +664,9 @@ void snake_unextrapolate(
 {
     *head = replica->head_history[0];
 
-    if (rb_count(data->bezier_knots) > 1)
+    if (rb_count(data->knots) > 1)
     {
-        struct bezier_knot* head_knot = rb_peek_write(data->bezier_knots);
+        struct bezier_knot* head_knot = rb_peek_write(data->knots);
         head_knot->pos = head->pos;
         head_knot->angle = qa_add(head->angle, QA_PI);
     }
@@ -754,19 +774,20 @@ int snake_extrapolate(
     const struct snake_param*   param,
     uint16_t                    frame_number)
 {
-    qw                  dx, dy;
-    struct bezier_knot* head_knot;
-    struct bezier_knot* prev_knot;
-    struct qwaabb*      segment_bb;
+    qw                     dx, dy;
+    struct bezier_knot*    head_knot;
+    struct bezier_knot*    prev_knot;
+    struct bezier_segment* segment;
+    struct qwaabb*         segment_bb;
 
-    if (rb_count(data->bezier_knots) < 2)
+    if (rb_count(data->knots) < 2)
         return 0;
 
     dx = qw_sub(snake_boost_speed(param), snake_min_speed(param));
     dx = qw_rescale(dx, head->speed, 255);
     dx = qw_add(dx, snake_min_speed(param));
     dx = qw_mul(dx, make_qw(frame_number - replica->head_frame_numbers[0]));
-    // TODO: Clamp extrapolation distance here?
+    /* TODO: Clamp extrapolation distance here? */
     dx = qw_mul(qa_cos(head->angle), dx);
     head->pos.x = qw_add(head->pos.x, dx);
 
@@ -777,20 +798,16 @@ int snake_extrapolate(
     dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
 
-    head_knot = rb_peek_write(data->bezier_knots);
-    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
-    segment_bb = rb_peek_write(data->bezier_aabbs);
+    head_knot = rb_peek_write(data->knots);
+    prev_knot = rb_peek(data->knots, rb_count(data->knots) - 2);
+    segment = rb_peek_write(data->segments);
+    segment_bb = rb_peek_write(data->segment_bbs);
 
     head_knot->pos = head->pos;
     head_knot->angle = qa_add(head->angle, QA_PI);
-
-    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
-    snake_update_aabb(data);
-    bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
+    bezier_calc_segment(segment, head_knot, prev_knot);
+    bezier_calc_aabb(segment_bb, segment);
+    update_snake_aabb(data);
 
     return frame_number - replica->head_frame_numbers[0];
 }
@@ -800,19 +817,19 @@ int snake_extrapolate_o2(
     struct snake_data*          data,
     struct snake_head*          head,
     const struct snake_replica* replica,
-    const struct snake_param*   param,
     uint16_t                    frame_number)
 {
-    float               T[2][2];
-    float               a[2];
-    float               x[2];
-    float               t;
-    float               t0, t1;
-    struct bezier_knot* head_knot;
-    struct bezier_knot* prev_knot;
-    struct qwaabb*      segment_bb;
+    float                  T[2][2];
+    float                  a[2];
+    float                  x[2];
+    float                  t;
+    float                  t0, t1;
+    struct bezier_knot*    head_knot;
+    struct bezier_knot*    prev_knot;
+    struct bezier_segment* segment;
+    struct qwaabb*         segment_bb;
 
-    if (rb_count(data->bezier_knots) < 2)
+    if (rb_count(data->knots) < 2)
         return 0;
 
     t0 = replica->head_frame_numbers[1];
@@ -833,20 +850,16 @@ int snake_extrapolate_o2(
     a[1] = T[1][0] * x[0] + T[1][1] * x[1];
     head->pos.y = make_qw(a[0] + a[1] * t);
 
-    head_knot = rb_peek_write(data->bezier_knots);
-    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
-    segment_bb = rb_peek_write(data->bezier_aabbs);
+    head_knot = rb_peek_write(data->knots);
+    prev_knot = rb_peek(data->knots, rb_count(data->knots) - 2);
+    segment = rb_peek_write(data->segments);
+    segment_bb = rb_peek_write(data->segment_bbs);
 
     head_knot->pos = head->pos;
     head_knot->angle = qa_add(head->angle, QA_PI);
-
-    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
-    snake_update_aabb(data);
-    bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
+    bezier_calc_segment(segment, head_knot, prev_knot);
+    bezier_calc_aabb(segment_bb, segment);
+    update_snake_aabb(data);
 
     return frame_number - replica->head_frame_numbers[0];
 }
@@ -856,19 +869,19 @@ int snake_extrapolate_o3(
     struct snake_data*          data,
     struct snake_head*          head,
     const struct snake_replica* replica,
-    const struct snake_param*   param,
     uint16_t                    frame_number)
 {
-    float               T[3][3];
-    float               a[3];
-    float               x[3];
-    float               t;
-    float               t0, t1, t2;
-    struct bezier_knot* head_knot;
-    struct bezier_knot* prev_knot;
-    struct qwaabb*      segment_bb;
+    float                  T[3][3];
+    float                  a[3];
+    float                  x[3];
+    float                  t;
+    float                  t0, t1, t2;
+    struct bezier_knot*    head_knot;
+    struct bezier_knot*    prev_knot;
+    struct bezier_segment* segment;
+    struct qwaabb*         segment_bb;
 
-    if (rb_count(data->bezier_knots) < 2)
+    if (rb_count(data->knots) < 2)
         return 0;
 
     t0 = replica->head_frame_numbers[2];
@@ -894,20 +907,16 @@ int snake_extrapolate_o3(
     a[2] = T[2][0] * x[0] + T[2][1] * x[1] + T[2][2] * x[2];
     head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t);
 
-    head_knot = rb_peek_write(data->bezier_knots);
-    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
-    segment_bb = rb_peek_write(data->bezier_aabbs);
+    head_knot = rb_peek_write(data->knots);
+    prev_knot = rb_peek(data->knots, rb_count(data->knots) - 2);
+    segment = rb_peek_write(data->segments);
+    segment_bb = rb_peek_write(data->segment_bbs);
 
     head_knot->pos = head->pos;
     head_knot->angle = qa_add(head->angle, QA_PI);
-
-    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
-    snake_update_aabb(data);
-    bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
+    bezier_calc_segment(segment, head_knot, prev_knot);
+    bezier_calc_aabb(segment_bb, segment);
+    update_snake_aabb(data);
 
     return frame_number - replica->head_frame_numbers[0];
 }
@@ -917,19 +926,19 @@ int snake_extrapolate_o4(
     struct snake_data*          data,
     struct snake_head*          head,
     const struct snake_replica* replica,
-    const struct snake_param*   param,
     uint16_t                    frame_number)
 {
-    float               T[4][4];
-    float               a[4];
-    float               x[4];
-    float               t;
-    float               t0, t1, t2, t3;
-    struct bezier_knot* head_knot;
-    struct bezier_knot* prev_knot;
-    struct qwaabb*      segment_bb;
+    float                  T[4][4];
+    float                  a[4];
+    float                  x[4];
+    float                  t;
+    float                  t0, t1, t2, t3;
+    struct bezier_knot*    head_knot;
+    struct bezier_knot*    prev_knot;
+    struct bezier_segment* segment;
+    struct qwaabb*         segment_bb;
 
-    if (rb_count(data->bezier_knots) < 2)
+    if (rb_count(data->knots) < 2)
         return 0;
 
     t0 = replica->head_frame_numbers[3];
@@ -960,20 +969,16 @@ int snake_extrapolate_o4(
     a[3] = T[3][0] * x[0] + T[3][1] * x[1] + T[3][2] * x[2] + T[3][3] * x[3];
     head->pos.y = make_qw(a[0] + a[1] * t + a[2] * t * t + a[3] * t * t * t);
 
-    head_knot = rb_peek_write(data->bezier_knots);
-    prev_knot = rb_peek(data->bezier_knots, rb_count(data->bezier_knots) - 2);
-    segment_bb = rb_peek_write(data->bezier_aabbs);
+    head_knot = rb_peek_write(data->knots);
+    prev_knot = rb_peek(data->knots, rb_count(data->knots) - 2);
+    segment = rb_peek_write(data->segments);
+    segment_bb = rb_peek_write(data->segment_bbs);
 
     head_knot->pos = head->pos;
     head_knot->angle = qa_add(head->angle, QA_PI);
-
-    bezier_calc_aabb(segment_bb, prev_knot, head_knot);
-    snake_update_aabb(data);
-    bezier_calc_equidistant_points(
-        &data->bezier_points,
-        data->bezier_knots,
-        qw_mul(SNAKE_PART_SPACING, snake_scale(param)),
-        snake_length(param));
+    bezier_calc_segment(segment, head_knot, prev_knot);
+    bezier_calc_aabb(segment_bb, segment);
+    update_snake_aabb(data);
 
     return frame_number - replica->head_frame_numbers[0];
 }

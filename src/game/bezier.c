@@ -1,6 +1,6 @@
 #include "clither/game/bezier.h"
 #include "clither/game/bezier_knot_rb.h"
-#include "clither/game/bezier_point_vec.h"
+#include "clither/game/bezier_segment_rb.h"
 #include "clither/game/qwpos_vec.h"
 
 #define _USE_MATH_DEFINES
@@ -74,116 +74,83 @@ static q16_16 binary_search_min_dist_sq(
 }
 
 /* ------------------------------------------------------------------------- */
-static void calc_coeff(
-    qw*                       Ax,
-    qw*                       Ay,
+void bezier_calc_segment(
+    struct bezier_segment*    seg,
     const struct bezier_knot* head,
-    const struct bezier_knot* tail,
-    const struct qwpos        off)
+    const struct bezier_knot* tail)
 {
     /* Calculate bezier control points */
-    const struct qwpos p0 =
-        make_qwposqw(qw_sub(head->pos.x, off.x), qw_sub(head->pos.y, off.y));
-    const struct qwpos p3 =
-        make_qwposqw(qw_sub(tail->pos.x, off.x), qw_sub(tail->pos.y, off.y));
+    const struct qwpos p3 = make_qwposqw(
+        qw_sub(tail->pos.x, head->pos.x), qw_sub(tail->pos.y, head->pos.y));
     const struct qwpos p1 = make_qwposqw(
-        qw_add(p0.x, qw_rescale(qa_cos(head->angle), head->len_backwards, 255)),
-        qw_add(
-            p0.y, qw_rescale(qa_sin(head->angle), head->len_backwards, 255)));
+        qw_rescale(qa_cos(head->angle), head->len_backwards, 255),
+        qw_rescale(qa_sin(head->angle), head->len_backwards, 255));
     const struct qwpos p2 = make_qwposqw(
         qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
         qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)));
 
-    const qw _3x0 = 3 * p0.x;
     const qw _3x1 = 3 * p1.x;
     const qw _6x1 = 6 * p1.x;
     const qw _3x2 = 3 * p2.x;
 
-    const qw _3y0 = 3 * p0.y;
     const qw _3y1 = 3 * p1.y;
     const qw _6y1 = 6 * p1.y;
     const qw _3y2 = 3 * p2.y;
 
-    /* Calculate polynomial coefficients X dimension */
-    Ax[0] = p0.x;
-    Ax[1] = qw_sub(_3x1, _3x0);
-    Ax[2] = qw_sub(qw_add(_3x0, _3x2), _6x1);
-    Ax[3] = qw_sub(qw_sub(qw_add(_3x1, p3.x), _3x2), p0.x);
+    seg->coeff[0].x = _3x1;
+    seg->coeff[1].x = qw_sub(_3x2, _6x1);
+    seg->coeff[2].x = qw_sub(qw_add(_3x1, p3.x), _3x2);
 
-    /* Calculate polynomial coefficients Y dimension */
-    Ay[0] = p0.y;
-    Ay[1] = qw_sub(_3y1, _3y0);
-    Ay[2] = qw_sub(qw_add(_3y0, _3y2), _6y1);
-    Ay[3] = qw_sub(qw_sub(qw_add(_3y1, p3.y), _3y2), p0.y);
+    seg->coeff[0].y = _3y1;
+    seg->coeff[1].y = qw_sub(_3y2, _6y1);
+    seg->coeff[2].y = qw_sub(qw_add(_3y1, p3.y), _3y2);
+
+    seg->p[0] = head->pos;
+    seg->p[1] =
+        make_qwposqw(qw_add(head->pos.x, p1.x), qw_add(head->pos.y, p1.y));
+    seg->p[2] =
+        make_qwposqw(qw_add(head->pos.x, p2.x), qw_add(head->pos.y, p2.y));
+    seg->p[3] = tail->pos;
 }
 
 /* ------------------------------------------------------------------------- */
-static struct qwpos bezier_xy(const qw Ax[4], const qw Ay[4], const qw t)
+void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment)
 {
-    /* Calculate x,y position on curve */
-    const qw t2 = qw_mul(t, t);
-    const qw t3 = qw_mul(t, t2);
-    return make_qwposqw(
-        qw_add(
-            qw_add(qw_add(Ax[0], qw_mul(Ax[1], t)), qw_mul(Ax[2], t2)),
-            qw_mul(Ax[3], t3)),
-        qw_add(
-            qw_add(qw_add(Ay[0], qw_mul(Ay[1], t)), qw_mul(Ay[2], t2)),
-            qw_mul(Ay[3], t3)));
-}
+    const struct qwpos* coeff = segment->coeff;
 
-/* ------------------------------------------------------------------------- */
-void bezier_knot_init(
-    struct bezier_knot* knot,
-    struct qwpos        pos,
-    qa                  angle,
-    uint8_t             len_backwards,
-    uint8_t             len_forwards)
-{
-    knot->pos = pos;
-    knot->angle = angle;
-    knot->len_backwards = len_backwards;
-    knot->len_forwards = len_forwards;
-}
+    /* x1 and y1 are 0 */
 
-/* ------------------------------------------------------------------------- */
-static void
-bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
-{
-    qw x1 = Ax[0];
-    qw x2 = qw_add(Ax[0], qw_add(Ax[1], qw_add(Ax[2], Ax[3])));
+    qw x2 = qw_add(coeff[0].x, qw_add(coeff[1].x, coeff[2].x));
+    qw y2 = qw_add(coeff[0].y, qw_add(coeff[1].y, coeff[2].y));
 
-    qw y1 = Ay[0];
-    qw y2 = qw_add(Ay[0], qw_add(Ay[1], qw_add(Ay[2], Ay[3])));
+    qw ax = 3 * coeff[2].x;
+    qw bx = 2 * coeff[1].x;
+    qw Dx = qw_sub(qw_sq(bx), 4 * qw_mul(ax, coeff[0].x));
 
-    qw ax = 3 * Ax[3];
-    qw bx = 2 * Ax[2];
-    qw Dx = qw_sub(qw_sq(bx), 4 * qw_mul(ax, Ax[1]));
+    qw ay = 3 * coeff[2].y;
+    qw by = 2 * coeff[1].y;
+    qw Dy = qw_sub(qw_sq(by), 4 * qw_mul(ay, coeff[0].y));
 
-    qw ay = 3 * Ay[3];
-    qw by = 2 * Ay[2];
-    qw Dy = qw_sub(qw_sq(by), 4 * qw_mul(ay, Ay[1]));
-
-    if (x1 < x2)
+    if (0 < x2)
     {
-        bb->x1 = x1;
+        bb->x1 = 0;
         bb->x2 = x2;
     }
     else
     {
         bb->x1 = x2;
-        bb->x2 = x1;
+        bb->x2 = 0;
     }
 
-    if (y1 < y2)
+    if (0 < y2)
     {
-        bb->y1 = y1;
+        bb->y1 = 0;
         bb->y2 = y2;
     }
     else
     {
         bb->y1 = y2;
-        bb->y2 = y1;
+        bb->y2 = 0;
     }
 
     if (Dx >= make_qw(0) && ax != make_qw(0))
@@ -196,8 +163,8 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
             qw t1_2 = qw_mul(t1, t1);
             qw t1_3 = qw_mul(t1_2, t1);
             qw x = qw_add(
-                qw_add(qw_add(Ax[0], qw_mul(Ax[1], t1)), qw_mul(Ax[2], t1_2)),
-                qw_mul(Ax[3], t1_3));
+                qw_add(qw_mul(coeff[0].x, t1), qw_mul(coeff[1].x, t1_2)),
+                qw_mul(coeff[2].x, t1_3));
             if (bb->x1 > x)
                 bb->x1 = x;
             if (bb->x2 < x)
@@ -209,8 +176,8 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
             qw t2_2 = qw_mul(t2, t2);
             qw t2_3 = qw_mul(t2_2, t2);
             qw x = qw_add(
-                qw_add(qw_add(Ax[0], qw_mul(Ax[1], t2)), qw_mul(Ax[2], t2_2)),
-                qw_mul(Ax[3], t2_3));
+                qw_add(qw_mul(coeff[0].x, t2), qw_mul(coeff[1].x, t2_2)),
+                qw_mul(coeff[2].x, t2_3));
             if (bb->x1 > x)
                 bb->x1 = x;
             if (bb->x2 < x)
@@ -228,8 +195,8 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
             qw t1_2 = qw_mul(t1, t1);
             qw t1_3 = qw_mul(t1_2, t1);
             qw y = qw_add(
-                qw_add(qw_add(Ay[0], qw_mul(Ay[1], t1)), qw_mul(Ay[2], t1_2)),
-                qw_mul(Ay[3], t1_3));
+                qw_add(qw_mul(coeff[0].y, t1), qw_mul(coeff[1].y, t1_2)),
+                qw_mul(coeff[2].y, t1_3));
             if (bb->y1 > y)
                 bb->y1 = y;
             if (bb->y2 < y)
@@ -241,8 +208,8 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
             qw t2_2 = qw_mul(t2, t2);
             qw t2_3 = qw_mul(t2_2, t2);
             qw y = qw_add(
-                qw_add(qw_add(Ay[0], qw_mul(Ay[1], t2)), qw_mul(Ay[2], t2_2)),
-                qw_mul(Ay[3], t2_3));
+                qw_add(qw_mul(coeff[0].y, t2), qw_mul(coeff[1].y, t2_2)),
+                qw_mul(coeff[2].y, t2_3));
             if (bb->y1 > y)
                 bb->y1 = y;
             if (bb->y2 < y)
@@ -250,18 +217,61 @@ bezier_calc_aabb_coeff(struct qwaabb* bb, const qw Ax[4], const qw Ay[4])
         }
     }
 }
-void bezier_calc_aabb(
-    struct qwaabb*            bb,
-    const struct bezier_knot* head,
-    const struct bezier_knot* tail)
+
+/* ------------------------------------------------------------------------- */
+struct qwpos bezier_xy(const struct bezier_segment* segment, const qw t)
 {
-    qw Ax[4], Ay[4];
-    calc_coeff(Ax, Ay, head, tail, head->pos);
-    bezier_calc_aabb_coeff(bb, Ax, Ay);
-    bb->x1 = qw_add(bb->x1, head->pos.x);
-    bb->x2 = qw_add(bb->x2, head->pos.x);
-    bb->y1 = qw_add(bb->y1, head->pos.y);
-    bb->y2 = qw_add(bb->y2, head->pos.y);
+    const struct qwpos* coeff = segment->coeff;
+
+    const qw t2 = qw_mul(t, t);
+    const qw t3 = qw_mul(t, t2);
+
+    /* NOTE: ax and ay are 0 */
+
+    const qw bx = qw_mul(coeff[0].x, t);
+    const qw cx = qw_mul(coeff[1].x, t2);
+    const qw dx = qw_mul(coeff[2].x, t3);
+
+    const qw by = qw_mul(coeff[0].y, t);
+    const qw cy = qw_mul(coeff[1].y, t2);
+    const qw dy = qw_mul(coeff[2].y, t3);
+
+    return make_qwposqw(qw_add(qw_add(bx, cx), dx), qw_add(qw_add(by, cy), dy));
+}
+
+/* ------------------------------------------------------------------------- */
+struct qwpos bezier_tangent(const struct bezier_segment* segment, const qw t)
+{
+    const struct qwpos* coeff = segment->coeff;
+
+    const qw t2 = qw_mul(t, t);
+
+    /* NOTE: ax and ay are 0 */
+
+    const qw bx = coeff[0].x;
+    const qw cx = qw_mul(coeff[1].x, 2 * t);
+    const qw dx = qw_mul(coeff[2].x, 3 * t2);
+
+    const qw by = coeff[0].y;
+    const qw cy = qw_mul(coeff[1].y, 2 * t);
+    const qw dy = qw_mul(coeff[2].y, 3 * t2);
+
+    return qwpos_normalize(
+        make_qwposqw(-qw_add(qw_add(bx, cx), dx), -qw_add(qw_add(by, cy), dy)));
+}
+
+/* ------------------------------------------------------------------------- */
+void bezier_knot_init(
+    struct bezier_knot* knot,
+    struct qwpos        pos,
+    qa                  angle,
+    uint8_t             len_backwards,
+    uint8_t             len_forwards)
+{
+    knot->pos = pos;
+    knot->angle = angle;
+    knot->len_backwards = len_backwards;
+    knot->len_forwards = len_forwards;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -337,7 +347,6 @@ double bezier_fit_trail(
         head->angle =
             make_qa(atan2(qw_to_float(head_dy), qw_to_float(head_dx)));
         head->len_backwards = (uint8_t)(head_len * 255.0);
-
         tail->len_forwards = (uint8_t)(tail_len * 255.0);
 
         return 0;
@@ -610,145 +619,104 @@ double bezier_fit_trail(
 }
 
 /* ------------------------------------------------------------------------- */
-void bezier_squeeze_step(struct bezier_knot_rb* knots, int sim_tick_rate)
+void bezier_sample_begin(
+    struct bezier_sample*           it,
+    const struct bezier_segment_rb* segments,
+    qw                              spacing,
+    qw                              snake_length)
 {
+    it->segments = segments;
+    it->segment_idx = rb_count(segments) - 1;
+
+    it->spacing_sq = qw_mul(spacing, spacing);
+    it->total_spacing = make_qw(0);
+    it->snake_length = snake_length;
+    it->t = make_qw(0);
+    it->last_t = make_qw(0);
+
+    if (rb_count(segments) == 0)
+        it->t = -1; /* no segments */
+    else
+        it->pos = rb_peek(segments, it->segment_idx)->p[0];
 }
-
-/* ------------------------------------------------------------------------- */
-void bezier_squeeze_n_recent_step(
-    struct bezier_knot_rb* knots, int n, int sim_tick_rate)
+void bezier_sample_next(struct bezier_sample* it)
 {
-}
+    qw                           t_step, dist_sq, dx, dy;
+    struct qwpos                 next;
+    const struct bezier_segment* segment;
 
-/* ------------------------------------------------------------------------- */
-int bezier_calc_equidistant_points(
-    struct bezier_point_vec**    bezier_points,
-    const struct bezier_knot_rb* knots,
-    qw                           spacing,
-    qw                           snake_length)
-{
-    int i;
+again:
+    segment = rb_peek(it->segments, it->segment_idx);
 
-    const qw spacing_sq = qw_mul(spacing, spacing);
-    qw       total_spacing = 0;
+    /* We're working in local space of the segment, so need to transform
+     * current position to the next segment's local space */
+    it->pos = make_qwposqw(
+        qw_sub(it->pos.x, segment->p[0].x), qw_sub(it->pos.y, segment->p[0].y));
 
-    /*
-     * Initial x,y positions
-     * Calculating coefficients far away from 0,0 results in precision issues,
-     * so we translate everything to 0,0 first, calculate, then translate
-     * the result back.
-     */
-    struct qwpos pos = make_qwposi(0, 0);
-    struct qwpos off = rb_peek_write(knots)->pos;
-
-    /* Insert first point */
-    bezier_point_vec_clear(*bezier_points);
+    for (t_step = make_qw2(1, 2); t_step; t_step /= 2)
     {
-        struct bezier_point*      bp = bezier_point_vec_emplace(bezier_points);
-        const struct bezier_knot* head = rb_peek_write(knots);
-        bp->pos.x = qw_add(pos.x, off.x);
-        bp->pos.y = qw_add(pos.y, off.y);
-        bp->dir.x = -qa_cos(head->angle);
-        bp->dir.y = -qa_sin(head->angle);
-    }
-
-    for (i = rb_count(knots) - 2; i >= 0; --i)
-    {
-        const struct bezier_knot* head = rb_peek(knots, i + 1);
-        const struct bezier_knot* tail = rb_peek(knots, i + 0);
-
-        qw t = make_qw(0); /* Begin search at head of curve */
-        qw last_t = make_qw(0);
-
-        qw Ax[4], Ay[4];
-        calc_coeff(Ax, Ay, head, tail, off);
-
-        while (1)
+        /* Check distance to previous calculated position */
+        next = bezier_xy(segment, it->t);
+        dx = qw_sub(it->pos.x, next.x);
+        dy = qw_sub(it->pos.y, next.y);
+        dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        it->t = dist_sq > it->spacing_sq /* overshot? */
+                    ? qw_sub(it->t, t_step)
+                    : qw_add(it->t, t_step);
+        if (it->t >= make_qw(1))
         {
-            qw t_step = make_qw2(1, 2);
-            while (1)
-            {
-                /* Calculate x,y position on curve */
-                const struct qwpos next = bezier_xy(Ax, Ay, t);
-
-                /* Check distance to previous calculated position */
-                const qw dx = qw_sub(pos.x, next.x);
-                const qw dy = qw_sub(pos.y, next.y);
-                const qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
-                if (dist_sq > spacing_sq)
-                    t = qw_sub(t, t_step);
-                else
-                    t = qw_add(t, t_step);
-
-                if (t >= make_qw(1))
-                    t = make_qw(1) -
-                        1; /* t=1 means we'd be on the next curve segment */
-                if (t < last_t)
-                    t = last_t;
-
-                t_step /= 2;
-                if (t_step == 0)
-                {
-                    const qw             t2 = qw_mul(t, t);
-                    struct bezier_point* bp;
-                    if (t == make_qw(1) - 1)
-                        goto next_segment;
-
-                    /* Insert new point and calculate tangent vector */
-                    bp = bezier_point_vec_emplace(bezier_points);
-                    bp->pos.x = qw_add(next.x, off.x);
-                    bp->pos.y = qw_add(next.y, off.y);
-                    bp->dir.x = -qw_add(
-                        qw_add(Ax[1], qw_mul(make_qw(2), qw_mul(Ax[2], t))),
-                        qw_mul(make_qw(3), qw_mul(Ax[3], t2)));
-                    bp->dir.y = -qw_add(
-                        qw_add(Ay[1], qw_mul(make_qw(2), qw_mul(Ay[2], t))),
-                        qw_mul(make_qw(3), qw_mul(Ay[3], t2)));
-                    bp->dir = qwpos_normalize(bp->dir);
-
-                    total_spacing = qw_add(total_spacing, qw_sqrt(dist_sq));
-                    if (total_spacing >= snake_length)
-                        return i;
-
-                    pos = next;
-                    break;
-                }
-            }
-            last_t = t;
+            /* t=1 means we'd be on the next curve segment */
+            it->t = make_qw(1) - 1;
         }
-    next_segment:;
+        if (it->t < it->last_t)
+            it->t = it->last_t;
     }
 
-    return 0;
+    /* The point must be on the next segment */
+    if (it->t == make_qw(1) - 1)
+    {
+        it->pos = make_qwposqw(
+            qw_add(it->pos.x, segment->p[0].x),
+            qw_add(it->pos.y, segment->p[0].y));
+        it->last_t = 0;
+
+        if (it->segment_idx == 0)
+        {
+            it->t = -1;
+            return;
+        }
+        it->segment_idx--;
+        goto again;
+    }
+
+    it->pos = make_qwposqw(
+        qw_add(next.x, segment->p[0].x), qw_add(next.y, segment->p[0].y));
+
+    it->total_spacing = qw_add(it->total_spacing, qw_sqrt(dist_sq));
+    if (it->total_spacing >= it->snake_length)
+    {
+        it->t = -1; /* no more points */
+        return;
+    }
 }
 
 int bezier_test_radius(
-    const struct bezier_knot* head,
-    const struct bezier_knot* tail,
-    struct qwpos              pos,
-    qw                        radius)
+    const struct bezier_segment* segment, struct qwpos pos, qw radius)
 {
-    qw           Ax[4], Ay[4], dx, dy, dist, t_step, t;
-    struct qwpos off;
+    qw dx, dy, dist, t_step, t;
 
-    /*
-     * Calculating coefficients far away from 0,0 results in precision issues,
-     * so we translate everything to 0,0 first and do the collision checks
-     * there.
-     */
-    off = head->pos;
-    pos.x = qw_sub(pos.x, off.x);
-    pos.y = qw_sub(pos.y, off.x);
-    calc_coeff(Ax, Ay, head, tail, off);
+    /* We operate in local space of the segment */
+    pos.x = qw_sub(pos.x, segment->p[0].x);
+    pos.y = qw_sub(pos.y, segment->p[0].y);
 
-    dx = qw_sub(head->pos.x, tail->pos.x);
-    dy = qw_sub(head->pos.y, tail->pos.y);
+    dx = qw_sub(segment->p[0].x, segment->p[3].x);
+    dy = qw_sub(segment->p[0].y, segment->p[3].y);
     dist = qw_sqrt(qw_add(qw_mul(dx, dx), qw_mul(dy, dy)));
     t_step = qw_mul(make_qw(0.05), qw_div(radius, dist));
 
     for (t = make_qw(0); t <= make_qw(1); t += t_step)
     {
-        struct qwpos p = bezier_xy(Ax, Ay, t);
+        struct qwpos p = bezier_xy(segment, t);
         dx = qw_sub(p.x, pos.x);
         dy = qw_sub(p.y, pos.y);
         dist = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));

@@ -8,6 +8,7 @@ VEC_DECLARE(str_impl, char, 16)
 
 void str_init(struct str** str);
 void str_deinit(struct str* str);
+int  str_set(struct str** str, struct strview view);
 int  str_set_cstr(struct str** str, const char* cstr);
 int  str_set_path_cstr(struct str** str, const char* path);
 int  str_join_path(struct str** str, struct strview path);
@@ -21,6 +22,11 @@ static const char* str_cstr(const struct str* str)
 static int str_len(const struct str* str)
 {
     return str ? ((const struct str_impl*)str)->count - 1 : 0;
+}
+
+static struct strview str_view(const struct str* str)
+{
+    return strview(str_cstr(str), 0, str_len(str));
 }
 
 int cstr_ends_with(const char* cstr, const char* suffix);

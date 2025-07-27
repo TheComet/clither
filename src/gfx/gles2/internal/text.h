@@ -11,7 +11,8 @@ typedef struct hb_font_t   hb_font_t;
 
 struct aspect_ratio;
 struct camera;
-struct resource_pack;
+struct resource_shader;
+struct resource_text;
 
 struct text_glyph_info
 {
@@ -58,7 +59,10 @@ struct font
 
 int  gfx_gles2_font_init(struct font* font);
 void gfx_gles2_font_deinit(struct font* font);
-int  gfx_gles2_font_load(struct font* font, const struct resource_pack* pack);
+int  gfx_gles2_font_load(
+     struct font*                  font,
+     const struct resource_text*   res,
+     const struct resource_shader* shader);
 void gfx_gles2_font_unload(struct font* font);
 
 struct text
@@ -68,15 +72,13 @@ struct text
     unsigned                    was_used : 1;
 };
 
-int  gfx_gles2_text_init(struct text* text);
+void gfx_gles2_text_init(struct text* text);
 void gfx_gles2_text_deinit(struct text* text);
 void gfx_gles2_text_shape(
     struct text* text, struct font* font, const char* str);
 
 void gfx_gles2_text_prepare_draw(
-    const struct text*         text,
-    const struct font*         font,
-    const struct aspect_ratio* ar);
+    const struct font* font, const struct aspect_ratio* ar);
 void gfx_gles2_text_draw(
     const struct text*   text,
     const struct font*   font,

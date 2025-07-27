@@ -1,4 +1,3 @@
-#include "clither/game/bezier_point_vec.h"
 #include "clither/game/food.h"
 #include "clither/game/q.h"
 #include "clither/game/settings.h"
@@ -163,10 +162,14 @@ int world_spawn_food_corpse(
     const struct snake_data*  data,
     const struct snake_param* param)
 {
-    int                        i;
-    const struct bezier_point* p;
+    int                  i;
+    struct bezier_sample sample;
 
-    vec_for_each (data->bezier_points, p)
+    for (bezier_sample_begin(
+             &sample, data->segments, SNAKE_PART_SPACING, snake_length(param));
+         !bezier_sample_end(&sample);
+         bezier_sample_next(&sample))
+    {
         for (i = 0; i != 10; ++i)
         {
             qw           scale = qw_div(snake_scale(param), make_qw(4));
@@ -174,11 +177,12 @@ int world_spawn_food_corpse(
             qw           dy = qw_rescale(rng(w) & 0x7FFFFFFF, scale, 1 << 31);
             qa           a = (qa)(rng(w));
             struct qwpos dir = make_qwposqw(qa_cos(a), qa_sin(a));
-            struct qwpos pos =
-                make_qwposqw(qw_add(p->pos.x, dx), qw_add(p->pos.y, dy));
+            struct qwpos pos = make_qwposqw(
+                qw_add(sample.pos.x, dx), qw_add(sample.pos.y, dy));
             if (food_bmap_create_food(&w->food_bmap, pos, dir) != 0)
                 return -1;
         }
+    }
 
     return 0;
 }

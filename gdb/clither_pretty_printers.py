@@ -29,9 +29,9 @@ def factories(val):
         return hmap_PrettyPrinter(val)
     if str(val.type).endswith("str *"):
         return s_PrettyPrinter(val)
-    if str(val.type) == "strspan":
+    if str(val.type).endswith("strspan"):
         return strspan_PrettyPrinter(val)
-    if str(val.type) == "strview":
+    if str(val.type).endswith("strview"):
         return strview_PrettyPrinter(val)
     if str(val.type).endswith("strlist *"):
         return strlist_PrettyPrinter(val)

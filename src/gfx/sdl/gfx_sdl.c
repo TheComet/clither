@@ -465,7 +465,7 @@ VECTOR_END_EACH*/
 
 /* Equidistant points along the bezier curve */
 #if 1
-    vec_for_each (snake->data.bezier_points, bp)
+    vec_for_each (snake->data.samples, bp)
     {
         pos = gfx_world_to_screen(bp->pos, gfx, camera);
         draw_circle(gfx->renderer, make_SDL_Point(pos.x, pos.y), 5);
@@ -507,12 +507,12 @@ VECTOR_END_EACH*/
         draw_circle(gfx->renderer, make_SDL_Point(screen_x, screen_y), 5);
     }
 
-    for (i = 0; i < rb_count(snake->data.bezier_knots) - 1; ++i)
+    for (i = 0; i < rb_count(snake->data.knots) - 1; ++i)
     {
         const struct bezier_knot* tail =
-            rb_peek(snake->data.bezier_knots, i + 0);
+            rb_peek(snake->data.knots, i + 0);
         const struct bezier_knot* head =
-            rb_peek(snake->data.bezier_knots, i + 1);
+            rb_peek(snake->data.knots, i + 1);
         if (i & 1)
             SDL_SetRenderDrawColor(gfx->renderer, 255, 0, 0, 255);
         else

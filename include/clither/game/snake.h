@@ -7,6 +7,7 @@
 #define SNAKE_PART_SPACING make_qw2(1, 6)
 
 struct food_bmap;
+struct bezier_segment_rb;
 
 struct snake_head
 {
@@ -62,22 +63,31 @@ struct snake_data
      * a previous state. Lists are removed as the snake's head position is
      * ACK'd.
      */
-    struct qwpos_vec_rb* head_trails;
+    struct qwpos_vec_rb* trails;
 
-    /* List of bezier knots that define the shape of the entire snake. */
-    struct bezier_knot_rb* bezier_knots;
-
-    /*
-     * List of axis-aligned bounding-boxes (qwaabb) for each bezier segment.
-     * This list will be 1 shorter than the list of bezier_knots.
-     */
-    struct qwaabb_rb* bezier_aabbs;
+    /* List of bezier knots that define the shape of the entire snake. These
+     * structures are optimized for synchronization over the network and are the
+     * source of truth for the shape of the snake. Knots are calculated from the
+     * list of trails. */
+    struct bezier_knot_rb* knots;
 
     /*
-     * The curve is sampled N times (N = length of snake) and the results are
-     * cached here. These are used for rendering.
+     * Every pair of knots define a bezier segment and contain handle positions
+     * and curve coefficients. Segments are calculated from the list of knots.
+     * NOTE: This list will be 1 shorter than the list of knots.
      */
-    struct bezier_point_vec* bezier_points;
+    struct bezier_segment_rb* segments;
+
+    /*
+     * List of AABBs of each segment. If the snake has trail data, then the
+     * AABBs are calculated from the trail points. See
+     * snake.c:snake_update_head_trail_aabb(). If the snake is a replica, then
+     * the AABBs are calculated from the segments.
+     *
+     * This means that client-side collision checks for replica snakes can be
+     * slightly inaccurate because only the server has the full trail data.
+     */
+    struct qwaabb_rb* segment_bbs;
 
     struct snake_split_rb* splits;
 

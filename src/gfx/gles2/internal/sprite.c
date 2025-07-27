@@ -7,30 +7,39 @@
 
 void gfx_gles2_sprite_mat_init(struct sprite_mat* mat)
 {
-    mat->program = 0;
-    mat->uAspectRatio = (GLuint)-1;
-    mat->uPosCameraSpace = (GLuint)-1;
-    mat->uDir = (GLuint)-1;
-    mat->uSize = (GLuint)-1;
-    mat->uAnim = (GLuint)-1;
-    mat->sCol = (GLuint)-1;
-    mat->sNM = (GLuint)-1;
+    int i;
+
+    mat->program = INVALID_HANDLE;
+    mat->uAspectRatio = INVALID_UNIFORM_LOCATION;
+    mat->uPosCameraSpace = INVALID_UNIFORM_LOCATION;
+    mat->uDir = INVALID_UNIFORM_LOCATION;
+    mat->uSize = INVALID_UNIFORM_LOCATION;
+    mat->uAnim = INVALID_UNIFORM_LOCATION;
+
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+        mat->sTex[i] = INVALID_UNIFORM_LOCATION;
 }
 
 void gfx_gles2_sprite_mat_deinit(struct sprite_mat* mat)
 {
     if (mat->program != 0)
+    {
+        gfx_untrack_shader(mat->program);
         glDeleteProgram(mat->program);
+    }
 }
 
 int gfx_gles2_sprite_mat_load(
-    struct sprite_mat* mat, const struct resource_pack* pack)
+    struct sprite_mat* mat, const struct resource_shader* shader)
 {
+    int i;
+
     CLITHER_DEBUG_ASSERT(mat->program == 0);
-    mat->program = gfx_gles2_load_shader(
-        pack->shaders.glsl.sprite, gfx_gles2_quad_attr_bindings);
+    mat->program =
+        gfx_gles2_load_shader(shader->sprite, gfx_gles2_quad_attr_bindings);
     if (mat->program == 0)
         return -1;
+    gfx_track_shader(mat->program);
 
     mat->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(mat->program, "uAspectRatio");
@@ -39,8 +48,13 @@ int gfx_gles2_sprite_mat_load(
     mat->uDir = gfx_gles2_get_uniform_location_and_warn(mat->program, "uDir");
     mat->uSize = gfx_gles2_get_uniform_location_and_warn(mat->program, "uSize");
     mat->uAnim = gfx_gles2_get_uniform_location_and_warn(mat->program, "uAnim");
-    mat->sCol = gfx_gles2_get_uniform_location_and_warn(mat->program, "sCol");
-    mat->sNM = gfx_gles2_get_uniform_location_and_warn(mat->program, "sNM");
+
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+    {
+        char uniform_name[16] = "sTexX";
+        uniform_name[4] = '0' + i;
+        mat->sTex[i] = glGetUniformLocation(mat->program, uniform_name);
+    }
 
     return 0;
 }
@@ -48,109 +62,74 @@ int gfx_gles2_sprite_mat_load(
 void gfx_gles2_sprite_mat_unload(struct sprite_mat* mat)
 {
     if (mat->program != 0)
+    {
+        gfx_untrack_shader(mat->program);
         glDeleteProgram(mat->program);
-    mat->program = 0;
+        mat->program = 0;
+    }
 }
 
 void gfx_gles2_sprite_tex_init(struct sprite_tex* tex)
 {
-    glGenTextures(1, &tex->texDiffuse);
-    glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(
-        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    int i;
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+        tex->tex[i] = INVALID_HANDLE;
 
-    glGenTextures(1, &tex->texNM);
-    glBindTexture(GL_TEXTURE_2D, tex->texNM);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(
-        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    tex->scale = 1.0;
+    tex->tile_x = 1;
+    tex->tile_y = 1;
+    tex->tile_count = 1;
+    tex->fps = 0;
+    tex->anim_frame = 0;
+    tex->sim_time = 0;
 }
 
 void gfx_gles2_sprite_tex_deinit(struct sprite_tex* tex)
 {
-    glDeleteTextures(1, &tex->texNM);
-    glDeleteTextures(1, &tex->texDiffuse);
+    (void)tex;
 }
 
 void gfx_gles2_sprite_tex_load(
-    struct sprite_tex* tex, const struct resource_sprite* res)
+    struct sprite_tex* tex, const struct resource_layer* res)
 {
-    int      img_width, img_height, img_channels;
-    stbi_uc* img_data;
+    int         i;
+    int         img_width, img_height, img_channels;
+    stbi_uc*    img_data;
+    const char* tex_filename;
 
-    if (res == NULL)
+    strlist_for_each (res->textures, i, tex_filename)
     {
-        log_warn("Sprite texture resource is NULL\n");
-        return;
-    }
-
-    if (strlist_count(res->textures) > 0)
-    {
-        img_data = stbi_load(
-            strlist_cstr(res->textures, 0),
-            &img_width,
-            &img_height,
-            &img_channels,
-            4);
-        if (img_data != NULL)
+        img_data =
+            stbi_load(tex_filename, &img_width, &img_height, &img_channels, 4);
+        if (img_data == NULL)
         {
-            glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGBA,
-                img_width,
-                img_height,
-                0,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                img_data);
-            glGenerateMipmap(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            stbi_image_free(img_data);
+            log_warn("Failed to load image \"%s\"\n", tex_filename);
+            continue;
         }
-        else
-            log_warn(
-                "Failed to load image \"%s\"\n",
-                strlist_cstr(res->textures, 0));
-    }
 
-    if (strlist_count(res->textures) > 1)
-    {
-        img_data = stbi_load(
-            strlist_cstr(res->textures, 1),
-            &img_width,
-            &img_height,
-            &img_channels,
-            4);
-        if (img_data != NULL)
-        {
-            glBindTexture(GL_TEXTURE_2D, tex->texNM);
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGBA,
-                img_width,
-                img_height,
-                0,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                img_data);
-            glGenerateMipmap(GL_TEXTURE_2D);
-            stbi_image_free(img_data);
-            glBindTexture(GL_TEXTURE_2D, 0);
-        }
-        else
-            log_warn(
-                "Failed to load image \"%s\"\n",
-                strlist_cstr(res->textures, 1));
+        glGenTextures(1, &tex->tex[i]);
+        gfx_track_tex(tex->tex[i]);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex->tex[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(
+            GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            img_width,
+            img_height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        stbi_image_free(img_data);
     }
 
     tex->tile_x = res->tile_x;
@@ -164,13 +143,15 @@ void gfx_gles2_sprite_tex_load(
 
 void gfx_gles2_sprite_tex_unload(struct sprite_tex* tex)
 {
-    glBindTexture(GL_TEXTURE_2D, tex->texNM);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    int i;
+
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+        if (tex->tex[i] != 0)
+        {
+            gfx_untrack_tex(tex->tex[i]);
+            glDeleteTextures(1, &tex->tex[i]);
+            tex->tex[i] = INVALID_HANDLE;
+        }
 }
 
 void gfx_gles2_sprite_prepare_draw(
@@ -178,26 +159,31 @@ void gfx_gles2_sprite_prepare_draw(
     const struct sprite_mat*   mat,
     const struct aspect_ratio* ar)
 {
+    int i;
+
     gfx_gles2_quad_mesh_prepare_draw(mesh);
+
     glUseProgram(mat->program);
     glUniform2f(mat->uAspectRatio, ar->scale_x, ar->scale_y);
-    glUniform1i(mat->sCol, 0);
-    glUniform1i(mat->sNM, 1);
+
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+        if (mat->sTex[i] != INVALID_UNIFORM_LOCATION)
+            glUniform1i(mat->sTex[i], i);
 }
 
 void gfx_gles2_sprite_bind_textures(const struct sprite_tex* tex)
 {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex->texDiffuse);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, tex->texNM);
+    int i;
+    for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
+        if (tex->tex[i] != INVALID_HANDLE)
+        {
+            glActiveTexture(GL_TEXTURE0 + i);
+            glBindTexture(GL_TEXTURE_2D, tex->tex[i]);
+        }
 }
 
 void gfx_gles2_sprite_end_draw(void)
 {
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
     gfx_gles2_quad_mesh_end_draw();
 }

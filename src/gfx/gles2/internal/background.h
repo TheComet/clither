@@ -1,11 +1,13 @@
 #pragma once
 
+#include "./gfx_constants.h"
 #include "glad/gles2.h"
 
 struct aspect_ratio;
 struct camera;
 struct gfx;
-struct resource_pack;
+struct resource_background;
+struct resource_shader;
 struct world;
 
 struct background
@@ -13,15 +15,13 @@ struct background
     GLuint program;
     GLuint fbo;
     GLuint texShadow;
-    GLuint texCol;
-    GLuint texNor;
+    GLuint tex[MAX_TEXTURE_SAMPLERS];
     GLuint uAspectRatio;
     GLuint uCamera;
     GLuint uShadowInvRes;
     GLuint uWorldBorder;
     GLuint sShadow;
-    GLuint sCol;
-    GLuint sNM;
+    GLuint sTex[MAX_TEXTURE_SAMPLERS];
 };
 
 int gfx_gles2_background_init(
@@ -30,17 +30,16 @@ int gfx_gles2_background_init(
     int                fbheight,
     int                shadow_map_size_factor);
 void gfx_gles2_background_deinit(struct background* bg);
-
 void gfx_gles2_background_resize(
     struct background* bg,
     int                fbwidth,
     int                fbheight,
     int                shadow_map_size_factor);
-
 int gfx_gles2_background_load(
-    struct background* bg, const struct resource_pack* pack);
+    struct background*                bg,
+    const struct resource_background* res,
+    const struct resource_shader*     shader);
 void gfx_gles2_background_unload(struct background* bg);
-
 void gfx_gles2_background_draw(
     const struct world*        world,
     const struct gfx*          gfx,

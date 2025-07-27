@@ -10,12 +10,12 @@
         V*           values;                                                   \
     };                                                                         \
     HMAP_DECLARE_FULL(                                                         \
-        API, prefix, hash32, const char*, V, bits, struct prefix##_kvs)
+        API, prefix, hash32, struct strview, V, bits, struct prefix##_kvs)
 
 #define HMAP_DEFINE_STR(API, prefix, V, bits)                                  \
-    static hash32 prefix##_hash(const char* key)                               \
+    static hash32 prefix##_hash(struct strview key)                            \
     {                                                                          \
-        return hash32_jenkins_oaat(key, strlen(key));                          \
+        return hash32_jenkins_oaat(key.data + key.off, key.len);               \
     }                                                                          \
     static int prefix##_kvs_alloc(                                             \
         struct prefix##_kvs* kvs,                                              \
@@ -51,19 +51,20 @@
     {                                                                          \
         prefix##_kvs_free(kvs, capacity);                                      \
     }                                                                          \
-    static const char* prefix##_kvs_get_key(                                   \
+    static struct strview prefix##_kvs_get_key(                                \
         const struct prefix##_kvs* kvs, int##bits##_t slot)                    \
     {                                                                          \
-        return str_cstr(kvs->keys[slot]);                                      \
+        const struct str* str = kvs->keys[slot];                               \
+        return strview(str_cstr(str), 0, str_len(str));                        \
     }                                                                          \
     static void prefix##_kvs_set_key(                                          \
-        struct prefix##_kvs* kvs, int##bits##_t slot, const char* key)         \
+        struct prefix##_kvs* kvs, int##bits##_t slot, struct strview key)      \
     {                                                                          \
-        str_set_cstr(&kvs->keys[slot], key);                                   \
+        str_set(&kvs->keys[slot], key);                                        \
     }                                                                          \
-    static int prefix##_kvs_keys_equal(const char* k1, const char* k2)         \
+    static int prefix##_kvs_keys_equal(struct strview k1, struct strview k2)   \
     {                                                                          \
-        return strcmp(k1, k2) == 0;                                            \
+        return strview_eq(k1, k2);                                             \
     }                                                                          \
     static V* prefix##_kvs_get_value(                                          \
         const struct prefix##_kvs* kvs, int##bits##_t slot)                    \
@@ -79,7 +80,7 @@
         API,                                                                   \
         prefix,                                                                \
         hash32,                                                                \
-        const char*,                                                           \
+        struct strview,                                                        \
         V,                                                                     \
         bits,                                                                  \
         prefix##_hash,                                                         \

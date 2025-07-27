@@ -1,6 +1,6 @@
 #include "clither/game/args.h"
 #include "clither/game/bezier_knot_rb.h"
-#include "clither/game/bezier_point_vec.h"
+#include "clither/game/bezier_segment_rb.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/qwaabb_rb.h"
 #include "clither/game/settings.h"
@@ -394,8 +394,7 @@ int server_update_snakes_in_range(
                         bezier_knot_acks_bmap_init(knot_acks);
 
                         /* Add all snake bezier knots to the list to send. */
-                        rb_for_each (
-                            other_snake->data.bezier_knots, knot_idx, knot)
+                        rb_for_each (other_snake->data.knots, knot_idx, knot)
                         {
                             if (bezier_knot_acks_bmap_insert_new(
                                     knot_acks, knot_idx, 0) == BMAP_OOM)
@@ -442,7 +441,7 @@ find_client_for_snake_id(const struct server* server, uint16_t snake_id)
 static int snake_head_collided(
     struct qwpos victim_head_pos, const struct snake* attacker, qw scale)
 {
-    int16_t      bb_idx;
+    int16_t      segment_idx;
     struct qwpos pad = make_qwposqw(
         qw_mul(SNAKE_PART_SPACING, scale / 2),
         qw_mul(SNAKE_PART_SPACING, scale / 2));
@@ -450,21 +449,19 @@ static int snake_head_collided(
     if (!qwaabb_test_qwpos(qwaabb_pad(attacker->data.bb, pad), victim_head_pos))
         return 0;
 
-    for (bb_idx = 0; bb_idx != rb_count(attacker->data.bezier_aabbs); ++bb_idx)
+    for (segment_idx = 0; segment_idx != rb_count(attacker->data.segment_bbs);
+         ++segment_idx)
     {
-        const struct qwaabb* pbb = rb_peek(attacker->data.bezier_aabbs, bb_idx);
+        const struct qwaabb* pbb =
+            rb_peek(attacker->data.segment_bbs, segment_idx);
         if (qwaabb_test_qwpos(qwaabb_pad(*pbb, pad), victim_head_pos))
             break;
     }
-    if (bb_idx == rb_count(attacker->data.bezier_aabbs))
+    if (segment_idx == rb_count(attacker->data.segment_bbs))
         return 0;
 
     return bezier_test_radius(
-        rb_peek(attacker->data.bezier_knots, bb_idx),
-        rb_peek(attacker->data.bezier_knots, bb_idx + 1),
-        victim_head_pos,
-        pad.x);
-    return 1;
+        rb_peek(attacker->data.segments, segment_idx), victim_head_pos, pad.x);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -569,7 +566,7 @@ int server_queue_snake_data(
             struct bezier_knot* knot;
             struct snake* snake = snake_bmap_find(world->snakes, snake_id);
             CLITHER_DEBUG_ASSERT(snake != NULL);
-            rb_for_each (snake->data.bezier_knots, knot_idx, knot)
+            rb_for_each (snake->data.knots, knot_idx, knot)
             {
                 char* ackd;
                 switch (bezier_knot_acks_bmap_emplace_or_get(
@@ -600,27 +597,26 @@ int server_queue_snake_data(
              * acknowledgement list explicitly. Otherwise, if the client doesn't
              * ack them, then they'd remain in the list forever. */
             bezier_knot_acks_bmap_remove_stale_knots(
-                *knot_acks, snake->data.bezier_knots);
+                *knot_acks, snake->data.knots);
 
             /* The "len_forwards" property of the second knot (the one that
              * follows the head) and the "len_backwards" property of the head
              * knot are constantly updated as the head moves. We have to send
              * this to the client as well. */
-            if (rb_count(snake->data.bezier_knots) > 1)
+            if (rb_count(snake->data.knots) > 1)
             {
                 const struct bezier_knot* head_knot =
-                    rb_peek_write(snake->data.bezier_knots);
-                const struct bezier_knot* second_knot = rb_peek(
-                    snake->data.bezier_knots,
-                    rb_count(snake->data.bezier_knots) - 2);
+                    rb_peek_write(snake->data.knots);
+                const struct bezier_knot* second_knot =
+                    rb_peek(snake->data.knots, rb_count(snake->data.knots) - 2);
 
                 server_queue(
                     client,
                     msg_bezier(
                         snake_id,
                         frame_number,
-                        rb_read_idx(snake->data.bezier_knots),
-                        rb_write_idx(snake->data.bezier_knots),
+                        rb_read_idx(snake->data.knots),
+                        rb_write_idx(snake->data.knots),
                         snake->head.pos,
                         snake->head.angle,
                         snake->head.speed,

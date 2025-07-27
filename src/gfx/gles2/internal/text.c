@@ -55,6 +55,7 @@ static struct vertex vertex(GLfloat x, GLfloat y, GLfloat u, GLfloat v)
 VEC_DECLARE(text_vertex_buf_vec, struct vertex, 16)
 VEC_DEFINE(text_vertex_buf_vec, struct vertex, 16)
 
+/* ------------------------------------------------------------------------- */
 static int to_nearest_pow2(int value)
 {
     int nearest = 2;
@@ -63,6 +64,7 @@ static int to_nearest_pow2(int value)
     return nearest;
 }
 
+/* ------------------------------------------------------------------------- */
 static int force_ucs2_charmap(FT_Face face)
 {
     int i;
@@ -79,6 +81,7 @@ static int force_ucs2_charmap(FT_Face face)
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_text_atlas_init(struct text_atlas* atlas)
 {
     text_glyph_hmap_init(&atlas->glyphs);
@@ -90,6 +93,7 @@ static void gfx_gles2_text_atlas_init(struct text_atlas* atlas)
     atlas->row_width = 0;
 }
 
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_text_atlas_deinit(struct text_atlas* atlas)
 {
     if (atlas->data != NULL)
@@ -97,6 +101,7 @@ static void gfx_gles2_text_atlas_deinit(struct text_atlas* atlas)
     text_glyph_hmap_deinit(atlas->glyphs);
 }
 
+/* ------------------------------------------------------------------------- */
 static int
 add_glyph(struct text_glyph_info* info, struct font* font, uint32_t codepoint)
 {
@@ -178,6 +183,7 @@ add_glyph(struct text_glyph_info* info, struct font* font, uint32_t codepoint)
     info->bearing_y = TO_PIXELS((GLfloat)slot->metrics.horiBearingY);
     atlas->next_y += slot->bitmap.rows + padding;
 
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->tex_atlas);
     glTexImage2D(
         GL_TEXTURE_2D,
@@ -189,11 +195,11 @@ add_glyph(struct text_glyph_info* info, struct font* font, uint32_t codepoint)
         GL_ALPHA,
         GL_UNSIGNED_BYTE,
         atlas->data);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 static int
 update_atlas(struct font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
 {
@@ -216,6 +222,7 @@ update_atlas(struct font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 static int generate_mesh(
     struct text*         text,
     struct font*         font,
@@ -295,6 +302,7 @@ static int generate_mesh(
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 int gfx_gles2_font_init(struct font* font)
 {
     FT_Error ft_error = FT_Init_FreeType(&font->ft_lib);
@@ -313,18 +321,19 @@ int gfx_gles2_font_init(struct font* font)
 
     glGenTextures(1, &font->tex_atlas);
     gfx_track_tex(font->tex_atlas);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->tex_atlas);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     gfx_gles2_text_atlas_init(&font->atlas);
 
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_font_deinit(struct font* font)
 {
     gfx_gles2_text_atlas_deinit(&font->atlas);
@@ -342,20 +351,21 @@ void gfx_gles2_font_deinit(struct font* font)
     FT_Done_FreeType(font->ft_lib);
 }
 
-int gfx_gles2_font_load(struct font* font, const struct resource_pack* pack)
+/* ------------------------------------------------------------------------- */
+int gfx_gles2_font_load(
+    struct font*                  font,
+    const struct resource_text*   res,
+    const struct resource_shader* shader)
 {
     int      ft_size;
     FT_Error error;
 
-    const struct resource_text* res = &pack->text;
-
-    error =
-        FT_New_Face(font->ft_lib, str_cstr(res->font_file), 0, &font->ft_face);
+    error = FT_New_Face(font->ft_lib, str_cstr(res->font), 0, &font->ft_face);
     if (error)
     {
         log_err(
             "Failed to load font '%s': %s\n",
-            str_cstr(res->font_file),
+            str_cstr(res->font),
             FT_Error_String(error));
         goto ft_new_face_failed;
     }
@@ -364,8 +374,7 @@ int gfx_gles2_font_load(struct font* font, const struct resource_pack* pack)
 
     /* NOTE: Don't use this if using FreeType's cache API */
     ft_size = TO_Q26_6(res->size);
-    FT_Set_Char_Size(
-        font->ft_face, ft_size, ft_size, res->device_hdpi, res->device_vdpi);
+    FT_Set_Char_Size(font->ft_face, ft_size, ft_size, res->dpi, res->dpi);
 
     font->hb_font = hb_ft_font_create(font->ft_face, NULL);
     if (font->hb_font == NULL)
@@ -384,8 +393,7 @@ int gfx_gles2_font_load(struct font* font, const struct resource_pack* pack)
     track_mem(font->hb_buf, 0);
 
     CLITHER_DEBUG_ASSERT(font->program == 0);
-    font->program =
-        gfx_gles2_load_shader(pack->shaders.glsl.text, attr_bindings);
+    font->program = gfx_gles2_load_shader(shader->text, attr_bindings);
     if (font->program == 0)
         goto load_shader_failed;
     gfx_track_shader(font->program);
@@ -412,6 +420,7 @@ ft_new_face_failed:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_font_unload(struct font* font)
 {
     if (font->program != 0)
@@ -431,17 +440,17 @@ void gfx_gles2_font_unload(struct font* font)
     FT_Done_Face(font->ft_face);
 }
 
-int gfx_gles2_text_init(struct text* text)
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_text_init(struct text* text)
 {
     text_vertex_buf_vec_init(&text->vertices);
     glGenBuffers(1, &text->vbo);
     gfx_track_buf(text->vbo);
 
     text->was_used = 0;
-
-    return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_text_deinit(struct text* text)
 {
     gfx_untrack_buf(text->vbo);
@@ -449,6 +458,7 @@ void gfx_gles2_text_deinit(struct text* text)
     text_vertex_buf_vec_deinit(text->vertices);
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_text_shape(struct text* text, struct font* font, const char* str)
 {
     unsigned int         glyph_count;
@@ -474,29 +484,10 @@ void gfx_gles2_text_shape(struct text* text, struct font* font, const char* str)
     generate_mesh(text, font, hb_glyph_info, hb_glyph_pos, glyph_count);
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_text_prepare_draw(
-    const struct text*         text,
-    const struct font*         font,
-    const struct aspect_ratio* ar)
+    const struct font* font, const struct aspect_ratio* ar)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        2,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(struct vertex),
-        (void*)offsetof(struct vertex, uv));
-
     glUseProgram(font->program);
     glUniform2f(font->uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform1i(font->sAtlas, 0);
@@ -505,15 +496,16 @@ void gfx_gles2_text_prepare_draw(
     glBindTexture(GL_TEXTURE_2D, font->tex_atlas);
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_text_end_draw(void)
 {
-    glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_text_draw(
     const struct text*   text,
     const struct font*   font,
@@ -537,5 +529,23 @@ void gfx_gles2_text_draw(
 
     glUniform1f(font->uSize, scale);
     glUniform2f(font->uPosCameraSpace, pos_cameraSpace.x, pos_cameraSpace.y);
+
+    glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(struct vertex),
+        (void*)offsetof(struct vertex, uv));
     glDrawArrays(GL_TRIANGLES, 0, vec_count(text->vertices));
 }

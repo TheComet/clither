@@ -1,4 +1,5 @@
 #include "clither/util/strview.h"
+#include <string.h>
 
 float strview_to_float(struct strview str)
 {
@@ -59,4 +60,10 @@ int strview_eq_cstr(struct strview str, const char* cstr)
         if (str.data[str.off + i] != cstr[i])
             return 0;
     return cstr[i] == '\0';
+}
+
+int strview_eq(struct strview s1, struct strview s2)
+{
+    return s1.len == s2.len &&
+           memcmp(s1.data + s1.off, s2.data + s2.off, s1.len) == 0;
 }

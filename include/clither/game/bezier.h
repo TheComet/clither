@@ -5,15 +5,7 @@
 struct qwpos_vec;
 struct bezier_knot_rb;
 struct bezier_point_vec;
-
-/*! Represents a point on a bezier curve. These are generated with the function
- * bezier_calc_equidistant_points() and are used for rendering the snake. */
-struct bezier_point
-{
-    struct qwpos pos; /* Position in world space */
-    struct qwpos dir; /* Direction vector (normalized). Used for rotating the
-                         sprite correctly */
-};
+struct bezier_segment_rb;
 
 /*!
  * \brief Represents a knot in the bezier curve.
@@ -32,17 +24,36 @@ struct bezier_knot
     uint8_t      len_backwards, len_forwards;
 };
 
+/* These are derived from bezier_knot angle and len_backwards/len_forwards, and
+ * are not transmitted over the network. */
+struct bezier_segment
+{
+    struct qwpos p[4];     /* p[0] = head, p[3] = tail */
+    struct qwpos coeff[3]; /* Bezier coefficients to backwards knot */
+    /* NOTE: Bezier coefficients are calculated relative to the head position,
+     * i.e. if a*t^3 + b*t^2 + c*t + d is the bezier curve, then d will always
+     * equal 0. This is why there are only 3 coefficients stored instead of 4.
+     * It is recommended to perform calculations in local space and transform
+     * the result back to world space by adding p[0] to the result. Calculating
+     * far away from 0,0 results in fixed point overflow issues. */
+};
+
 void bezier_knot_init(
-    struct bezier_knot* bh,
+    struct bezier_knot* knot,
     struct qwpos        pos,
     qa                  angle,
     uint8_t             len_backwards,
     uint8_t             len_forwards);
 
-void bezier_calc_aabb(
-    struct qwaabb*            bb,
+void bezier_calc_segment(
+    struct bezier_segment*    segment,
     const struct bezier_knot* head,
     const struct bezier_knot* tail);
+
+void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment);
+
+struct qwpos bezier_xy(const struct bezier_segment* segment, const qw t);
+struct qwpos bezier_tangent(const struct bezier_segment* segment, const qw t);
 
 /*!
  * \brief Performs a constrained least squares fit on the input data points to
@@ -60,38 +71,39 @@ double bezier_fit_trail(
     const struct qwpos_vec* trail);
 
 /*!
- * \brief Adjusts all bezier knots in a way to cause the snake to "squeeze"
- * over time, i.e. tight circles become tighter over time.
- * \param[in,out] knots A list of all bezier knots forming the curve.
- * \param[in] sim_tick_rate Simulation tick rate.
- */
-void bezier_squeeze_step(struct bezier_knot_rb* knots, int sim_tick_rate);
-
-void bezier_squeeze_n_recent_step(
-    struct bezier_knot_rb* knots, int n, int sim_tick_rate);
-
-/*!
- * \brief Samples the curve at constant intervals and stores each position
- * into the bezier_points structure.
- * \param[out] bezier_points The resulting points are written to this array.
- * The array is cleared every time, so no need to do that before calling.
+ * \brief Samples the curve at constant intervals until the total length is
+ * reached.
  * \param[in] knots The list of bezier knots comprising the curve.
  * \param[in] spacing The distance between each sampled point on the curve,
  * in world space.
  * \param[in] snake_length The required total length of the snake, in world
  * space.
  */
-int bezier_calc_equidistant_points(
-    struct bezier_point_vec**    bezier_points,
-    const struct bezier_knot_rb* knots,
-    qw                           spacing,
-    qw                           snake_length);
+struct bezier_sample
+{
+    const struct bezier_segment_rb* segments;
+    int                             segment_idx;
+
+    struct qwpos pos;
+
+    qw spacing_sq;
+    qw total_spacing;
+    qw snake_length;
+    qw t;
+    qw last_t;
+};
+void bezier_sample_begin(
+    struct bezier_sample*           it,
+    const struct bezier_segment_rb* segments,
+    qw                              spacing,
+    qw                              snake_length);
+void bezier_sample_next(struct bezier_sample* it);
+#define bezier_sample_end(it)           ((it)->t < 0)
+#define bezier_sample_segment(it)       (rb_peek((it)->segments, (it)->segment_idx))
+#define bezier_sample_segments_left(it) ((it)->segment_idx)
 
 int bezier_test_radius(
-    const struct bezier_knot* head,
-    const struct bezier_knot* tail,
-    struct qwpos              pos,
-    qw                        radius);
+    const struct bezier_segment* segment, struct qwpos pos, qw radius);
 
 static int
 bezier_knots_equal(const struct bezier_knot* a, const struct bezier_knot* b)

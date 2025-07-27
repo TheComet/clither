@@ -1,0 +1,41 @@
+#pragma once
+
+#include "./gfx_constants.h"
+#include "clither/game/q.h"
+#include "glad/gles2.h"
+
+struct aspect_ratio;
+struct bezier_knot;
+struct camera;
+struct resource_shader;
+struct resource_spine;
+
+struct spine
+{
+    GLuint vbo;
+    GLuint program;
+    GLuint uCoeff;
+    GLuint uWidth;
+    GLuint uAspectRatio;
+    GLuint tex[MAX_TEXTURE_SAMPLERS];
+    GLuint sTex[MAX_TEXTURE_SAMPLERS];
+    float  width;
+};
+
+void gfx_gles2_spine_init(struct spine* spine);
+void gfx_gles2_spine_deinit(struct spine* spine);
+int  gfx_gles2_spine_load(
+     struct spine*                 spine,
+     const struct resource_spine*  res,
+     const struct resource_shader* shader);
+void gfx_gles2_spine_unload(struct spine* spine);
+
+void gfx_gles2_spine_prepare_draw(const struct spine* spine);
+void gfx_gles2_spine_draw(
+    const struct spine*        spine,
+    const struct bezier_knot*  head,
+    const struct bezier_knot*  tail,
+    qw                         scale,
+    const struct camera*       camera,
+    const struct aspect_ratio* ar);
+void gfx_gles2_spine_end_draw(void);

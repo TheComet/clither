@@ -1,12 +1,13 @@
 #pragma once
 
+#include "./gfx_constants.h"
 #include "clither/game/q.h"
 #include "glad/gles2.h"
 
 struct aspect_ratio;
 struct background;
 struct camera;
-struct resource_pack;
+struct resource_shader;
 struct sprite_tex;
 struct quad_mesh;
 
@@ -18,13 +19,13 @@ struct sprite_shadow_mat
     GLuint uDir;
     GLuint uSize;
     GLuint uAnim;
-    GLuint sNM;
+    GLuint sTex[MAX_TEXTURE_SAMPLERS];
 };
 
 void gfx_gles2_sprite_shadow_init(struct sprite_shadow_mat* ss);
 void gfx_gles2_sprite_shadow_deinit(struct sprite_shadow_mat* ss);
 int  gfx_gles2_sprite_shadow_load(
-     struct sprite_shadow_mat* ss, const struct resource_pack* pack);
+     struct sprite_shadow_mat* ss, const struct resource_shader* res);
 void gfx_gles2_sprite_shadow_unload(struct sprite_shadow_mat* ss);
 
 void gfx_gles2_sprite_shadow_prepare_draw(

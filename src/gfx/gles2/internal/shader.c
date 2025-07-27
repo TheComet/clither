@@ -47,6 +47,12 @@ GLuint gfx_gles2_load_shader(
     GLuint      program;
     GLint       linked;
 
+    if (strlist_count(shader_fnames) == 0)
+    {
+        log_warn("No shader files provided\n");
+        return 0;
+    }
+
     program = glCreateProgram();
     if (program == 0)
     {
@@ -59,6 +65,7 @@ GLuint gfx_gles2_load_shader(
         GLuint       shader;
         struct mfile source;
 
+        log_dbg("Loading shader file \"%s\"\n", fname);
         if (mfile_map_read(&source, fname, 1) != 0)
             goto load_shaders_failed;
 
@@ -69,10 +76,7 @@ GLuint gfx_gles2_load_shader(
                                           : GL_FRAGMENT_SHADER);
         mfile_unmap(&source);
         if (shader == 0)
-        {
-            log_err("Failed to load shader \"%s\"\n", fname);
             goto load_shaders_failed;
-        }
 
         glAttachShader(program, shader);
         glDeleteShader(shader);
@@ -103,6 +107,7 @@ link_program_failed:
 load_shaders_failed:
     glDeleteProgram(program);
 create_program_failed:
+    log_err("Failed to compile shader: %s\n", fname);
     return 0;
 }
 

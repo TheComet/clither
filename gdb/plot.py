@@ -25,7 +25,7 @@ def iter_knots(rb):
             float(knot["len_forwards"]) / 255
         read = (read + 1) % capacity
 
-def plot_bezier_knots(rb, color):
+def plot_knots(rb, color):
     knots = list(iter_knots(rb))
     handle = None
     for tail, head in zip(knots[:-1], knots[1:]):
@@ -67,7 +67,7 @@ def plot_head_trail(vec, color):
     handle = plt.scatter(x, y, color=color)
     return handle
 
-def plot_head_trails(vec_rb, color):
+def plot_trails(vec_rb, color):
     handle = None
     read = vec_rb["read"]
     write = vec_rb["write"]
@@ -85,13 +85,13 @@ def plot_aabb(qwaabb, color):
     handle, = plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], color=color, linewidth=0.5)
     return handle
 
-def plot_bezier_aabbs(qwaabb_rb, color):
+def plot_segment_bbs(segment_rb, color):
     handle = None
-    read = qwaabb_rb["read"]
-    write = qwaabb_rb["write"]
-    capacity = qwaabb_rb["capacity"]
+    read = segment_rb["read"]
+    write = segment_rb["write"]
+    capacity = segment_rb["capacity"]
     while read != write:
-        handle = plot_aabb(qwaabb_rb["data"][read], color=color)
+        handle = plot_aabb(segment_rb["data"][read]["bb"], color=color)
         read = (read + 1) % capacity
     return handle
 
@@ -117,30 +117,30 @@ class Plot(gdb.Command):
             if str(val.type).endswith("snake *"):
                 val = val.dereference()
             if str(val.type).endswith("snake"):
-                plot_bezier_knots(val["data"]["bezier_knots"], colors[0])
-                plot_head_trails(val["data"]["head_trails"], colors[0])
-                plot_bezier_aabbs(val["data"]["bezier_aabbs"], colors[1])
+                plot_knots(val["data"]["knots"], colors[0])
+                plot_trails(val["data"]["trails"], colors[0])
+                #plot_segment_bbs(val["data"]["segment_bbs"], colors[1])
                 handle = plot_aabb(val["data"]["bb"], colors[1])
 
             if str(val.type).endswith("snake_data *"):
                 val = val.dereference()
             if str(val.type).endswith("snake_data"):
-                plot_bezier_knots(val["bezier_knots"], colors[0])
-                plot_head_trails(val["head_trails"], colors[0])
-                plot_bezier_aabbs(val["bezier_aabbs"], colors[1])
+                plot_knots(val["knots"], colors[0])
+                plot_trails(val["trails"], colors[0])
+                #plot_segment_bbs(val["segment_bbs"], colors[1])
                 handle = plot_aabb(val["bb"], colors[1])
 
             if str(val.type).endswith("bezier_knot_rb *"):
-                handle = plot_bezier_knots(val, colors[0])
+                handle = plot_knots(val, colors[0])
 
             if str(val.type).endswith("qwpos_vec_rb *"):
-                handle = plot_head_trails(val, colors[0])
+                handle = plot_trails(val, colors[0])
 
             if str(val.type).endswith("qwpos_vec *"):
                 handle = plot_head_trail(val, colors[0])
 
-            if str(val.type).endswith("qwaabb_rb *"):
-                handle = plot_bezier_aabbs(val, colors[1])
+            #if str(val.type).endswith("bezier_segment_rb *"):
+            #    handle = plot_segment_bbs(val, colors[1])
 
             if str(val.type).endswith("qwaabb"):
                 handle = plot_aabb(val, colors[1])

@@ -1,6 +1,4 @@
 #include "clither/game/resource_pack.h"
-#include "clither/game/resource_snake_part_vec.h"
-#include "clither/game/resource_sprite_vec.h"
 #include "clither/platform/fs.h"
 #include "clither/platform/mfile.h"
 #include "clither/util/log.h"
@@ -12,103 +10,161 @@
 #include <stdlib.h>
 #include <string.h>
 
-static struct resource_sprite* resource_sprite_create(void)
+HMAP_DEFINE_STR(extern, resource_shader_hmap, struct resource_shader, 16)
+HMAP_DEFINE_STR(extern, resource_sprite_hmap, struct resource_sprite, 16)
+HMAP_DEFINE_STR(extern, resource_snake_hmap, struct resource_snake, 16)
+HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
+
+static void resource_shader_init(struct resource_shader* res)
 {
-    struct resource_sprite* sprite = mem_alloc(sizeof *sprite);
-    if (sprite == NULL)
-    {
-        log_oom(sizeof *sprite, "resource_sprite_create()");
-        return NULL;
-    }
-
-    strlist_init(&sprite->textures);
-    sprite->tile_x = 1;
-    sprite->tile_y = 1;
-    sprite->num_frames = 1;
-    sprite->fps = 0;
-    sprite->scale = 1.0;
-
-    return sprite;
+    strlist_init(&res->text);
+    strlist_init(&res->sprite);
+    strlist_init(&res->shadow);
+    strlist_init(&res->background);
+    strlist_init(&res->spine);
 }
 
-static void resource_sprite_destroy(struct resource_sprite* sprite)
+static void resource_shader_deinit(struct resource_shader* res)
 {
-    strlist_deinit(sprite->textures);
-    mem_free(sprite);
+    strlist_deinit(res->spine);
+    strlist_deinit(res->background);
+    strlist_deinit(res->shadow);
+    strlist_deinit(res->sprite);
+    strlist_deinit(res->text);
 }
 
-static void resource_snake_part_init(struct resource_snake_part* part)
+static void resource_background_init(struct resource_background* res)
 {
-    memset(part, 0, sizeof *part);
+    strlist_init(&res->textures);
 }
 
-static void resource_snake_part_deinit(struct resource_snake_part* part)
+static void resource_background_deinit(struct resource_background* res)
 {
-    if (part->base)
-        resource_sprite_destroy(part->base);
-    if (part->gather)
-        resource_sprite_destroy(part->gather);
-    if (part->boost)
-        resource_sprite_destroy(part->boost);
-    if (part->turn)
-        resource_sprite_destroy(part->turn);
-    if (part->projectile)
-        resource_sprite_destroy(part->projectile);
-    if (part->split)
-        resource_sprite_destroy(part->split);
-    if (part->armor)
-        resource_sprite_destroy(part->armor);
+    strlist_deinit(res->textures);
+}
+
+static void resource_text_init(struct resource_text* res)
+{
+    str_init(&res->font);
+    res->size = 72;
+    res->dpi = 72;
+}
+
+static void resource_text_deinit(struct resource_text* res)
+{
+    str_deinit(res->font);
+}
+
+static void resource_layer_init(struct resource_layer* res)
+{
+    strlist_init(&res->textures);
+    res->tile_x = 1;
+    res->tile_y = 1;
+    res->num_frames = 1;
+    res->fps = 0;
+    res->scale = 1.0;
+}
+
+static void resource_layer_deinit(struct resource_layer* res)
+{
+    strlist_deinit(res->textures);
+}
+
+static void resource_sprite_init(struct resource_sprite* res)
+{
+    int i;
+    for (i = 0; i != RESOURCE_LAYER_COUNT; i++)
+        resource_layer_init(&res->layer[i]);
+}
+
+static void resource_sprite_deinit(struct resource_sprite* res)
+{
+    int i;
+    for (i = 0; i != RESOURCE_LAYER_COUNT; i++)
+        resource_layer_deinit(&res->layer[i]);
+}
+
+static void resource_spine_init(struct resource_spine* res)
+{
+    strlist_init(&res->textures);
+    res->width = 1.0;
+}
+
+static void resource_spine_deinit(struct resource_spine* res)
+{
+    strlist_deinit(res->textures);
+}
+
+static void resource_food_init(struct resource_food* res)
+{
+    str_init(&res->sprite);
+}
+
+static void resource_food_deinit(struct resource_food* res)
+{
+    str_deinit(res->sprite);
+}
+
+static void resource_snake_init(struct resource_snake* res)
+{
+    str_init(&res->head_sprite);
+    str_init(&res->tail_sprite);
+    strlist_init(&res->body_sprites);
+    str_init(&res->spine);
+    res->part_spacing = 0.15;
+}
+
+static void resource_snake_deinit(struct resource_snake* res)
+{
+    str_deinit(res->spine);
+    strlist_deinit(res->body_sprites);
+    str_deinit(res->tail_sprite);
+    str_deinit(res->head_sprite);
 }
 
 static void resource_pack_init(struct resource_pack* pack)
 {
+    pack->path = "";
     str_init(&pack->pack_ini);
-    strlist_init(&pack->shaders.glsl.background);
-    strlist_init(&pack->shaders.glsl.shadow);
-    strlist_init(&pack->shaders.glsl.sprite);
-    strlist_init(&pack->shaders.glsl.text);
-    resource_sprite_vec_init(&pack->sprites.background);
-    pack->sprites.food = NULL;
-    resource_snake_part_vec_init(&pack->sprites.heads);
-    resource_snake_part_vec_init(&pack->sprites.bodies);
-    resource_snake_part_vec_init(&pack->sprites.tails);
-    str_init(&pack->text.font_file);
-    pack->text.size = 72;
-    pack->text.device_hdpi = 72;
-    pack->text.device_vdpi = 72;
+
+    resource_background_init(&pack->background);
+    resource_text_init(&pack->text);
+    resource_food_init(&pack->food);
+
+    resource_spine_hmap_init(&pack->spines);
+    resource_shader_hmap_init(&pack->shaders);
+    resource_sprite_hmap_init(&pack->sprites);
+    resource_snake_hmap_init(&pack->snakes);
 }
 
 static void resource_pack_deinit(struct resource_pack* pack)
 {
-    struct resource_snake_part* snake_part;
-    struct resource_sprite**    sprite;
+    int16_t                 slot;
+    struct str*             name;
+    struct resource_snake*  snake;
+    struct resource_sprite* sprite;
+    struct resource_shader* shader;
+    struct resource_spine*  spine;
 
-    str_deinit(pack->text.font_file);
+    hmap_for_each (pack->snakes, slot, name, snake)
+        (void)slot, (void)name, resource_snake_deinit(snake);
+    resource_snake_hmap_deinit(pack->snakes);
 
-    vec_for_each (pack->sprites.tails, snake_part)
-        resource_snake_part_deinit(snake_part);
-    resource_snake_part_vec_deinit(pack->sprites.tails);
+    hmap_for_each (pack->sprites, slot, name, sprite)
+        (void)slot, (void)name, resource_sprite_deinit(sprite);
+    resource_sprite_hmap_deinit(pack->sprites);
 
-    vec_for_each (pack->sprites.bodies, snake_part)
-        resource_snake_part_deinit(snake_part);
-    resource_snake_part_vec_deinit(pack->sprites.bodies);
+    hmap_for_each (pack->shaders, slot, name, shader)
+        (void)slot, (void)name, resource_shader_deinit(shader);
+    resource_shader_hmap_deinit(pack->shaders);
 
-    vec_for_each (pack->sprites.heads, snake_part)
-        resource_snake_part_deinit(snake_part);
-    resource_snake_part_vec_deinit(pack->sprites.heads);
+    hmap_for_each (pack->spines, slot, name, spine)
+        (void)slot, (void)name, resource_spine_deinit(spine);
+    resource_spine_hmap_deinit(pack->spines);
 
-    if (pack->sprites.food)
-        resource_sprite_destroy(pack->sprites.food);
-
-    vec_for_each (pack->sprites.background, sprite)
-        if (*sprite)
-            resource_sprite_destroy(*sprite);
-    resource_sprite_vec_deinit(pack->sprites.background);
-
-    strlist_deinit(pack->shaders.glsl.text);
-    strlist_deinit(pack->shaders.glsl.sprite);
-    strlist_deinit(pack->shaders.glsl.shadow);
-    strlist_deinit(pack->shaders.glsl.background);
+    resource_food_deinit(&pack->food);
+    resource_text_deinit(&pack->text);
+    resource_background_deinit(&pack->background);
 
     str_deinit(pack->pack_ini);
 }
@@ -120,7 +176,6 @@ enum token
     TOK_LBRACKET = '[',
     TOK_RBRACKET = ']',
     TOK_COMMA = ',',
-    TOK_PERIOD = '.',
     TOK_EQUALS = '=',
     TOK_INTEGER = 256,
     TOK_FLOAT,
@@ -140,23 +195,6 @@ struct parser
         int            integer_literal;
     } value;
 };
-
-struct section
-{
-    struct strview section;
-    struct strview subsection;
-    struct strview subsubsection;
-
-    int section_index;
-};
-
-static void section_init(struct section* s)
-{
-    s->section = strview("", 0, 0);
-    s->subsection = strview("", 0, 0);
-    s->subsubsection = strview("", 0, 0);
-    s->section_index = -1;
-}
 
 static int print_verror(
     const char*    filename,
@@ -264,7 +302,8 @@ static enum token scan_next_token(struct parser* p)
         /* Key */
         if (isalpha(p->source[p->head]))
         {
-            while (p->head != p->end && isalnum(p->source[p->head]))
+            while (p->head != p->end &&
+                   (isalnum(p->source[p->head]) || p->source[p->head] == '_'))
                 p->head++;
             p->value.string = strview(p->source, p->tail, p->head - p->tail);
             return TOK_KEY;
@@ -289,10 +328,19 @@ scan_next_string:
     if (tok != TOK_STRING)
         return parser_error(p, "Expected a string value\n");
 
-    if (str_set_cstr(&str, path_prefix) != 0)
-        goto error;
-    if (str_join_path(&str, p->value.string) != 0)
-        goto error;
+    if (path_prefix)
+    {
+        if (str_set_cstr(&str, path_prefix) != 0)
+            goto error;
+        if (str_join_path(&str, p->value.string) != 0)
+            goto error;
+    }
+    else
+    {
+        if (str_set(&str, p->value.string) != 0)
+            goto error;
+    }
+
     if (strlist_add_cstr(list, str_cstr(str)) != 0)
         goto error;
 
@@ -308,10 +356,14 @@ error:
     return -1;
 }
 
-static int parse_section_glsl(
-    struct parser* p, struct resource_pack* pack, const char* path_prefix)
+static int parse_section_shader(
+    struct parser*                p,
+    struct resource_shader_hmap** shaders,
+    const char*                   path_prefix)
 {
-    enum token tok;
+    enum token              tok;
+    struct resource_shader* res = NULL;
+
     while (1)
     {
         tok = scan_next_token(p);
@@ -324,14 +376,44 @@ static int parse_section_glsl(
             case TOK_KEY: {
                 struct strlist** shaderlist;
                 struct strview   key = p->value.string;
+                if (strview_eq_cstr(key, "target"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    switch (resource_shader_hmap_emplace_or_get(
+                        shaders, p->value.string, &res))
+                    {
+                        case HMAP_OOM: return -1;
+                        case HMAP_EXISTS:
+                            return parser_error(
+                                p,
+                                "Shader target \"%.*s\" already exists\n",
+                                key.len,
+                                key.data + key.off);
+                        case HMAP_NEW: resource_shader_init(res); break;
+                    }
+                    continue;
+                }
+
+                if (res == NULL)
+                    return parser_error(
+                        p,
+                        "You need to specify the shader target first. "
+                        "Example:\n"
+                        "target = \"gles2\"\n");
+
                 if (strview_eq_cstr(key, "shadow"))
-                    shaderlist = &pack->shaders.glsl.shadow;
+                    shaderlist = &res->shadow;
                 else if (strview_eq_cstr(key, "sprite"))
-                    shaderlist = &pack->shaders.glsl.sprite;
+                    shaderlist = &res->sprite;
                 else if (strview_eq_cstr(key, "background"))
-                    shaderlist = &pack->shaders.glsl.background;
+                    shaderlist = &res->background;
                 else if (strview_eq_cstr(key, "text"))
-                    shaderlist = &pack->shaders.glsl.text;
+                    shaderlist = &res->text;
+                else if (strview_eq_cstr(key, "spine"))
+                    shaderlist = &res->spine;
                 else
                     return parser_error(
                         p,
@@ -350,8 +432,8 @@ static int parse_section_glsl(
     }
 }
 
-static int parse_section_sprite(
-    struct parser* p, struct resource_sprite* sprite, const char* path_prefix)
+static int parse_section_background(
+    struct parser* p, struct resource_background* bg, const char* path_prefix)
 {
     enum token tok;
     while (1)
@@ -365,70 +447,12 @@ static int parse_section_sprite(
 
             case TOK_KEY: {
                 struct strview key = p->value.string;
-
                 if (strview_eq_cstr(key, "textures"))
                 {
                     if (scan_next_token(p) != '=')
                         return parser_error(p, "Expected '=' after key\n");
-                    tok = parse_string_list(p, &sprite->textures, path_prefix);
+                    tok = parse_string_list(p, &bg->textures, path_prefix);
                     goto reswitch_tok;
-                }
-
-                if (strview_eq_cstr(key, "tile"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_INTEGER)
-                        return parser_error(
-                            p,
-                            "Expected an integer value. Example: tile = 4,4\n");
-                    sprite->tile_x = p->value.integer_literal;
-                    if (scan_next_token(p) != ',')
-                        return parser_error(
-                            p, "Expected a comma after the first tile value\n");
-                    if (scan_next_token(p) != TOK_INTEGER)
-                        return parser_error(
-                            p,
-                            "Expected an integer value. Example: tile = 4,4\n");
-                    sprite->tile_y = p->value.integer_literal;
-                    break;
-                }
-
-                if (strview_eq_cstr(key, "frames"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_INTEGER)
-                        return parser_error(
-                            p,
-                            "Expected an integer value. Example: frames = "
-                            "16\n");
-                    sprite->num_frames = p->value.integer_literal;
-                    break;
-                }
-
-                if (strview_eq_cstr(key, "fps"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_INTEGER)
-                        return parser_error(
-                            p,
-                            "Expected an integer value. Example: fps = 20\n");
-                    sprite->fps = p->value.integer_literal;
-                    break;
-                }
-
-                if (strview_eq_cstr(key, "scale"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_FLOAT)
-                        return parser_error(
-                            p,
-                            "Expected a float value. Example: scale = 2.0\n");
-                    sprite->scale = p->value.float_literal;
-                    break;
                 }
 
                 return parser_error(
@@ -461,9 +485,9 @@ enum token parse_section_text(
                         return parser_error(p, "Expected '=' after key\n");
                     if (scan_next_token(p) != TOK_STRING)
                         return parser_error(p, "Expected a string value\n");
-                    if (str_set_cstr(&text->font_file, path_prefix) != 0)
+                    if (str_set_cstr(&text->font, path_prefix) != 0)
                         return -1;
-                    if (str_join_path(&text->font_file, p->value.string) != 0)
+                    if (str_join_path(&text->font, p->value.string) != 0)
                         return -1;
                     break;
                 }
@@ -489,219 +513,417 @@ enum token parse_section_text(
     }
 }
 
-static void parse_section_name_and_index(struct section* s, struct strview key)
-{
-    int first_digit = key.off + key.len;
-    while (first_digit > 0 && isdigit(key.data[first_digit - 1]))
-        first_digit--;
-
-    s->section = strview(key.data, key.off, first_digit - key.off);
-    s->section_index =
-        first_digit < key.off + key.len
-            ? strview_to_integer(strview(
-                  key.data, first_digit, key.off + key.len - first_digit))
-            : -1;
-}
-
-static enum token parse_section_desc(struct parser* p, struct section* s)
+enum token parse_section_food(struct parser* p, struct resource_food* food)
 {
     enum token tok;
-    if (scan_next_token(p) != TOK_KEY)
-        return parser_error(
-            p,
-            "Expected a section name within the brackets. Example: "
-            "[section]\n");
-    parse_section_name_and_index(s, p->value.string);
+    while (1)
+    {
+        tok = scan_next_token(p);
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
 
-    tok = scan_next_token(p);
-    if (tok != '.')
-        return tok;
-    if (scan_next_token(p) != TOK_KEY)
-        return parser_error(
-            p,
-            "Expected a subsection name after the period. "
-            "Example: [section.subsection]\n");
-    s->subsection = p->value.string;
+            case TOK_KEY: {
+                struct strview key = p->value.string;
 
-    tok = scan_next_token(p);
-    if (tok != '.')
-        return tok;
-    if (scan_next_token(p) != TOK_KEY)
-        return parser_error(
-            p,
-            "Expected a subsubsection name after the period. "
-            "Example: [section.subsection.subsubsection]\n");
-    s->subsubsection = p->value.string;
+                if (strview_eq_cstr(key, "sprite"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    if (str_set(&food->sprite, p->value.string) != 0)
+                        return -1;
+                    break;
+                }
 
-    return scan_next_token(p);
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+static int parse_section_sprite(
+    struct parser*                p,
+    struct resource_sprite_hmap** sprites,
+    const char*                   path_prefix)
+{
+    enum token              tok;
+    struct resource_sprite* sprite = NULL;
+    struct resource_layer*  layer = NULL;
+
+    while (1)
+    {
+        tok = scan_next_token(p);
+    reswitch_tok:
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                struct strview key = p->value.string;
+
+                if (strview_eq_cstr(key, "name"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    switch (resource_sprite_hmap_emplace_or_get(
+                        sprites, p->value.string, &sprite))
+                    {
+                        case HMAP_OOM: return -1;
+                        case HMAP_NEW: resource_sprite_init(sprite);
+                        case HMAP_EXISTS: break;
+                    }
+                    continue;
+                }
+
+                if (sprite == NULL)
+                    return parser_error(
+                        p,
+                        "You need to specify the sprite name first. "
+                        "Example:\n"
+                        "name = \"metal head\"\n");
+
+                if (strview_eq_cstr(key, "layer"))
+                {
+                    struct strview layer_name;
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    layer_name = p->value.string;
+                    if (strview_eq_cstr(layer_name, "base"))
+                        layer = &sprite->layer[RESOURCE_LAYER_BASE];
+                    else if (strview_eq_cstr(layer_name, "gather"))
+                        layer = &sprite->layer[RESOURCE_LAYER_GATHER];
+                    else if (strview_eq_cstr(layer_name, "boost"))
+                        layer = &sprite->layer[RESOURCE_LAYER_BOOST];
+                    else if (strview_eq_cstr(layer_name, "turn"))
+                        layer = &sprite->layer[RESOURCE_LAYER_TURN];
+                    else if (strview_eq_cstr(layer_name, "projectile"))
+                        layer = &sprite->layer[RESOURCE_LAYER_PROJECTILE];
+                    else if (strview_eq_cstr(layer_name, "split"))
+                        layer = &sprite->layer[RESOURCE_LAYER_SPLIT];
+                    else if (strview_eq_cstr(layer_name, "armor"))
+                        layer = &sprite->layer[RESOURCE_LAYER_ARMOR];
+                    else
+                        return parser_error(
+                            p,
+                            "Unknown layer \"%.*s\"\n",
+                            layer_name.len,
+                            layer_name.data + layer_name.off);
+                    if (strlist_count(layer->textures) > 0)
+                        return parser_error(
+                            p,
+                            "Layer \"%.*s\" was already defined for this "
+                            "sprite\n",
+                            layer_name.len,
+                            layer_name.data + layer_name.off);
+                    continue;
+                }
+
+                if (layer == NULL)
+                    return parser_error(
+                        p,
+                        "You need to specify the layer first. "
+                        "Example:\n"
+                        "layer = \"base\"\n");
+
+                if (strview_eq_cstr(key, "textures"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    tok = parse_string_list(p, &layer->textures, path_prefix);
+                    goto reswitch_tok;
+                }
+
+                if (strview_eq_cstr(key, "tile"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_INTEGER)
+                        return parser_error(
+                            p,
+                            "Expected an integer value. Example: tile = 4,4\n");
+                    layer->tile_x = p->value.integer_literal;
+                    if (scan_next_token(p) != ',')
+                        return parser_error(
+                            p, "Expected a comma after the first tile value\n");
+                    if (scan_next_token(p) != TOK_INTEGER)
+                        return parser_error(
+                            p,
+                            "Expected an integer value. Example: tile = 4,4\n");
+                    layer->tile_y = p->value.integer_literal;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "frames"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_INTEGER)
+                        return parser_error(
+                            p,
+                            "Expected an integer value. Example: frames = "
+                            "16\n");
+                    layer->num_frames = p->value.integer_literal;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "fps"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_INTEGER)
+                        return parser_error(
+                            p,
+                            "Expected an integer value. Example: fps = 20\n");
+                    layer->fps = p->value.integer_literal;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "scale"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_FLOAT)
+                        return parser_error(
+                            p,
+                            "Expected a float value. Example: scale = 2.0\n");
+                    layer->scale = p->value.float_literal;
+                    break;
+                }
+
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+static int parse_section_spine(
+    struct parser*               p,
+    struct resource_spine_hmap** spines,
+    const char*                  path_prefix)
+{
+    enum token             tok;
+    struct resource_spine* spine = NULL;
+
+    while (1)
+    {
+        tok = scan_next_token(p);
+    reswitch_tok:
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                struct strview key = p->value.string;
+
+                if (strview_eq_cstr(key, "name"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    switch (resource_spine_hmap_emplace_or_get(
+                        spines, p->value.string, &spine))
+                    {
+                        case HMAP_OOM: return -1;
+                        case HMAP_NEW: resource_spine_init(spine); break;
+                        case HMAP_EXISTS:
+                            return parser_error(
+                                p,
+                                "Spine name \"%.*s\" already exists\n",
+                                key.len,
+                                key.data + key.off);
+                    }
+                    continue;
+                }
+
+                if (spine == NULL)
+                    return parser_error(
+                        p,
+                        "You need to specify the spine name first. "
+                        "Example:\n"
+                        "name = \"metal spine\"\n");
+
+                if (strview_eq_cstr(key, "textures"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    tok = parse_string_list(p, &spine->textures, path_prefix);
+                    goto reswitch_tok;
+                }
+
+                if (strview_eq_cstr(key, "width"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_FLOAT)
+                        return parser_error(
+                            p,
+                            "Expected a float value. Example: scale = 2.0\n");
+                    spine->width = p->value.float_literal;
+                    break;
+                }
+
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+static int
+parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
+{
+    enum token             tok;
+    struct resource_snake* snake = NULL;
+
+    while (1)
+    {
+        tok = scan_next_token(p);
+    reswitch_tok:
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                struct strview key = p->value.string;
+
+                if (strview_eq_cstr(key, "name"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    switch (resource_snake_hmap_emplace_or_get(
+                        snakes, p->value.string, &snake))
+                    {
+                        case HMAP_OOM: return -1;
+                        case HMAP_NEW: resource_snake_init(snake); break;
+                        case HMAP_EXISTS:
+                            return parser_error(
+                                p,
+                                "Snake name \"%.*s\" already exists\n",
+                                key.len,
+                                key.data + key.off);
+                    }
+                    continue;
+                }
+
+                if (snake == NULL)
+                    return parser_error(
+                        p,
+                        "You need to specify the spine name first. "
+                        "Example:\n"
+                        "name = \"metal spine\"\n");
+
+                if (strview_eq_cstr(key, "head_sprite"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    if (str_set(&snake->head_sprite, p->value.string) != 0)
+                        return -1;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "tail_sprite"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    if (str_set(&snake->tail_sprite, p->value.string) != 0)
+                        return -1;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "body_sprites"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    tok = parse_string_list(p, &snake->body_sprites, NULL);
+                    goto reswitch_tok;
+                }
+
+                if (strview_eq_cstr(key, "spine"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_STRING)
+                        return parser_error(p, "Expected a string value\n");
+                    if (str_set(&snake->spine, p->value.string) != 0)
+                        return -1;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "part_spacing"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_FLOAT)
+                        return parser_error(
+                            p,
+                            "Expected a float value. Example: part_spacing = "
+                            "0.5\n");
+                    snake->part_spacing = p->value.float_literal;
+                    break;
+                }
+
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
 }
 
 static int parse_section(
     struct parser*        p,
-    const struct section* s,
+    struct strview        section,
     struct resource_pack* pack,
     const char*           path_prefix)
 {
-    if (strview_eq_cstr(s->section, "shaders"))
-    {
-        if (strview_eq_cstr(s->subsection, "glsl"))
-            return parse_section_glsl(p, pack, path_prefix);
-
-        if (s->subsection.len == 0)
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->section.off, s->section.len),
-                "Section 'shaders' requires a subsection for the shader "
-                "language. Example: [shaders.glsl]\n");
-        else
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->subsection.off, s->subsection.len),
-                "Unknown subsection \"%.*s\"\n",
-                s->subsection.len,
-                p->source + s->subsection.off);
-    }
-
-    if (strview_eq_cstr(s->section, "background"))
-    {
-        struct resource_sprite** bg;
-
-        if (s->section_index < 0)
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->section.off, s->section.len),
-                "Section 'background' requires an index. Example: "
-                "[background0]\n");
-
-        while (vec_count(pack->sprites.background) <= s->section_index)
-        {
-            if (resource_sprite_vec_push(&pack->sprites.background, NULL) != 0)
-                return -1;
-        }
-
-        bg = vec_get(pack->sprites.background, s->section_index);
-        if (*bg == NULL)
-        {
-            *bg = resource_sprite_create();
-            if (*bg == NULL)
-                return -1;
-        }
-        return parse_section_sprite(p, *bg, path_prefix);
-    }
-
-    if (strview_eq_cstr(s->section, "text"))
+    if (strview_eq_cstr(section, "shader"))
+        return parse_section_shader(p, &pack->shaders, path_prefix);
+    if (strview_eq_cstr(section, "background"))
+        return parse_section_background(p, &pack->background, path_prefix);
+    if (strview_eq_cstr(section, "text"))
         return parse_section_text(p, &pack->text, path_prefix);
-
-    if (strview_eq_cstr(s->section, "food"))
-    {
-        if (pack->sprites.food != NULL)
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->section.off, s->section.len),
-                "Section 'food' already defined!\n");
-
-        pack->sprites.food = resource_sprite_create();
-        if (pack->sprites.food == NULL)
-            return -1;
-
-        return parse_section_sprite(p, pack->sprites.food, path_prefix);
-    }
-
-    if (strview_eq_cstr(s->section, "snake"))
-    {
-        struct resource_snake_part_vec** snake_part_vec;
-        struct resource_snake_part*      snake_part;
-        struct resource_sprite**         sprite;
-        if (s->section_index < 0)
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->section.off, s->section.len),
-                "Section 'snake' requires an index. Example: "
-                "[snake0.head.base]\n");
-
-        if (strview_eq_cstr(s->subsection, "head"))
-            snake_part_vec = &pack->sprites.heads;
-        else if (strview_eq_cstr(s->subsection, "body"))
-            snake_part_vec = &pack->sprites.bodies;
-        else if (strview_eq_cstr(s->subsection, "tail"))
-            snake_part_vec = &pack->sprites.tails;
-        else
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->subsection.off, s->subsection.len),
-                "Unknown snake part \"%.*s\". Know 'head', 'body', and "
-                "'tail'\n",
-                s->subsection.len,
-                p->source + s->subsection.off);
-
-        while (vec_count(pack->sprites.heads) <= s->section_index)
-        {
-            snake_part = resource_snake_part_vec_emplace(&pack->sprites.heads);
-            if (snake_part == NULL)
-                return -1;
-            resource_snake_part_init(snake_part);
-        }
-        while (vec_count(pack->sprites.bodies) <= s->section_index)
-        {
-            snake_part = resource_snake_part_vec_emplace(&pack->sprites.bodies);
-            if (snake_part == NULL)
-                return -1;
-            resource_snake_part_init(snake_part);
-        }
-        while (vec_count(pack->sprites.tails) <= s->section_index)
-        {
-            snake_part = resource_snake_part_vec_emplace(&pack->sprites.tails);
-            if (snake_part == NULL)
-                return -1;
-            resource_snake_part_init(snake_part);
-        }
-        snake_part = vec_get(*snake_part_vec, s->section_index);
-
-        if (strview_eq_cstr(s->subsubsection, "base"))
-            sprite = &snake_part->base;
-        else if (strview_eq_cstr(s->subsubsection, "gather"))
-            sprite = &snake_part->gather;
-        else if (strview_eq_cstr(s->subsubsection, "boost"))
-            sprite = &snake_part->boost;
-        else if (strview_eq_cstr(s->subsubsection, "turn"))
-            sprite = &snake_part->turn;
-        else if (strview_eq_cstr(s->subsubsection, "projectile"))
-            sprite = &snake_part->projectile;
-        else if (strview_eq_cstr(s->subsubsection, "split"))
-            sprite = &snake_part->split;
-        else if (strview_eq_cstr(s->subsubsection, "armor"))
-            sprite = &snake_part->armor;
-        else
-            return print_error(
-                p->filename,
-                p->source,
-                strspan(s->subsubsection.off, s->subsubsection.len),
-                "Unknown snake part \"%.*s\". Know 'base', 'gather', 'boost', "
-                "'turn', 'projectile', 'split', and 'armor'\n",
-                s->subsubsection.len,
-                p->source + s->subsubsection.off);
-
-        if (*sprite == NULL)
-            *sprite = resource_sprite_create();
-        if (*sprite == NULL)
-            return -1;
-
-        return parse_section_sprite(p, *sprite, path_prefix);
-    }
+    if (strview_eq_cstr(section, "food"))
+        return parse_section_food(p, &pack->food);
+    if (strview_eq_cstr(section, "sprite"))
+        return parse_section_sprite(p, &pack->sprites, path_prefix);
+    if (strview_eq_cstr(section, "spine"))
+        return parse_section_spine(p, &pack->spines, path_prefix);
+    if (strview_eq_cstr(section, "snake"))
+        return parse_section_snake(p, &pack->snakes);
 
     return print_error(
         p->filename,
         p->source,
-        strspan(s->section.off, s->section.len),
+        strspan(section.off, section.len),
         "Unknown section \"%.*s\"\n",
-        s->section.len,
-        p->source + s->section.off);
+        section.len,
+        p->source + section.off);
 }
 
 static int
@@ -718,11 +940,16 @@ parse_ini(struct parser* p, struct resource_pack* pack, const char* path_prefix)
             case TOK_END: return 0;
 
             case '[': {
-                struct section section;
-                section_init(&section);
-                if (parse_section_desc(p, &section) != ']')
+                struct strview section;
+                if (scan_next_token(p) != TOK_KEY)
+                    return parser_error(
+                        p,
+                        "Expected a section name within the brackets. "
+                        "Example: [section]\n");
+                section = p->value.string;
+                if (scan_next_token(p) != ']')
                     return parser_error(p, "Missing closing bracket ']'\n");
-                tok = parse_section(p, &section, pack, path_prefix);
+                tok = parse_section(p, section, pack, path_prefix);
                 goto reswitch_tok;
             }
 
@@ -730,7 +957,7 @@ parse_ini(struct parser* p, struct resource_pack* pack, const char* path_prefix)
                 return parser_error(
                     p,
                     "Unexpected token encountered. Expected a section name. "
-                    "Example: [section.subsection]\n");
+                    "Example: [section]\n");
         }
     }
 }

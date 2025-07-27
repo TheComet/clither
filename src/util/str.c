@@ -20,21 +20,25 @@ void str_deinit(struct str* str)
     str_impl_deinit((struct str_impl*)str);
 }
 
-int str_set_cstr(struct str** str, const char* cstr)
+int str_set(struct str** str, struct strview view)
 {
     struct str_impl* impl;
-    int              len = (int)strlen(cstr);
 
-    if (vec_capacity((struct str_impl*)*str) < len + 1)
-        if (str_impl_realloc((struct str_impl**)str, len + 1) != 0)
+    if (vec_capacity((struct str_impl*)*str) < view.len + 1)
+        if (str_impl_realloc((struct str_impl**)str, view.len + 1) != 0)
             return -1;
 
     impl = (struct str_impl*)*str;
-    memcpy(impl->data, cstr, len);
-    impl->data[len] = '\0';
-    impl->count = len + 1;
+    memcpy(impl->data, view.data + view.off, view.len);
+    impl->data[view.len] = '\0';
+    impl->count = view.len + 1;
 
     return 0;
+}
+
+int str_set_cstr(struct str** str, const char* cstr)
+{
+    return str_set(str, strview(cstr, 0, (int)strlen(cstr)));
 }
 
 int str_set_path_cstr(struct str** str, const char* path)

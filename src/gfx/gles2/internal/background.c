@@ -1,8 +1,8 @@
 #include "./gfx.h"
+#include "./gfx_constants.h"
 #include "./shader.h"
 #include "clither/game/camera.h"
 #include "clither/game/resource_pack.h"
-#include "clither/game/resource_sprite_vec.h"
 #include "clither/game/world.h"
 #include "clither/util/strlist.h"
 #include "stb_image.h"
@@ -13,11 +13,14 @@ int gfx_gles2_background_init(
     int                fbheight,
     int                shadow_map_size_factor)
 {
+    int i;
+
     memset(bg, 0, sizeof *bg);
 
     /* Set up shadow framebuffer */
     glGenTextures(1, &bg->texShadow);
     gfx_track_tex(bg->texShadow);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
     glTexImage2D(
         GL_TEXTURE_2D,
@@ -33,7 +36,6 @@ int gfx_gles2_background_init(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenFramebuffers(1, &bg->fbo);
     gfx_track_fbo(bg->fbo);
@@ -47,36 +49,19 @@ int gfx_gles2_background_init(
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    /* Prepare background textures */
-    glGenTextures(1, &bg->texCol);
-    gfx_track_tex(bg->texCol);
-    glBindTexture(GL_TEXTURE_2D, bg->texCol);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(
-        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glGenTextures(1, &bg->texNor);
-    gfx_track_tex(bg->texNor);
-    glBindTexture(GL_TEXTURE_2D, bg->texNor);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(
-        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
     /* Set default values for shader uniforms */
-    bg->program = 0;
-    bg->uAspectRatio = (GLuint)-1;
-    bg->uCamera = (GLuint)-1;
-    bg->uShadowInvRes = (GLuint)-1;
-    bg->uWorldBorder = (GLuint)-1;
-    bg->sShadow = (GLuint)-1;
-    bg->sCol = (GLuint)-1;
-    bg->sNM = (GLuint)-1;
+    bg->program = INVALID_HANDLE;
+    bg->uAspectRatio = INVALID_UNIFORM_LOCATION;
+    bg->uCamera = INVALID_UNIFORM_LOCATION;
+    bg->uShadowInvRes = INVALID_UNIFORM_LOCATION;
+    bg->uWorldBorder = INVALID_UNIFORM_LOCATION;
+    bg->sShadow = INVALID_UNIFORM_LOCATION;
+
+    for (i = 0; i != MAX_TEXTURE_SAMPLERS; ++i)
+    {
+        bg->tex[i] = INVALID_HANDLE;
+        bg->sTex[i] = INVALID_UNIFORM_LOCATION;
+    }
 
     return 0;
 
@@ -90,12 +75,6 @@ incomplete_shadow_framebuffer:
 
 void gfx_gles2_background_deinit(struct background* bg)
 {
-    gfx_untrack_tex(bg->texNor);
-    glDeleteTextures(1, &bg->texNor);
-
-    gfx_untrack_tex(bg->texCol);
-    glDeleteTextures(1, &bg->texCol);
-
     gfx_untrack_fbo(bg->fbo);
     glDeleteFramebuffers(1, &bg->fbo);
 
@@ -115,6 +94,7 @@ void gfx_gles2_background_resize(
     int                fbheight,
     int                shadow_map_size_factor)
 {
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
     glTexImage2D(
         GL_TEXTURE_2D,
@@ -126,7 +106,6 @@ void gfx_gles2_background_resize(
         GL_RGB,
         GL_UNSIGNED_BYTE,
         NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
     glFramebufferTexture2D(
@@ -135,23 +114,17 @@ void gfx_gles2_background_resize(
 }
 
 int gfx_gles2_background_load(
-    struct background* bg, const struct resource_pack* pack)
+    struct background*                bg,
+    const struct resource_background* res,
+    const struct resource_shader*     shader)
 {
-    int             img_width, img_height, img_channels;
-    stbi_uc*        img_data;
-    struct strlist* textures;
+    int         i;
+    int         img_width, img_height, img_channels;
+    const char* tex_filename;
 
-    /* For now we only support a single background layer */
-    if (vec_count(pack->sprites.background) == 0)
-    {
-        log_warn("No background texture defined\n");
-        return -1;
-    }
-
-    /* Load shaders */
     CLITHER_DEBUG_ASSERT(bg->program == 0);
-    bg->program = gfx_gles2_load_shader(
-        pack->shaders.glsl.background, gfx_gles2_quad_attr_bindings);
+    bg->program =
+        gfx_gles2_load_shader(shader->background, gfx_gles2_quad_attr_bindings);
     if (bg->program == 0)
         return -1;
     gfx_track_shader(bg->program);
@@ -166,68 +139,47 @@ int gfx_gles2_background_load(
         gfx_gles2_get_uniform_location_and_warn(bg->program, "uWorldBorder");
     bg->sShadow =
         gfx_gles2_get_uniform_location_and_warn(bg->program, "sShadow");
-    bg->sCol = gfx_gles2_get_uniform_location_and_warn(bg->program, "sCol");
-    bg->sNM = gfx_gles2_get_uniform_location_and_warn(bg->program, "sNM");
 
-    textures = (*vec_first(pack->sprites.background))->textures;
-    if (strlist_count(textures) > 0)
+    strlist_for_each (res->textures, i, tex_filename)
     {
-        img_data = stbi_load(
-            strlist_cstr(textures, 0),
-            &img_width,
-            &img_height,
-            &img_channels,
-            3);
-        if (img_data)
+        char     uniform_name[] = "sTexX";
+        stbi_uc* img_data =
+            stbi_load(tex_filename, &img_width, &img_height, &img_channels, 3);
+        if (img_data == NULL)
         {
-            glBindTexture(GL_TEXTURE_2D, bg->texCol);
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGB,
-                img_width,
-                img_height,
-                0,
-                GL_RGB,
-                GL_UNSIGNED_BYTE,
-                img_data);
-            glGenerateMipmap(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            stbi_image_free(img_data);
-        }
-        else
             log_warn(
-                "Failed to load image \"%s\"\n", strlist_cstr(textures, 0));
-    }
+                "Failed to load image \"%s\"\n",
+                strlist_cstr(res->textures, 0));
+            continue;
+        }
 
-    if (strlist_count(textures) > 1)
-    {
-        img_data = stbi_load(
-            strlist_cstr(textures, 1),
-            &img_width,
-            &img_height,
-            &img_channels,
-            3);
-        if (img_data)
-        {
-            glBindTexture(GL_TEXTURE_2D, bg->texNor);
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGB,
-                img_width,
-                img_height,
-                0,
-                GL_RGB,
-                GL_UNSIGNED_BYTE,
-                img_data);
-            glGenerateMipmap(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            stbi_image_free(img_data);
-        }
-        else
-            log_warn(
-                "Failed to load image \"%s\"\n", strlist_cstr(textures, 1));
+        glGenTextures(1, &bg->tex[i]);
+        gfx_track_tex(bg->tex[i]);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, bg->tex[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(
+            GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGB,
+            img_width,
+            img_height,
+            0,
+            GL_RGB,
+            GL_UNSIGNED_BYTE,
+            img_data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        stbi_image_free(img_data);
+
+        uniform_name[4] = '0' + i;
+        bg->sTex[i] =
+            gfx_gles2_get_uniform_location_and_warn(bg->program, uniform_name);
     }
 
     return 0;
@@ -235,6 +187,8 @@ int gfx_gles2_background_load(
 
 void gfx_gles2_background_unload(struct background* bg)
 {
+    int i;
+
     if (bg->program != 0)
     {
         gfx_untrack_shader(bg->program);
@@ -242,13 +196,14 @@ void gfx_gles2_background_unload(struct background* bg)
         bg->program = 0;
     }
 
-    glBindTexture(GL_TEXTURE_2D, bg->texCol);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glBindTexture(GL_TEXTURE_2D, bg->texNor);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    for (i = 0; i != MAX_TEXTURE_SAMPLERS; ++i)
+        if (bg->tex[i] != INVALID_HANDLE)
+        {
+            gfx_untrack_tex(bg->tex[i]);
+            glDeleteTextures(1, &bg->tex[i]);
+            bg->tex[i] = INVALID_HANDLE;
+            bg->sTex[i] = INVALID_UNIFORM_LOCATION;
+        }
 }
 
 void gfx_gles2_background_draw(
@@ -258,13 +213,21 @@ void gfx_gles2_background_draw(
     const struct aspect_ratio* ar,
     int                        shadow_map_size_factor)
 {
+    int i;
+
     gfx_gles2_quad_mesh_prepare_draw(&gfx->quad_mesh);
     glUseProgram(gfx->background.program);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gfx->background.texShadow);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, gfx->background.texCol);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, gfx->background.texNor);
+    glUniform1i(gfx->background.sShadow, 0);
+
+    for (i = 0; i != MAX_TEXTURE_SAMPLERS; ++i)
+        if (gfx->background.tex[i] != INVALID_HANDLE)
+        {
+            glActiveTexture(GL_TEXTURE0 + 1 + i);
+            glBindTexture(GL_TEXTURE_2D, gfx->background.tex[i]);
+            glUniform1i(gfx->background.sTex[i], 1 + i);
+        }
 
     glUniform4f(
         gfx->background.uAspectRatio,
@@ -286,16 +249,9 @@ void gfx_gles2_background_draw(
         qw_to_float(world->inner_radius),
         qw_to_float(world->ring_start),
         qw_to_float(world->ring_end));
-    glUniform1i(gfx->background.sCol, 1);
-    glUniform1i(gfx->background.sNM, 2);
 
     gfx_gles2_quad_mesh_draw();
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
     gfx_gles2_quad_mesh_end_draw();
 }
