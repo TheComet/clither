@@ -12,6 +12,7 @@ struct gfx_part_sample
 };
 
 VEC_DECLARE(gfx_part_sample_vec, struct gfx_part_sample, 32)
+VEC_DECLARE(gfx_sprite_tex_vec, struct gfx_sprite_tex, 8)
 
 struct aspect_ratio;
 struct camera;
@@ -23,12 +24,12 @@ struct snake;
 
 struct gfx_snake
 {
-    struct gfx_sprite_tex head_base;
-    struct gfx_sprite_tex head_gather;
-    struct gfx_sprite_tex body_base;
-    struct gfx_sprite_tex tail_base;
-    struct spine          spine;
-    GLfloat               part_spacing;
+    struct gfx_sprite_tex      head_base;
+    struct gfx_sprite_tex      head_gather;
+    struct gfx_sprite_tex_vec* body_base;
+    struct gfx_sprite_tex      tail_base;
+    struct spine               spine;
+    GLfloat                    part_spacing;
 
     /* Working buffer of samples for rendering */
     struct gfx_part_sample_vec* part_samples;

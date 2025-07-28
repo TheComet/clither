@@ -165,7 +165,7 @@ int gfx_gles2_spine_load(
         spine->sTex[i] = glGetUniformLocation(spine->program, uniform_name);
     }
 
-    strlist_for_each (res->textures, i, tex_filename)
+    strlist_for_each_cstr (res->textures, i, tex_filename)
     {
         log_dbg("Loading texture \"%s\"\n", tex_filename);
         img_data =

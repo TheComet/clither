@@ -53,6 +53,7 @@ ForEachMacros: [
     rb_for_each_r,
     server_client_hmap_for_each,
     strlist_for_each,
+    strlist_for_each_cstr,
     vec_for_each,
     vec_for_each_r,
     vec_enumerate

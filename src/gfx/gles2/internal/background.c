@@ -9,9 +9,9 @@
 
 int gfx_gles2_background_init(
     struct gfx_background* bg,
-    int                fbwidth,
-    int                fbheight,
-    int                shadow_map_size_factor)
+    int                    fbwidth,
+    int                    fbheight,
+    int                    shadow_map_size_factor)
 {
     int i;
 
@@ -90,9 +90,9 @@ void gfx_gles2_background_deinit(struct gfx_background* bg)
 
 void gfx_gles2_background_resize(
     struct gfx_background* bg,
-    int                fbwidth,
-    int                fbheight,
-    int                shadow_map_size_factor)
+    int                    fbwidth,
+    int                    fbheight,
+    int                    shadow_map_size_factor)
 {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
@@ -114,7 +114,7 @@ void gfx_gles2_background_resize(
 }
 
 int gfx_gles2_background_load(
-    struct gfx_background*                bg,
+    struct gfx_background*            bg,
     const struct resource_background* res,
     const struct resource_shader*     shader)
 {
@@ -140,7 +140,7 @@ int gfx_gles2_background_load(
     bg->sShadow =
         gfx_gles2_get_uniform_location_and_warn(bg->program, "sShadow");
 
-    strlist_for_each (res->textures, i, tex_filename)
+    strlist_for_each_cstr (res->textures, i, tex_filename)
     {
         char     uniform_name[] = "sTexX";
         stbi_uc* img_data =

@@ -75,6 +75,9 @@ static int strlist_count(const struct strlist* l)
  */
 int strlist_lower_bound(const struct strlist* l, struct strview str);
 
-#define strlist_for_each(l, i, var)                                            \
+#define strlist_for_each_cstr(l, i, var)                                            \
     for (i = 0; (l) && i != (l)->count && ((var = strlist_cstr((l), i)), 1);   \
+         ++i)
+#define strlist_for_each(l, i, var)                                            \
+    for (i = 0; (l) && i != (l)->count && ((var = strlist_view((l), i)), 1);   \
          ++i)

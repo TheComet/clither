@@ -97,7 +97,7 @@ void gfx_gles2_sprite_tex_load(
     stbi_uc*    img_data;
     const char* tex_filename;
 
-    strlist_for_each (res->textures, i, tex_filename)
+    strlist_for_each_cstr(res->textures, i, tex_filename)
     {
         log_dbg("Loading texture \"%s\"\n", tex_filename);
         img_data =
@@ -156,9 +156,9 @@ void gfx_gles2_sprite_tex_unload(struct gfx_sprite_tex* tex)
 }
 
 void gfx_gles2_sprite_prepare_draw(
-    const struct gfx_quad_mesh*    mesh,
-    const struct gfx_sprite_mat*   mat,
-    const struct aspect_ratio* ar)
+    const struct gfx_quad_mesh*  mesh,
+    const struct gfx_sprite_mat* mat,
+    const struct aspect_ratio*   ar)
 {
     int i;
 
@@ -196,10 +196,10 @@ void gfx_gles2_sprite_end_draw(void)
 int gfx_gles2_sprite_update_uniforms(
     const struct gfx_sprite_mat* mat,
     const struct gfx_sprite_tex* tex,
-    struct qwpos             pos,
-    struct qwpos             dir,
-    qw                       scale,
-    const struct camera*     camera)
+    struct qwpos                 pos,
+    struct qwpos                 dir,
+    qw                           scale,
+    const struct camera*         camera)
 {
     int tile_x, tile_y;
     struct

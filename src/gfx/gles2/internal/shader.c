@@ -60,7 +60,7 @@ GLuint gfx_gles2_load_shader(
         goto create_program_failed;
     }
 
-    strlist_for_each (shader_fnames, i, fname)
+    strlist_for_each_cstr (shader_fnames, i, fname)
     {
         GLuint       shader;
         struct mfile source;
