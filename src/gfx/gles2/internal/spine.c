@@ -8,7 +8,7 @@
 #include "clither/util/strlist.h"
 #include "stb_image.h"
 
-#define QUADS 20
+#define QUADS 8
 
 struct vertex
 {
@@ -17,31 +17,20 @@ struct vertex
 
 static struct vertex vertex(GLfloat x, GLfloat y)
 {
-    struct vertex v;
-    v.pos[0] = x;
-    v.pos[1] = y;
-    return v;
+    struct vertex vert;
+    vert.pos[0] = x;
+    vert.pos[1] = y;
+    return vert;
 }
 
-static struct vertex spine_vertices[2 * QUADS + 2];
-static const char*   attr_bindings[] = {"vPosition", NULL};
-
-/* ------------------------------------------------------------------------- */
-static void spine_vertices_init(void)
-{
-    int i;
-    for (i = 0; i <= QUADS; ++i)
-    {
-        GLfloat x = (GLfloat)i / QUADS;
-        spine_vertices[i * 2 + 0] = vertex(x, -1);
-        spine_vertices[i * 2 + 1] = vertex(x, 1);
-    }
-}
+static const char* attr_bindings[] = {"vPosition", NULL};
 
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_spine_init(struct spine* spine)
 {
-    int i;
+    int           i;
+    struct vertex spine_vertices[2 * QUADS + 2];
+
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
     {
         spine->tex[i] = INVALID_HANDLE;
@@ -50,17 +39,24 @@ void gfx_gles2_spine_init(struct spine* spine)
 
     spine->program = INVALID_HANDLE;
     spine->uCoeff = INVALID_UNIFORM_LOCATION;
-    spine->uWidth = INVALID_UNIFORM_LOCATION;
+    spine->uBezierSize = INVALID_UNIFORM_LOCATION;
     spine->uAspectRatio = INVALID_UNIFORM_LOCATION;
     spine->uHeadPosition = INVALID_UNIFORM_LOCATION;
-    spine->uScroll = INVALID_UNIFORM_LOCATION;
+    spine->uScrollScaleOffset = INVALID_UNIFORM_LOCATION;
+    spine->uCutoff = INVALID_UNIFORM_LOCATION;
 
-    spine->width = 1.0;
+    spine->spine_width = 1.0;
+    spine->tex_aspect_ratio = 0;
 
+    for (i = 0; i <= QUADS; ++i)
+    {
+        GLfloat x = (GLfloat)i / QUADS;
+        spine_vertices[i * 2 + 0] = vertex(x, -1);
+        spine_vertices[i * 2 + 1] = vertex(x, 1);
+    }
     glGenBuffers(1, &spine->vbo);
     gfx_track_buf(spine->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, spine->vbo);
-    spine_vertices_init();
     glBufferData(
         GL_ARRAY_BUFFER,
         sizeof(spine_vertices),
@@ -83,6 +79,54 @@ void gfx_gles2_spine_deinit(struct spine* spine)
 }
 
 /* ------------------------------------------------------------------------- */
+static GLfloat bezier_length(const struct bezier_segment* segment)
+{
+    int     v;
+    GLfloat last_x = 0.0, last_y = 0.0;
+    GLfloat length = 0.0;
+    for (v = 1; v <= QUADS; ++v)
+    {
+        qw           t = make_qw2(v, QUADS);
+        struct qwpos pos = bezier_xy(segment, t);
+        GLfloat      pos_x = qw_to_float(pos.x);
+        GLfloat      pos_y = qw_to_float(pos.y);
+        GLfloat      dx = pos_x - last_x;
+        GLfloat      dy = pos_y - last_y;
+        length += sqrtf(dx * dx + dy * dy);
+        last_x = pos_x;
+        last_y = pos_y;
+    }
+
+    return length;
+}
+
+/* ------------------------------------------------------------------------- */
+static GLfloat
+bezier_t_cutoff(const struct bezier_segment* segment, GLfloat length)
+{
+    int     v;
+    GLfloat last_x = 0.0, last_y = 0.0;
+    GLfloat total_length = 0.0;
+    for (v = 1; v <= QUADS; ++v)
+    {
+        qw           t = make_qw2(v, QUADS);
+        struct qwpos pos = bezier_xy(segment, t);
+        GLfloat      pos_x = qw_to_float(pos.x);
+        GLfloat      pos_y = qw_to_float(pos.y);
+        GLfloat      dx = pos_x - last_x;
+        GLfloat      dy = pos_y - last_y;
+        total_length += sqrtf(dx * dx + dy * dy);
+        last_x = pos_x;
+        last_y = pos_y;
+
+        if (total_length >= length)
+            return 1.0 - qw_to_float(t);
+    }
+
+    return 1.0;
+}
+
+/* ------------------------------------------------------------------------- */
 int gfx_gles2_spine_load(
     struct spine*                 spine,
     const struct resource_spine*  res,
@@ -93,7 +137,7 @@ int gfx_gles2_spine_load(
     stbi_uc*    img_data;
     const char* tex_filename;
 
-    spine->width = res->width;
+    spine->spine_width = res->width;
 
     CLITHER_DEBUG_ASSERT(spine->program == 0);
     spine->program = gfx_gles2_load_shader(shader->spine, attr_bindings);
@@ -103,14 +147,16 @@ int gfx_gles2_spine_load(
 
     spine->uCoeff =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uCoeff");
-    spine->uWidth =
-        gfx_gles2_get_uniform_location_and_warn(spine->program, "uWidth");
+    spine->uBezierSize =
+        gfx_gles2_get_uniform_location_and_warn(spine->program, "uBezierSize");
     spine->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uAspectRatio");
     spine->uHeadPosition = gfx_gles2_get_uniform_location_and_warn(
         spine->program, "uHeadPosition");
-    spine->uScroll =
-        gfx_gles2_get_uniform_location_and_warn(spine->program, "uScroll");
+    spine->uScrollScaleOffset = gfx_gles2_get_uniform_location_and_warn(
+        spine->program, "uScrollScaleOffset");
+    spine->uCutoff =
+        gfx_gles2_get_uniform_location_and_warn(spine->program, "uCutoff");
 
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
     {
@@ -130,6 +176,8 @@ int gfx_gles2_spine_load(
             continue;
         }
 
+        spine->tex_aspect_ratio = (GLfloat)img_height / (GLfloat)img_width;
+
         glGenTextures(1, &spine->tex[i]);
         gfx_track_tex(spine->tex[i]);
         glActiveTexture(GL_TEXTURE0);
@@ -148,6 +196,7 @@ int gfx_gles2_spine_load(
             GL_RGBA,
             GL_UNSIGNED_BYTE,
             img_data);
+
         stbi_image_free(img_data);
     }
 
@@ -195,13 +244,17 @@ void gfx_gles2_spine_draw(
     const struct spine*             spine,
     const struct bezier_segment_rb* segments,
     qw                              snake_scale,
+    qw                              snake_length,
     const struct camera*            camera,
     const struct aspect_ratio*      ar)
 {
     int                          i, c;
     const struct bezier_segment* segment;
     GLfloat                      coeff[6];
-    GLfloat                      scroll = 0.0f;
+    GLfloat                      scroll_offset;
+    GLfloat                      total_length;
+    GLfloat width = spine->spine_width * qw_to_float(snake_scale);
+    GLfloat snake_length_f = qw_to_float(snake_length);
 
     glBindBuffer(GL_ARRAY_BUFFER, spine->vbo);
     glEnableVertexAttribArray(0);
@@ -213,25 +266,19 @@ void gfx_gles2_spine_draw(
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, pos));
 
-    glUniform1f(spine->uWidth, spine->width * qw_to_float(snake_scale));
     glUniform3f(
         spine->uAspectRatio,
         ar->scale_x,
         ar->scale_y,
         qw_to_float(camera->scale));
 
+    scroll_offset = 0.0;
+    total_length = 0.0;
     rb_for_each_r (segments, i, segment)
     {
-        GLfloat dx =
-            qw_to_float(segment->p[3].x) - qw_to_float(segment->p[0].x);
-        GLfloat dy =
-            qw_to_float(segment->p[3].y) - qw_to_float(segment->p[0].y);
-        GLfloat length = sqrtf(dx * dx + dy * dy);
-        GLfloat width = spine->width * qw_to_float(snake_scale);
+        GLfloat length = bezier_length(segment);
         GLfloat bezier_aspect = length / width;
-        GLfloat tex_width = 1024;
-        GLfloat tex_height = 160;
-        GLfloat tex_aspect = tex_height / tex_width;
+
         GLfloat head_x =
             qw_to_float(segment->p[0].x) - qw_to_float(camera->pos.x);
         GLfloat head_y =
@@ -242,13 +289,23 @@ void gfx_gles2_spine_draw(
             coeff[c * 2 + 1] = qw_to_float(segment->coeff[c].y);
         }
 
-        glUniform2f(spine->uHeadPosition, head_x, head_y);
         glUniform2fv(spine->uCoeff, 3, coeff);
-        glUniform2f(spine->uScroll, scroll, bezier_aspect * tex_aspect);
+        glUniform2f(spine->uBezierSize, width, length);
+        glUniform2f(spine->uHeadPosition, head_x, head_y);
+        glUniform2f(
+            spine->uScrollScaleOffset,
+            bezier_aspect * spine->tex_aspect_ratio,
+            scroll_offset);
+        glUniform1f(
+            spine->uCutoff, snake_length_f / width * spine->tex_aspect_ratio);
+
+        scroll_offset += bezier_aspect * spine->tex_aspect_ratio;
+        total_length += length;
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 2 * QUADS + 2);
 
-        scroll += bezier_aspect * tex_aspect;
+        if (total_length > snake_length_f)
+            break;
     }
 
     glDisableVertexAttribArray(0);

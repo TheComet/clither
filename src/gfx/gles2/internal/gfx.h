@@ -2,6 +2,7 @@
 
 #include "./background.h"
 #include "./quad.h"
+#include "./snake.h"
 #include "./spine.h"
 #include "./sprite.h"
 #include "./sprite_shadow.h"
@@ -45,24 +46,18 @@ struct gfx
 
     struct input input_buffer;
 
-    struct font           font;
+    struct gfx_font       font;
     struct gfx_text_hmap* text_hmap;
 
-    struct background        background;
-    struct quad_mesh         quad_mesh;
-    struct sprite_mat        sprite_mat;
-    struct sprite_shadow_mat sprite_shadow_mat;
-    struct sprite_tex        food;
-    struct sprite_tex        head0_base;
-    struct sprite_tex        head0_gather;
-    struct sprite_tex        body0_base;
-    struct sprite_tex        tail0_base;
-    GLfloat                  part_spacing;
-
-    struct spine spine;
+    struct gfx_background        background;
+    struct gfx_quad_mesh         quad_mesh;
+    struct gfx_sprite_mat        sprite_mat;
+    struct gfx_sprite_shadow_mat sprite_shadow_mat;
+    struct gfx_snake             snake;
+    struct gfx_sprite_tex        food;
 
 #if defined(CLITHER_GFX_DEBUG)
-    struct debug debug;
+    struct gfx_debug debug;
 #endif
 };
 

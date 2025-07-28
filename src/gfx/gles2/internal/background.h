@@ -10,7 +10,7 @@ struct resource_background;
 struct resource_shader;
 struct world;
 
-struct background
+struct gfx_background
 {
     GLuint program;
     GLuint fbo;
@@ -25,21 +25,21 @@ struct background
 };
 
 int gfx_gles2_background_init(
-    struct background* bg,
-    int                fbwidth,
-    int                fbheight,
-    int                shadow_map_size_factor);
-void gfx_gles2_background_deinit(struct background* bg);
+    struct gfx_background* bg,
+    int                    fbwidth,
+    int                    fbheight,
+    int                    shadow_map_size_factor);
+void gfx_gles2_background_deinit(struct gfx_background* bg);
 void gfx_gles2_background_resize(
-    struct background* bg,
-    int                fbwidth,
-    int                fbheight,
-    int                shadow_map_size_factor);
+    struct gfx_background* bg,
+    int                    fbwidth,
+    int                    fbheight,
+    int                    shadow_map_size_factor);
 int gfx_gles2_background_load(
-    struct background*                bg,
+    struct gfx_background*            bg,
     const struct resource_background* res,
     const struct resource_shader*     shader);
-void gfx_gles2_background_unload(struct background* bg);
+void gfx_gles2_background_unload(struct gfx_background* bg);
 void gfx_gles2_background_draw(
     const struct world*        world,
     const struct gfx*          gfx,

@@ -3,6 +3,7 @@
 #include "./internal/snake.h"
 #include "GLFW/glfw3.h"
 #include "clither/game/camera.h"
+#include "clither/game/qwpos_vec.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_bmap.h"
@@ -206,6 +207,13 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     if (gfx_gles2_sprite_mat_load(&gfx->sprite_mat, shader) < 0)
         goto sprite_mat_load_failed;
 
+    snake = resource_snake_hmap_find(
+        pack->snakes, strview("snake", 0, sizeof("snake") - 1));
+    if (snake != NULL)
+    {
+        gfx_gles2_snake_load(&gfx->snake, snake, pack, shader);
+    }
+
     if (str_len(pack->food.sprite) > 0)
     {
         struct resource_sprite* sprite = resource_sprite_hmap_find(
@@ -214,39 +222,6 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         {
             gfx_gles2_sprite_tex_load(
                 &gfx->food, &sprite->layer[RESOURCE_LAYER_BASE]);
-        }
-    }
-
-    snake = resource_snake_hmap_find(
-        pack->snakes, strview("snake", 0, sizeof("snake") - 1));
-    if (snake != NULL)
-    {
-        struct resource_sprite* sprite;
-        struct resource_spine*  spine;
-
-        sprite = resource_sprite_hmap_find(
-            pack->sprites, str_view(snake->head_sprite));
-        if (sprite != NULL)
-        {
-            gfx_gles2_sprite_tex_load(
-                &gfx->head0_base, &sprite->layer[RESOURCE_LAYER_BASE]);
-            gfx_gles2_sprite_tex_load(
-                &gfx->head0_gather, &sprite->layer[RESOURCE_LAYER_GATHER]);
-        }
-
-        sprite = resource_sprite_hmap_find(
-            pack->sprites, strlist_view(snake->body_sprites, 0));
-        if (sprite != NULL)
-        {
-            gfx_gles2_sprite_tex_load(
-                &gfx->body0_base, &sprite->layer[RESOURCE_LAYER_BASE]);
-        }
-        gfx->part_spacing = snake->part_spacing;
-
-        spine = resource_spine_hmap_find(pack->spines, str_view(snake->spine));
-        if (spine != NULL)
-        {
-            gfx_gles2_spine_load(&gfx->spine, spine, shader);
         }
     }
 
@@ -270,40 +245,9 @@ font_load_failed:
 static void gfx_gles2_unload_resource_pack(
     struct gfx* gfx, const struct resource_pack* pack)
 {
-    struct resource_snake* snake;
-
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_unload(&gfx->debug);
 #endif
-
-    snake = resource_snake_hmap_find(
-        pack->snakes, strview("snake", 0, sizeof("snake") - 1));
-    if (snake != NULL)
-    {
-        struct resource_sprite* sprite;
-        struct resource_spine*  spine;
-
-        spine = resource_spine_hmap_find(pack->spines, str_view(snake->spine));
-        if (spine != NULL)
-        {
-            gfx_gles2_spine_unload(&gfx->spine);
-        }
-
-        sprite = resource_sprite_hmap_find(
-            pack->sprites, strlist_view(snake->body_sprites, 0));
-        if (sprite != NULL)
-        {
-            gfx_gles2_sprite_tex_unload(&gfx->body0_base);
-        }
-
-        sprite = resource_sprite_hmap_find(
-            pack->sprites, str_view(snake->head_sprite));
-        if (sprite != NULL)
-        {
-            gfx_gles2_sprite_tex_unload(&gfx->head0_base);
-            gfx_gles2_sprite_tex_unload(&gfx->head0_gather);
-        }
-    }
 
     if (str_len(pack->food.sprite) > 0)
     {
@@ -313,6 +257,7 @@ static void gfx_gles2_unload_resource_pack(
             gfx_gles2_sprite_tex_unload(&gfx->food);
     }
 
+    gfx_gles2_snake_unload(&gfx->snake);
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
     gfx_gles2_background_unload(&gfx->background);
@@ -403,13 +348,8 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_quad_mesh_init(&gfx->quad_mesh);
     gfx_gles2_sprite_shadow_init(&gfx->sprite_shadow_mat);
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
+    gfx_gles2_snake_init(&gfx->snake);
     gfx_gles2_sprite_tex_init(&gfx->food);
-    gfx_gles2_sprite_tex_init(&gfx->head0_base);
-    gfx_gles2_sprite_tex_init(&gfx->head0_gather);
-    gfx_gles2_sprite_tex_init(&gfx->body0_base);
-    gfx->part_spacing = 0.15;
-
-    gfx_gles2_spine_init(&gfx->spine);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -447,12 +387,8 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_debug_deinit(&gfx->debug);
 #endif
 
-    gfx_gles2_spine_deinit(&gfx->spine);
-
-    gfx_gles2_sprite_tex_deinit(&gfx->body0_base);
-    gfx_gles2_sprite_tex_deinit(&gfx->head0_gather);
-    gfx_gles2_sprite_tex_deinit(&gfx->head0_base);
     gfx_gles2_sprite_tex_deinit(&gfx->food);
+    gfx_gles2_snake_deinit(&gfx->snake);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
@@ -540,9 +476,8 @@ static struct cmd gfx_gles2_next_cmd(
 /* ------------------------------------------------------------------------- */
 static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 {
-    gfx_gles2_step_sprite_anim(&gfx->food, sim_tick_rate);
-    gfx_gles2_step_sprite_anim(&gfx->head0_base, sim_tick_rate);
-    gfx_gles2_step_sprite_anim(&gfx->body0_base, sim_tick_rate);
+    gfx_gles2_sprite_step_anim(&gfx->food, sim_tick_rate);
+    gfx_gles2_snake_step_anim(&gfx->snake, sim_tick_rate);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -572,19 +507,18 @@ static void gfx_gles2_draw_world(
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    bmap_for_each (world->snakes, idx, snake_id, snake)
-    {
-        (void)snake_id;
-        if (snake_is_dead(snake))
-            continue;
-        gfx_gles2_draw_snake_shadow(
-            snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
-    }
-    gfx_gles2_draw_food_shadows(
-        world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+    // bmap_for_each (world->snakes, idx, snake_id, snake)
+    //{
+    //     (void)snake_id;
+    //     if (snake_is_dead(snake))
+    //         continue;
+    //     gfx_gles2_draw_snake_shadow(
+    //         snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+    // }
+    // gfx_gles2_draw_food_shadows(
+    //     world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
 
     gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
-
     gfx_gles2_draw_food(world->food_bmap, gfx, camera, &ar);
 
     bmap_for_each (world->snakes, idx, snake_id, snake)
@@ -592,8 +526,7 @@ static void gfx_gles2_draw_world(
         (void)snake_id;
         if (snake_is_dead(snake))
             continue;
-        gfx_gles2_draw_snake_spine(snake, gfx, camera, &ar);
-        gfx_gles2_draw_snake(snake, gfx, camera, &ar);
+        gfx_gles2_draw_snake(&gfx->snake, gfx, snake, camera, &ar);
     }
 
     hmap_for_each (gfx->text_hmap, idx, str, text)

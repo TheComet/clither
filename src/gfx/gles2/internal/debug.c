@@ -32,7 +32,7 @@ static const char fs[] =
     "    gl_FragColor = vec4(uColor, t);\n"
     "}\n";
 
-void gfx_gles2_debug_init(struct debug* debug)
+void gfx_gles2_debug_init(struct gfx_debug* debug)
 {
     debug->mat.program = 0;
     debug->mat.uPosCameraSpace = (GLuint)-1;
@@ -43,7 +43,7 @@ void gfx_gles2_debug_init(struct debug* debug)
     debug_circle_vec_init(&debug->circles);
 }
 
-void gfx_gles2_debug_deinit(struct debug* debug)
+void gfx_gles2_debug_deinit(struct gfx_debug* debug)
 {
     debug_circle_vec_deinit(debug->circles);
 
@@ -51,7 +51,7 @@ void gfx_gles2_debug_deinit(struct debug* debug)
         glDeleteProgram(debug->mat.program);
 }
 
-int gfx_gles2_debug_load(struct debug* debug)
+int gfx_gles2_debug_load(struct gfx_debug* debug)
 {
     GLuint shader;
     GLint  linked;
@@ -102,7 +102,7 @@ int gfx_gles2_debug_load(struct debug* debug)
     return 0;
 }
 
-void gfx_gles2_debug_unload(struct debug* debug)
+void gfx_gles2_debug_unload(struct gfx_debug* debug)
 {
     if (debug->mat.program)
         glDeleteProgram(debug->mat.program);
@@ -136,8 +136,8 @@ static void draw_circle(
 }
 
 void gfx_gles2_debug_draw(
-    struct debug*              debug,
-    const struct quad_mesh*    mesh,
+    struct gfx_debug*              debug,
+    const struct gfx_quad_mesh*    mesh,
     const struct camera*       camera,
     const struct aspect_ratio* ar)
 {

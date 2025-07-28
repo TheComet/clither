@@ -5,13 +5,13 @@
 #include "glad/gles2.h"
 
 struct aspect_ratio;
-struct background;
+struct gfx_background;
 struct camera;
 struct resource_shader;
-struct sprite_tex;
-struct quad_mesh;
+struct gfx_sprite_tex;
+struct gfx_quad_mesh;
 
-struct sprite_shadow_mat
+struct gfx_sprite_shadow_mat
 {
     GLuint program;
     GLuint uAspectRatio;
@@ -22,25 +22,25 @@ struct sprite_shadow_mat
     GLuint sTex[MAX_TEXTURE_SAMPLERS];
 };
 
-void gfx_gles2_sprite_shadow_init(struct sprite_shadow_mat* ss);
-void gfx_gles2_sprite_shadow_deinit(struct sprite_shadow_mat* ss);
+void gfx_gles2_sprite_shadow_init(struct gfx_sprite_shadow_mat* ss);
+void gfx_gles2_sprite_shadow_deinit(struct gfx_sprite_shadow_mat* ss);
 int  gfx_gles2_sprite_shadow_load(
-     struct sprite_shadow_mat* ss, const struct resource_shader* res);
-void gfx_gles2_sprite_shadow_unload(struct sprite_shadow_mat* ss);
+     struct gfx_sprite_shadow_mat* ss, const struct resource_shader* res);
+void gfx_gles2_sprite_shadow_unload(struct gfx_sprite_shadow_mat* ss);
 
 void gfx_gles2_sprite_shadow_prepare_draw(
-    const struct background*        bg,
-    const struct quad_mesh*         mesh,
-    const struct sprite_shadow_mat* mat,
+    const struct gfx_background*        bg,
+    const struct gfx_quad_mesh*         mesh,
+    const struct gfx_sprite_shadow_mat* mat,
     const struct aspect_ratio*      ar,
     GLint                           gfx_width,
     GLint                           gfx_height,
     int                             shadow_map_size_factor);
 void gfx_gles2_sprite_shadow_end_draw(GLint gfx_width, GLint gfx_height);
-void gfx_gles2_sprite_shadow_bind_textures(const struct sprite_tex* tex);
+void gfx_gles2_sprite_shadow_bind_textures(const struct gfx_sprite_tex* tex);
 void gfx_gles2_sprite_shadow_update_uniforms(
-    const struct sprite_shadow_mat* mat,
-    const struct sprite_tex*        tex,
+    const struct gfx_sprite_shadow_mat* mat,
+    const struct gfx_sprite_tex*        tex,
     struct qwpos                    pos,
     struct qwpos                    dir,
     qw                              scale,

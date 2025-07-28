@@ -3,7 +3,7 @@
 #include "clither/game/camera.h"
 #include "clither/game/resource_pack.h"
 
-void gfx_gles2_sprite_shadow_init(struct sprite_shadow_mat* ss)
+void gfx_gles2_sprite_shadow_init(struct gfx_sprite_shadow_mat* ss)
 {
     int i;
 
@@ -18,14 +18,14 @@ void gfx_gles2_sprite_shadow_init(struct sprite_shadow_mat* ss)
         ss->sTex[i] = INVALID_UNIFORM_LOCATION;
 }
 
-void gfx_gles2_sprite_shadow_deinit(struct sprite_shadow_mat* ss)
+void gfx_gles2_sprite_shadow_deinit(struct gfx_sprite_shadow_mat* ss)
 {
     if (ss->program != 0)
         glDeleteProgram(ss->program);
 }
 
 int gfx_gles2_sprite_shadow_load(
-    struct sprite_shadow_mat* ss, const struct resource_shader* res)
+    struct gfx_sprite_shadow_mat* ss, const struct resource_shader* res)
 {
     int i;
 
@@ -54,7 +54,7 @@ int gfx_gles2_sprite_shadow_load(
     return 0;
 }
 
-void gfx_gles2_sprite_shadow_unload(struct sprite_shadow_mat* ss)
+void gfx_gles2_sprite_shadow_unload(struct gfx_sprite_shadow_mat* ss)
 {
     if (ss->program != 0)
     {
@@ -65,9 +65,9 @@ void gfx_gles2_sprite_shadow_unload(struct sprite_shadow_mat* ss)
 }
 
 void gfx_gles2_sprite_shadow_prepare_draw(
-    const struct background*        bg,
-    const struct quad_mesh*         mesh,
-    const struct sprite_shadow_mat* mat,
+    const struct gfx_background*        bg,
+    const struct gfx_quad_mesh*         mesh,
+    const struct gfx_sprite_shadow_mat* mat,
     const struct aspect_ratio*      ar,
     GLint                           gfx_width,
     GLint                           gfx_height,
@@ -101,7 +101,7 @@ void gfx_gles2_sprite_shadow_end_draw(GLint gfx_width, GLint gfx_height)
     gfx_gles2_quad_mesh_end_draw();
 }
 
-void gfx_gles2_sprite_shadow_bind_textures(const struct sprite_tex* tex)
+void gfx_gles2_sprite_shadow_bind_textures(const struct gfx_sprite_tex* tex)
 {
     int i;
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
@@ -113,8 +113,8 @@ void gfx_gles2_sprite_shadow_bind_textures(const struct sprite_tex* tex)
 }
 
 void gfx_gles2_sprite_shadow_update_uniforms(
-    const struct sprite_shadow_mat* mat,
-    const struct sprite_tex*        tex,
+    const struct gfx_sprite_shadow_mat* mat,
+    const struct gfx_sprite_tex*        tex,
     struct qwpos                    pos,
     struct qwpos                    dir,
     qw                              scale,

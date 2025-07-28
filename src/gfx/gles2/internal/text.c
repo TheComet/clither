@@ -103,7 +103,7 @@ static void gfx_gles2_text_atlas_deinit(struct text_atlas* atlas)
 
 /* ------------------------------------------------------------------------- */
 static int
-add_glyph(struct text_glyph_info* info, struct font* font, uint32_t codepoint)
+add_glyph(struct text_glyph_info* info, struct gfx_font* font, uint32_t codepoint)
 {
     int          tex_width, tex_height;
     FT_GlyphSlot slot;
@@ -201,7 +201,7 @@ add_glyph(struct text_glyph_info* info, struct font* font, uint32_t codepoint)
 
 /* ------------------------------------------------------------------------- */
 static int
-update_atlas(struct font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
+update_atlas(struct gfx_font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
 {
     int i;
     for (i = 0; i < (int)glyph_count; ++i)
@@ -225,7 +225,7 @@ update_atlas(struct font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
 /* ------------------------------------------------------------------------- */
 static int generate_mesh(
     struct text*         text,
-    struct font*         font,
+    struct gfx_font*         font,
     hb_glyph_info_t*     hb_glyph_info,
     hb_glyph_position_t* hb_glyph_pos,
     int                  glyph_count)
@@ -303,7 +303,7 @@ static int generate_mesh(
 }
 
 /* ------------------------------------------------------------------------- */
-int gfx_gles2_font_init(struct font* font)
+int gfx_gles2_font_init(struct gfx_font* font)
 {
     FT_Error ft_error = FT_Init_FreeType(&font->ft_lib);
     if (ft_error)
@@ -334,7 +334,7 @@ int gfx_gles2_font_init(struct font* font)
 }
 
 /* ------------------------------------------------------------------------- */
-void gfx_gles2_font_deinit(struct font* font)
+void gfx_gles2_font_deinit(struct gfx_font* font)
 {
     gfx_gles2_text_atlas_deinit(&font->atlas);
 
@@ -353,7 +353,7 @@ void gfx_gles2_font_deinit(struct font* font)
 
 /* ------------------------------------------------------------------------- */
 int gfx_gles2_font_load(
-    struct font*                  font,
+    struct gfx_font*                  font,
     const struct resource_text*   res,
     const struct resource_shader* shader)
 {
@@ -421,7 +421,7 @@ ft_new_face_failed:
 }
 
 /* ------------------------------------------------------------------------- */
-void gfx_gles2_font_unload(struct font* font)
+void gfx_gles2_font_unload(struct gfx_font* font)
 {
     if (font->program != 0)
     {
@@ -459,7 +459,7 @@ void gfx_gles2_text_deinit(struct text* text)
 }
 
 /* ------------------------------------------------------------------------- */
-void gfx_gles2_text_shape(struct text* text, struct font* font, const char* str)
+void gfx_gles2_text_shape(struct text* text, struct gfx_font* font, const char* str)
 {
     unsigned int         glyph_count;
     hb_glyph_info_t*     hb_glyph_info;
@@ -486,7 +486,7 @@ void gfx_gles2_text_shape(struct text* text, struct font* font, const char* str)
 
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_text_prepare_draw(
-    const struct font* font, const struct aspect_ratio* ar)
+    const struct gfx_font* font, const struct aspect_ratio* ar)
 {
     glUseProgram(font->program);
     glUniform2f(font->uAspectRatio, ar->scale_x, ar->scale_y);
@@ -508,7 +508,7 @@ void gfx_gles2_text_end_draw(void)
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_text_draw(
     const struct text*   text,
-    const struct font*   font,
+    const struct gfx_font*   font,
     struct qwpos         pos,
     float                screen_off_x,
     float                screen_off_y,

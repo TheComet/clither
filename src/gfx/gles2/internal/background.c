@@ -8,7 +8,7 @@
 #include "stb_image.h"
 
 int gfx_gles2_background_init(
-    struct background* bg,
+    struct gfx_background* bg,
     int                fbwidth,
     int                fbheight,
     int                shadow_map_size_factor)
@@ -73,7 +73,7 @@ incomplete_shadow_framebuffer:
     return -1;
 }
 
-void gfx_gles2_background_deinit(struct background* bg)
+void gfx_gles2_background_deinit(struct gfx_background* bg)
 {
     gfx_untrack_fbo(bg->fbo);
     glDeleteFramebuffers(1, &bg->fbo);
@@ -89,7 +89,7 @@ void gfx_gles2_background_deinit(struct background* bg)
 }
 
 void gfx_gles2_background_resize(
-    struct background* bg,
+    struct gfx_background* bg,
     int                fbwidth,
     int                fbheight,
     int                shadow_map_size_factor)
@@ -114,7 +114,7 @@ void gfx_gles2_background_resize(
 }
 
 int gfx_gles2_background_load(
-    struct background*                bg,
+    struct gfx_background*                bg,
     const struct resource_background* res,
     const struct resource_shader*     shader)
 {
@@ -185,7 +185,7 @@ int gfx_gles2_background_load(
     return 0;
 }
 
-void gfx_gles2_background_unload(struct background* bg)
+void gfx_gles2_background_unload(struct gfx_background* bg)
 {
     int i;
 

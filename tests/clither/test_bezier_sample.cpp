@@ -248,7 +248,7 @@ TEST_F(NAME, weird_edgecase)
         struct qwpos* pos = qwpos_vec_emplace(&samples);
         *pos = sample.pos;
     }
-    int segments_left = bezier_sample_segments_left(&sample);
+    int segments_left = bezier_sample_idx(&sample);
 
     EXPECT_THAT(vec_count(samples), Eq(23));
     EXPECT_THAT(segments_left, Eq(4));

@@ -329,7 +329,7 @@ static int measure_unused_segments(
         struct qwpos* pos = qwpos_vec_emplace(&data->samples);
         *pos = sample.pos;
     }
-    return bezier_sample_segments_left(&sample);
+    return bezier_sample_idx(&sample);
 }
 
 /* ------------------------------------------------------------------------- */

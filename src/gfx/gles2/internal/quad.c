@@ -17,7 +17,7 @@ const char* gfx_gles2_quad_attr_bindings[2] = {
     NULL};
 /* clang-format on */
 
-void gfx_gles2_quad_mesh_init(struct quad_mesh* mesh)
+void gfx_gles2_quad_mesh_init(struct gfx_quad_mesh* mesh)
 {
     glGenBuffers(1, &mesh->vbo);
     gfx_track_buf(mesh->vbo);
@@ -30,13 +30,13 @@ void gfx_gles2_quad_mesh_init(struct quad_mesh* mesh)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void gfx_gles2_quad_mesh_deinit(struct quad_mesh* mesh)
+void gfx_gles2_quad_mesh_deinit(struct gfx_quad_mesh* mesh)
 {
     gfx_untrack_buf(mesh->vbo);
     glDeleteBuffers(1, &mesh->vbo);
 }
 
-void gfx_gles2_quad_mesh_prepare_draw(const struct quad_mesh* mesh)
+void gfx_gles2_quad_mesh_prepare_draw(const struct gfx_quad_mesh* mesh)
 {
     glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
     glEnableVertexAttribArray(0);

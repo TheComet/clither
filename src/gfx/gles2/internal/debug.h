@@ -6,7 +6,7 @@
 
 struct aspect_ratio;
 struct camera;
-struct quad_mesh;
+struct gfx_quad_mesh;
 
 struct debug_circle
 {
@@ -26,18 +26,18 @@ struct debug_mat
     GLuint uColor;
 };
 
-struct debug
+struct gfx_debug
 {
     struct debug_mat         mat;
     struct debug_circle_vec* circles;
 };
 
-void gfx_gles2_debug_init(struct debug* debug);
-void gfx_gles2_debug_deinit(struct debug* debug);
-int  gfx_gles2_debug_load(struct debug* debug);
-void gfx_gles2_debug_unload(struct debug* debug);
+void gfx_gles2_debug_init(struct gfx_debug* debug);
+void gfx_gles2_debug_deinit(struct gfx_debug* debug);
+int  gfx_gles2_debug_load(struct gfx_debug* debug);
+void gfx_gles2_debug_unload(struct gfx_debug* debug);
 void gfx_gles2_debug_draw(
-    struct debug*              debug,
-    const struct quad_mesh*    mesh,
+    struct gfx_debug*              debug,
+    const struct gfx_quad_mesh*    mesh,
     const struct camera*       camera,
     const struct aspect_ratio* ar);

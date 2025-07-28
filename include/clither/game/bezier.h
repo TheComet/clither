@@ -103,7 +103,7 @@ void bezier_sample_begin(
 void bezier_sample_next(struct bezier_sample* it);
 #define bezier_sample_end(it)           ((it)->t < 0)
 #define bezier_sample_segment(it)       (rb_peek((it)->segments, (it)->segment_idx))
-#define bezier_sample_segments_left(it) ((it)->segment_idx)
+#define bezier_sample_idx(it) ((it)->segment_idx)
 
 int bezier_test_radius(
     const struct bezier_segment* segment, struct qwpos pos, qw radius);

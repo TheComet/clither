@@ -4,12 +4,114 @@
 #include "./sprite_shadow.h"
 #include "clither/game/bezier_knot_rb.h"
 #include "clither/game/bezier_segment_rb.h"
+#include "clither/game/qwpos_vec.h"
+#include "clither/game/resource_pack.h"
 #include "clither/game/snake.h"
-#include "clither/util/vec.h"
+#include "clither/util/strlist.h"
 
+VEC_DEFINE(gfx_part_sample_vec, struct gfx_part_sample, 32)
+
+/* ------------------------------------------------------------------------- */
+int gfx_gles2_snake_init(struct gfx_snake* gfx)
+{
+    gfx_gles2_sprite_tex_init(&gfx->head_base);
+    gfx_gles2_sprite_tex_init(&gfx->head_gather);
+    gfx_gles2_sprite_tex_init(&gfx->body_base);
+    gfx_gles2_sprite_tex_init(&gfx->tail_base);
+    gfx_gles2_spine_init(&gfx->spine);
+
+    gfx_part_sample_vec_init(&gfx->part_samples);
+
+    gfx->part_spacing = 0.15;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_snake_deinit(struct gfx_snake* gfx)
+{
+    gfx_part_sample_vec_deinit(gfx->part_samples);
+
+    gfx_gles2_spine_deinit(&gfx->spine);
+    gfx_gles2_sprite_tex_deinit(&gfx->tail_base);
+    gfx_gles2_sprite_tex_deinit(&gfx->body_base);
+    gfx_gles2_sprite_tex_deinit(&gfx->head_gather);
+    gfx_gles2_sprite_tex_deinit(&gfx->head_base);
+}
+
+/* ------------------------------------------------------------------------- */
+int gfx_gles2_snake_load(
+    struct gfx_snake*             snake,
+    const struct resource_snake*  res,
+    const struct resource_pack*   pack,
+    const struct resource_shader* shader)
+{
+    struct resource_sprite* sprite;
+    struct resource_spine*  spine;
+
+    sprite =
+        resource_sprite_hmap_find(pack->sprites, str_view(res->head_sprite));
+    if (sprite != NULL)
+    {
+        gfx_gles2_sprite_tex_load(
+            &snake->head_base, &sprite->layer[RESOURCE_LAYER_BASE]);
+        gfx_gles2_sprite_tex_load(
+            &snake->head_gather, &sprite->layer[RESOURCE_LAYER_GATHER]);
+    }
+
+    sprite = strlist_count(res->body_sprites) > 0
+                 ? resource_sprite_hmap_find(
+                       pack->sprites, strlist_view(res->body_sprites, 0))
+                 : NULL;
+    if (sprite != NULL)
+    {
+        gfx_gles2_sprite_tex_load(
+            &snake->body_base, &sprite->layer[RESOURCE_LAYER_BASE]);
+    }
+
+    sprite =
+        resource_sprite_hmap_find(pack->sprites, str_view(res->tail_sprite));
+    if (sprite != NULL)
+    {
+        gfx_gles2_sprite_tex_load(
+            &snake->tail_base, &sprite->layer[RESOURCE_LAYER_BASE]);
+    }
+
+    snake->part_spacing = res->part_spacing;
+
+    spine = resource_spine_hmap_find(pack->spines, str_view(res->spine));
+    if (spine != NULL)
+    {
+        gfx_gles2_spine_load(&snake->spine, spine, shader);
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_snake_unload(struct gfx_snake* gfx)
+{
+    gfx_gles2_spine_unload(&gfx->spine);
+    gfx_gles2_sprite_tex_unload(&gfx->tail_base);
+    gfx_gles2_sprite_tex_unload(&gfx->body_base);
+    gfx_gles2_sprite_tex_unload(&gfx->head_gather);
+    gfx_gles2_sprite_tex_unload(&gfx->head_base);
+}
+
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_snake_step_anim(struct gfx_snake* gfx, int sim_tick_rate)
+{
+    gfx_gles2_sprite_step_anim(&gfx->head_base, sim_tick_rate);
+    gfx_gles2_sprite_step_anim(&gfx->head_gather, sim_tick_rate);
+    gfx_gles2_sprite_step_anim(&gfx->body_base, sim_tick_rate);
+    gfx_gles2_sprite_step_anim(&gfx->tail_base, sim_tick_rate);
+}
+
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_draw_snake_shadow(
-    const struct snake*        snake,
+    struct gfx_snake*          gfx_snake,
     const struct gfx*          gfx,
+    const struct snake*        snake,
     const struct camera*       camera,
     const struct aspect_ratio* ar,
     int                        shadow_map_size_factor)
@@ -27,7 +129,7 @@ void gfx_gles2_draw_snake_shadow(
         shadow_map_size_factor);
 
     /* body parts */
-    gfx_gles2_sprite_shadow_bind_textures(&gfx->body0_base);
+    gfx_gles2_sprite_shadow_bind_textures(&gfx_snake->body_base);
     for (i = 0,
         bezier_sample_begin(
              &sample,
@@ -42,7 +144,7 @@ void gfx_gles2_draw_snake_shadow(
             continue; /* Skip body part at head position */
         gfx_gles2_sprite_shadow_update_uniforms(
             &gfx->sprite_shadow_mat,
-            &gfx->body0_base,
+            &gfx_snake->body_base,
             sample.pos,
             bezier_tangent(segment, sample.t),
             snake_scale(&snake->param),
@@ -55,94 +157,121 @@ void gfx_gles2_draw_snake_shadow(
     {
         const struct bezier_segment* segment =
             rb_peek_write(snake->data.segments);
-        gfx_gles2_sprite_shadow_bind_textures(&gfx->head0_base);
+        gfx_gles2_sprite_shadow_bind_textures(&gfx_snake->head_base);
         gfx_gles2_sprite_shadow_update_uniforms(
             &gfx->sprite_shadow_mat,
-            &gfx->head0_base,
+            &gfx_snake->head_base,
             segment->p[0],
             bezier_tangent(segment, 0),
             snake_scale(&snake->param),
             camera);
         gfx_gles2_sprite_shadow_draw();
 
-        gfx_gles2_sprite_shadow_bind_textures(&gfx->head0_gather);
+        gfx_gles2_sprite_shadow_bind_textures(&gfx_snake->head_gather);
         gfx_gles2_sprite_shadow_draw();
     }
 
     gfx_gles2_sprite_shadow_end_draw(gfx->width, gfx->height);
 }
 
-void gfx_gles2_draw_snake_spine(
-    const struct snake*        snake,
-    const struct gfx*          gfx,
-    const struct camera*       camera,
-    const struct aspect_ratio* ar)
-{
-    gfx_gles2_spine_prepare_draw(&gfx->spine);
-    gfx_gles2_spine_draw(
-        &gfx->spine,
-        snake->data.segments,
-        snake_scale(&snake->param),
-        camera,
-        ar);
-    gfx_gles2_spine_end_draw();
-}
-
+/* ------------------------------------------------------------------------- */
 void gfx_gles2_draw_snake(
-    const struct snake*        snake,
+    struct gfx_snake*          gfx_snake,
     const struct gfx*          gfx,
+    const struct snake*        snake,
     const struct camera*       camera,
     const struct aspect_ratio* ar)
 {
-    int32_t              i;
-    struct bezier_sample sample;
+    int32_t                 i;
+    struct bezier_sample    sample;
+    struct gfx_part_sample* part_sample;
 
-    gfx_gles2_sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
-
+    gfx_part_sample_vec_clear(gfx_snake->part_samples);
     for (i = 0,
         bezier_sample_begin(
              &sample,
              snake->data.segments,
-             make_qw(gfx->part_spacing),
+             make_qw(gfx_snake->part_spacing),
              snake_length(&snake->param));
          !bezier_sample_end(&sample);
          i++, bezier_sample_next(&sample))
     {
-        const struct bezier_segment* segment = bezier_sample_segment(&sample);
-        const struct qwpos           dir = bezier_tangent(segment, sample.t);
+        struct gfx_part_sample* ps =
+            gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
+        ps->pos = sample.pos;
+        ps->dir = bezier_tangent(bezier_sample_segment(&sample), sample.t);
+        ps->length = sample.total_spacing;
+    }
+
+    gfx_gles2_spine_prepare_draw(&gfx_snake->spine);
+    gfx_gles2_spine_draw(
+        &gfx_snake->spine,
+        snake->data.segments,
+        snake_scale(&snake->param),
+        vec_count(gfx_snake->part_samples) > 0
+            ? vec_last(gfx_snake->part_samples)->length
+            : make_qw(0),
+        camera,
+        ar);
+    gfx_gles2_spine_end_draw();
+
+    gfx_gles2_sprite_prepare_draw(&gfx->quad_mesh, &gfx->sprite_mat, ar);
+    vec_enumerate (gfx_snake->part_samples, i, part_sample)
+    {
+        /* head */
         if (i == 0)
         {
-            gfx_gles2_sprite_update_uniforms(
-                &gfx->sprite_mat,
-                &gfx->head0_base,
-                sample.pos,
-                dir,
-                snake_scale(&snake->param),
-                camera);
-            gfx_gles2_sprite_bind_textures(&gfx->head0_base);
-            gfx_gles2_sprite_draw();
+            if (gfx_gles2_sprite_update_uniforms(
+                    &gfx->sprite_mat,
+                    &gfx_snake->head_base,
+                    part_sample->pos,
+                    part_sample->dir,
+                    snake_scale(&snake->param),
+                    camera) &&
+                gfx_gles2_sprite_bind_textures(&gfx_snake->head_base))
+            {
+                gfx_gles2_sprite_draw();
+            }
 
-            gfx_gles2_sprite_update_uniforms(
-                &gfx->sprite_mat,
-                &gfx->head0_base,
-                sample.pos,
-                dir,
-                snake_scale(&snake->param),
-                camera);
-            gfx_gles2_sprite_bind_textures(&gfx->head0_gather);
-            gfx_gles2_sprite_draw();
+            if (gfx_gles2_sprite_update_uniforms(
+                    &gfx->sprite_mat,
+                    &gfx_snake->head_base,
+                    part_sample->pos,
+                    part_sample->dir,
+                    snake_scale(&snake->param),
+                    camera) &&
+                gfx_gles2_sprite_bind_textures(&gfx_snake->head_gather))
+            {
+                gfx_gles2_sprite_draw();
+            }
         }
-        else
+        else if (i == vec_count(gfx_snake->part_samples) - 1) /* tail */
         {
-            gfx_gles2_sprite_update_uniforms(
-                &gfx->sprite_mat,
-                &gfx->body0_base,
-                sample.pos,
-                dir,
-                snake_scale(&snake->param),
-                camera);
-            gfx_gles2_sprite_bind_textures(&gfx->body0_base);
-            gfx_gles2_sprite_draw();
+            if (gfx_gles2_sprite_update_uniforms(
+                    &gfx->sprite_mat,
+                    &gfx_snake->tail_base,
+                    part_sample->pos,
+                    part_sample->dir,
+                    snake_scale(&snake->param),
+                    camera) &&
+                gfx_gles2_sprite_bind_textures(&gfx_snake->tail_base))
+            {
+                gfx_gles2_sprite_draw();
+            }
+        }
+        else /* body */
+        {
+            if (gfx_gles2_sprite_update_uniforms(
+                    &gfx->sprite_mat,
+                    &gfx_snake->body_base,
+                    part_sample->pos,
+                    part_sample->dir,
+                    snake_scale(&snake->param),
+                    camera) &&
+                gfx_gles2_sprite_bind_textures(&gfx_snake->body_base))
+            {
+                gfx_gles2_sprite_draw();
+            }
         }
     }
 

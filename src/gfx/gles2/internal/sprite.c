@@ -5,7 +5,7 @@
 #include "clither/util/strlist.h"
 #include "stb_image.h"
 
-void gfx_gles2_sprite_mat_init(struct sprite_mat* mat)
+void gfx_gles2_sprite_mat_init(struct gfx_sprite_mat* mat)
 {
     int i;
 
@@ -20,7 +20,7 @@ void gfx_gles2_sprite_mat_init(struct sprite_mat* mat)
         mat->sTex[i] = INVALID_UNIFORM_LOCATION;
 }
 
-void gfx_gles2_sprite_mat_deinit(struct sprite_mat* mat)
+void gfx_gles2_sprite_mat_deinit(struct gfx_sprite_mat* mat)
 {
     if (mat->program != 0)
     {
@@ -30,7 +30,7 @@ void gfx_gles2_sprite_mat_deinit(struct sprite_mat* mat)
 }
 
 int gfx_gles2_sprite_mat_load(
-    struct sprite_mat* mat, const struct resource_shader* shader)
+    struct gfx_sprite_mat* mat, const struct resource_shader* shader)
 {
     int i;
 
@@ -59,7 +59,7 @@ int gfx_gles2_sprite_mat_load(
     return 0;
 }
 
-void gfx_gles2_sprite_mat_unload(struct sprite_mat* mat)
+void gfx_gles2_sprite_mat_unload(struct gfx_sprite_mat* mat)
 {
     if (mat->program != 0)
     {
@@ -69,7 +69,7 @@ void gfx_gles2_sprite_mat_unload(struct sprite_mat* mat)
     }
 }
 
-void gfx_gles2_sprite_tex_init(struct sprite_tex* tex)
+void gfx_gles2_sprite_tex_init(struct gfx_sprite_tex* tex)
 {
     int i;
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
@@ -84,13 +84,13 @@ void gfx_gles2_sprite_tex_init(struct sprite_tex* tex)
     tex->sim_time = 0;
 }
 
-void gfx_gles2_sprite_tex_deinit(struct sprite_tex* tex)
+void gfx_gles2_sprite_tex_deinit(struct gfx_sprite_tex* tex)
 {
     (void)tex;
 }
 
 void gfx_gles2_sprite_tex_load(
-    struct sprite_tex* tex, const struct resource_layer* res)
+    struct gfx_sprite_tex* tex, const struct resource_layer* res)
 {
     int         i;
     int         img_width, img_height, img_channels;
@@ -142,7 +142,7 @@ void gfx_gles2_sprite_tex_load(
     tex->anim_frame = 0;
 }
 
-void gfx_gles2_sprite_tex_unload(struct sprite_tex* tex)
+void gfx_gles2_sprite_tex_unload(struct gfx_sprite_tex* tex)
 {
     int i;
 
@@ -156,8 +156,8 @@ void gfx_gles2_sprite_tex_unload(struct sprite_tex* tex)
 }
 
 void gfx_gles2_sprite_prepare_draw(
-    const struct quad_mesh*    mesh,
-    const struct sprite_mat*   mat,
+    const struct gfx_quad_mesh*    mesh,
+    const struct gfx_sprite_mat*   mat,
     const struct aspect_ratio* ar)
 {
     int i;
@@ -172,15 +172,19 @@ void gfx_gles2_sprite_prepare_draw(
             glUniform1i(mat->sTex[i], i);
 }
 
-void gfx_gles2_sprite_bind_textures(const struct sprite_tex* tex)
+int gfx_gles2_sprite_bind_textures(const struct gfx_sprite_tex* tex)
 {
     int i;
+    int bound = 0;
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
         if (tex->tex[i] != INVALID_HANDLE)
         {
             glActiveTexture(GL_TEXTURE0 + i);
             glBindTexture(GL_TEXTURE_2D, tex->tex[i]);
+            bound = 1;
         }
+
+    return bound;
 }
 
 void gfx_gles2_sprite_end_draw(void)
@@ -189,9 +193,9 @@ void gfx_gles2_sprite_end_draw(void)
     gfx_gles2_quad_mesh_end_draw();
 }
 
-void gfx_gles2_sprite_update_uniforms(
-    const struct sprite_mat* mat,
-    const struct sprite_tex* tex,
+int gfx_gles2_sprite_update_uniforms(
+    const struct gfx_sprite_mat* mat,
+    const struct gfx_sprite_tex* tex,
     struct qwpos             pos,
     struct qwpos             dir,
     qw                       scale,
@@ -224,6 +228,8 @@ void gfx_gles2_sprite_update_uniforms(
         1.0 / tex->tile_y,
         (GLfloat)tile_x / tex->tile_x,
         (GLfloat)tile_y / tex->tile_y);
+
+    return 1;
 }
 
 void gfx_gles2_sprite_draw(void)
@@ -231,7 +237,7 @@ void gfx_gles2_sprite_draw(void)
     gfx_gles2_quad_mesh_draw();
 }
 
-void gfx_gles2_step_sprite_anim(struct sprite_tex* tex, int sim_tick_rate)
+void gfx_gles2_sprite_step_anim(struct gfx_sprite_tex* tex, int sim_tick_rate)
 {
     float anim_step = (float)sim_tick_rate / (float)tex->fps;
     tex->sim_time += 1.0;
