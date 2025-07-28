@@ -304,7 +304,7 @@ void gfx_gles2_draw_snake(
         else if (vec_count(gfx_snake->body_base) > 0) /* body */
         {
             const struct gfx_sprite_tex* tex = vec_get(
-                gfx_snake->body_base, i % vec_count(gfx_snake->body_base));
+                gfx_snake->body_base, (i - 1) % vec_count(gfx_snake->body_base));
             if (gfx_gles2_sprite_update_uniforms(
                     &gfx->sprite_mat,
                     tex,
