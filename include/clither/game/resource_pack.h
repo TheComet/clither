@@ -73,6 +73,7 @@ struct resource_spine
 struct resource_food
 {
     struct str* sprite;
+    float       scale;
 };
 
 struct resource_snake

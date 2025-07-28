@@ -222,6 +222,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         {
             gfx_gles2_sprite_tex_load(
                 &gfx->food, &sprite->layer[RESOURCE_LAYER_BASE]);
+            gfx->food.scale *= pack->food.scale;
         }
     }
 
@@ -245,18 +246,13 @@ font_load_failed:
 static void gfx_gles2_unload_resource_pack(
     struct gfx* gfx, const struct resource_pack* pack)
 {
+    (void)pack;
+
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_unload(&gfx->debug);
 #endif
 
-    if (str_len(pack->food.sprite) > 0)
-    {
-        struct resource_sprite* sprite = resource_sprite_hmap_find(
-            pack->sprites, str_view(pack->food.sprite));
-        if (sprite != NULL)
-            gfx_gles2_sprite_tex_unload(&gfx->food);
-    }
-
+    gfx_gles2_sprite_tex_unload(&gfx->food);
     gfx_gles2_snake_unload(&gfx->snake);
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
@@ -559,7 +555,7 @@ static void gfx_gles2_draw_world(
     gfx_gles2_text_prepare_draw(&gfx->font, &ar);
     hmap_for_each (gfx->text_hmap, idx, str, text)
         gfx_gles2_text_draw(
-            text, &gfx->font, snake->head.pos, 0, 0.1, 0.15, camera);
+            text, &gfx->font, snake->head.pos, 0, 0.1, 0.12, camera);
     gfx_gles2_text_end_draw();
 
 #if defined(CLITHER_GFX_DEBUG)

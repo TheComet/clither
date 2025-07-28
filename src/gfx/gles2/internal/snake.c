@@ -208,24 +208,41 @@ void gfx_gles2_draw_snake(
     const struct aspect_ratio* ar)
 {
     int32_t                 i;
+    int                     oversample_factor;
     struct bezier_sample    sample;
     struct gfx_part_sample* part_sample;
+    qw                      sample_spacing;
+
+    /* If the spacing is really far apart, then we undersample the bezier curve
+     * and the accumulated distance becomes inaccurate. This compensates for
+     * that */
+    sample_spacing =
+        qw_mul(snake_scale(&snake->param), make_qw(gfx_snake->part_spacing));
+    oversample_factor = 1;
+    while (sample_spacing > make_qw(0.1))
+    {
+        sample_spacing = qw_div(sample_spacing, make_qw(2));
+        oversample_factor *= 2;
+    }
 
     gfx_part_sample_vec_clear(gfx_snake->part_samples);
     for (i = 0,
         bezier_sample_begin(
              &sample,
              snake->data.segments,
-             make_qw(gfx_snake->part_spacing),
+             sample_spacing,
              snake_length(&snake->param));
          !bezier_sample_end(&sample);
          i++, bezier_sample_next(&sample))
     {
-        struct gfx_part_sample* ps =
-            gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
-        ps->pos = sample.pos;
-        ps->dir = bezier_tangent(bezier_sample_segment(&sample), sample.t);
-        ps->length = sample.total_spacing;
+        if (i % oversample_factor == 0)
+        {
+            struct gfx_part_sample* ps =
+                gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
+            ps->pos = sample.pos;
+            ps->dir = bezier_tangent(bezier_sample_segment(&sample), sample.t);
+            ps->length = sample.total_spacing;
+        }
     }
 
     gfx_gles2_spine_prepare_draw(&gfx_snake->spine);

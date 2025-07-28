@@ -98,6 +98,7 @@ static void resource_spine_deinit(struct resource_spine* res)
 static void resource_food_init(struct resource_food* res)
 {
     str_init(&res->sprite);
+    res->scale = 1.0;
 }
 
 static void resource_food_deinit(struct resource_food* res)
@@ -535,6 +536,18 @@ enum token parse_section_food(struct parser* p, struct resource_food* food)
                         return parser_error(p, "Expected a string value\n");
                     if (str_set(&food->sprite, p->value.string) != 0)
                         return -1;
+                    break;
+                }
+
+                if (strview_eq_cstr(key, "scale"))
+                {
+                    if (scan_next_token(p) != '=')
+                        return parser_error(p, "Expected '=' after key\n");
+                    if (scan_next_token(p) != TOK_FLOAT)
+                        return parser_error(
+                            p,
+                            "Expected a float value. Example: scale = 2.0\n");
+                    food->scale = p->value.float_literal;
                     break;
                 }
 

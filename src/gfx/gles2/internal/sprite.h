@@ -42,18 +42,18 @@ void gfx_gles2_sprite_tex_load(
 void gfx_gles2_sprite_tex_unload(struct gfx_sprite_tex* tex);
 
 void gfx_gles2_sprite_prepare_draw(
-    const struct gfx_quad_mesh*    mesh,
-    const struct gfx_sprite_mat*   mat,
-    const struct aspect_ratio* ar);
+    const struct gfx_quad_mesh*  mesh,
+    const struct gfx_sprite_mat* mat,
+    const struct aspect_ratio*   ar);
 void gfx_gles2_sprite_end_draw(void);
 int  gfx_gles2_sprite_bind_textures(const struct gfx_sprite_tex* tex);
 int  gfx_gles2_sprite_update_uniforms(
      const struct gfx_sprite_mat* mat,
      const struct gfx_sprite_tex* tex,
-     struct qwpos             pos,
-     struct qwpos             dir,
-     qw                       scale,
-     const struct camera*     camera);
+     struct qwpos                 pos,
+     struct qwpos                 dir,
+     qw                           scale,
+     const struct camera*         camera);
 void gfx_gles2_sprite_draw(void);
 
 void gfx_gles2_sprite_step_anim(struct gfx_sprite_tex* tex, int sim_tick_rate);
