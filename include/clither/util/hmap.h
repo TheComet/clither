@@ -143,7 +143,10 @@ enum hmap_status
      * valid to read/write to the value until the next hashmap operation. If   \
      * the key does not exist, NULL is returned.                               \
      */                                                                        \
-    API V* prefix##_find(const struct prefix* hmap, K key);
+    API V* prefix##_find(const struct prefix* hmap, K key);                    \
+                                                                               \
+    API void prefix##_clear(struct prefix* hmap);                              \
+    API void prefix##_clear_compact(struct prefix** hmap);
 
 #define HMAP_DEFINE(API, prefix, K, V, bits)                                   \
     static hash32 prefix##_hash(K key)                                         \
@@ -503,6 +506,23 @@ enum hmap_status
             return NULL;                                                       \
                                                                                \
         return prefix##_erase_slot(hmap, -1 - slot);                           \
+    }                                                                          \
+                                                                               \
+    API void prefix##_clear(struct prefix* hmap)                               \
+    {                                                                          \
+        int##bits##_t i;                                                       \
+        for (i = 0; i != hmap_capacity(hmap); ++i)                             \
+            hmap->hashes[i] = HMAP_SLOT_UNUSED;                                \
+    }                                                                          \
+                                                                               \
+    API void prefix##_clear_compact(struct prefix** hmap)                      \
+    {                                                                          \
+        if (*hmap != NULL)                                                     \
+        {                                                                      \
+            kvs_free(&(*hmap)->kvs, (*hmap)->capacity);                        \
+            mem_free(*hmap);                                                   \
+            *hmap = NULL;                                                      \
+        }                                                                      \
     }
 
 #define hmap_count(hmap)    ((hmap) ? (hmap)->count : 0)

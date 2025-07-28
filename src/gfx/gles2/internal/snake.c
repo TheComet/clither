@@ -241,7 +241,7 @@ void gfx_gles2_draw_snake(
                 gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
             ps->pos = sample.pos;
             ps->dir = bezier_tangent(bezier_sample_segment(&sample), sample.t);
-            ps->length = sample.total_spacing;
+            ps->length = q16_16_to_qw(sample.total_spacing);
         }
     }
 

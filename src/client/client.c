@@ -8,6 +8,7 @@
 #include "clither/game/settings.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_bmap.h"
+#include "clither/game/ui.h"
 #include "clither/game/world.h"
 #include "clither/game/wrap.h"
 #include "clither/gfx/gfx.h"
@@ -669,6 +670,7 @@ void* client_run(
 {
     struct fs_watch* pack_watch;
     struct world     world;
+    struct ui        ui;
     struct input     input;
     struct cmd       cmd;
     struct camera    camera;
@@ -945,7 +947,7 @@ void* client_run(
         {
 #    if defined(CLITHER_GFX)
             if (*gfx != NULL)
-                (*igfx)->draw_world(*gfx, &world, &camera);
+                (*igfx)->draw(*gfx, &world, &ui, &camera);
 #    endif
         }
         else

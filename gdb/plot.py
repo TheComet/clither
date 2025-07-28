@@ -7,6 +7,10 @@ def qw_to_float(qw):
     Q = 14
     return float(qw) / (1 << Q)
 
+def q16_16_to_float(qw):
+    Q = 16
+    return float(qw) / (1 << Q)
+
 def qa_to_float(qa):
     Q = 12
     return float(qa) / (1 << Q)
@@ -45,11 +49,12 @@ def plot_knots(rb, color):
 
 def plot_segment(segment, color):
     p = segment["p"]
-    A = segment["coeff"]
+    Ax = segment["coeff_x"]
+    Ay = segment["coeff_y"]
     px = [qw_to_float(p[i]["x"]) for i in range(4)]
     py = [qw_to_float(p[i]["y"]) for i in range(4)]
-    Ax = [qw_to_float(A[i]["x"]) for i in range(3)]
-    Ay = [qw_to_float(A[i]["y"]) for i in range(3)]
+    Ax = [q16_16_to_float(Ax[i]) for i in range(3)]
+    Ay = [q16_16_to_float(Ay[i]) for i in range(3)]
 
     t = np.linspace(0, 1, 50)
     x = (Ax[0]*t + Ax[1]*t**2 + Ax[2]*t**3) + px[0]
@@ -177,7 +182,7 @@ class Plot(gdb.Command):
                 handle.set_label(exprs[i])
 
         plt.legend()
-        #plt.gca().set_aspect('equal', adjustable='box')
+        plt.gca().set_aspect('equal', adjustable='box')
         plt.gca().set_facecolor("#011627")
         plt.show()
 

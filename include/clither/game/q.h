@@ -110,6 +110,18 @@ static q16_16 q16_16_div(q16_16 a, q16_16 b)
     return (q16_16)(temp / b);
 }
 
+static q16_16 q16_16_sq(q16_16 q)
+{
+    return q16_16_mul(q, q);
+}
+
+#include <math.h>
+static q16_16 q16_16_sqrt(q16_16 q)
+{
+    /* TODO */
+    return make_q16_16(sqrt(q16_16_to_float(q)));
+}
+
 #define make_qw(v)              (qw)((v) * (1 << QW_Q))
 #define make_qw2(v, div)        (qw)((v) * (1 << QW_Q) / (div))
 #define qw_to_int(q)            ((int)((q) / (1 << QW_Q)))
@@ -194,8 +206,6 @@ static qw qw_sq(qw q)
 {
     return qw_mul(q, q);
 }
-
-#include <math.h>
 
 static qw qw_sqrt(qw q)
 {

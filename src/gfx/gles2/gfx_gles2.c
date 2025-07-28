@@ -25,9 +25,6 @@ enum
     SHADOW_MAP_SIZE_FACTOR = 4
 };
 
-HMAP_DECLARE_STR(static, gfx_text_hmap, struct text, 16)
-HMAP_DEFINE_STR(static, gfx_text_hmap, struct text, 16)
-
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_DEBUG_MEMORY)
 struct tracker_gfx
@@ -337,7 +334,6 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     if (gfx_gles2_font_init(&gfx->font) != 0)
         goto font_init_failed;
-    gfx_text_hmap_init(&gfx->text_hmap);
 
     gfx_gles2_background_init(
         &gfx->background, fbwidth, fbheight, SHADOW_MAP_SIZE_FACTOR);
@@ -375,10 +371,6 @@ create_window_failed:
 /* ------------------------------------------------------------------------- */
 static void gfx_gles2_destroy(struct gfx* gfx)
 {
-    int16_t      slot;
-    struct str*  str;
-    struct text* text;
-
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_deinit(&gfx->debug);
 #endif
@@ -389,10 +381,6 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
     gfx_gles2_quad_mesh_deinit(&gfx->quad_mesh);
     gfx_gles2_background_deinit(&gfx->background);
-
-    hmap_for_each (gfx->text_hmap, slot, str, text)
-        (void)slot, (void)str, gfx_gles2_text_deinit(text);
-    gfx_text_hmap_deinit(gfx->text_hmap);
     gfx_gles2_font_deinit(&gfx->font);
 
     glfwDestroyWindow(gfx->window);
@@ -477,14 +465,15 @@ static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 }
 
 /* ------------------------------------------------------------------------- */
-static void gfx_gles2_draw_world(
-    struct gfx* gfx, const struct world* world, const struct camera* camera)
+static void gfx_gles2_draw(
+    struct gfx*          gfx,
+    const struct world*  world,
+    const struct ui*     ui,
+    const struct camera* camera)
 {
     int16_t             idx;
     uint16_t            snake_id;
     const struct snake* snake;
-    const struct str*   str;
-    struct text*        text;
 
     struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
@@ -525,38 +514,23 @@ static void gfx_gles2_draw_world(
         gfx_gles2_draw_snake(&gfx->snake, gfx, snake, camera, &ar);
     }
 
-    hmap_for_each (gfx->text_hmap, idx, str, text)
-        (void)idx, (void)str, text->was_used = 0;
+    gfx_gles2_text_prepare_draw(&gfx->font, &ar);
     bmap_for_each (world->snakes, idx, snake_id, snake)
     {
-        struct strview name = str_view(snake->data.name);
-        switch (gfx_text_hmap_emplace_or_get(&gfx->text_hmap, name, &text))
-        {
-            case HMAP_NEW:
-                gfx_gles2_text_init(text);
-                gfx_gles2_text_shape(
-                    text, &gfx->font, str_cstr(snake->data.name));
-            /* fallthrough */
-            case HMAP_EXISTS:
-                text->was_used = 1;
-                break;
-                /* fallthrough */
-            case HMAP_OOM: break;
-        }
-    }
-    hmap_for_each (gfx->text_hmap, idx, str, text)
-        if (text->was_used == 0)
-        {
-            (void)str;
-            gfx_gles2_text_deinit(text);
-            gfx_text_hmap_erase_slot(gfx->text_hmap, idx);
-        }
-
-    gfx_gles2_text_prepare_draw(&gfx->font, &ar);
-    hmap_for_each (gfx->text_hmap, idx, str, text)
         gfx_gles2_text_draw(
-            text, &gfx->font, snake->head.pos, 0, 0.1, 0.12, camera);
-    gfx_gles2_text_end_draw();
+            str_view(snake->data.name),
+            &gfx->font,
+            snake->head.pos,
+            0,
+            0.1,
+            0.12,
+            camera);
+    }
+    gfx_gles2_text_draw_screen(cstr_view("Connect"), &gfx->font, 0, 0.4, 0.15);
+    gfx_gles2_text_draw_screen(cstr_view("Host"), &gfx->font, 0, 0.15, 0.15);
+    gfx_gles2_text_draw_screen(cstr_view("Garage"), &gfx->font, 0, -0.15, 0.15);
+    gfx_gles2_text_draw_screen(cstr_view("Quit"), &gfx->font, 0, -0.4, 0.15);
+    gfx_gles2_text_end_draw(&gfx->font);
 
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_draw(&gfx->debug, &gfx->quad_mesh, camera, &ar);
@@ -591,7 +565,7 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_poll_input,
     &gfx_gles2_next_cmd,
     &gfx_gles2_step_anim,
-    &gfx_gles2_draw_world,
+    &gfx_gles2_draw,
 #if defined(CLITHER_GFX_DEBUG)
     &gfx_gles2_draw_debug_circle
 #endif

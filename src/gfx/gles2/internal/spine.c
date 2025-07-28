@@ -79,7 +79,7 @@ void gfx_gles2_spine_deinit(struct spine* spine)
 }
 
 /* ------------------------------------------------------------------------- */
-static GLfloat bezier_length(const struct bezier_segment* segment)
+static GLfloat bezier_length_f(const struct bezier_segment* segment)
 {
     int     v;
     GLfloat last_x = 0.0, last_y = 0.0;
@@ -98,32 +98,6 @@ static GLfloat bezier_length(const struct bezier_segment* segment)
     }
 
     return length;
-}
-
-/* ------------------------------------------------------------------------- */
-static GLfloat
-bezier_t_cutoff(const struct bezier_segment* segment, GLfloat length)
-{
-    int     v;
-    GLfloat last_x = 0.0, last_y = 0.0;
-    GLfloat total_length = 0.0;
-    for (v = 1; v <= QUADS; ++v)
-    {
-        qw           t = make_qw2(v, QUADS);
-        struct qwpos pos = bezier_xy(segment, t);
-        GLfloat      pos_x = qw_to_float(pos.x);
-        GLfloat      pos_y = qw_to_float(pos.y);
-        GLfloat      dx = pos_x - last_x;
-        GLfloat      dy = pos_y - last_y;
-        total_length += sqrtf(dx * dx + dy * dy);
-        last_x = pos_x;
-        last_y = pos_y;
-
-        if (total_length >= length)
-            return 1.0 - qw_to_float(t);
-    }
-
-    return 1.0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -276,7 +250,7 @@ void gfx_gles2_spine_draw(
     total_length = 0.0;
     rb_for_each_r (segments, i, segment)
     {
-        GLfloat length = bezier_length(segment);
+        GLfloat length = bezier_length_f(segment);
         GLfloat bezier_aspect = length / width;
 
         GLfloat head_x =
@@ -285,8 +259,8 @@ void gfx_gles2_spine_draw(
             qw_to_float(segment->p[0].y) - qw_to_float(camera->pos.y);
         for (c = 0; c != 3; c++)
         {
-            coeff[c * 2 + 0] = qw_to_float(segment->coeff[c].x);
-            coeff[c * 2 + 1] = qw_to_float(segment->coeff[c].y);
+            coeff[c * 2 + 0] = q16_16_to_float(segment->coeff_x[c]);
+            coeff[c * 2 + 1] = q16_16_to_float(segment->coeff_y[c]);
         }
 
         glUniform2fv(spine->uCoeff, 3, coeff);

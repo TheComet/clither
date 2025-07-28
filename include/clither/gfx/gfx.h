@@ -7,6 +7,7 @@ struct camera;
 struct command;
 struct input;
 struct resource_pack;
+struct ui;
 struct world;
 
 /*! Opaque type. This is implemented differently depending on the graphics
@@ -99,9 +100,10 @@ struct gfx_interface
     /*!
      * \brief Draw everything.
      */
-    void (*draw_world)(
+    void (*draw)(
         struct gfx*          gfx,
         const struct world*  world,
+        const struct ui*     ui,
         const struct camera* camera);
 
 #if defined(CLITHER_GFX_DEBUG)

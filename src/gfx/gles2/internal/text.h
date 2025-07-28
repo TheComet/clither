@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/game/q.h"
+#include "clither/util/strview.h"
 #include "glad/gles2.h"
 
 typedef struct FT_LibraryRec_* FT_Library;
@@ -13,6 +14,7 @@ struct aspect_ratio;
 struct camera;
 struct resource_shader;
 struct resource_text;
+struct gfx_text_hmap;
 
 struct text_glyph_info
 {
@@ -47,7 +49,8 @@ struct gfx_font
     hb_font_t*   hb_font;
     hb_buffer_t* hb_buf;
 
-    struct text_atlas atlas;
+    struct gfx_text_hmap* text_hmap;
+    struct text_atlas     atlas;
 
     GLuint program;
     GLuint tex_atlas;
@@ -60,33 +63,37 @@ struct gfx_font
 int  gfx_gles2_font_init(struct gfx_font* font);
 void gfx_gles2_font_deinit(struct gfx_font* font);
 int  gfx_gles2_font_load(
-     struct gfx_font*                  font,
+     struct gfx_font*              font,
      const struct resource_text*   res,
      const struct resource_shader* shader);
 void gfx_gles2_font_unload(struct gfx_font* font);
 
-struct text
+struct gfx_text
 {
     struct text_vertex_buf_vec* vertices;
     GLuint                      vbo;
     unsigned                    was_used : 1;
 };
 
-void gfx_gles2_text_init(struct text* text);
-void gfx_gles2_text_deinit(struct text* text);
-void gfx_gles2_text_shape(
-    struct text* text, struct gfx_font* font, const char* str);
+void gfx_gles2_text_init(struct gfx_text* text);
+void gfx_gles2_text_deinit(struct gfx_text* text);
 
 void gfx_gles2_text_prepare_draw(
-    const struct gfx_font* font, const struct aspect_ratio* ar);
+    struct gfx_font* font, const struct aspect_ratio* ar);
 void gfx_gles2_text_draw(
-    const struct text*   text,
-    const struct gfx_font*   font,
+    struct strview       str,
+    struct gfx_font*     font,
     struct qwpos         pos,
     float                screen_off_x,
     float                screen_off_y,
     float                scale,
     const struct camera* camera);
-void gfx_gles2_text_end_draw(void);
+void gfx_gles2_text_draw_screen(
+    struct strview   str,
+    struct gfx_font* font,
+    float            screen_x,
+    float            screen_y,
+    float            scale);
+void gfx_gles2_text_end_draw(struct gfx_font* font);
 
 #define gfx_gles2_text_shaped(text) ((text)->vertices != NULL)

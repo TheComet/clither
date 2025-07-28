@@ -79,7 +79,7 @@ void bezier_calc_segment(
     const struct bezier_knot* head,
     const struct bezier_knot* tail)
 {
-    /* Calculate bezier control points */
+    /* Calculate bezier control points (local space) */
     const struct qwpos head_dir =
         make_qwposqw(qa_cos(head->angle), qa_sin(head->angle));
     const struct qwpos p3 = make_qwposqw(
@@ -91,22 +91,23 @@ void bezier_calc_segment(
         qw_sub(p3.x, qw_rescale(qa_cos(tail->angle), tail->len_forwards, 255)),
         qw_sub(p3.y, qw_rescale(qa_sin(tail->angle), tail->len_forwards, 255)));
 
-    const qw _3x1 = 3 * p1.x;
-    const qw _6x1 = 6 * p1.x;
-    const qw _3x2 = 3 * p2.x;
+    const q16_16 _3x1 = 3 * qw_to_q16_16(p1.x);
+    const q16_16 _6x1 = 6 * qw_to_q16_16(p1.x);
+    const q16_16 _3x2 = 3 * qw_to_q16_16(p2.x);
 
-    const qw _3y1 = 3 * p1.y;
-    const qw _6y1 = 6 * p1.y;
-    const qw _3y2 = 3 * p2.y;
+    const q16_16 _3y1 = 3 * qw_to_q16_16(p1.y);
+    const q16_16 _6y1 = 6 * qw_to_q16_16(p1.y);
+    const q16_16 _3y2 = 3 * qw_to_q16_16(p2.y);
 
-    seg->coeff[0].x = _3x1;
-    seg->coeff[1].x = qw_sub(_3x2, _6x1);
-    seg->coeff[2].x = qw_sub(qw_add(_3x1, p3.x), _3x2);
+    seg->coeff_x[0] = _3x1;
+    seg->coeff_x[1] = q16_16_sub(_3x2, _6x1);
+    seg->coeff_x[2] = q16_16_sub(q16_16_add(_3x1, qw_to_q16_16(p3.x)), _3x2);
 
-    seg->coeff[0].y = _3y1;
-    seg->coeff[1].y = qw_sub(_3y2, _6y1);
-    seg->coeff[2].y = qw_sub(qw_add(_3y1, p3.y), _3y2);
+    seg->coeff_y[0] = _3y1;
+    seg->coeff_y[1] = q16_16_sub(_3y2, _6y1);
+    seg->coeff_y[2] = q16_16_sub(q16_16_add(_3y1, qw_to_q16_16(p3.y)), _3y2);
 
+    /* Calculate control points in world space */
     seg->p[0] = head->pos;
     seg->p[1] =
         make_qwposqw(qw_add(head->pos.x, p1.x), qw_add(head->pos.y, p1.y));
@@ -133,7 +134,7 @@ qw bezier_segment_calc_length(const struct bezier_segment* segment, qw t_step)
 
         dx = qw_sub(pos.x, last.x);
         dy = qw_sub(pos.y, last.y);
-        dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        dist_sq = qw_add(qw_sq(dx), qw_sq(dy));
         dist = qw_sqrt(dist_sq);
         length = qw_add(length, dist);
         last = pos;
@@ -143,7 +144,7 @@ qw bezier_segment_calc_length(const struct bezier_segment* segment, qw t_step)
     last.y = qw_add(last.y, segment->p[0].y);
     dx = qw_sub(segment->p[3].x, last.x);
     dy = qw_sub(segment->p[3].y, last.y);
-    dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+    dist_sq = qw_add(qw_sq(dx), qw_sq(dy));
     dist = qw_sqrt(dist_sq);
     length = qw_add(length, dist);
 
@@ -153,148 +154,144 @@ qw bezier_segment_calc_length(const struct bezier_segment* segment, qw t_step)
 /* ------------------------------------------------------------------------- */
 void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment)
 {
-    const struct qwpos* coeff = segment->coeff;
+    const q16_16* Ax = segment->coeff_x;
+    const q16_16* Ay = segment->coeff_y;
 
-    /* x1 and y1 are 0 */
+    q16_16 x1 = 0;
+    q16_16 y1 = 0;
+    q16_16 x2 = q16_16_add(Ax[0], q16_16_add(Ax[1], Ax[2]));
+    q16_16 y2 = q16_16_add(Ay[0], q16_16_add(Ay[1], Ay[2]));
 
-    qw x2 = qw_add(coeff[0].x, qw_add(coeff[1].x, coeff[2].x));
-    qw y2 = qw_add(coeff[0].y, qw_add(coeff[1].y, coeff[2].y));
+    q16_16 ax = 3 * Ax[2];
+    q16_16 bx = 2 * Ax[1];
+    q16_16 Dx = q16_16_sub(q16_16_sq(bx), 4 * q16_16_mul(ax, Ax[0]));
 
-    qw ax = 3 * coeff[2].x;
-    qw bx = 2 * coeff[1].x;
-    qw Dx = qw_sub(qw_sq(bx), 4 * qw_mul(ax, coeff[0].x));
+    q16_16 ay = 3 * Ay[2];
+    q16_16 by = 2 * Ay[1];
+    q16_16 Dy = q16_16_sub(q16_16_sq(by), 4 * q16_16_mul(ay, Ay[0]));
 
-    qw ay = 3 * coeff[2].y;
-    qw by = 2 * coeff[1].y;
-    qw Dy = qw_sub(qw_sq(by), 4 * qw_mul(ay, coeff[0].y));
+    if (x2 < 0)
+        x1 = x2, x2 = 0;
+    if (y2 < 0)
+        y1 = y2, y2 = 0;
 
-    if (0 < x2)
+    if (Dx >= make_q16_16(0) && ax != make_q16_16(0))
     {
-        bb->x1 = 0;
-        bb->x2 = x2;
-    }
-    else
-    {
-        bb->x1 = x2;
-        bb->x2 = 0;
-    }
-
-    if (0 < y2)
-    {
-        bb->y1 = 0;
-        bb->y2 = y2;
-    }
-    else
-    {
-        bb->y1 = y2;
-        bb->y2 = 0;
-    }
-
-    if (Dx >= make_qw(0) && ax != make_qw(0))
-    {
-        qw D_sq = qw_sqrt(Dx);
-        qw t1 = qw_div(qw_add(-bx, D_sq), 2 * ax);
-        qw t2 = qw_div(qw_sub(-bx, D_sq), 2 * ax);
-        if (t1 >= make_qw(0) && t1 <= make_qw(1))
+        q16_16 D_sq = q16_16_sqrt(Dx);
+        q16_16 t1 = q16_16_div(q16_16_add(-bx, D_sq), 2 * ax);
+        q16_16 t2 = q16_16_div(q16_16_sub(-bx, D_sq), 2 * ax);
+        if (t1 >= make_q16_16(0) && t1 <= make_q16_16(1))
         {
-            qw t1_2 = qw_mul(t1, t1);
-            qw t1_3 = qw_mul(t1_2, t1);
-            qw x = qw_add(
-                qw_add(qw_mul(coeff[0].x, t1), qw_mul(coeff[1].x, t1_2)),
-                qw_mul(coeff[2].x, t1_3));
-            if (bb->x1 > x)
-                bb->x1 = x;
-            if (bb->x2 < x)
-                bb->x2 = x;
+            q16_16 t1_2 = q16_16_sq(t1);
+            q16_16 t1_3 = q16_16_mul(t1_2, t1);
+            q16_16 x = q16_16_add(
+                q16_16_add(q16_16_mul(Ax[0], t1), q16_16_mul(Ax[1], t1_2)),
+                q16_16_mul(Ax[2], t1_3));
+            if (x1 > x)
+                x1 = x;
+            if (x2 < x)
+                x2 = x;
         }
 
-        if (t2 >= make_qw(0) && t2 <= make_qw(1))
+        if (t2 >= make_q16_16(0) && t2 <= make_q16_16(1))
         {
-            qw t2_2 = qw_mul(t2, t2);
-            qw t2_3 = qw_mul(t2_2, t2);
-            qw x = qw_add(
-                qw_add(qw_mul(coeff[0].x, t2), qw_mul(coeff[1].x, t2_2)),
-                qw_mul(coeff[2].x, t2_3));
-            if (bb->x1 > x)
-                bb->x1 = x;
-            if (bb->x2 < x)
-                bb->x2 = x;
+            q16_16 t2_2 = q16_16_mul(t2, t2);
+            q16_16 t2_3 = q16_16_mul(t2_2, t2);
+            q16_16 x = q16_16_add(
+                q16_16_add(q16_16_mul(Ax[0], t2), q16_16_mul(Ax[1], t2_2)),
+                q16_16_mul(Ax[2], t2_3));
+            if (x1 > x)
+                x1 = x;
+            if (x2 < x)
+                x2 = x;
         }
     }
 
-    if (Dy >= make_qw(0) && ay != make_qw(0))
+    if (Dy >= make_q16_16(0) && ay != make_q16_16(0))
     {
-        qw D_sq = qw_sqrt(Dy);
-        qw t1 = qw_div(qw_add(-by, D_sq), 2 * ay);
-        qw t2 = qw_div(qw_sub(-by, D_sq), 2 * ay);
-        if (t1 >= make_qw(0) && t1 <= make_qw(1))
+        q16_16 D_sq = q16_16_sqrt(Dy);
+        q16_16 t1 = q16_16_div(q16_16_add(-by, D_sq), 2 * ay);
+        q16_16 t2 = q16_16_div(q16_16_sub(-by, D_sq), 2 * ay);
+        if (t1 >= make_q16_16(0) && t1 <= make_q16_16(1))
         {
-            qw t1_2 = qw_mul(t1, t1);
-            qw t1_3 = qw_mul(t1_2, t1);
-            qw y = qw_add(
-                qw_add(qw_mul(coeff[0].y, t1), qw_mul(coeff[1].y, t1_2)),
-                qw_mul(coeff[2].y, t1_3));
-            if (bb->y1 > y)
-                bb->y1 = y;
-            if (bb->y2 < y)
-                bb->y2 = y;
+            q16_16 t1_2 = q16_16_sq(t1);
+            q16_16 t1_3 = q16_16_mul(t1_2, t1);
+            q16_16 y = q16_16_add(
+                q16_16_add(q16_16_mul(Ay[0], t1), q16_16_mul(Ay[1], t1_2)),
+                q16_16_mul(Ay[2], t1_3));
+            if (y1 > y)
+                y1 = y;
+            if (y2 < y)
+                y2 = y;
         }
 
-        if (t2 >= make_qw(0) && t2 <= make_qw(1))
+        if (t2 >= make_q16_16(0) && t2 <= make_q16_16(1))
         {
-            qw t2_2 = qw_mul(t2, t2);
-            qw t2_3 = qw_mul(t2_2, t2);
-            qw y = qw_add(
-                qw_add(qw_mul(coeff[0].y, t2), qw_mul(coeff[1].y, t2_2)),
-                qw_mul(coeff[2].y, t2_3));
-            if (bb->y1 > y)
-                bb->y1 = y;
-            if (bb->y2 < y)
-                bb->y2 = y;
+            q16_16 t2_2 = q16_16_sq(t2);
+            q16_16 t2_3 = q16_16_mul(t2_2, t2);
+            q16_16 y = q16_16_add(
+                q16_16_add(q16_16_mul(Ay[0], t2), q16_16_mul(Ay[1], t2_2)),
+                q16_16_mul(Ay[2], t2_3));
+            if (y1 > y)
+                y1 = y;
+            if (y2 < y)
+                y2 = y;
         }
     }
+
+    bb->x1 = q16_16_to_qw(x1);
+    bb->y1 = q16_16_to_qw(y1);
+    bb->x2 = q16_16_to_qw(x2);
+    bb->y2 = q16_16_to_qw(y2);
 }
 
 /* ------------------------------------------------------------------------- */
-struct qwpos bezier_xy(const struct bezier_segment* segment, const qw t)
+struct qwpos bezier_xy(const struct bezier_segment* segment, qw t)
 {
-    const struct qwpos* coeff = segment->coeff;
+    const q16_16* Ax = segment->coeff_x;
+    const q16_16* Ay = segment->coeff_y;
 
-    const qw t2 = qw_mul(t, t);
-    const qw t3 = qw_mul(t, t2);
+    const q16_16 t1 = qw_to_q16_16(t);
+    const q16_16 t2 = q16_16_sq(t1);
+    const q16_16 t3 = q16_16_mul(t2, t1);
 
     /* NOTE: ax and ay are 0 */
 
-    const qw bx = qw_mul(coeff[0].x, t);
-    const qw cx = qw_mul(coeff[1].x, t2);
-    const qw dx = qw_mul(coeff[2].x, t3);
+    const q16_16 bx = q16_16_mul(Ax[0], t1);
+    const q16_16 cx = q16_16_mul(Ax[1], t2);
+    const q16_16 dx = q16_16_mul(Ax[2], t3);
 
-    const qw by = qw_mul(coeff[0].y, t);
-    const qw cy = qw_mul(coeff[1].y, t2);
-    const qw dy = qw_mul(coeff[2].y, t3);
+    const q16_16 by = q16_16_mul(Ay[0], t1);
+    const q16_16 cy = q16_16_mul(Ay[1], t2);
+    const q16_16 dy = q16_16_mul(Ay[2], t3);
 
-    return make_qwposqw(qw_add(qw_add(bx, cx), dx), qw_add(qw_add(by, cy), dy));
+    return make_qwposqw(
+        q16_16_to_qw(q16_16_add(q16_16_add(bx, cx), dx)),
+        q16_16_to_qw(q16_16_add(q16_16_add(by, cy), dy)));
 }
 
 /* ------------------------------------------------------------------------- */
-struct qwpos bezier_tangent(const struct bezier_segment* segment, const qw t)
+struct qwpos bezier_tangent(const struct bezier_segment* segment, qw t)
 {
-    const struct qwpos* coeff = segment->coeff;
+    const q16_16* Ax = segment->coeff_x;
+    const q16_16* Ay = segment->coeff_y;
 
-    const qw t2 = qw_mul(t, t);
+    const q16_16 t1 = qw_to_q16_16(t);
+    const q16_16 t2 = q16_16_sq(t1);
 
     /* NOTE: ax and ay are 0 */
 
-    const qw bx = coeff[0].x;
-    const qw cx = qw_mul(coeff[1].x, 2 * t);
-    const qw dx = qw_mul(coeff[2].x, 3 * t2);
+    const q16_16 bx = Ax[0];
+    const q16_16 cx = q16_16_mul(Ax[1], 2 * t1);
+    const q16_16 dx = q16_16_mul(Ax[2], 3 * t2);
 
-    const qw by = coeff[0].y;
-    const qw cy = qw_mul(coeff[1].y, 2 * t);
-    const qw dy = qw_mul(coeff[2].y, 3 * t2);
+    const q16_16 by = Ay[0];
+    const q16_16 cy = q16_16_mul(Ay[1], 2 * t1);
+    const q16_16 dy = q16_16_mul(Ay[2], 3 * t2);
 
-    struct qwpos tangent = qwpos_normalize(
-        make_qwposqw(qw_add(qw_add(bx, cx), dx), qw_add(qw_add(by, cy), dy)));
+    struct qwpos tangent = qwpos_normalize(make_qwposqw(
+        q16_16_to_qw(q16_16_add(q16_16_add(bx, cx), dx)),
+        q16_16_to_qw(q16_16_add(q16_16_add(by, cy), dy))));
 
     /* HACK: This is slightly stupid. The head angle is stored as a fallback in
      * case the segment is 0 in length. Avoids an issue with flickering sprites
@@ -357,12 +354,10 @@ double bezier_fit_trail(
         qw                  head_dy = qw_sub(p1->y, pm->y);
         qw                  tail_dx = qw_sub(p0->x, p1->x);
         qw                  tail_dy = qw_sub(p0->y, p1->y);
-        qw                  head_lensq =
-            qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
-        qw tail_lensq =
-            qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
-        double head_len = sqrt(qw_to_float(head_lensq));
-        double tail_len = sqrt(qw_to_float(tail_lensq));
+        qw                  head_lensq = qw_add(qw_sq(head_dx), qw_sq(head_dy));
+        qw                  tail_lensq = qw_add(qw_sq(tail_dx), qw_sq(tail_dy));
+        double              head_len = sqrt(qw_to_float(head_lensq));
+        double              tail_len = sqrt(qw_to_float(tail_lensq));
 
         head->pos = *pm;
         head->angle =
@@ -381,12 +376,10 @@ double bezier_fit_trail(
         qw                  head_dy = qw_sub(p2->y, pm->y);
         qw                  tail_dx = qw_sub(p0->x, p1->x);
         qw                  tail_dy = qw_sub(p0->y, p1->y);
-        qw                  head_lensq =
-            qw_add(qw_mul(head_dx, head_dx), qw_mul(head_dy, head_dy));
-        qw tail_lensq =
-            qw_add(qw_mul(tail_dx, tail_dx), qw_mul(tail_dy, tail_dy));
-        double head_len = sqrt(qw_to_float(head_lensq));
-        double tail_len = sqrt(qw_to_float(tail_lensq));
+        qw                  head_lensq = qw_add(qw_sq(head_dx), qw_sq(head_dy));
+        qw                  tail_lensq = qw_add(qw_sq(tail_dx), qw_sq(tail_dy));
+        double              head_len = sqrt(qw_to_float(head_lensq));
+        double              tail_len = sqrt(qw_to_float(tail_lensq));
 
         head->pos = *pm;
         head->angle =
@@ -673,9 +666,9 @@ void bezier_sample_begin(
     it->segments = segments;
     it->segment_idx = 0;
 
-    it->spacing_sq = qw_mul(spacing, spacing);
-    it->total_spacing = make_qw(0);
-    it->snake_length = snake_length;
+    it->spacing_sq = q16_16_sq(qw_to_q16_16(spacing));
+    it->total_spacing = make_q16_16(0);
+    it->snake_length = qw_to_q16_16(snake_length);
     it->t = make_qw(0);
 
     if (rb_count(segments) == 0)
@@ -688,7 +681,8 @@ void bezier_sample_begin(
 }
 void bezier_sample_next(struct bezier_sample* it)
 {
-    qw                           t_step, t_last, dist_sq, dx, dy;
+    qw                           t_step, t_last;
+    q16_16                       dist_sq, dx, dy;
     struct qwpos                 next;
     const struct bezier_segment* segment;
 
@@ -707,9 +701,9 @@ again:
     {
         /* Check distance to previous calculated position */
         next = bezier_xy(segment, it->t);
-        dx = qw_sub(it->pos.x, next.x);
-        dy = qw_sub(it->pos.y, next.y);
-        dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        dx = qw_to_q16_16(qw_sub(it->pos.x, next.x));
+        dy = qw_to_q16_16(qw_sub(it->pos.y, next.y));
+        dist_sq = q16_16_add(q16_16_sq(dx), q16_16_sq(dy));
         it->t = dist_sq > it->spacing_sq /* overshot? */
                     ? qw_sub(it->t, t_step)
                     : qw_add(it->t, t_step);
@@ -742,7 +736,7 @@ again:
     it->pos = make_qwposqw(
         qw_add(next.x, segment->p[0].x), qw_add(next.y, segment->p[0].y));
 
-    it->total_spacing = qw_add(it->total_spacing, qw_sqrt(dist_sq));
+    it->total_spacing = q16_16_add(it->total_spacing, q16_16_sqrt(dist_sq));
     if (it->total_spacing >= it->snake_length)
     {
         it->t = -1;
@@ -761,7 +755,7 @@ int bezier_test_radius(
 
     dx = qw_sub(segment->p[0].x, segment->p[3].x);
     dy = qw_sub(segment->p[0].y, segment->p[3].y);
-    dist = qw_sqrt(qw_add(qw_mul(dx, dx), qw_mul(dy, dy)));
+    dist = qw_sqrt(qw_add(qw_sq(dx), qw_sq(dy)));
     t_step = qw_mul(make_qw(0.05), qw_div(radius, dist));
 
     for (t = make_qw(0); t <= make_qw(1); t += t_step)
@@ -769,7 +763,7 @@ int bezier_test_radius(
         struct qwpos p = bezier_xy(segment, t);
         dx = qw_sub(p.x, pos.x);
         dy = qw_sub(p.y, pos.y);
-        dist = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+        dist = qw_add(qw_sq(dx), qw_sq(dy));
         if (dist < radius * radius)
             return 1;
     }

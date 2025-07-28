@@ -28,8 +28,9 @@ struct bezier_knot
  * are not transmitted over the network. */
 struct bezier_segment
 {
-    struct qwpos p[4];     /* p[0] = head, p[3] = tail */
-    struct qwpos coeff[3]; /* Bezier coefficients to backwards knot */
+    struct qwpos p[4];       /* p[0] = head, p[3] = tail */
+    q16_16       coeff_x[3]; /* Bezier coefficients to backwards knot */
+    q16_16       coeff_y[3]; /* Bezier coefficients to backwards knot */
     /* NOTE: Bezier coefficients are calculated relative to the head position,
      * i.e. if a*t^3 + b*t^2 + c*t + d is the bezier curve, then d will always
      * equal 0. This is why there are only 3 coefficients stored instead of 4.
@@ -51,13 +52,12 @@ void bezier_calc_segment(
     const struct bezier_knot* head,
     const struct bezier_knot* tail);
 
-qw bezier_segment_calc_length(
-    const struct bezier_segment* segment, qw t_step);
+qw bezier_segment_calc_length(const struct bezier_segment* segment, qw t_step);
 
 void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment);
 
-struct qwpos bezier_xy(const struct bezier_segment* segment, const qw t);
-struct qwpos bezier_tangent(const struct bezier_segment* segment, const qw t);
+struct qwpos bezier_xy(const struct bezier_segment* segment, qw t);
+struct qwpos bezier_tangent(const struct bezier_segment* segment, qw t);
 
 /*!
  * \brief Performs a constrained least squares fit on the input data points to
@@ -90,10 +90,10 @@ struct bezier_sample
 
     struct qwpos pos;
 
-    qw spacing_sq;
-    qw total_spacing;
-    qw snake_length;
-    qw t;
+    q16_16 spacing_sq;
+    q16_16 total_spacing;
+    q16_16 snake_length;
+    qw     t;
 };
 void bezier_sample_begin(
     struct bezier_sample*           it,
@@ -101,9 +101,9 @@ void bezier_sample_begin(
     qw                              spacing,
     qw                              snake_length);
 void bezier_sample_next(struct bezier_sample* it);
-#define bezier_sample_end(it)           ((it)->t < 0)
-#define bezier_sample_segment(it)       (rb_peek((it)->segments, (it)->segment_idx))
-#define bezier_sample_idx(it) ((it)->segment_idx)
+#define bezier_sample_end(it)     ((it)->t < 0)
+#define bezier_sample_segment(it) (rb_peek((it)->segments, (it)->segment_idx))
+#define bezier_sample_idx(it)     ((it)->segment_idx)
 
 int bezier_test_radius(
     const struct bezier_segment* segment, struct qwpos pos, qw radius);

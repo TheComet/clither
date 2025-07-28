@@ -70,7 +70,7 @@ static int predicate_radius(morton morton, struct food* food, void* user)
     struct qwpos                 pos = morton_decode_qwpos(morton);
     qw                           dx = qw_sub(ctx->pos.x, pos.x);
     qw                           dy = qw_sub(ctx->pos.y, pos.y);
-    qw dist_sq = qw_add(qw_mul(dx, dx), qw_mul(dy, dy));
+    qw                           dist_sq = qw_add(qw_sq(dx), qw_sq(dy));
     if (dist_sq <= ctx->radius_sq)
         return ctx->callback(morton, food, ctx->user);
     return BMAP_RETAIN;
@@ -95,7 +95,7 @@ int food_bmap_for_each_in_radius(
     int32_t upper_idx = food_bmap_lower_bound(food_bmap, upper_morton);
 
     ctx.pos = pos;
-    ctx.radius_sq = qw_mul(radius, radius);
+    ctx.radius_sq = qw_sq(radius);
     ctx.callback = callback;
     ctx.user = user;
     return food_bmap_retain_range(
