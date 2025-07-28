@@ -77,6 +77,7 @@ int gfx_gles2_snake_load(
                 gfx_sprite_tex_vec_emplace(&snake->body_base);
             if (tex == NULL)
                 return -1;
+            gfx_gles2_sprite_tex_init(tex);
             gfx_gles2_sprite_tex_load(tex, &sprite->layer[RESOURCE_LAYER_BASE]);
         }
     }
@@ -109,7 +110,10 @@ void gfx_gles2_snake_unload(struct gfx_snake* gfx)
     gfx_gles2_sprite_tex_unload(&gfx->tail_base);
 
     vec_for_each (gfx->body_base, tex)
+    {
         gfx_gles2_sprite_tex_unload(tex);
+        gfx_gles2_sprite_tex_deinit(tex);
+    }
     gfx_sprite_tex_vec_clear_compact(&gfx->body_base);
 
     gfx_gles2_sprite_tex_unload(&gfx->head_gather);

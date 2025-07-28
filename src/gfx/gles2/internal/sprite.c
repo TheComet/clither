@@ -147,7 +147,7 @@ void gfx_gles2_sprite_tex_unload(struct gfx_sprite_tex* tex)
     int i;
 
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
-        if (tex->tex[i] != 0)
+        if (tex->tex[i] != INVALID_HANDLE)
         {
             gfx_untrack_tex(tex->tex[i]);
             glDeleteTextures(1, &tex->tex[i]);
