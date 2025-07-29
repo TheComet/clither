@@ -112,6 +112,20 @@ struct gfx_interface
 #endif
 };
 
+struct fpos
+{
+    float x;
+    float y;
+};
+
+static struct fpos make_fpos(float x, float y)
+{
+    struct fpos p;
+    p.x = x;
+    p.y = y;
+    return p;
+}
+
 #if defined(CLITHER_GFX)
 extern const struct gfx_interface* gfx_backends[];
 #endif

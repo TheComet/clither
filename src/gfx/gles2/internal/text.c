@@ -29,11 +29,11 @@
 
 /* NOTE: 64 is the FreeType's internal pixel size multiplier */
 #define PIXEL_FORMAT 64
-#define TO_Q26_6(x)  (x * PIXEL_FORMAT)
-#define TO_PIXELS(x) (x / PIXEL_FORMAT)
+#define TO_Q26_6(x)  ((x) * PIXEL_FORMAT)
+#define TO_PIXELS(x) ((x) / PIXEL_FORMAT)
 
-HMAP_DECLARE(static, text_glyph_hmap, uint32_t, struct text_glyph_info, 16)
-HMAP_DEFINE(static, text_glyph_hmap, uint32_t, struct text_glyph_info, 16)
+HMAP_DECLARE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
+HMAP_DEFINE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
 
 HMAP_DECLARE_STR(static, gfx_text_hmap, struct gfx_text, 16)
 HMAP_DEFINE_STR(static, gfx_text_hmap, struct gfx_text, 16)
@@ -85,36 +85,38 @@ static int force_ucs2_charmap(FT_Face face)
 }
 
 /* ------------------------------------------------------------------------- */
-static void gfx_gles2_text_atlas_init(struct text_atlas* atlas)
+static void gfx_gles2_text_atlas_init(struct gfx_atlas* atlas)
 {
-    text_glyph_hmap_init(&atlas->glyphs);
+    text_glyph_hmap_init(&atlas->glyph_hmap);
     atlas->data = NULL;
     atlas->width = 0;
     atlas->height = 0;
     atlas->next_x = 1;
     atlas->next_y = 1;
-    atlas->row_width = 0;
+    atlas->col_width = 0;
 }
 
 /* ------------------------------------------------------------------------- */
-static void gfx_gles2_text_atlas_deinit(struct text_atlas* atlas)
+static void gfx_gles2_text_atlas_deinit(struct gfx_atlas* atlas)
 {
     if (atlas->data != NULL)
         mem_free(atlas->data);
-    text_glyph_hmap_deinit(atlas->glyphs);
+    text_glyph_hmap_deinit(atlas->glyph_hmap);
 }
 
 /* ------------------------------------------------------------------------- */
-static int add_glyph(
-    struct text_glyph_info* info, struct gfx_font* font, uint32_t codepoint)
+static int add_glyph_to_atlas(
+    struct gfx_glyph_info* info,
+    struct gfx_font*       font,
+    uint32_t               codepoint,
+    uint8_t*               did_realloc)
 {
     int          tex_width, tex_height;
     FT_GlyphSlot slot;
     int          y;
     const int    padding = 1;
-    int          texcoords_changed = 0;
 
-    struct text_atlas* atlas = &font->atlas;
+    struct gfx_atlas* atlas = &font->atlas;
 
     FT_Error error = FT_Load_Glyph(font->ft_face, codepoint, FT_LOAD_DEFAULT);
     if (error)
@@ -128,26 +130,29 @@ static int add_glyph(
     slot = font->ft_face->glyph;
     FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
 
-    if (atlas->row_width < (int)slot->bitmap.width)
-        atlas->row_width = (int)slot->bitmap.width;
+    if (atlas->col_width < (int)slot->bitmap.width)
+        atlas->col_width = (int)slot->bitmap.width;
 
-    tex_width = to_nearest_pow2(atlas->next_x + atlas->row_width);
+    tex_width = to_nearest_pow2(atlas->next_x + atlas->col_width);
     tex_height = to_nearest_pow2(atlas->next_y + slot->bitmap.rows);
     if (tex_height < atlas->height)
         tex_height = atlas->height;
 
     /* Begin new column if we reach upper Y limit of atlas size */
-    if (tex_height > 4096)
+    if (tex_height > 1024)
     {
-        atlas->next_x += atlas->row_width + padding;
-        atlas->row_width = slot->bitmap.width;
+        atlas->next_x += atlas->col_width + padding;
+        atlas->col_width = slot->bitmap.width;
         atlas->next_y = 0;
-        tex_width = to_nearest_pow2(atlas->next_x + atlas->row_width);
+        tex_width = to_nearest_pow2(atlas->next_x + atlas->col_width);
         tex_height = atlas->height;
     }
 
     if (atlas->data != NULL && tex_width > atlas->width)
     {
+        /* Adding a new column is more expensive because we have to copy over
+         * all of the old glyphs to different memory offsets on the bigger
+         * atlas */
         uint8_t* new_data = mem_alloc(tex_width * tex_height);
         if (new_data == NULL)
             return -1;
@@ -159,9 +164,12 @@ static int add_glyph(
                 atlas->width);
         mem_free(atlas->data);
         atlas->data = new_data;
+        *did_realloc = 1;
     }
-    else if (tex_width > atlas->width || tex_height > atlas->height)
+    else if (atlas->data == NULL || tex_height > atlas->height)
     {
+        /* Growing the atlas downwards preserves the offsets of the old glyphs,
+         * so can just realloc(). Make sure to memset() the new space */
         uint8_t* new_data = mem_realloc(atlas->data, tex_width * tex_height);
         if (new_data == NULL)
             return -1;
@@ -170,7 +178,7 @@ static int add_glyph(
             atlas->data + atlas->width * atlas->height,
             0,
             (tex_width * tex_height) - (atlas->width * atlas->height));
-        texcoords_changed = 1;
+        *did_realloc = 1;
     }
     atlas->width = tex_width;
     atlas->height = tex_height;
@@ -206,58 +214,60 @@ static int add_glyph(
         GL_UNSIGNED_BYTE,
         atlas->data);
 
-    return texcoords_changed;
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
-static int update_atlas(
-    struct gfx_font* font, hb_glyph_info_t* hb_glyph_info, int glyph_count)
+static int add_glyphs_to_atlas(
+    struct gfx_font* font,
+    hb_glyph_info_t* hb_info,
+    int              glyph_count,
+    uint8_t*         did_realloc)
 {
     int i;
-    int texcoords_changed = 0;
-    for (i = 0; i < (int)glyph_count; ++i)
+    for (i = 0; i < glyph_count; ++i)
     {
-        struct text_glyph_info* info;
+        struct gfx_glyph_info* info;
+        uint32_t               codepoint = hb_info[i].codepoint;
         switch (text_glyph_hmap_emplace_or_get(
-            &font->atlas.glyphs, hb_glyph_info[i].codepoint, &info))
+            &font->atlas.glyph_hmap, codepoint, &info))
         {
-            case HMAP_OOM: return -1;
-            case HMAP_EXISTS: continue;
             case HMAP_NEW:
-                texcoords_changed =
-                    add_glyph(info, font, hb_glyph_info[i].codepoint);
+                if (add_glyph_to_atlas(info, font, codepoint, did_realloc) != 0)
+                    return -1;
                 break;
+            case HMAP_EXISTS: continue;
+            case HMAP_OOM: return -1;
         }
     }
 
-    return texcoords_changed;
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
 static int generate_mesh(
     struct gfx_text*     text,
     struct gfx_font*     font,
-    hb_glyph_info_t*     hb_glyph_info,
-    hb_glyph_position_t* hb_glyph_pos,
+    hb_glyph_info_t*     hb_info,
+    hb_glyph_position_t* hb_pos,
     int                  glyph_count)
 {
-    int                i;
-    GLfloat            max_width, max_height, x, y;
-    GLfloat            rescale;
-    struct vertex*     vert;
-    struct text_atlas* atlas = &font->atlas;
+    int               i;
+    GLfloat           x, y;
+    GLfloat           rescale;
+    struct vertex*    vert;
+    struct gfx_atlas* atlas = &font->atlas;
 
-    text_vertex_buf_vec_clear(text->vertices);
+    text_vertex_buf_vec_clear(font->vertices);
 
-    max_width = 0, max_height = 0;
     x = 0, y = 0;
-    for (i = 0; i < (int)glyph_count; ++i)
+    for (i = 0; i < glyph_count; ++i)
     {
-        struct text_glyph_info* text_glyph_info =
-            text_glyph_hmap_find(atlas->glyphs, hb_glyph_info[i].codepoint);
+        struct gfx_glyph_info* text_glyph_info =
+            text_glyph_hmap_find(atlas->glyph_hmap, hb_info[i].codepoint);
 
-        GLfloat x_offset = TO_PIXELS((GLfloat)hb_glyph_pos[i].x_offset);
-        GLfloat y_offset = TO_PIXELS((GLfloat)hb_glyph_pos[i].y_offset);
+        GLfloat x_offset = TO_PIXELS((GLfloat)hb_pos[i].x_offset);
+        GLfloat y_offset = TO_PIXELS((GLfloat)hb_pos[i].y_offset);
         GLfloat width = text_glyph_info->end_x - text_glyph_info->start_x;
         GLfloat height = text_glyph_info->end_y - text_glyph_info->start_y;
 
@@ -271,46 +281,128 @@ static int generate_mesh(
         GLfloat u1 = (GLfloat)text_glyph_info->end_x / (GLfloat)atlas->width;
         GLfloat v1 = (GLfloat)text_glyph_info->end_y / (GLfloat)atlas->height;
 
-        if (max_width < width)
-            max_width = width;
-        if (max_height < height)
-            max_height = height;
+        x += TO_PIXELS((GLfloat)hb_pos[i].x_advance);
+        y += TO_PIXELS((GLfloat)hb_pos[i].y_advance);
 
-        if (i == (int)glyph_count - 1)
-        {
-            x += max_width;
-            y += max_height;
-        }
-        else
-        {
-            x += TO_PIXELS((GLfloat)hb_glyph_pos[i].x_advance);
-            y += TO_PIXELS((GLfloat)hb_glyph_pos[i].y_advance);
-        }
-
-        text_vertex_buf_vec_push(&text->vertices, vertex(x0, y0, u0, v0));
-        text_vertex_buf_vec_push(&text->vertices, vertex(x0, y1, u0, v1));
-        text_vertex_buf_vec_push(&text->vertices, vertex(x1, y1, u1, v1));
-        text_vertex_buf_vec_push(&text->vertices, vertex(x1, y0, u1, v0));
-        text_vertex_buf_vec_push(&text->vertices, vertex(x0, y0, u0, v0));
-        text_vertex_buf_vec_push(&text->vertices, vertex(x1, y1, u1, v1));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x0, y0, u0, v0));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x0, y1, u0, v1));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x1, y1, u1, v1));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x1, y0, u1, v0));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x0, y0, u0, v0));
+        text_vertex_buf_vec_push(&font->vertices, vertex(x1, y1, u1, v1));
     }
 
-    rescale = x > y ? x : y;
-    vec_for_each (text->vertices, vert)
+    /* We want the height of "1" to mean the entire height of the screen */
+    rescale = TO_PIXELS((GLfloat)font->ft_face->size->metrics.height);
+    vec_for_each (font->vertices, vert)
     {
-        vert->pos[0] = (vert->pos[0] * 2 - x) / rescale;
-        vert->pos[1] = (vert->pos[1] * 2 - y) / rescale;
+        vert->pos[0] = (vert->pos[0] * 2 - x) / rescale * 2;
+        vert->pos[1] = (vert->pos[1] * 2 - y) / rescale * 2;
     }
 
+    text->vertex_count = vec_count(font->vertices);
     glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
     glBufferData(
         GL_ARRAY_BUFFER,
-        vec_count(text->vertices) * sizeof(struct vertex),
-        vec_data(text->vertices),
+        text->vertex_count * sizeof(struct vertex),
+        vec_data(font->vertices),
         GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static int shape_text(
+    struct gfx_font*      font,
+    struct strview        str,
+    hb_glyph_info_t**     hb_info,
+    hb_glyph_position_t** hb_pos,
+    int*                  glyph_count)
+{
+    unsigned int        glyph_count_u;
+    const hb_tag_t      KernTag = HB_TAG('k', 'e', 'r', 'n');
+    static hb_feature_t KerningOn = {KernTag, 1, 0, INT_MAX};
+
+    hb_buffer_reset(font->hb_buf);
+    hb_buffer_set_direction(font->hb_buf, HB_DIRECTION_LTR);
+    hb_buffer_set_script(font->hb_buf, HB_SCRIPT_LATIN);
+    hb_buffer_set_language(
+        font->hb_buf, hb_language_from_string("en", sizeof("en") - 1));
+    hb_buffer_add_utf8(
+        font->hb_buf, strview_data(str), strview_len(str), 0, strview_len(str));
+    hb_shape(font->hb_font, font->hb_buf, &KerningOn, 1);
+
+    *hb_info = hb_buffer_get_glyph_infos(font->hb_buf, &glyph_count_u);
+    *hb_pos = hb_buffer_get_glyph_positions(font->hb_buf, &glyph_count_u);
+    *glyph_count = (int)glyph_count_u;
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static int regenerate_all_meshes(struct gfx_font* font)
+{
+    int16_t           idx;
+    const struct str* str;
+    struct gfx_text*  text;
+
+    hmap_for_each (font->text_hmap, idx, str, text)
+    {
+        hb_glyph_info_t*     hb_info;
+        hb_glyph_position_t* hb_pos;
+        int                  count;
+
+        (void)idx;
+        if (shape_text(font, str_view(str), &hb_info, &hb_pos, &count) != 0)
+            return -1;
+        if (generate_mesh(text, font, hb_info, hb_pos, count) != 0)
+            return -1;
+    }
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+update_text(struct gfx_text* text, struct gfx_font* font, struct strview str)
+{
+    uint8_t              did_realloc;
+    hb_glyph_info_t*     hb_info;
+    hb_glyph_position_t* hb_pos;
+    int                  glyph_count;
+
+    if (shape_text(font, str, &hb_info, &hb_pos, &glyph_count) != 0)
+        return -1;
+
+    did_realloc = 0;
+    if (add_glyphs_to_atlas(font, hb_info, glyph_count, &did_realloc) != 0)
+        return -1;
+
+    if (did_realloc)
+        return regenerate_all_meshes(font);
+
+    return generate_mesh(text, font, hb_info, hb_pos, glyph_count);
+}
+
+/* ------------------------------------------------------------------------- */
+static struct gfx_text*
+create_or_update_text(struct gfx_font* font, struct strview str)
+{
+    struct gfx_text* text = NULL;
+    switch (gfx_text_hmap_emplace_or_get(&font->text_hmap, str, &text))
+    {
+        case HMAP_NEW:
+            gfx_gles2_text_init(text);
+            if (update_text(text, font, str) != 0)
+                return NULL;
+            /* fallthrough */
+        case HMAP_EXISTS:
+            text->was_used = 1;
+            /* fallthrough */
+        case HMAP_OOM: break;
+    }
+
+    return text;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -323,12 +415,13 @@ int gfx_gles2_font_init(struct gfx_font* font)
             FT_Error_String(ft_error));
     track_mem(font->ft_lib, 0);
 
-    font->program = 0;
-    font->tex_atlas = (GLint)-1;
-    font->sAtlas = (GLint)-1;
-    font->uAspectRatio = (GLint)-1;
-    font->uPosCameraSpace = (GLint)-1;
-    font->uSize = (GLint)-1;
+    font->program = INVALID_HANDLE;
+    font->tex_atlas = INVALID_UNIFORM_LOCATION;
+    font->sAtlas = INVALID_UNIFORM_LOCATION;
+    font->uAspectRatio = INVALID_UNIFORM_LOCATION;
+    font->uPosCameraSpace = INVALID_UNIFORM_LOCATION;
+    font->uSize = INVALID_UNIFORM_LOCATION;
+    font->uColor = INVALID_UNIFORM_LOCATION;
 
     glGenTextures(1, &font->tex_atlas);
     gfx_track_tex(font->tex_atlas);
@@ -341,6 +434,7 @@ int gfx_gles2_font_init(struct gfx_font* font)
 
     gfx_text_hmap_init(&font->text_hmap);
     gfx_gles2_text_atlas_init(&font->atlas);
+    text_vertex_buf_vec_init(&font->vertices);
 
     return 0;
 }
@@ -348,6 +442,7 @@ int gfx_gles2_font_init(struct gfx_font* font)
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_font_deinit(struct gfx_font* font)
 {
+    text_vertex_buf_vec_deinit(font->vertices);
     gfx_gles2_text_atlas_deinit(&font->atlas);
     gfx_text_hmap_deinit(font->text_hmap);
 
@@ -418,6 +513,8 @@ int gfx_gles2_font_load(
         font->program, "uPosCameraSpace");
     font->uSize =
         gfx_gles2_get_uniform_location_and_warn(font->program, "uSize");
+    font->uColor =
+        gfx_gles2_get_uniform_location_and_warn(font->program, "uColor");
 
     return 0;
 
@@ -463,7 +560,6 @@ void gfx_gles2_font_unload(struct gfx_font* font)
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_text_init(struct gfx_text* text)
 {
-    text_vertex_buf_vec_init(&text->vertices);
     glGenBuffers(1, &text->vbo);
     gfx_track_buf(text->vbo);
 
@@ -475,101 +571,6 @@ void gfx_gles2_text_deinit(struct gfx_text* text)
 {
     gfx_untrack_buf(text->vbo);
     glDeleteBuffers(1, &text->vbo);
-    text_vertex_buf_vec_deinit(text->vertices);
-}
-
-/* ------------------------------------------------------------------------- */
-static int shape_text(
-    struct gfx_font*      font,
-    struct strview        str,
-    hb_glyph_info_t**     hb_glyph_info,
-    hb_glyph_position_t** hb_glyph_pos,
-    int*                  glyph_count)
-{
-    unsigned int        glyph_count_u;
-    const hb_tag_t      KernTag = HB_TAG('k', 'e', 'r', 'n');
-    static hb_feature_t KerningOn = {KernTag, 1, 0, INT_MAX};
-
-    hb_buffer_reset(font->hb_buf);
-    hb_buffer_set_direction(font->hb_buf, HB_DIRECTION_LTR);
-    hb_buffer_set_script(font->hb_buf, HB_SCRIPT_LATIN);
-    hb_buffer_set_language(
-        font->hb_buf, hb_language_from_string("en", sizeof("en") - 1));
-    hb_buffer_add_utf8(
-        font->hb_buf, strview_data(str), strview_len(str), 0, strview_len(str));
-    hb_shape(font->hb_font, font->hb_buf, &KerningOn, 1);
-
-    *hb_glyph_info = hb_buffer_get_glyph_infos(font->hb_buf, &glyph_count_u);
-    *hb_glyph_pos = hb_buffer_get_glyph_positions(font->hb_buf, &glyph_count_u);
-    *glyph_count = (int)glyph_count_u;
-
-    return 0;
-}
-
-/* ------------------------------------------------------------------------- */
-static int create_or_update_text_object(
-    struct gfx_font* font, struct gfx_text** text, struct strview str)
-{
-    hb_glyph_info_t*     hb_glyph_info;
-    hb_glyph_position_t* hb_glyph_pos;
-    int                  glyph_count;
-
-    switch (gfx_text_hmap_emplace_or_get(&font->text_hmap, str, text))
-    {
-        case HMAP_NEW:
-            gfx_gles2_text_init(*text);
-            if (shape_text(
-                    font, str, &hb_glyph_info, &hb_glyph_pos, &glyph_count) !=
-                0)
-            {
-                return -1;
-            }
-
-            switch (update_atlas(font, hb_glyph_info, glyph_count))
-            {
-                case 1: {
-                    int16_t           idx;
-                    const struct str* key;
-                    struct gfx_text*  value;
-                    hmap_for_each (font->text_hmap, idx, key, value)
-                    {
-                        (void)idx, (void)key;
-                        if (shape_text(
-                                font,
-                                str_view(key),
-                                &hb_glyph_info,
-                                &hb_glyph_pos,
-                                &glyph_count) != 0)
-                        {
-                            return -1;
-                        }
-
-                        generate_mesh(
-                            value,
-                            font,
-                            hb_glyph_info,
-                            hb_glyph_pos,
-                            glyph_count);
-                    }
-                }
-                break;
-
-                case 0: {
-                    generate_mesh(
-                        *text, font, hb_glyph_info, hb_glyph_pos, glyph_count);
-                }
-                break;
-
-                case -1: return -1;
-            }
-        /* fallthrough */
-        case HMAP_EXISTS:
-            (*text)->was_used = 1;
-            /* fallthrough */
-        case HMAP_OOM: break;
-    }
-
-    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -617,29 +618,35 @@ void gfx_gles2_text_draw(
     struct strview       str,
     struct gfx_font*     font,
     struct qwpos         pos,
-    float                screen_off_x,
-    float                screen_off_y,
+    struct fpos          screen_offset,
+    uint32_t             argb,
     float                scale,
     const struct camera* camera)
 {
-    struct gfx_text* text;
     struct
     {
         GLfloat x, y;
     } pos_cameraSpace;
 
+    struct gfx_text* text = create_or_update_text(font, str);
+    if (text == NULL)
+        return;
+
     pos_cameraSpace.x = qw_to_float(pos.x) - qw_to_float(camera->pos.x);
     pos_cameraSpace.y = qw_to_float(pos.y) - qw_to_float(camera->pos.y);
     pos_cameraSpace.y *= qw_to_float(camera->scale);
     pos_cameraSpace.x *= qw_to_float(camera->scale);
-    pos_cameraSpace.x += screen_off_x;
-    pos_cameraSpace.y += screen_off_y;
-
-    if (create_or_update_text_object(font, &text, str) != 0)
-        return;
+    pos_cameraSpace.x += screen_offset.x;
+    pos_cameraSpace.y += screen_offset.y;
 
     glUniform1f(font->uSize, scale);
     glUniform2f(font->uPosCameraSpace, pos_cameraSpace.x, pos_cameraSpace.y);
+    glUniform4f(
+        font->uColor,
+        ((argb >> 16) & 0xFF) / 255.0,
+        ((argb >> 8) & 0xFF) / 255.0,
+        ((argb >> 0) & 0xFF) / 255.0,
+        ((argb >> 24) & 0xFF) / 255.0);
 
     glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
     glEnableVertexAttribArray(0);
@@ -658,24 +665,29 @@ void gfx_gles2_text_draw(
         GL_FALSE,
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, uv));
-    glDrawArrays(GL_TRIANGLES, 0, vec_count(text->vertices));
+    glDrawArrays(GL_TRIANGLES, 0, text->vertex_count);
 }
 
 /* ------------------------------------------------------------------------- */
 void gfx_gles2_text_draw_screen(
     struct strview   str,
     struct gfx_font* font,
-    float            screen_x,
-    float            screen_y,
+    struct fpos      pos,
+    uint32_t         argb,
     float            scale)
 {
-    struct gfx_text* text;
-
-    if (create_or_update_text_object(font, &text, str) != 0)
+    struct gfx_text* text = create_or_update_text(font, str);
+    if (text == NULL)
         return;
 
     glUniform1f(font->uSize, scale);
-    glUniform2f(font->uPosCameraSpace, screen_x, screen_y);
+    glUniform2f(font->uPosCameraSpace, pos.x, pos.y);
+    glUniform4f(
+        font->uColor,
+        ((argb >> 16) & 0xFF) / 255.0,
+        ((argb >> 8) & 0xFF) / 255.0,
+        ((argb >> 0) & 0xFF) / 255.0,
+        ((argb >> 24) & 0xFF) / 255.0);
 
     glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
     glEnableVertexAttribArray(0);
@@ -694,5 +706,5 @@ void gfx_gles2_text_draw_screen(
         GL_FALSE,
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, uv));
-    glDrawArrays(GL_TRIANGLES, 0, vec_count(text->vertices));
+    glDrawArrays(GL_TRIANGLES, 0, text->vertex_count);
 }

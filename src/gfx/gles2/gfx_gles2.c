@@ -521,15 +521,41 @@ static void gfx_gles2_draw(
             str_view(snake->data.name),
             &gfx->font,
             snake->head.pos,
-            0,
-            0.1,
-            0.12,
+            make_fpos(0, 0.1),
+            0xA0FFFFFF,
+            1.0 / 64,
             camera);
     }
-    gfx_gles2_text_draw_screen(cstr_view("Connect"), &gfx->font, 0, 0.4, 0.15);
-    gfx_gles2_text_draw_screen(cstr_view("Host"), &gfx->font, 0, 0.15, 0.15);
-    gfx_gles2_text_draw_screen(cstr_view("Garage"), &gfx->font, 0, -0.15, 0.15);
-    gfx_gles2_text_draw_screen(cstr_view("Quit"), &gfx->font, 0, -0.4, 0.15);
+    gfx_gles2_text_draw_screen(
+        cstr_view("MechaSnek"),
+        &gfx->font,
+        make_fpos(0, 0.6),
+        0xA0FFFFFF,
+        1.0 / 14);
+    gfx_gles2_text_draw_screen(
+        cstr_view("Host"),
+        &gfx->font,
+        make_fpos(0, 0.0),
+        0xA0FFFFFF,
+        1.0 / 24);
+    gfx_gles2_text_draw_screen(
+        cstr_view("Connect"),
+        &gfx->font,
+        make_fpos(0, -0.2),
+        0xA0FFFFFF,
+        1.0 / 24);
+    gfx_gles2_text_draw_screen(
+        cstr_view("Garage"),
+        &gfx->font,
+        make_fpos(0, -0.4),
+        0xA0FFFFFF,
+        1.0 / 24);
+    gfx_gles2_text_draw_screen(
+        cstr_view("Quit"),
+        &gfx->font,
+        make_fpos(0, -0.6),
+        0xA0FF78FF,
+        1.0 / 24);
     gfx_gles2_text_end_draw(&gfx->font);
 
 #if defined(CLITHER_GFX_DEBUG)

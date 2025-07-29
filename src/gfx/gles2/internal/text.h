@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/game/q.h"
+#include "clither/gfx/gfx.h"
 #include "clither/util/strview.h"
 #include "glad/gles2.h"
 
@@ -16,7 +16,7 @@ struct resource_shader;
 struct resource_text;
 struct gfx_text_hmap;
 
-struct text_glyph_info
+struct gfx_glyph_info
 {
     int     start_x;
     int     start_y;
@@ -26,9 +26,9 @@ struct text_glyph_info
     GLfloat bearing_y;
 };
 
-struct text_atlas
+struct gfx_atlas
 {
-    struct text_glyph_hmap* glyphs;
+    struct text_glyph_hmap* glyph_hmap;
 
     uint8_t* data;
     int      width;
@@ -38,7 +38,7 @@ struct text_atlas
     int next_x;
     int next_y;
     /* Tracks the largest glyph width in the current column of glyphs */
-    int row_width;
+    int col_width;
 };
 
 struct gfx_font
@@ -49,8 +49,9 @@ struct gfx_font
     hb_font_t*   hb_font;
     hb_buffer_t* hb_buf;
 
-    struct gfx_text_hmap* text_hmap;
-    struct text_atlas     atlas;
+    struct gfx_text_hmap*       text_hmap;
+    struct gfx_atlas            atlas;
+    struct text_vertex_buf_vec* vertices;
 
     GLuint program;
     GLuint tex_atlas;
@@ -58,6 +59,7 @@ struct gfx_font
     GLuint uAspectRatio;
     GLuint uPosCameraSpace;
     GLuint uSize;
+    GLuint uColor;
 };
 
 int  gfx_gles2_font_init(struct gfx_font* font);
@@ -70,9 +72,9 @@ void gfx_gles2_font_unload(struct gfx_font* font);
 
 struct gfx_text
 {
-    struct text_vertex_buf_vec* vertices;
-    GLuint                      vbo;
-    unsigned                    was_used : 1;
+    GLuint   vbo;
+    int      vertex_count;
+    unsigned was_used : 1;
 };
 
 void gfx_gles2_text_init(struct gfx_text* text);
@@ -84,15 +86,15 @@ void gfx_gles2_text_draw(
     struct strview       str,
     struct gfx_font*     font,
     struct qwpos         pos,
-    float                screen_off_x,
-    float                screen_off_y,
+    struct fpos          screen_offset,
+    uint32_t             argb,
     float                scale,
     const struct camera* camera);
 void gfx_gles2_text_draw_screen(
     struct strview   str,
     struct gfx_font* font,
-    float            screen_x,
-    float            screen_y,
+    struct fpos      pos,
+    uint32_t         argb,
     float            scale);
 void gfx_gles2_text_end_draw(struct gfx_font* font);
 
