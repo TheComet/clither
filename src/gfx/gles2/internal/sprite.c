@@ -22,7 +22,7 @@ void gfx_gles2_sprite_mat_init(struct gfx_sprite_mat* mat)
 
 void gfx_gles2_sprite_mat_deinit(struct gfx_sprite_mat* mat)
 {
-    if (mat->program != 0)
+    if (mat->program != INVALID_HANDLE)
     {
         gfx_untrack_shader(mat->program);
         glDeleteProgram(mat->program);
@@ -34,12 +34,11 @@ int gfx_gles2_sprite_mat_load(
 {
     int i;
 
-    CLITHER_DEBUG_ASSERT(mat->program == 0);
+    CLITHER_DEBUG_ASSERT(mat->program == INVALID_HANDLE);
     mat->program =
         gfx_gles2_load_shader(shader->sprite, gfx_gles2_quad_attr_bindings);
-    if (mat->program == 0)
+    if (mat->program == INVALID_HANDLE)
         return -1;
-    gfx_track_shader(mat->program);
 
     mat->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(mat->program, "uAspectRatio");
@@ -97,7 +96,7 @@ void gfx_gles2_sprite_tex_load(
     stbi_uc*    img_data;
     const char* tex_filename;
 
-    strlist_for_each_cstr(res->textures, i, tex_filename)
+    strlist_for_each_cstr (res->textures, i, tex_filename)
     {
         log_dbg("Loading texture \"%s\"\n", tex_filename);
         img_data =

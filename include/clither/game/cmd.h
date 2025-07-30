@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+struct input;
+
 enum cmd_action
 {
     CMD_ACTION_NONE,
@@ -49,3 +51,22 @@ struct cmd cmd_make(
     float           normalized_speed,
     enum cmd_action action);
 
+/*!
+ * \brief Map user input into a "snake command structure", also known as a
+ * "command frame".
+ *
+ * The command structure stores the world-space target angle of the snake
+ * head as well as the target speed. These values are calculated from the
+ * mouse position in screen space.
+ *
+ * \note Very important: Due to network optimizations, when calculating new
+ * command you must limit the speed at which the "angle" and "speed" properties
+ * are allowed to change. This limitation allows commands to be
+ * delta-compressed more efficiently. cmd_make() takes care of this.
+ *
+ * \param[in] cmd The previously calculated command from the previous
+ * frame.
+ * \param[in] input Raw user input.
+ * \return The new command. Make sure to use @see cmd_make()
+ */
+struct cmd cmd_next(struct cmd prev, const struct input* input);

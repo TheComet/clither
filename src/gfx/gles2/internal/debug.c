@@ -53,42 +53,10 @@ void gfx_gles2_debug_deinit(struct gfx_debug* debug)
 
 int gfx_gles2_debug_load(struct gfx_debug* debug)
 {
-    GLuint shader;
-    GLint  linked;
-
-    debug->mat.program = glCreateProgram();
-    if (debug->mat.program == 0)
-    {
-        log_err("glCreateProgram() failed\n");
+    static const char* attr_bindings[] = {"vPosition", NULL};
+    debug->mat.program = gfx_gles2_load_shader_str(vs, fs, attr_bindings);
+    if (debug->mat.program == INVALID_HANDLE)
         return -1;
-    }
-
-    shader = gfx_gles2_load_shader_type(vs, sizeof(vs), GL_VERTEX_SHADER);
-    glAttachShader(debug->mat.program, shader);
-    glDeleteShader(shader);
-
-    shader = gfx_gles2_load_shader_type(fs, sizeof(fs), GL_FRAGMENT_SHADER);
-    glAttachShader(debug->mat.program, shader);
-    glDeleteShader(shader);
-
-    glBindAttribLocation(debug->mat.program, 0, "vPosition");
-    glLinkProgram(debug->mat.program);
-    glGetProgramiv(debug->mat.program, GL_LINK_STATUS, &linked);
-    if (!linked)
-    {
-        GLint info_len = 0;
-        glGetProgramiv(debug->mat.program, GL_INFO_LOG_LENGTH, &info_len);
-        if (info_len > 1)
-        {
-            char* info = mem_alloc(sizeof(char) * info_len);
-            glGetProgramInfoLog(debug->mat.program, info_len, NULL, info);
-            log_err("Failed to link shader program\n%s", info);
-            mem_free(info);
-        }
-        glDeleteProgram(debug->mat.program);
-        debug->mat.program = 0;
-        return -1;
-    }
 
     debug->mat.uAspectRatio = gfx_gles2_get_uniform_location_and_warn(
         debug->mat.program, "uAspectRatio");
@@ -104,9 +72,12 @@ int gfx_gles2_debug_load(struct gfx_debug* debug)
 
 void gfx_gles2_debug_unload(struct gfx_debug* debug)
 {
-    if (debug->mat.program)
+    if (debug->mat.program != INVALID_HANDLE)
+    {
+        gfx_untrack_shader(debug->mat.program);
         glDeleteProgram(debug->mat.program);
-    debug->mat.program = 0;
+    }
+    debug->mat.program = INVALID_HANDLE;
 }
 
 static void draw_circle(
@@ -136,10 +107,10 @@ static void draw_circle(
 }
 
 void gfx_gles2_debug_draw(
-    struct gfx_debug*              debug,
-    const struct gfx_quad_mesh*    mesh,
-    const struct camera*       camera,
-    const struct aspect_ratio* ar)
+    struct gfx_debug*           debug,
+    const struct gfx_quad_mesh* mesh,
+    const struct camera*        camera,
+    const struct aspect_ratio*  ar)
 {
     const struct debug_circle* circle;
 

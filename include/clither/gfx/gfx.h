@@ -63,35 +63,6 @@ struct gfx_interface
     void (*poll_input)(struct gfx* gfx, struct input* input);
 
     /*!
-     * \brief Map user input into a "snake command structure", also known as a
-     * "command frame".
-     *
-     * The command structure stores the world-space target angle of the snake
-     * head as well as the target speed. These values need to be calculated by
-     * transforming the snake head into screen space (or mouse coordinates into
-     * world space).
-     *
-     * \note Very important: Check command.h struct command: Due to network
-     * optimizations, when calculating new command you must limit the speed at
-     * which the "angle" and "speed" properties are allowed to change. This
-     * limitation allows commands to be delta-compressed more efficiently.
-     *
-     * \param[in] gfx Graphics context.
-     * \param[in] input Raw user input.
-     * \param[in] cam Camera information required for transformation.
-     * \param[in] cmd The previously calculated command from the previous
-     * frame.
-     * \param[in] snake_head Snake's head position in world space.
-     * \return The new command. Make sure to use @see cmd_make()
-     */
-    struct cmd (*next_cmd)(
-        const struct gfx*    gfx,
-        const struct input*  input,
-        const struct camera* cam,
-        struct cmd           prev,
-        struct qwpos         snake_head);
-
-    /*!
      * \brief Advance sprite animations. This is called at a frequency of
      * sim_tick_rate.
      */
@@ -111,20 +82,6 @@ struct gfx_interface
         struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba);
 #endif
 };
-
-struct fpos
-{
-    float x;
-    float y;
-};
-
-static struct fpos make_fpos(float x, float y)
-{
-    struct fpos p;
-    p.x = x;
-    p.y = y;
-    return p;
-}
 
 #if defined(CLITHER_GFX)
 extern const struct gfx_interface* gfx_backends[];

@@ -34,7 +34,6 @@ int gfx_gles2_sprite_shadow_load(
         gfx_gles2_load_shader(res->shadow, gfx_gles2_quad_attr_bindings);
     if (ss->program == 0)
         return -1;
-    gfx_track_shader(ss->program);
 
     ss->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(ss->program, "uAspectRatio");

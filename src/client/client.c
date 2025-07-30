@@ -8,7 +8,6 @@
 #include "clither/game/settings.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_bmap.h"
-#include "clither/game/ui.h"
 #include "clither/game/world.h"
 #include "clither/game/wrap.h"
 #include "clither/gfx/gfx.h"
@@ -16,6 +15,7 @@
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
 #include "clither/platform/tick.h"
+#include "clither/ui/ui.h"
 #include "clither/util/bmap.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
@@ -670,7 +670,7 @@ void* client_run(
 {
     struct fs_watch* pack_watch;
     struct world     world;
-    struct ui        ui;
+    struct ui*       ui;
     struct input     input;
     struct cmd       cmd;
     struct camera    camera;
@@ -691,6 +691,10 @@ void* client_run(
         if (pack_watch == NULL)
             goto watch_resource_pack_failed;
     }
+
+    ui = ui_create();
+    if (ui == NULL)
+        goto create_ui_failed;
 
     client_init(&client);
     /*
@@ -722,6 +726,7 @@ void* client_run(
 #    if defined(CLITHER_GFX)
         if (*gfx != NULL)
             (*igfx)->poll_input(*gfx, &input);
+        ui_update(ui, &input, client.sim_tick_rate);
 #    endif
 
         if (input.quit)
@@ -873,8 +878,7 @@ void* client_run(
                 if (*gfx != NULL)
 #        endif
                 {
-                    cmd = (*igfx)->next_cmd(
-                        *gfx, &input, &camera, cmd, snake->head.pos);
+                    cmd = cmd_next(cmd, &input);
                 }
 #    endif
 
@@ -947,7 +951,7 @@ void* client_run(
         {
 #    if defined(CLITHER_GFX)
             if (*gfx != NULL)
-                (*igfx)->draw(*gfx, &world, &ui, &camera);
+                (*igfx)->draw(*gfx, &world, ui, &camera);
 #    endif
         }
         else
@@ -977,6 +981,8 @@ void* client_run(
         client_disconnect(&client);
 client_connect_failed:
     client_deinit(&client);
+    ui_destroy(ui);
+create_ui_failed:
     if (pack_watch != NULL)
         fs_watch_deinit(pack_watch);
 watch_resource_pack_failed:

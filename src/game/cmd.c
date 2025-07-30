@@ -1,5 +1,6 @@
 #include "clither/game/cmd.h"
-#include "clither/config.h"
+#include "clither/game/input.h"
+#include <math.h>
 
 /* ------------------------------------------------------------------------- */
 struct cmd cmd_default(void)
@@ -54,4 +55,28 @@ struct cmd cmd_make(
 
     prev.action = action;
     return prev;
+}
+
+/* ------------------------------------------------------------------------- */
+struct cmd cmd_next(struct cmd prev, const struct input* input)
+{
+    float angle, dist, dx, dy;
+    float max_dist;
+
+    /* Scale the speed vector to a quarter of the screen's size */
+    max_dist = 0.25;
+
+    /* Calc angle and distance from mouse position and snake head position */
+    dx = input->mousex;
+    dy = input->mousey;
+    angle = atan2(dy, dx);
+    dist = sqrt(dx * dx + dy * dy);
+    if (dist > max_dist)
+        dist = max_dist;
+
+    return cmd_make(
+        prev,
+        angle,
+        dist / max_dist,
+        input->boost ? CMD_ACTION_BOOST : CMD_ACTION_NONE);
 }

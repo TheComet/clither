@@ -1,3 +1,4 @@
+#include "./gfx.h"
 #include "./shader.h"
 #include "clither/platform/mfile.h"
 #include "clither/util/log.h"
@@ -39,6 +40,64 @@ GLuint gfx_gles2_load_shader_type(const char* code, GLint length, GLenum type)
     return shader;
 }
 
+GLuint gfx_gles2_load_shader_str(
+    const char* vs, const char* fs, const char* attribute_bindings[])
+{
+    int    i;
+    GLuint shader;
+    GLuint program;
+    GLint  linked;
+
+    program = glCreateProgram();
+    if (program == 0)
+    {
+        log_err("glCreateProgram() failed\n");
+        goto create_program_failed;
+    }
+    gfx_track_shader(program);
+
+    shader = gfx_gles2_load_shader_type(vs, strlen(vs), GL_VERTEX_SHADER);
+    if (shader == 0)
+        goto link_program_failed;
+    glAttachShader(program, shader);
+    glDeleteShader(shader);
+
+    shader = gfx_gles2_load_shader_type(fs, strlen(fs), GL_FRAGMENT_SHADER);
+    if (shader == 0)
+        goto link_program_failed;
+    glAttachShader(program, shader);
+    glDeleteShader(shader);
+
+    for (i = 0; attribute_bindings[i]; ++i)
+        if (attribute_bindings[i] != NULL)
+            glBindAttribLocation(program, i, attribute_bindings[i]);
+
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (!linked)
+    {
+        GLint info_len = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &info_len);
+        if (info_len > 1)
+        {
+            char* info = mem_alloc(sizeof(char) * info_len);
+            glGetProgramInfoLog(program, info_len, NULL, info);
+            log_err("Failed to link shader\n%s\n", info);
+            mem_free(info);
+            goto link_program_failed;
+        }
+    }
+
+    return program;
+
+link_program_failed:
+    gfx_untrack_shader(program);
+    glDeleteProgram(program);
+create_program_failed:
+    log_err("Failed to compile shader (str)\n");
+    return 0;
+}
+
 GLuint gfx_gles2_load_shader(
     struct strlist* shader_fnames, const char* attribute_bindings[])
 {
@@ -59,6 +118,7 @@ GLuint gfx_gles2_load_shader(
         log_err("glCreateProgram() failed\n");
         goto create_program_failed;
     }
+    gfx_track_shader(program);
 
     strlist_for_each_cstr (shader_fnames, i, fname)
     {
@@ -83,7 +143,8 @@ GLuint gfx_gles2_load_shader(
     }
 
     for (i = 0; attribute_bindings[i]; ++i)
-        glBindAttribLocation(program, i, attribute_bindings[i]);
+        if (attribute_bindings[i] != NULL)
+            glBindAttribLocation(program, i, attribute_bindings[i]);
 
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &linked);

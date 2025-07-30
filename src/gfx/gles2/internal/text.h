@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clither/gfx/gfx.h"
+#include "clither/game/fpos.h"
 #include "clither/util/strview.h"
 #include "glad/gles2.h"
 

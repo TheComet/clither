@@ -2,8 +2,8 @@
 
 #include "./background.h"
 #include "./quad.h"
+#include "./rectangle.h"
 #include "./snake.h"
-#include "./spine.h"
 #include "./sprite.h"
 #include "./sprite_shadow.h"
 #include "./text.h"
@@ -44,7 +44,7 @@ struct gfx
 
     struct input input_buffer;
 
-    struct gfx_font       font;
+    struct gfx_font font;
 
     struct gfx_background        background;
     struct gfx_quad_mesh         quad_mesh;
@@ -52,6 +52,7 @@ struct gfx
     struct gfx_sprite_shadow_mat sprite_shadow_mat;
     struct gfx_snake             snake;
     struct gfx_sprite_tex        food;
+    struct gfx_rectangle_mat         rect;
 
 #if defined(CLITHER_GFX_DEBUG)
     struct gfx_debug debug;

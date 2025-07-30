@@ -127,7 +127,6 @@ int gfx_gles2_background_load(
         gfx_gles2_load_shader(shader->background, gfx_gles2_quad_attr_bindings);
     if (bg->program == 0)
         return -1;
-    gfx_track_shader(bg->program);
 
     bg->uAspectRatio =
         gfx_gles2_get_uniform_location_and_warn(bg->program, "uAspectRatio");

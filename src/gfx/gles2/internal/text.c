@@ -504,7 +504,6 @@ int gfx_gles2_font_load(
     font->program = gfx_gles2_load_shader(shader->text, attr_bindings);
     if (font->program == 0)
         goto load_shader_failed;
-    gfx_track_shader(font->program);
     font->sAtlas =
         gfx_gles2_get_uniform_location_and_warn(font->program, "sAtlas");
     font->uAspectRatio =

@@ -117,7 +117,6 @@ int gfx_gles2_spine_load(
     spine->program = gfx_gles2_load_shader(shader->spine, attr_bindings);
     if (spine->program == 0)
         return -1;
-    gfx_track_shader(spine->program);
 
     spine->uCoeff =
         gfx_gles2_get_uniform_location_and_warn(spine->program, "uCoeff");

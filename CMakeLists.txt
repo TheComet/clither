@@ -199,6 +199,8 @@ list (APPEND ClitherSources
     "src/game/snake_split_rb.c"
     "src/game/world.c"
 
+    "src/ui/ui.c"
+
     "src/util/base64.c"
     "src/util/hash.c"
     "src/util/log.c"
@@ -266,6 +268,7 @@ if (CLITHER_GFX)
             "src/gfx/gles2/internal/background.c"
             "src/gfx/gles2/internal/food.c"
             "src/gfx/gles2/internal/quad.c"
+            "src/gfx/gles2/internal/rectangle.c"
             "src/gfx/gles2/internal/shader.c"
             "src/gfx/gles2/internal/snake.c"
             "src/gfx/gles2/internal/spine.c"

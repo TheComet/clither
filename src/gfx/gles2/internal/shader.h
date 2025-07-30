@@ -5,6 +5,8 @@
 struct strlist;
 
 GLuint gfx_gles2_load_shader_type(const char* code, GLint length, GLenum type);
+GLuint gfx_gles2_load_shader_str(
+    const char* vs, const char* fs, const char* attribute_bindings[]);
 GLuint gfx_gles2_load_shader(
     struct strlist* shader_fnames, const char* attribute_bindings[]);
 GLuint

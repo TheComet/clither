@@ -9,11 +9,13 @@
 #include "clither/game/snake_bmap.h"
 #include "clither/game/world.h"
 #include "clither/gfx/gfx.h"
+#include "clither/ui/ui.h"
 #include "clither/util/hmap_str.h"
 #include "clither/util/log.h"
 #include "clither/util/str.h"
 #include "clither/util/strlist.h"
 #include "clither/util/tracker.h"
+#include "internal/rectangle.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -151,7 +153,10 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     (void)mods;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT)
+    {
         gfx->input_buffer.boost = (action == GLFW_PRESS);
+        gfx->input_buffer.menu_clicked = (action == GLFW_PRESS);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -159,8 +164,27 @@ static void
 cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
-    gfx->input_buffer.mousex = xpos;
-    gfx->input_buffer.mousey = ypos;
+
+    gfx->input_buffer.mousex = xpos * 2.0 / gfx->width - 1.0;
+    gfx->input_buffer.mousey = 1.0 - ypos * 2.0 / gfx->height;
+
+    if (gfx->width < gfx->height)
+    {
+        double padding = gfx->height - gfx->width;
+        ypos -= padding / 2;
+        xpos /= gfx->width;
+        ypos /= gfx->width;
+    }
+    else
+    {
+        double padding = gfx->width - gfx->height;
+        xpos -= padding / 2;
+        xpos /= gfx->height;
+        ypos /= gfx->height;
+    }
+
+    gfx->input_buffer.mousex_ar = 2.0 * xpos - 1.0;
+    gfx->input_buffer.mousey_ar = 1.0 - 2.0 * ypos;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -342,6 +366,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
     gfx_gles2_snake_init(&gfx->snake);
     gfx_gles2_sprite_tex_init(&gfx->food);
+    gfx_gles2_rectangle_init(&gfx->rect);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -375,6 +400,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_debug_deinit(&gfx->debug);
 #endif
 
+    gfx_gles2_rectangle_deinit(&gfx->rect);
     gfx_gles2_sprite_tex_deinit(&gfx->food);
     gfx_gles2_snake_deinit(&gfx->snake);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
@@ -393,68 +419,10 @@ static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
     glfwPollEvents();
     *input = gfx->input_buffer;
     gfx->input_buffer.scroll = 0; /* Clear deltas */
+    gfx->input_buffer.menu_clicked = 0;
 
     if (glfwWindowShouldClose(gfx->window))
         input->quit = 1;
-}
-
-/* ------------------------------------------------------------------------- */
-static struct cmd gfx_gles2_next_cmd(
-    const struct gfx*    gfx,
-    const struct input*  input,
-    const struct camera* camera,
-    struct cmd           prev,
-    struct qwpos         snake_head)
-{
-    float       a, d, dx, dy;
-    int         max_dist;
-    struct spos snake_head_screen;
-
-    /* world -> camera space */
-    struct qwpos pos_cameraSpace;
-    pos_cameraSpace.x =
-        qw_mul(qw_sub(snake_head.x, camera->pos.x), camera->scale);
-    pos_cameraSpace.y =
-        qw_mul(qw_sub(snake_head.y, camera->pos.y), camera->scale);
-
-    /* camera space -> screen space + keep aspect ratio */
-    if (gfx->width < gfx->height)
-    {
-        int pad = (gfx->height - gfx->width) / 2;
-        snake_head_screen.x =
-            qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->width)) +
-            (gfx->width / 2);
-        snake_head_screen.y =
-            qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->width)) +
-            (gfx->width / 2 + pad);
-    }
-    else
-    {
-        int pad = (gfx->width - gfx->height) / 2;
-        snake_head_screen.x =
-            qw_mul_to_int(pos_cameraSpace.x, make_qw(gfx->height)) +
-            (gfx->height / 2 + pad);
-        snake_head_screen.y =
-            qw_mul_to_int(pos_cameraSpace.y, make_qw(-gfx->height)) +
-            (gfx->height / 2);
-    }
-
-    /* Scale the speed vector to a quarter of the screen's size */
-    max_dist = gfx->width > gfx->height ? gfx->height / 4 : gfx->width / 4;
-
-    /* Calc angle and distance from mouse position and snake head position */
-    dx = input->mousex - snake_head_screen.x;
-    dy = snake_head_screen.y - input->mousey;
-    a = atan2(dy, dx);
-    d = sqrt(dx * dx + dy * dy);
-    if (d > max_dist)
-        d = max_dist;
-
-    return cmd_make(
-        prev,
-        a,
-        d / max_dist,
-        input->boost ? CMD_ACTION_BOOST : CMD_ACTION_NONE);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -471,9 +439,10 @@ static void gfx_gles2_draw(
     const struct ui*     ui,
     const struct camera* camera)
 {
-    int16_t             idx;
-    uint16_t            snake_id;
-    const struct snake* snake;
+    int16_t                  idx;
+    uint16_t                 snake_id;
+    const struct snake*      snake;
+    const struct ui_element* ui_elem;
 
     struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
@@ -492,16 +461,18 @@ static void gfx_gles2_draw(
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // bmap_for_each (world->snakes, idx, snake_id, snake)
-    //{
-    //     (void)snake_id;
-    //     if (snake_is_dead(snake))
-    //         continue;
-    //     gfx_gles2_draw_snake_shadow(
-    //         snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
-    // }
-    // gfx_gles2_draw_food_shadows(
-    //     world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+#if 0
+     bmap_for_each (world->snakes, idx, snake_id, snake)
+    {
+         (void)snake_id;
+         if (snake_is_dead(snake))
+             continue;
+         gfx_gles2_draw_snake_shadow(
+             snake, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+     }
+     gfx_gles2_draw_food_shadows(
+         world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
+#endif
 
     gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
     gfx_gles2_draw_food(world->food_bmap, gfx, camera, &ar);
@@ -513,6 +484,22 @@ static void gfx_gles2_draw(
             continue;
         gfx_gles2_draw_snake(&gfx->snake, gfx, snake, camera, &ar);
     }
+
+    ui_for_each (ui, ui_elem)
+        switch (ui_elem->type)
+        {
+            case UI_RECTANGLE:
+                gfx_gles2_rectangle_draw(
+                    &gfx->rect,
+                    &gfx->quad_mesh,
+                    ui_elem->u.rectangle.pos,
+                    ui_elem->u.rectangle.size,
+                    ui_elem->u.rectangle.color,
+                    &ar);
+                break;
+            case UI_TEXT:
+            case UI_BUTTON: break;
+        }
 
     gfx_gles2_text_prepare_draw(&gfx->font, &ar);
     bmap_for_each (world->snakes, idx, snake_id, snake)
@@ -526,36 +513,27 @@ static void gfx_gles2_draw(
             1.0 / 64,
             camera);
     }
-    gfx_gles2_text_draw_screen(
-        cstr_view("MechaSnek"),
-        &gfx->font,
-        make_fpos(0, 0.6),
-        0xA0FFFFFF,
-        1.0 / 14);
-    gfx_gles2_text_draw_screen(
-        cstr_view("Host"),
-        &gfx->font,
-        make_fpos(0, 0.0),
-        0xA0FFFFFF,
-        1.0 / 24);
-    gfx_gles2_text_draw_screen(
-        cstr_view("Connect"),
-        &gfx->font,
-        make_fpos(0, -0.2),
-        0xA0FFFFFF,
-        1.0 / 24);
-    gfx_gles2_text_draw_screen(
-        cstr_view("Garage"),
-        &gfx->font,
-        make_fpos(0, -0.4),
-        0xA0FFFFFF,
-        1.0 / 24);
-    gfx_gles2_text_draw_screen(
-        cstr_view("Quit"),
-        &gfx->font,
-        make_fpos(0, -0.6),
-        0xA0FF78FF,
-        1.0 / 24);
+    ui_for_each (ui, ui_elem)
+        switch (ui_elem->type)
+        {
+            case UI_RECTANGLE: break;
+            case UI_TEXT:
+                gfx_gles2_text_draw_screen(
+                    ui_elem->u.text.str,
+                    &gfx->font,
+                    ui_elem->u.text.pos,
+                    ui_elem->u.text.color,
+                    ui_elem->u.text.size);
+                break;
+            case UI_BUTTON:
+                gfx_gles2_text_draw_screen(
+                    ui_elem->u.button.text.str,
+                    &gfx->font,
+                    ui_elem->u.button.text.pos,
+                    ui_elem->u.button.color,
+                    ui_elem->u.button.text.size);
+                break;
+        }
     gfx_gles2_text_end_draw(&gfx->font);
 
 #if defined(CLITHER_GFX_DEBUG)
@@ -589,7 +567,6 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_load_resource_pack,
     &gfx_gles2_unload_resource_pack,
     &gfx_gles2_poll_input,
-    &gfx_gles2_next_cmd,
     &gfx_gles2_step_anim,
     &gfx_gles2_draw,
 #if defined(CLITHER_GFX_DEBUG)
