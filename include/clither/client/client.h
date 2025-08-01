@@ -30,12 +30,10 @@ enum client_state
 
 struct client_recv_result
 {
-    unsigned error : 1;              /* Critical error (e.g.
-oom) */
-    unsigned disconnected : 1;       /* The "client_state" property was changed
-                                      */
+    unsigned error : 1;        /* Critical error (e.g. oom) */
+    unsigned disconnected : 1; /* The "client_state" property was changed */
     unsigned tick_rated_changed : 1; /* The server has adjusted the client's
- tick rate */
+                                        tick rate */
 };
 
 static struct client_recv_result client_recv_ok(void)

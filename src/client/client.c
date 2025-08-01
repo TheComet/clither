@@ -677,6 +677,7 @@ void* client_run(
     struct client    client;
     struct tick      sim_tick;
     struct tick      net_tick;
+    union ui_cmd     ui_cmd;
     int              tick_lag;
     int              retval = -1;
 
@@ -726,7 +727,25 @@ void* client_run(
 #    if defined(CLITHER_GFX)
         if (*gfx != NULL)
             (*igfx)->poll_input(*gfx, &input);
-        ui_update(ui, &input, client.sim_tick_rate);
+        switch (ui_update(ui, &ui_cmd, &input, client.sim_tick_rate))
+        {
+            case UI_CMD_NONE: break;
+            case UI_CMD_QUIT: input.quit = 1; break;
+            case UI_CMD_JOIN:
+                log_dbg(
+                    "UI_CMD_JOIN: %s:%s, username: %s\n",
+                    ui_cmd.join.address,
+                    ui_cmd.join.port,
+                    strview_cstr(ui_cmd.join.username));
+                break;
+            case UI_CMD_HOST:
+                log_dbg(
+                    "UI_CMD_HOST: %s:%s, username: %s\n",
+                    ui_cmd.host.address,
+                    ui_cmd.host.port,
+                    strview_cstr(ui_cmd.host.username));
+                break;
+        }
 #    endif
         if (input.quit)
         {

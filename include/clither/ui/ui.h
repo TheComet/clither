@@ -12,7 +12,8 @@ enum ui_element_type
     UI_RECTANGLE,
     UI_TEXT,
     UI_TEXTINPUT,
-    UI_BUTTON
+    UI_BUTTON,
+    UI_CONTROLLER
 };
 
 enum ui_align
@@ -20,6 +21,31 @@ enum ui_align
     UI_ALIGN_LEFT,
     UI_ALIGN_CENTER,
     UI_ALIGN_RIGHT
+};
+
+enum ui_cmd_type
+{
+    UI_CMD_NONE,
+    UI_CMD_QUIT,
+    UI_CMD_JOIN,
+    UI_CMD_HOST
+};
+
+union ui_cmd
+{
+    struct
+    {
+        struct strview username;
+        const char*    address;
+        const char*    port;
+    } host;
+
+    struct
+    {
+        struct strview username;
+        const char*    address;
+        const char*    port;
+    } join;
 };
 
 struct ui_rectangle
@@ -67,8 +93,10 @@ struct ui_button
     uint32_t       normal_color;
     uint32_t       mouseover_color;
     uint32_t       disabled_color;
-    int            mouseover_crossfade;
+    int            hover_crossfade;
     unsigned       enabled : 1;
+    unsigned       hover : 1;
+    unsigned       mouse_controlled : 1;
 };
 
 struct ui_element
@@ -78,8 +106,11 @@ struct ui_element
         struct ui_element*  elem,
         const struct input* input,
         uint8_t             sim_tick_rate);
-    void (*interact)(
-        struct ui* ui, struct ui_element* elem, struct input* input);
+    enum ui_cmd_type (*interact)(
+        struct ui*         ui,
+        union ui_cmd*      cmd,
+        struct ui_element* elem,
+        struct input*      input);
 
     union
     {
@@ -101,7 +132,11 @@ struct ui
 struct ui* ui_create(void);
 void       ui_destroy(struct ui* ui);
 
-void ui_update(struct ui* ui, struct input* input, uint8_t sim_tick_rate);
+enum ui_cmd_type ui_update(
+    struct ui*    ui,
+    union ui_cmd* cmd,
+    struct input* input,
+    uint8_t       sim_tick_rate);
 
 #define ui_for_each_active(ui, elem)                                           \
     for (elem = (ui)->elements; elem != ((ui)->elements + (ui)->count);        \

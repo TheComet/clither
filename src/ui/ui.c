@@ -10,6 +10,7 @@ enum ui_element_index
 {
     BACKGROUND_FADER,
 
+    CONTROLLER_VIM,
     TEXT_TITLE,
     BUTTON_HOST,
     BUTTON_JOIN,
@@ -29,6 +30,7 @@ enum ui_element_index
 
 static enum ui_element_index main_screen[] = {
     BACKGROUND_FADER,
+    CONTROLLER_VIM,
     TEXT_TITLE,
     BUTTON_HOST,
     BUTTON_JOIN,
@@ -89,6 +91,28 @@ static void ui_element_init(struct ui_element* elem, enum ui_element_type type)
     elem->interact = NULL;
     elem->type = type;
     elem->active = 0;
+}
+
+/* ------------------------------------------------------------------------- */
+static union ui_cmd
+make_ui_host_cmd(struct strview username, const char* address, const char* port)
+{
+    union ui_cmd cmd;
+    cmd.host.username = username;
+    cmd.host.address = address;
+    cmd.host.port = port;
+    return cmd;
+}
+
+/* ------------------------------------------------------------------------- */
+static union ui_cmd
+make_ui_join_cmd(struct strview username, const char* address, const char* port)
+{
+    union ui_cmd cmd;
+    cmd.join.username = username;
+    cmd.join.address = address;
+    cmd.join.port = port;
+    return cmd;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -156,8 +180,11 @@ static void textinput_step_anim(
     }
     (void)input;
 }
-static void
-textinput_interact(struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type textinput_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
     const uint32_t* codepoint;
     vec_for_each (input->keys, codepoint)
@@ -181,7 +208,8 @@ textinput_interact(struct ui* ui, struct ui_element* elem, struct input* input)
         vec_count(elem->u.textinput.input_buffer));
     elem->u.textinput.text.str = str_view(elem->u.textinput.input_buffer_utf8);
 
-    (void)ui;
+    (void)ui, (void)cmd;
+    return UI_CMD_NONE;
 }
 static struct ui_element
 make_ui_textinput(struct fpos pos, struct ui_text_style style)
@@ -230,93 +258,145 @@ static void button_step_anim(
         return;
     }
 
-    if (elem->is_mouse_over(elem, input))
+    if (elem->u.button.mouse_controlled)
+        elem->u.button.hover = elem->is_mouse_over(elem, input) != 0;
+
+    if (elem->u.button.hover)
     {
-        if (elem->u.button.mouseover_crossfade < crossfade_speed)
-            elem->u.button.mouseover_crossfade++;
+        if (elem->u.button.hover_crossfade < crossfade_speed)
+            elem->u.button.hover_crossfade++;
     }
     else
     {
-        if (elem->u.button.mouseover_crossfade > 0)
-            elem->u.button.mouseover_crossfade--;
+        if (elem->u.button.hover_crossfade > 0)
+            elem->u.button.hover_crossfade--;
     }
 
     elem->u.button.text.color = crossfade_color(
         elem->u.button.normal_color,
         elem->u.button.mouseover_color,
-        elem->u.button.mouseover_crossfade,
+        elem->u.button.hover_crossfade,
         crossfade_speed);
 }
-static void button_host_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type button_host_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
-    int mouse_over = elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
         switch_screen(ui, host_screen);
+    }
+    (void)cmd;
+    return UI_CMD_NONE;
 }
-static void button_join_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type button_join_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
-    int mouse_over = elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
         switch_screen(ui, join_screen);
+    }
+    (void)cmd;
+    return UI_CMD_NONE;
 }
-static void button_quit_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type button_quit_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
-    int mouse_over = elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
-        input->quit = 1;
-    if (check_and_clear(input->escape))
-        input->quit = 1;
+    int             quit_key = 0;
+    const uint32_t* codepoint;
+    vec_for_each (input->keys, codepoint)
+        if (*codepoint == 'q')
+            quit_key = 1;
 
-    (void)ui;
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
+        return UI_CMD_QUIT;
+    }
+    if (check_and_clear(input->escape) || quit_key)
+        return UI_CMD_QUIT;
+
+    (void)ui, (void)cmd;
+    return UI_CMD_NONE;
 }
-static void button_back_to_main_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type button_back_to_main_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
-    int mouse_over = elem->is_mouse_over && elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
+    if (elem->u.button.hover && check_and_clear(input->screen_clicked))
         switch_screen(ui, main_screen);
     if (check_and_clear(input->escape))
         switch_screen(ui, main_screen);
-}
-static void button_host_game_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
-{
-    int                        mouse_over;
-    const struct ui_textinput* textinput;
 
+    (void)cmd;
+    return UI_CMD_NONE;
+}
+static enum ui_cmd_type button_host_game_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
+{
+    const struct ui_textinput* textinput;
     textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+
     elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
     if (!elem->u.button.enabled)
-        return;
+        return UI_CMD_NONE;
 
-    mouse_over = elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
-        switch_screen(ui, host_screen);
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
+        *cmd = make_ui_host_cmd(
+            str_view(textinput->input_buffer_utf8), "0.0.0.0", "5555");
+        return UI_CMD_HOST;
+    }
+
+    (void)cmd;
+    return UI_CMD_NONE;
 }
-static void button_join_game_interact(
-    struct ui* ui, struct ui_element* elem, struct input* input)
+static enum ui_cmd_type button_join_game_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
 {
-    int                        mouse_over;
     const struct ui_textinput* textinput;
-
     textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+
     elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
     if (!elem->u.button.enabled)
-        return;
+        return UI_CMD_NONE;
 
-    mouse_over = elem->is_mouse_over(elem, input);
-    if (mouse_over && check_and_clear(input->screen_clicked))
-        switch_screen(ui, host_screen);
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
+        *cmd = make_ui_join_cmd(
+            str_view(textinput->input_buffer_utf8), "localhost", "5555");
+        return UI_CMD_JOIN;
+    }
+
+    return UI_CMD_NONE;
 }
 static struct ui_element make_ui_button(
     struct strview         str,
     struct fpos            pos,
     struct ui_button_style style,
     int (*is_mouse_over)(struct ui_element*, const struct input*),
-    void (*interact)(struct ui*, struct ui_element*, struct input*))
+    enum ui_cmd_type (*interact)(
+        struct ui*, union ui_cmd*, struct ui_element*, struct input*))
 {
     struct ui_element    elem;
     struct ui_text_style text_style =
@@ -329,13 +409,97 @@ static struct ui_element make_ui_button(
     elem.u.button.mouseover_color = style.mouseover_color;
     elem.u.button.disabled_color = style.disabled_color;
     elem.u.button.normal_color = style.color;
-    elem.u.button.mouseover_crossfade = 0;
+    elem.u.button.hover_crossfade = 0;
     elem.u.button.enabled = 1;
+    elem.u.button.mouse_controlled = 0;
+    elem.u.button.hover = 0;
 
     elem.is_mouse_over = is_mouse_over;
     elem.step_anim = button_step_anim;
     elem.interact = interact;
 
+    return elem;
+}
+
+/* ------------------------------------------------------------------------- */
+static enum ui_cmd_type controller_vim(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
+{
+    const uint32_t*        codepoint;
+    enum ui_element_index* idx;
+    enum ui_element_index  old_idx;
+
+    enum direction
+    {
+        NONE,
+        UP,
+        DOWN
+    } direction = NONE;
+
+    if (input->mouse_moved)
+        for (idx = main_screen; *idx != ELEMENT_COUNT; ++idx)
+            if (ui->elements[*idx].type == UI_BUTTON)
+                ui->elements[*idx].u.button.mouse_controlled = 1;
+
+    vec_for_each (input->keys, codepoint)
+    {
+        switch (*codepoint)
+        {
+            case 'j': direction = DOWN; break;
+            case 'k': direction = UP; break;
+            case 'q': break;
+        }
+
+        if (direction == NONE)
+            continue;
+        for (idx = main_screen; *idx != ELEMENT_COUNT; ++idx)
+            if (ui->elements[*idx].type == UI_BUTTON)
+                ui->elements[*idx].u.button.mouse_controlled = 0;
+
+        for (idx = main_screen; *idx != ELEMENT_COUNT; ++idx)
+            if (ui->elements[*idx].type == UI_BUTTON)
+                if (ui->elements[*idx].u.button.hover)
+                    break;
+        old_idx = *idx;
+
+        if (*idx == ELEMENT_COUNT)
+        {
+            for (idx = main_screen; *idx != ELEMENT_COUNT; ++idx)
+                if (ui->elements[*idx].type == UI_BUTTON)
+                {
+                    ui->elements[*idx].u.button.hover = 1;
+                    break;
+                }
+        }
+        else
+        {
+            for (idx = direction == DOWN ? idx + 1 : idx - 1;
+                 idx >= main_screen && *idx < ELEMENT_COUNT;
+                 idx = direction == DOWN ? idx + 1 : idx - 1)
+            {
+                if (ui->elements[*idx].type == UI_BUTTON &&
+                    ui->elements[*idx].u.button.enabled)
+                {
+                    ui->elements[*idx].u.button.hover = 1;
+                    ui->elements[old_idx].u.button.hover = 0;
+                    break;
+                }
+            }
+        }
+    }
+
+    (void)cmd, (void)elem;
+    return UI_CMD_NONE;
+}
+static struct ui_element make_ui_controller(enum ui_cmd_type (*interact)(
+    struct ui*, union ui_cmd*, struct ui_element*, struct input*))
+{
+    struct ui_element elem;
+    ui_element_init(&elem, UI_CONTROLLER);
+    elem.interact = interact;
     return elem;
 }
 
@@ -375,7 +539,7 @@ struct ui* ui_create(void)
         make_fpos(0.0, 0.6),
         style_text_title,
         UI_ALIGN_CENTER);
-
+    ui->elements[CONTROLLER_VIM] = make_ui_controller(controller_vim);
     ui->elements[BUTTON_HOST] = make_ui_button(
         cstr_view("Host"),
         make_fpos(0, 0.0),
@@ -426,7 +590,7 @@ struct ui* ui_create(void)
         button_host_game_interact);
     ui->elements[BUTTON_JOIN_GAME] = make_ui_button(
         cstr_view("Join"),
-        make_fpos(0.4, 0.6),
+        make_fpos(0.4, -0.6),
         style_button,
         button_is_mouse_over_smaller,
         button_join_game_interact);
@@ -459,15 +623,24 @@ void ui_destroy(struct ui* ui)
 }
 
 /* ------------------------------------------------------------------------- */
-void ui_update(struct ui* ui, struct input* input, uint8_t sim_tick_rate)
+enum ui_cmd_type ui_update(
+    struct ui*    ui,
+    union ui_cmd* cmd,
+    struct input* input,
+    uint8_t       sim_tick_rate)
 {
     struct ui_element* elem;
     ui_for_each_active (ui, elem)
-    {
         if (elem->step_anim)
             elem->step_anim(elem, input, sim_tick_rate);
 
+    ui_for_each_active (ui, elem)
         if (elem->interact)
-            elem->interact(ui, elem, input);
-    }
+        {
+            enum ui_cmd_type cmd_type = elem->interact(ui, cmd, elem, input);
+            if (cmd_type != UI_CMD_NONE)
+                return cmd_type;
+        }
+
+    return UI_CMD_NONE;
 }

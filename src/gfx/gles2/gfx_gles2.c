@@ -111,9 +111,6 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 
     switch (key)
     {
-        case GLFW_KEY_ESCAPE:
-            gfx->input_buffer.escape = (action == GLFW_PRESS);
-            break;
         case GLFW_KEY_LEFT:
             gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
             break;
@@ -142,9 +139,16 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
                 gfx->input_buffer.split = 0;
             break;
 
+        case GLFW_KEY_ENTER:
+            if (action == GLFW_PRESS || action == GLFW_REPEAT)
+                gfx->input_buffer.enter = 1;
+            break;
         case GLFW_KEY_BACKSPACE:
             if (action == GLFW_PRESS || action == GLFW_REPEAT)
                 gfx->input_buffer.backspace = 1;
+            break;
+        case GLFW_KEY_ESCAPE:
+            gfx->input_buffer.escape = (action == GLFW_PRESS);
             break;
     }
 }
@@ -196,6 +200,8 @@ cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 
     gfx->input_buffer.mousex_ar = 2.0 * xpos - 1.0;
     gfx->input_buffer.mousey_ar = 1.0 - 2.0 * ypos;
+
+    gfx->input_buffer.mouse_moved = 1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -535,6 +541,7 @@ static void gfx_gles2_draw(
                 break;
             }
             case UI_BUTTON: break;
+            case UI_CONTROLLER: break;
         }
 
     gfx_gles2_text_prepare_draw(&gfx->font, &ar);
@@ -581,6 +588,7 @@ static void gfx_gles2_draw(
                     ui_elem->u.button.text.size,
                     ui_elem->u.button.text.align);
                 break;
+            case UI_CONTROLLER: break;
         }
     gfx_gles2_text_end_draw(&gfx->font);
 
