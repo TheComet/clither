@@ -577,7 +577,7 @@ static void gfx_gles2_draw(
                     ui_elem->u.button.text.str,
                     &gfx->font,
                     ui_elem->u.button.text.pos,
-                    ui_elem->u.button.color,
+                    ui_elem->u.button.text.color,
                     ui_elem->u.button.text.size,
                     ui_elem->u.button.text.align);
                 break;

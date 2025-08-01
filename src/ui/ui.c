@@ -17,6 +17,8 @@ enum ui_element_index
     BUTTON_QUIT,
 
     TEXT_ENTER_USERNAME,
+    TEXT_HOST_GAME,
+    TEXT_JOIN_GAME,
     TEXTEDIT_USERNAME,
     BUTTON_HOST_GAME,
     BUTTON_JOIN_GAME,
@@ -35,6 +37,7 @@ static enum ui_element_index main_screen[] = {
     ELEMENT_COUNT};
 static enum ui_element_index host_screen[] = {
     BACKGROUND_FADER,
+    TEXT_HOST_GAME,
     TEXT_ENTER_USERNAME,
     TEXTEDIT_USERNAME,
     BUTTON_HOST_GAME,
@@ -42,6 +45,7 @@ static enum ui_element_index host_screen[] = {
     ELEMENT_COUNT};
 static enum ui_element_index join_screen[] = {
     BACKGROUND_FADER,
+    TEXT_JOIN_GAME,
     TEXT_ENTER_USERNAME,
     TEXTEDIT_USERNAME,
     BUTTON_JOIN_GAME,
@@ -100,21 +104,44 @@ make_ui_rectangle(struct fpos pos, struct fpos size, uint32_t color)
 }
 
 /* ------------------------------------------------------------------------- */
+static struct ui_text_style make_ui_text_style(uint32_t color, float size)
+{
+    struct ui_text_style style;
+    style.color = color;
+    style.size = size;
+    return style;
+}
+
+/* ------------------------------------------------------------------------- */
 static struct ui_element make_ui_text(
-    struct strview str,
-    struct fpos    pos,
-    uint32_t       color,
-    float          size,
-    enum ui_align  align)
+    struct strview       str,
+    struct fpos          pos,
+    struct ui_text_style style,
+    enum ui_align        align)
 {
     struct ui_element elem;
     ui_element_init(&elem, UI_TEXT);
     elem.u.text.str = str;
     elem.u.text.pos = pos;
-    elem.u.text.color = color;
-    elem.u.text.size = size;
+    elem.u.text.color = style.color;
+    elem.u.text.size = style.size;
     elem.u.text.align = align;
     return elem;
+}
+
+/* ------------------------------------------------------------------------- */
+static struct ui_button_style make_ui_button_style(
+    uint32_t color,
+    uint32_t mouseover_color,
+    uint32_t disabled_color,
+    float    size)
+{
+    struct ui_button_style style;
+    style.color = color;
+    style.mouseover_color = mouseover_color;
+    style.disabled_color = disabled_color;
+    style.text_size = size;
+    return style;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -157,14 +184,13 @@ textinput_interact(struct ui* ui, struct ui_element* elem, struct input* input)
     (void)ui;
 }
 static struct ui_element
-make_ui_textinput(struct fpos pos, uint32_t color, float size)
+make_ui_textinput(struct fpos pos, struct ui_text_style style)
 {
     struct ui_element elem;
     ui_element_init(&elem, UI_TEXTINPUT);
 
     elem.u.textinput.text =
-        make_ui_text(cstr_view("TheComet"), pos, color, size, UI_ALIGN_LEFT)
-            .u.text;
+        make_ui_text(cstr_view("TheComet"), pos, style, UI_ALIGN_LEFT).u.text;
     codepoint_vec_init(&elem.u.textinput.input_buffer);
     str_init(&elem.u.textinput.input_buffer_utf8);
     elem.u.textinput.blink_counter = 0;
@@ -197,8 +223,12 @@ static void button_step_anim(
     struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
 {
     const int crossfade_speed = sim_tick_rate / 12;
-    if (elem->is_mouse_over == NULL)
+
+    if (!elem->u.button.enabled)
+    {
+        elem->u.button.text.color = elem->u.button.disabled_color;
         return;
+    }
 
     if (elem->is_mouse_over(elem, input))
     {
@@ -211,8 +241,8 @@ static void button_step_anim(
             elem->u.button.mouseover_crossfade--;
     }
 
-    elem->u.button.color = crossfade_color(
-        elem->u.button.text.color,
+    elem->u.button.text.color = crossfade_color(
+        elem->u.button.normal_color,
         elem->u.button.mouseover_color,
         elem->u.button.mouseover_crossfade,
         crossfade_speed);
@@ -251,22 +281,56 @@ static void button_back_to_main_interact(
     if (check_and_clear(input->escape))
         switch_screen(ui, main_screen);
 }
+static void button_host_game_interact(
+    struct ui* ui, struct ui_element* elem, struct input* input)
+{
+    int                        mouse_over;
+    const struct ui_textinput* textinput;
+
+    textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+    elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
+    if (!elem->u.button.enabled)
+        return;
+
+    mouse_over = elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
+        switch_screen(ui, host_screen);
+}
+static void button_join_game_interact(
+    struct ui* ui, struct ui_element* elem, struct input* input)
+{
+    int                        mouse_over;
+    const struct ui_textinput* textinput;
+
+    textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+    elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
+    if (!elem->u.button.enabled)
+        return;
+
+    mouse_over = elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
+        switch_screen(ui, host_screen);
+}
 static struct ui_element make_ui_button(
-    struct strview str,
-    struct fpos    pos,
-    uint32_t       color,
-    uint32_t       mouseover_color,
-    float          text_size,
+    struct strview         str,
+    struct fpos            pos,
+    struct ui_button_style style,
     int (*is_mouse_over)(struct ui_element*, const struct input*),
     void (*interact)(struct ui*, struct ui_element*, struct input*))
 {
-    struct ui_element elem;
+    struct ui_element    elem;
+    struct ui_text_style text_style =
+        make_ui_text_style(style.color, style.text_size);
+
     ui_element_init(&elem, UI_BUTTON);
+
     elem.u.button.text =
-        make_ui_text(str, pos, color, text_size, UI_ALIGN_CENTER).u.text;
-    elem.u.button.color = color;
-    elem.u.button.mouseover_color = mouseover_color;
+        make_ui_text(str, pos, text_style, UI_ALIGN_CENTER).u.text;
+    elem.u.button.mouseover_color = style.mouseover_color;
+    elem.u.button.disabled_color = style.disabled_color;
+    elem.u.button.normal_color = style.color;
     elem.u.button.mouseover_crossfade = 0;
+    elem.u.button.enabled = 1;
 
     elem.is_mouse_over = is_mouse_over;
     elem.step_anim = button_step_anim;
@@ -278,11 +342,29 @@ static struct ui_element make_ui_button(
 /* ------------------------------------------------------------------------- */
 struct ui* ui_create(void)
 {
+    /* clang-format off */
+    struct ui_button_style style_button = {
+        0xA0FFFFFF,
+        0xA0FF78FF,
+        0xA0606060,
+        1.0 / 24};
+    struct ui_text_style style_text_title = {
+        0xA0FFFFFF,
+        1.0 / 14};
+    struct ui_text_style style_text_subtitle = {
+        0xA0FFFFFF,
+        1.0 / 24};
+    struct ui_text_style style_text_input = {
+        0xA0FFFFFF,
+        1.0 / 64};
+    /* clang-format on */
+
     int        header = offsetof(struct ui, elements);
     int        data = sizeof(struct ui_element) * ELEMENT_COUNT;
     struct ui* ui = mem_alloc(header + data);
     if (ui == NULL)
         return NULL;
+    memset(ui, 0x00, sizeof(*ui));
     ui->count = ELEMENT_COUNT;
 
     ui->elements[BACKGROUND_FADER] =
@@ -291,73 +373,67 @@ struct ui* ui_create(void)
     ui->elements[TEXT_TITLE] = make_ui_text(
         cstr_view("MechaSnek"),
         make_fpos(0.0, 0.6),
-        0xA0FFFFFF,
-        1.0 / 14,
+        style_text_title,
         UI_ALIGN_CENTER);
 
     ui->elements[BUTTON_HOST] = make_ui_button(
         cstr_view("Host"),
         make_fpos(0, 0.0),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 24,
+        style_button,
         button_is_mouse_over,
         button_host_interact);
     ui->elements[BUTTON_JOIN] = make_ui_button(
         cstr_view("Join"),
         make_fpos(0, -0.2),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 24,
+        style_button,
         button_is_mouse_over,
         button_join_interact);
     ui->elements[BUTTON_GARAGE] = make_ui_button(
         cstr_view("Garage"),
         make_fpos(0, -0.4),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 24,
+        style_button,
         button_is_mouse_over,
         NULL);
     ui->elements[BUTTON_QUIT] = make_ui_button(
         cstr_view("Quit"),
         make_fpos(0, -0.6),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 24,
+        style_button,
         button_is_mouse_over,
         button_quit_interact);
 
+    ui->elements[TEXT_HOST_GAME] = make_ui_text(
+        cstr_view("Host Game"),
+        make_fpos(0.0, 0.4),
+        style_text_subtitle,
+        UI_ALIGN_CENTER);
+    ui->elements[TEXT_JOIN_GAME] = make_ui_text(
+        cstr_view("Join Game"),
+        make_fpos(0.0, 0.4),
+        style_text_subtitle,
+        UI_ALIGN_CENTER);
     ui->elements[TEXT_ENTER_USERNAME] = make_ui_text(
         cstr_view("Enter username:"),
         make_fpos(-0.3, 0.0),
-        0xA0FFFFFF,
-        1.0 / 64,
+        style_text_input,
         UI_ALIGN_RIGHT);
     ui->elements[TEXTEDIT_USERNAME] =
-        make_ui_textinput(make_fpos(-0.26, 0.0), 0xA0FFFFFF, 1.0 / 64);
+        make_ui_textinput(make_fpos(-0.26, 0.0), style_text_input);
     ui->elements[BUTTON_HOST_GAME] = make_ui_button(
         cstr_view("Host"),
-        make_fpos(0.2, -0.2),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 36,
+        make_fpos(0.4, -0.6),
+        style_button,
         button_is_mouse_over_smaller,
-        NULL);
+        button_host_game_interact);
     ui->elements[BUTTON_JOIN_GAME] = make_ui_button(
         cstr_view("Join"),
-        make_fpos(0.2, -0.2),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 36,
+        make_fpos(0.4, 0.6),
+        style_button,
         button_is_mouse_over_smaller,
-        NULL);
+        button_join_game_interact);
     ui->elements[BUTTON_BACK_TO_MAIN] = make_ui_button(
         cstr_view("Back"),
-        make_fpos(-0.2, -0.2),
-        0xA0FFFFFF,
-        0xA0FF78FF,
-        1.0 / 36,
+        make_fpos(-0.4, -0.6),
+        style_button,
         button_is_mouse_over_smaller,
         button_back_to_main_interact);
 

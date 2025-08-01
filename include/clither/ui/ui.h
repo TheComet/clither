@@ -29,6 +29,12 @@ struct ui_rectangle
     uint32_t    color;
 };
 
+struct ui_text_style
+{
+    uint32_t color;
+    float    size;
+};
+
 struct ui_text
 {
     struct strview str;
@@ -47,12 +53,22 @@ struct ui_textinput
     unsigned              blink_on : 1;
 };
 
+struct ui_button_style
+{
+    uint32_t color;
+    uint32_t mouseover_color;
+    uint32_t disabled_color;
+    float    text_size;
+};
+
 struct ui_button
 {
     struct ui_text text;
-    uint32_t       color;
+    uint32_t       normal_color;
     uint32_t       mouseover_color;
+    uint32_t       disabled_color;
     int            mouseover_crossfade;
+    unsigned       enabled : 1;
 };
 
 struct ui_element
