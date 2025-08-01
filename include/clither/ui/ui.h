@@ -11,7 +11,15 @@ enum ui_element_type
 {
     UI_RECTANGLE,
     UI_TEXT,
+    UI_TEXTINPUT,
     UI_BUTTON
+};
+
+enum ui_align
+{
+    UI_ALIGN_LEFT,
+    UI_ALIGN_CENTER,
+    UI_ALIGN_RIGHT
 };
 
 struct ui_rectangle
@@ -27,6 +35,16 @@ struct ui_text
     struct fpos    pos;
     uint32_t       color;
     float          size;
+    enum ui_align  align;
+};
+
+struct ui_textinput
+{
+    struct ui_text        text;
+    struct codepoint_vec* input_buffer;
+    struct str*           input_buffer_utf8;
+    int                   blink_counter;
+    unsigned              blink_on : 1;
 };
 
 struct ui_button
@@ -45,13 +63,14 @@ struct ui_element
         const struct input* input,
         uint8_t             sim_tick_rate);
     void (*interact)(
-        struct ui* ui, struct ui_element* elem, const struct input* input);
+        struct ui* ui, struct ui_element* elem, struct input* input);
 
     union
     {
         struct ui_rectangle rectangle;
         struct ui_text      text;
         struct ui_button    button;
+        struct ui_textinput textinput;
     } u;
     enum ui_element_type type;
     unsigned             active : 1;
@@ -66,9 +85,12 @@ struct ui
 struct ui* ui_create(void);
 void       ui_destroy(struct ui* ui);
 
-void ui_update(struct ui* ui, const struct input* input, uint8_t sim_tick_rate);
+void ui_update(struct ui* ui, struct input* input, uint8_t sim_tick_rate);
 
-#define ui_for_each(ui, elem)                                                  \
+#define ui_for_each_active(ui, elem)                                           \
     for (elem = (ui)->elements; elem != ((ui)->elements + (ui)->count);        \
          ++elem)                                                               \
         if ((elem)->active)
+
+#define ui_for_each(ui, elem)                                                  \
+    for (elem = (ui)->elements; elem != ((ui)->elements + (ui)->count); ++elem)

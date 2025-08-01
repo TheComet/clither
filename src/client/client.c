@@ -728,7 +728,6 @@ void* client_run(
             (*igfx)->poll_input(*gfx, &input);
         ui_update(ui, &input, client.sim_tick_rate);
 #    endif
-
         if (input.quit)
         {
             retval = 0;
@@ -979,6 +978,7 @@ void* client_run(
     world_deinit(&world);
     if (client.state != CLIENT_DISCONNECTED)
         client_disconnect(&client);
+    input_deinit(&input);
 client_connect_failed:
     client_deinit(&client);
     ui_destroy(ui);

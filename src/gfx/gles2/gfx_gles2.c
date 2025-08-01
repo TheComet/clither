@@ -112,8 +112,7 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
     switch (key)
     {
         case GLFW_KEY_ESCAPE:
-            if (action == GLFW_PRESS)
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            gfx->input_buffer.escape = (action == GLFW_PRESS);
             break;
         case GLFW_KEY_LEFT:
             gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
@@ -142,7 +141,19 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
             if (action == GLFW_RELEASE)
                 gfx->input_buffer.split = 0;
             break;
+
+        case GLFW_KEY_BACKSPACE:
+            if (action == GLFW_PRESS || action == GLFW_REPEAT)
+                gfx->input_buffer.backspace = 1;
+            break;
     }
+}
+
+/* ------------------------------------------------------------------------- */
+static void set_char_callback(GLFWwindow* window, unsigned int codepoint)
+{
+    struct gfx* gfx = glfwGetWindowUserPointer(window);
+    codepoint_vec_push(&gfx->input_buffer.keys, codepoint);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -155,7 +166,7 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     if (button == GLFW_MOUSE_BUTTON_LEFT)
     {
         gfx->input_buffer.boost = (action == GLFW_PRESS);
-        gfx->input_buffer.menu_clicked = (action == GLFW_PRESS);
+        gfx->input_buffer.screen_clicked = (action == GLFW_PRESS);
     }
 }
 
@@ -373,6 +384,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
 
     glfwSetWindowUserPointer(gfx->window, gfx);
     glfwSetKeyCallback(gfx->window, key_callback);
+    glfwSetCharCallback(gfx->window, set_char_callback);
     glfwSetMouseButtonCallback(gfx->window, mouse_button_callback);
     glfwSetCursorPosCallback(gfx->window, cursor_position_callback);
     glfwSetScrollCallback(gfx->window, scroll_callback);
@@ -410,6 +422,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_font_deinit(&gfx->font);
 
     glfwDestroyWindow(gfx->window);
+    input_deinit(&gfx->input_buffer);
     mem_free(gfx);
 }
 
@@ -417,9 +430,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
 static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 {
     glfwPollEvents();
-    *input = gfx->input_buffer;
-    gfx->input_buffer.scroll = 0; /* Clear deltas */
-    gfx->input_buffer.menu_clicked = 0;
+    input_set_and_clear(input, &gfx->input_buffer);
 
     if (glfwWindowShouldClose(gfx->window))
         input->quit = 1;
@@ -485,7 +496,7 @@ static void gfx_gles2_draw(
         gfx_gles2_draw_snake(&gfx->snake, gfx, snake, camera, &ar);
     }
 
-    ui_for_each (ui, ui_elem)
+    ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
             case UI_RECTANGLE:
@@ -497,7 +508,32 @@ static void gfx_gles2_draw(
                     ui_elem->u.rectangle.color,
                     &ar);
                 break;
-            case UI_TEXT:
+            case UI_TEXT: break;
+            case UI_TEXTINPUT: {
+                struct fpos text_size = gfx_gles2_text_screen_size(
+                    &gfx->font,
+                    ui_elem->u.textinput.text.str,
+                    ui_elem->u.textinput.text.size);
+                GLfloat     padding = 1.0 / gfx->width * 8;
+                struct fpos cursor_size = make_fpos(
+                    1.0 / gfx->width * 2,
+                    text_size.y * 2 /* twice as high as the text looks right */
+                );
+
+                if (!ui_elem->u.textinput.blink_on)
+                    break;
+
+                gfx_gles2_rectangle_draw(
+                    &gfx->rect,
+                    &gfx->quad_mesh,
+                    make_fpos(
+                        ui_elem->u.textinput.text.pos.x + text_size.x + padding,
+                        ui_elem->u.textinput.text.pos.y + cursor_size.y / 2),
+                    cursor_size,
+                    ui_elem->u.textinput.text.color,
+                    &ar);
+                break;
+            }
             case UI_BUTTON: break;
         }
 
@@ -511,9 +547,10 @@ static void gfx_gles2_draw(
             make_fpos(0, 0.1),
             0xA0FFFFFF,
             1.0 / 64,
+            UI_ALIGN_CENTER,
             camera);
     }
-    ui_for_each (ui, ui_elem)
+    ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
             case UI_RECTANGLE: break;
@@ -523,7 +560,17 @@ static void gfx_gles2_draw(
                     &gfx->font,
                     ui_elem->u.text.pos,
                     ui_elem->u.text.color,
-                    ui_elem->u.text.size);
+                    ui_elem->u.text.size,
+                    ui_elem->u.text.align);
+                break;
+            case UI_TEXTINPUT:
+                gfx_gles2_text_draw_screen(
+                    ui_elem->u.textinput.text.str,
+                    &gfx->font,
+                    ui_elem->u.textinput.text.pos,
+                    ui_elem->u.textinput.text.color,
+                    ui_elem->u.textinput.text.size,
+                    ui_elem->u.textinput.text.align);
                 break;
             case UI_BUTTON:
                 gfx_gles2_text_draw_screen(
@@ -531,7 +578,8 @@ static void gfx_gles2_draw(
                     &gfx->font,
                     ui_elem->u.button.text.pos,
                     ui_elem->u.button.color,
-                    ui_elem->u.button.text.size);
+                    ui_elem->u.button.text.size,
+                    ui_elem->u.button.text.align);
                 break;
         }
     gfx_gles2_text_end_draw(&gfx->font);

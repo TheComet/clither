@@ -1,32 +1,26 @@
 #pragma once
 
 #include "clither/util/strview.h"
-#include "clither/util/vec.h"
+#include <stdint.h>
 
 struct str;
-VEC_DECLARE(str_impl, char, 16)
 
-void str_init(struct str** str);
-void str_deinit(struct str* str);
-int  str_set(struct str** str, struct strview view);
-int  str_set_cstr(struct str** str, const char* cstr);
-int  str_set_path_cstr(struct str** str, const char* path);
-int  str_join_path(struct str** str, struct strview path);
-int  str_join_path_cstr(struct str** str, const char* path);
-
-static const char* str_cstr(const struct str* str)
-{
-    return str ? ((const struct str_impl*)str)->data : "";
-}
-
-static int str_len(const struct str* str)
-{
-    return str ? ((const struct str_impl*)str)->count - 1 : 0;
-}
+void        str_init(struct str** str);
+void        str_deinit(struct str* str);
+int         str_set(struct str** str, struct strview view);
+int         str_set_utf32(struct str** str, const uint32_t* utf32, int len);
+int         str_set_cstr(struct str** str, const char* cstr);
+int         str_set_path_cstr(struct str** str, const char* path);
+int         str_join_path(struct str** str, struct strview path);
+int         str_join_path_cstr(struct str** str, const char* path);
+int         str_append_char(struct str** str, char c);
+void        str_pop_char(struct str* str);
+void        str_clear(struct str* str);
+const char* str_cstr(const struct str* str);
+int         str_len(const struct str* str);
+int         cstr_ends_with(const char* cstr, const char* suffix);
 
 static struct strview str_view(const struct str* str)
 {
     return strview(str_cstr(str), 0, str_len(str));
 }
-
-int cstr_ends_with(const char* cstr, const char* suffix);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 wchar_t* utf8_to_utf16(const char* utf8, int utf8_bytes);

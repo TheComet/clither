@@ -1,6 +1,8 @@
 #pragma once
 
 #include "clither/game/fpos.h"
+#include "clither/game/q.h"
+#include "clither/ui/ui.h"
 #include "clither/util/strview.h"
 #include "glad/gles2.h"
 
@@ -72,13 +74,17 @@ void gfx_gles2_font_unload(struct gfx_font* font);
 
 struct gfx_text
 {
-    GLuint   vbo;
-    int      vertex_count;
-    unsigned was_used : 1;
+    struct fpos   dimensions;
+    GLuint        vbo;
+    int           vertex_count;
+    unsigned      was_used : 1;
 };
 
 void gfx_gles2_text_init(struct gfx_text* text);
 void gfx_gles2_text_deinit(struct gfx_text* text);
+
+struct fpos gfx_gles2_text_screen_size(
+    struct gfx_font* font, struct strview str, GLfloat scale);
 
 void gfx_gles2_text_prepare_draw(
     struct gfx_font* font, const struct aspect_ratio* ar);
@@ -88,14 +94,16 @@ void gfx_gles2_text_draw(
     struct qwpos         pos,
     struct fpos          screen_offset,
     uint32_t             argb,
-    float                scale,
+    GLfloat              scale,
+    enum ui_align        align,
     const struct camera* camera);
 void gfx_gles2_text_draw_screen(
     struct strview   str,
     struct gfx_font* font,
     struct fpos      pos,
     uint32_t         argb,
-    float            scale);
+    GLfloat          scale,
+    enum ui_align    align);
 void gfx_gles2_text_end_draw(struct gfx_font* font);
 
 #define gfx_gles2_text_shaped(text) ((text)->vertices != NULL)

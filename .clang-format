@@ -48,6 +48,7 @@ ForEachMacros: [
     hmap_for_each_full,
     hset_for_each,
     hset_for_each_full,
+    if_input,
     net_addr_hmap_for_each,
     rb_for_each,
     rb_for_each_r,
@@ -55,6 +56,7 @@ ForEachMacros: [
     strlist_for_each,
     strlist_for_each_cstr,
     ui_for_each,
+    ui_for_each_active,
     vec_for_each,
     vec_for_each_r,
     vec_enumerate

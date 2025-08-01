@@ -296,9 +296,11 @@ static int generate_mesh(
     rescale = TO_PIXELS((GLfloat)font->ft_face->size->metrics.height);
     vec_for_each (font->vertices, vert)
     {
-        vert->pos[0] = (vert->pos[0] * 2 - x) / rescale * 2;
-        vert->pos[1] = (vert->pos[1] * 2 - y) / rescale * 2;
+        vert->pos[0] = (vert->pos[0] * 2) / rescale * 2;
+        vert->pos[1] = (vert->pos[1] * 2) / rescale * 2;
     }
+    text->dimensions.x = x / rescale * 4;
+    text->dimensions.y = 1.0;
 
     text->vertex_count = vec_count(font->vertices);
     glBindBuffer(GL_ARRAY_BUFFER, text->vbo);
@@ -562,6 +564,7 @@ void gfx_gles2_text_init(struct gfx_text* text)
     glGenBuffers(1, &text->vbo);
     gfx_track_buf(text->vbo);
 
+    text->dimensions = make_fpos(0, 0);
     text->was_used = 0;
 }
 
@@ -570,6 +573,17 @@ void gfx_gles2_text_deinit(struct gfx_text* text)
 {
     gfx_untrack_buf(text->vbo);
     glDeleteBuffers(1, &text->vbo);
+}
+
+/* ------------------------------------------------------------------------- */
+struct fpos gfx_gles2_text_screen_size(
+    struct gfx_font* font, struct strview str, GLfloat scale)
+{
+    struct gfx_text* text = create_or_update_text(font, str);
+    if (text != NULL)
+        return make_fpos(
+            text->dimensions.x * scale, text->dimensions.y * scale);
+    return make_fpos(0, 0);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -620,6 +634,7 @@ void gfx_gles2_text_draw(
     struct fpos          screen_offset,
     uint32_t             argb,
     float                scale,
+    enum ui_align        align,
     const struct camera* camera)
 {
     struct
@@ -637,6 +652,17 @@ void gfx_gles2_text_draw(
     pos_cameraSpace.x *= qw_to_float(camera->scale);
     pos_cameraSpace.x += screen_offset.x;
     pos_cameraSpace.y += screen_offset.y;
+
+    switch (align)
+    {
+        case UI_ALIGN_LEFT: break;
+        case UI_ALIGN_CENTER:
+            pos_cameraSpace.x -= text->dimensions.x * scale / 2.0f;
+            break;
+        case UI_ALIGN_RIGHT:
+            pos_cameraSpace.x -= text->dimensions.x * scale;
+            break;
+    }
 
     glUniform1f(font->uSize, scale);
     glUniform2f(font->uPosCameraSpace, pos_cameraSpace.x, pos_cameraSpace.y);
@@ -673,11 +699,19 @@ void gfx_gles2_text_draw_screen(
     struct gfx_font* font,
     struct fpos      pos,
     uint32_t         argb,
-    float            scale)
+    GLfloat          scale,
+    enum ui_align    align)
 {
     struct gfx_text* text = create_or_update_text(font, str);
     if (text == NULL)
         return;
+
+    switch (align)
+    {
+        case UI_ALIGN_LEFT: break;
+        case UI_ALIGN_CENTER: pos.x -= text->dimensions.x * scale / 2.0f; break;
+        case UI_ALIGN_RIGHT: pos.x -= text->dimensions.x * scale; break;
+    }
 
     glUniform1f(font->uSize, scale);
     glUniform2f(font->uPosCameraSpace, pos.x, pos.y);

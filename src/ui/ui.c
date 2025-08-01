@@ -1,7 +1,10 @@
 #include "clither/game/input.h"
 #include "clither/ui/ui.h"
 #include "clither/util/mem.h"
+#include "clither/util/str.h"
 #include <stddef.h>
+
+#define check_and_clear(cond) ((cond) && ((cond) = 0, 1))
 
 enum ui_element_index
 {
@@ -14,6 +17,7 @@ enum ui_element_index
     BUTTON_QUIT,
 
     TEXT_ENTER_USERNAME,
+    TEXTEDIT_USERNAME,
     BUTTON_HOST_GAME,
     BUTTON_JOIN_GAME,
     BUTTON_BACK_TO_MAIN,
@@ -31,15 +35,15 @@ static enum ui_element_index main_screen[] = {
     ELEMENT_COUNT};
 static enum ui_element_index host_screen[] = {
     BACKGROUND_FADER,
-    TEXT_TITLE,
     TEXT_ENTER_USERNAME,
+    TEXTEDIT_USERNAME,
     BUTTON_HOST_GAME,
     BUTTON_BACK_TO_MAIN,
     ELEMENT_COUNT};
 static enum ui_element_index join_screen[] = {
     BACKGROUND_FADER,
-    TEXT_TITLE,
     TEXT_ENTER_USERNAME,
+    TEXTEDIT_USERNAME,
     BUTTON_JOIN_GAME,
     BUTTON_BACK_TO_MAIN,
     ELEMENT_COUNT};
@@ -96,16 +100,79 @@ make_ui_rectangle(struct fpos pos, struct fpos size, uint32_t color)
 }
 
 /* ------------------------------------------------------------------------- */
-static struct ui_element
-make_ui_text(struct strview str, struct fpos pos, uint32_t color, float size)
+static struct ui_element make_ui_text(
+    struct strview str,
+    struct fpos    pos,
+    uint32_t       color,
+    float          size,
+    enum ui_align  align)
 {
     struct ui_element elem;
     ui_element_init(&elem, UI_TEXT);
-    elem.active = 0;
     elem.u.text.str = str;
     elem.u.text.pos = pos;
     elem.u.text.color = color;
     elem.u.text.size = size;
+    elem.u.text.align = align;
+    return elem;
+}
+
+/* ------------------------------------------------------------------------- */
+static void textinput_step_anim(
+    struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
+{
+    const int period = sim_tick_rate / 4;
+    if (elem->u.textinput.blink_counter++ >= period)
+    {
+        elem->u.textinput.blink_counter = 0;
+        elem->u.textinput.blink_on = !elem->u.textinput.blink_on;
+    }
+    (void)input;
+}
+static void
+textinput_interact(struct ui* ui, struct ui_element* elem, struct input* input)
+{
+    const uint32_t* codepoint;
+    vec_for_each (input->keys, codepoint)
+        if (vec_count(elem->u.textinput.input_buffer) < 16 &&
+            *codepoint != '\0' && *codepoint != '\n' && *codepoint != '\r')
+        {
+            codepoint_vec_push(&elem->u.textinput.input_buffer, *codepoint);
+        }
+    codepoint_vec_clear(input->keys);
+
+    if (input->backspace)
+    {
+        if (vec_count(elem->u.textinput.input_buffer) > 0)
+            codepoint_vec_pop(elem->u.textinput.input_buffer);
+        input->backspace = 0;
+    }
+
+    str_set_utf32(
+        &elem->u.textinput.input_buffer_utf8,
+        vec_data(elem->u.textinput.input_buffer),
+        vec_count(elem->u.textinput.input_buffer));
+    elem->u.textinput.text.str = str_view(elem->u.textinput.input_buffer_utf8);
+
+    (void)ui;
+}
+static struct ui_element
+make_ui_textinput(struct fpos pos, uint32_t color, float size)
+{
+    struct ui_element elem;
+    ui_element_init(&elem, UI_TEXTINPUT);
+
+    elem.u.textinput.text =
+        make_ui_text(cstr_view("TheComet"), pos, color, size, UI_ALIGN_LEFT)
+            .u.text;
+    codepoint_vec_init(&elem.u.textinput.input_buffer);
+    str_init(&elem.u.textinput.input_buffer_utf8);
+    elem.u.textinput.blink_counter = 0;
+    elem.u.textinput.blink_on = 0;
+
+    elem.step_anim = textinput_step_anim;
+    elem.interact = textinput_interact;
+
     return elem;
 }
 
@@ -151,31 +218,38 @@ static void button_step_anim(
         crossfade_speed);
 }
 static void button_host_interact(
-    struct ui* ui, struct ui_element* elem, const struct input* input)
+    struct ui* ui, struct ui_element* elem, struct input* input)
 {
-    if (input->menu_clicked && elem->is_mouse_over &&
-        elem->is_mouse_over(elem, input))
-    {
+    int mouse_over = elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
         switch_screen(ui, host_screen);
-    }
 }
 static void button_join_interact(
-    struct ui* ui, struct ui_element* elem, const struct input* input)
+    struct ui* ui, struct ui_element* elem, struct input* input)
 {
-    if (input->menu_clicked && elem->is_mouse_over &&
-        elem->is_mouse_over(elem, input))
-    {
+    int mouse_over = elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
         switch_screen(ui, join_screen);
-    }
+}
+static void button_quit_interact(
+    struct ui* ui, struct ui_element* elem, struct input* input)
+{
+    int mouse_over = elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
+        input->quit = 1;
+    if (check_and_clear(input->escape))
+        input->quit = 1;
+
+    (void)ui;
 }
 static void button_back_to_main_interact(
-    struct ui* ui, struct ui_element* elem, const struct input* input)
+    struct ui* ui, struct ui_element* elem, struct input* input)
 {
-    if (input->menu_clicked && elem->is_mouse_over &&
-        elem->is_mouse_over(elem, input))
-    {
+    int mouse_over = elem->is_mouse_over && elem->is_mouse_over(elem, input);
+    if (mouse_over && check_and_clear(input->screen_clicked))
         switch_screen(ui, main_screen);
-    }
+    if (check_and_clear(input->escape))
+        switch_screen(ui, main_screen);
 }
 static struct ui_element make_ui_button(
     struct strview str,
@@ -184,19 +258,20 @@ static struct ui_element make_ui_button(
     uint32_t       mouseover_color,
     float          text_size,
     int (*is_mouse_over)(struct ui_element*, const struct input*),
-    void (*interact)(struct ui*, struct ui_element*, const struct input*))
+    void (*interact)(struct ui*, struct ui_element*, struct input*))
 {
     struct ui_element elem;
     ui_element_init(&elem, UI_BUTTON);
-    elem.u.button.text = make_ui_text(str, pos, color, text_size).u.text;
-    elem.u.button.text.pos = pos;
-    elem.u.button.text.color = color;
+    elem.u.button.text =
+        make_ui_text(str, pos, color, text_size, UI_ALIGN_CENTER).u.text;
     elem.u.button.color = color;
     elem.u.button.mouseover_color = mouseover_color;
     elem.u.button.mouseover_crossfade = 0;
+
     elem.is_mouse_over = is_mouse_over;
     elem.step_anim = button_step_anim;
     elem.interact = interact;
+
     return elem;
 }
 
@@ -214,7 +289,11 @@ struct ui* ui_create(void)
         make_ui_rectangle(make_fpos(0, 0), make_fpos(1000, 1000), 0xE0000000);
 
     ui->elements[TEXT_TITLE] = make_ui_text(
-        cstr_view("MechaSnek"), make_fpos(0.0, 0.6), 0xA0FFFFFF, 1.0 / 14);
+        cstr_view("MechaSnek"),
+        make_fpos(0.0, 0.6),
+        0xA0FFFFFF,
+        1.0 / 14,
+        UI_ALIGN_CENTER);
 
     ui->elements[BUTTON_HOST] = make_ui_button(
         cstr_view("Host"),
@@ -247,13 +326,16 @@ struct ui* ui_create(void)
         0xA0FF78FF,
         1.0 / 24,
         button_is_mouse_over,
-        NULL);
+        button_quit_interact);
 
     ui->elements[TEXT_ENTER_USERNAME] = make_ui_text(
         cstr_view("Enter username:"),
-        make_fpos(-0.5, 0.0),
+        make_fpos(-0.3, 0.0),
         0xA0FFFFFF,
-        1.0 / 64);
+        1.0 / 64,
+        UI_ALIGN_RIGHT);
+    ui->elements[TEXTEDIT_USERNAME] =
+        make_ui_textinput(make_fpos(-0.26, 0.0), 0xA0FFFFFF, 1.0 / 64);
     ui->elements[BUTTON_HOST_GAME] = make_ui_button(
         cstr_view("Host"),
         make_fpos(0.2, -0.2),
@@ -287,17 +369,28 @@ struct ui* ui_create(void)
 /* ------------------------------------------------------------------------- */
 void ui_destroy(struct ui* ui)
 {
+    struct ui_element* elem;
+    ui_for_each (ui, elem)
+    {
+        if (elem->type == UI_TEXTINPUT)
+        {
+            str_deinit(elem->u.textinput.input_buffer_utf8);
+            codepoint_vec_deinit(elem->u.textinput.input_buffer);
+        }
+    }
+
     mem_free(ui);
 }
 
 /* ------------------------------------------------------------------------- */
-void ui_update(struct ui* ui, const struct input* input, uint8_t sim_tick_rate)
+void ui_update(struct ui* ui, struct input* input, uint8_t sim_tick_rate)
 {
     struct ui_element* elem;
-    ui_for_each (ui, elem)
+    ui_for_each_active (ui, elem)
     {
         if (elem->step_anim)
             elem->step_anim(elem, input, sim_tick_rate);
+
         if (elem->interact)
             elem->interact(ui, elem, input);
     }

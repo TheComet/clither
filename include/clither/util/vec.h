@@ -206,6 +206,13 @@
      */                                                                        \
     void prefix##_erase(struct prefix* v, int##bits##_t i);                    \
                                                                                \
+    static void prefix##_swap(struct prefix** a, struct prefix** b)            \
+    {                                                                          \
+        struct prefix* tmp = *a;                                               \
+        *a = *b;                                                               \
+        *b = tmp;                                                              \
+    }                                                                          \
+                                                                               \
     static void prefix##_swap_values(                                          \
         struct prefix* v, int##bits##_t a, int##bits##_t b)                    \
     {                                                                          \
