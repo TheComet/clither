@@ -74,10 +74,10 @@ void gfx_gles2_font_unload(struct gfx_font* font);
 
 struct gfx_text
 {
-    struct fpos   dimensions;
-    GLuint        vbo;
-    int           vertex_count;
-    unsigned      was_used : 1;
+    struct fpos dimensions;
+    GLuint      vbo;
+    int         vertex_count;
+    unsigned    was_used : 1;
 };
 
 void gfx_gles2_text_init(struct gfx_text* text);
@@ -104,6 +104,8 @@ void gfx_gles2_text_draw_screen(
     uint32_t         argb,
     GLfloat          scale,
     enum ui_align    align);
-void gfx_gles2_text_end_draw(struct gfx_font* font);
+void gfx_gles2_text_end_draw(void);
+
+void gfx_gles2_text_clear_unused_from_cache(struct gfx_font* font);
 
 #define gfx_gles2_text_shaped(text) ((text)->vertices != NULL)

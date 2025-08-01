@@ -230,19 +230,6 @@ int settings_apply_args(struct settings* s, const struct args* a)
             SAFE_COPY(s->server.bind_port, port);
     }
 #endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    if (a->mode == MODE_HOST)
-    {
-        if (a->addr)
-            SAFE_COPY(s->server.bind_addr, addr);
-        if (a->port)
-            SAFE_COPY(s->server.bind_port, port);
-
-        /* Route client to server */
-        strcpy(s->client.connect_addr, "localhost");
-        strcpy(s->client.connect_port, s->server.bind_port);
-    }
-#endif
 #if defined(CLITHER_LOG)
     if (a->prefix)
         SAFE_COPY(s->client.log_prefix, prefix);
@@ -986,7 +973,9 @@ int settings_load(struct settings* s, const char* filepath)
 
     if (mfile_map_read(&mf, filepath, 0) != 0)
     {
-        log_warn("Failed to open file \"%s\". Creating default settings.\n", filepath);
+        log_warn(
+            "Failed to open file \"%s\". Creating default settings.\n",
+            filepath);
         settings_save(s, filepath);
         return 0;
     }
@@ -1026,7 +1015,7 @@ void settings_save(const struct settings* s, const char* filename)
         return;
     }
 
-    log_dbg("Saving settings to \"%s\"\n", filename);
+    log_info("Saving settings to \"%s\"\n", filename);
 
 #define WRITE_INT(fp, s, prop, desc)                                           \
     fprintf(fp, #prop " = %d ; " desc "\n", s->prop)

@@ -700,7 +700,6 @@ static enum process_message_result process_message(
                 struct snake* snake;
                 uint16_t      snake_id;
                 log_info("%s joined the game\n", pp.join_request.username);
-                log_net("MSG_JOIN_REQUEST \"%s\"\n", pp.join_request.username);
 
                 client = server_client_hmap_emplace_new(&server->clients, addr);
                 if (client == NULL)
@@ -977,8 +976,6 @@ static int unpack_packet(
         enum msg_type  type = packet->data[i + 0];
         const uint8_t  msg_len = packet->data[i + 1];
         const uint8_t* msg = &packet->data[i + 2];
-
-        log_net("Unpacking msg type=%d, len=%d\n", type, msg_len);
 
         if (i + 2 + msg_len > packet->len)
         {

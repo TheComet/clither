@@ -35,16 +35,16 @@ union ui_cmd
 {
     struct
     {
-        struct strview username;
-        const char*    address;
-        const char*    port;
+        const char* username;
+        const char* address;
+        const char* port;
     } host;
 
     struct
     {
-        struct strview username;
-        const char*    address;
-        const char*    port;
+        const char* username;
+        const char* address;
+        const char* port;
     } join;
 };
 
@@ -129,7 +129,8 @@ struct ui
     struct ui_element elements[1];
 };
 
-struct ui* ui_create(void);
+struct ui* ui_create_main_menu(void);
+struct ui* ui_create_in_game(void);
 void       ui_destroy(struct ui* ui);
 
 enum ui_cmd_type ui_update(

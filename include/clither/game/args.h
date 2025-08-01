@@ -10,14 +10,14 @@ enum mode
 #if defined(CLITHER_BENCHMARKS)
     MODE_BENCHMARKS,
 #endif
+#if defined(CLITHER_SERVER)
+    MODE_SERVER,
+#endif
 #if defined(CLITHER_CLIENT)
     MODE_CLIENT,
 #endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    MODE_HOST,
-#endif
-#if defined(CLITHER_SERVER)
-    MODE_SERVER,
+#if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
+    MODE_UI,
 #endif
     MODE_NONE
 };
@@ -37,7 +37,6 @@ struct args
 #endif
 #if defined(CLITHER_LOG)
     const char* log_file;
-    const char* netlog_file;
     const char* prefix;
 #endif
 #if defined(CLITHER_MCD)

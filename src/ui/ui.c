@@ -8,8 +8,6 @@
 
 enum ui_element_index
 {
-    BACKGROUND_FADER,
-
     CONTROLLER_VIM,
     TEXT_TITLE,
     BUTTON_HOST,
@@ -29,7 +27,6 @@ enum ui_element_index
 };
 
 static enum ui_element_index main_screen[] = {
-    BACKGROUND_FADER,
     CONTROLLER_VIM,
     TEXT_TITLE,
     BUTTON_HOST,
@@ -38,7 +35,6 @@ static enum ui_element_index main_screen[] = {
     BUTTON_QUIT,
     ELEMENT_COUNT};
 static enum ui_element_index host_screen[] = {
-    BACKGROUND_FADER,
     TEXT_HOST_GAME,
     TEXT_ENTER_USERNAME,
     TEXTEDIT_USERNAME,
@@ -46,7 +42,6 @@ static enum ui_element_index host_screen[] = {
     BUTTON_BACK_TO_MAIN,
     ELEMENT_COUNT};
 static enum ui_element_index join_screen[] = {
-    BACKGROUND_FADER,
     TEXT_JOIN_GAME,
     TEXT_ENTER_USERNAME,
     TEXTEDIT_USERNAME,
@@ -95,7 +90,7 @@ static void ui_element_init(struct ui_element* elem, enum ui_element_type type)
 
 /* ------------------------------------------------------------------------- */
 static union ui_cmd
-make_ui_host_cmd(struct strview username, const char* address, const char* port)
+make_ui_host_cmd(const char* username, const char* address, const char* port)
 {
     union ui_cmd cmd;
     cmd.host.username = username;
@@ -106,7 +101,7 @@ make_ui_host_cmd(struct strview username, const char* address, const char* port)
 
 /* ------------------------------------------------------------------------- */
 static union ui_cmd
-make_ui_join_cmd(struct strview username, const char* address, const char* port)
+make_ui_join_cmd(const char* username, const char* address, const char* port)
 {
     union ui_cmd cmd;
     cmd.join.username = username;
@@ -356,11 +351,11 @@ static enum ui_cmd_type button_host_game_interact(
     if (!elem->u.button.enabled)
         return UI_CMD_NONE;
 
-    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
-                                 check_and_clear(input->enter)))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->enter))
     {
         *cmd = make_ui_host_cmd(
-            str_view(textinput->input_buffer_utf8), "0.0.0.0", "5555");
+            str_cstr(textinput->input_buffer_utf8), "0.0.0.0", "5555");
         return UI_CMD_HOST;
     }
 
@@ -380,11 +375,11 @@ static enum ui_cmd_type button_join_game_interact(
     if (!elem->u.button.enabled)
         return UI_CMD_NONE;
 
-    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
-                                 check_and_clear(input->enter)))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->enter))
     {
         *cmd = make_ui_join_cmd(
-            str_view(textinput->input_buffer_utf8), "localhost", "5555");
+            str_cstr(textinput->input_buffer_utf8), "localhost", "5555");
         return UI_CMD_JOIN;
     }
 
@@ -411,7 +406,7 @@ static struct ui_element make_ui_button(
     elem.u.button.normal_color = style.color;
     elem.u.button.hover_crossfade = 0;
     elem.u.button.enabled = 1;
-    elem.u.button.mouse_controlled = 0;
+    elem.u.button.mouse_controlled = 1;
     elem.u.button.hover = 0;
 
     elem.is_mouse_over = is_mouse_over;
@@ -504,7 +499,7 @@ static struct ui_element make_ui_controller(enum ui_cmd_type (*interact)(
 }
 
 /* ------------------------------------------------------------------------- */
-struct ui* ui_create(void)
+struct ui* ui_create_main_menu(void)
 {
     /* clang-format off */
     struct ui_button_style style_button = {
@@ -530,9 +525,6 @@ struct ui* ui_create(void)
         return NULL;
     memset(ui, 0x00, sizeof(*ui));
     ui->count = ELEMENT_COUNT;
-
-    ui->elements[BACKGROUND_FADER] =
-        make_ui_rectangle(make_fpos(0, 0), make_fpos(1000, 1000), 0xE0000000);
 
     ui->elements[TEXT_TITLE] = make_ui_text(
         cstr_view("MechaSnek"),
@@ -581,7 +573,7 @@ struct ui* ui_create(void)
         style_text_input,
         UI_ALIGN_RIGHT);
     ui->elements[TEXTEDIT_USERNAME] =
-        make_ui_textinput(make_fpos(-0.26, 0.0), style_text_input);
+        make_ui_textinput(make_fpos(-0.22, 0.0), style_text_input);
     ui->elements[BUTTON_HOST_GAME] = make_ui_button(
         cstr_view("Host"),
         make_fpos(0.4, -0.6),
@@ -603,6 +595,17 @@ struct ui* ui_create(void)
 
     switch_screen(ui, main_screen);
 
+    return ui;
+}
+
+/* ------------------------------------------------------------------------- */
+struct ui* ui_create_in_game(void)
+{
+    int        header = offsetof(struct ui, elements);
+    struct ui* ui = mem_alloc(header);
+    if (ui == NULL)
+        return NULL;
+    ui->count = 0;
     return ui;
 }
 

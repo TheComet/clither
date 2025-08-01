@@ -90,8 +90,8 @@ union parsed_payload
 
     struct
     {
-        uint16_t    snake_id;
         const char* username;
+        uint16_t    snake_id;
     } snake_username;
 
     struct

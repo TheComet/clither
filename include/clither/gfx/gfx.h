@@ -68,14 +68,13 @@ struct gfx_interface
      */
     void (*step_anim)(struct gfx* gfx, int sim_tick_rate);
 
-    /*!
-     * \brief Draw everything.
-     */
-    void (*draw)(
+    void (*draw_begin)(struct gfx* gfx);
+    void (*draw_world)(
         struct gfx*          gfx,
         const struct world*  world,
-        const struct ui*     ui,
         const struct camera* camera);
+    void (*draw_ui)(struct gfx* gfx, const struct ui* ui);
+    void (*draw_end)(struct gfx* gfx);
 
 #if defined(CLITHER_GFX_DEBUG)
     void (*draw_debug_circle)(

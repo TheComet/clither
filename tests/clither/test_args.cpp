@@ -29,7 +29,6 @@ TEST_F(NAME, no_args_check_defaults)
 #endif
 #if defined(CLITHER_LOG)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
-    EXPECT_THAT(a.netlog_file, StrEq("net.txt"));
     EXPECT_THAT(a.prefix, IsNull());
 #endif
 #if defined(CLITHER_CLIENT)
@@ -85,38 +84,12 @@ TEST_F(NAME, help_multiple)
     const char* argv[] = {
         "./clither",
         "--server",
-        "--host",
         "--help",
         "--ip",
         "127.0.0.1",
     };
     struct args a;
     ASSERT_THAT(args_parse(&a, 6, (char**)argv), Eq(1)) << log().text;
-}
-#endif
-
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-TEST_F(NAME, set_host_mode_long)
-{
-    const char* argv[] = {"./clither", "--host"};
-    struct args a;
-    ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(0)) << log().text;
-    EXPECT_THAT(a.mode, Eq(MODE_HOST));
-}
-
-TEST_F(NAME, terminate_parsing)
-{
-    const char* argv[] = {"./clither", "--", "--host"};
-    struct args a;
-    ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0)) << log().text;
-    EXPECT_THAT(a.mode, Eq(MODE_CLIENT));
-}
-
-TEST_F(NAME, headless_and_client_at_same_time_invalid_1)
-{
-    const char* argv[] = {"./clither", "--host", "--server"};
-    struct args a;
-    ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(-1));
 }
 #endif
 
@@ -160,7 +133,6 @@ TEST_F(NAME, set_netlog_file_long)
     const char* argv[] = {"./clither", "--netlog", "mylog.txt"};
     struct args a;
     ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0)) << log().text;
-    EXPECT_THAT(a.netlog_file, StrEq("mylog.txt"));
 }
 
 TEST_F(NAME, set_prefix_long)

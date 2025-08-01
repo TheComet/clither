@@ -51,13 +51,6 @@ static int print_help(const char* prog_name)
     log_raw("  " ARG2 "-s" RESET "," ARG1 " --server" RESET "          Run in  headless  mode.  This only  starts  the server.\n");
 #endif
 
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    log_raw(
-        "     " ARG1 " --host  " RESET "          Spawn both the server and client,  and join the server.\n"
-        "                        If the  client is closed,  the server  will continue to\n"
-        "                        run in the background.\n");
-#endif
-
 #if defined(CLITHER_CLIENT)
     log_raw(
         "  " ARG2 "-u" RESET "," ARG1 " --username" RESET " <" ARG2 "name" RESET "> Username to use when connecting to a server.\n");
@@ -66,14 +59,12 @@ static int print_help(const char* prog_name)
 #if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
     log_raw(
         "  " ARG2 "-a" RESET "," ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server  address to  connect to. Can  be a URL  or an IP\n"
-        "                        address. If used together with --host or --server, then\n"
-        "                        this sets the bind  address rather than  the address to\n"
-        "                        connect  to. The  client will  always  use localhost or\n"
-        "                        127.0.0.1 in this case.\n");
+        "                        address. If used together with --server, then this sets\n"
+        "                        the bind address rather than the address to connect to.\n");
     log_raw(
         "  " ARG2 "-p" RESET "," ARG1 " --port " RESET "<" ARG2 "port" RESET ">     Port  number  of  the  server  to  connect  to. If used\n"
-        "                        together  with --host or  --server, then  this sets the\n"
-        "                        bind port rather than the port to connect to.\n");
+        "                        together  with --server,  then  this sets the bind port\n"
+        "                        rather than the port to connect to.\n");
 #elif defined(CLITHER_CLIENT)
     log_raw(
         "  "      "  "       " " ARG1 " --addr " RESET "<" ARG2 "address" RESET ">  Server address to connect to. Can be a URL or an IP address.\n"
@@ -128,10 +119,6 @@ static int print_help(const char* prog_name)
         "                        \"clither.txt\".  To  disable logging to a file, set this\n"
         "                        to an empty string.\n");
     log_raw(
-        "     " ARG1 " --netlog " RESET "<" ARG2 "file" RESET ">   Write  networking  log  output  to  a  custom file. The\n"
-        "                        default  file  is \"net.txt\".  To  disable  logging to a\n"
-        "                        file, set this to an empty string.\n");
-    log_raw(
         "     " ARG1 " --prefix " RESET "<" ARG2 "name" RESET ">   Sets the \"log prefix\" of the client.  This is the  text\n"
         "                        that  appears  in front of  every log message generated\n"
         "                        by the client. The default is \"Client: \"");
@@ -151,9 +138,6 @@ static int print_help(const char* prog_name)
 #if !defined(CLITHER_SERVER)
     log_raw("  " RED "-s" RESET "," RED " --server" RESET "          (Recompile with -DCLITHER_SERVER=ON)\n");
 #endif
-#if !defined(CLITHER_SERVER) || !defined(CLITHER_CLIENT)
-    log_raw("     " RED " --host " RESET "           (Recompile with -DCLITHER_CLIENT=ON -DCLITHER_SERVER=ON)\n");
-#endif
 #if !defined(CLITHER_CLIENT)
     log_raw(
         "  " RED "-u" RESET "," RED " --username" RESET "        (Recompile with -DCLITHER_CLIENT=ON)\n");
@@ -170,7 +154,6 @@ static int print_help(const char* prog_name)
 #endif
 #if !defined(CLITHER_LOG)
     log_raw("  " RED "-l" RESET "," RED " --log " RESET "            (Recompile with -DCLITHER_LOG=ON)\n");
-    log_raw("     " RED " --netlog " RESET "         (Recompile with -DCLITHER_LOG=ON)\n");
     log_raw("     " RED " --prefix " RESET "         (Recompile with -DCLITHER_LOG=ON)\n");
 #endif
 
@@ -183,13 +166,6 @@ static int print_help(const char* prog_name)
         TEXT "  Join a server\n" RESET
         "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2\n"
         "    %s" ARG1 " --username" RESET " \"Snek\"" ARG1 " --addr" RESET " 192.168.1.2" ARG1 " --port" RESET " 4200\n" RESET
-        "\n",
-        prog_name, prog_name
-    );
-    log_raw(
-        TEXT "  Create a server and join it as a client. Other players will be able to join.\n" RESET
-        "    %s" ARG1 " --host\n" RESET
-        "    %s" ARG1 " --host --addr" RESET " 0.0.0.0" ARG1 " --port" RESET " 5678" COMMENT "      # change bind address\n" RESET
         "\n",
         prog_name, prog_name
     );
@@ -224,9 +200,6 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_SERVER)
     char server_flag = 0;
 #endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    char host_flag = 0;
-#endif
 
     /* Set defaults */
     a->settings_file = "settings.ini";
@@ -239,10 +212,11 @@ int args_parse(struct args* a, int argc, char* argv[])
 #endif
 #if defined(CLITHER_LOG)
     a->log_file = "clither.txt";
-    a->netlog_file = "net.txt";
     a->prefix = NULL;
 #endif
-#if defined(CLITHER_CLIENT)
+#if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
+    a->mode = MODE_UI;
+#elif defined(CLITHER_CLIENT)
     a->mode = MODE_CLIENT;
 #elif defined(CLITHER_SERVER)
     a->mode = MODE_SERVER;
@@ -287,10 +261,6 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_SERVER)
                 else if (strcmp(arg, "server") == 0)
                     server_flag = 1;
-#endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-                else if (strcmp(arg, "host") == 0)
-                    host_flag = 1;
 #endif
 #if defined(CLITHER_CLIENT)
                 else if (strcmp(arg, "username") == 0)
@@ -361,8 +331,7 @@ int args_parse(struct args* a, int argc, char* argv[])
                     ++i;
                     if (i >= argc || !*argv[i])
                     {
-                        log_err(
-                            "Missing argument for --pack <path>\n");
+                        log_err("Missing argument for --pack <path>\n");
                         return -1;
                     }
                     a->pack = argv[i];
@@ -400,16 +369,6 @@ int args_parse(struct args* a, int argc, char* argv[])
                         return -1;
                     }
                     a->log_file = argv[i];
-                }
-                else if (strcmp(arg, "netlog") == 0)
-                {
-                    ++i;
-                    if (i >= argc /*|| !*argv[i] empty string is valid*/)
-                    {
-                        log_err("Missing argument for --netlog <file>\n");
-                        return -1;
-                    }
-                    a->netlog_file = argv[i];
                 }
                 else if (strcmp(arg, "prefix") == 0)
                 {
@@ -561,18 +520,6 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_SERVER)
     else if (server_flag)
         a->mode = MODE_SERVER;
-#endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    else if (host_flag)
-        a->mode = MODE_HOST;
-#endif
-
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-    if (server_flag && host_flag)
-    {
-        log_err("Can't use \"--server\" and \"--host\" at the same time\n");
-        return -1;
-    }
 #endif
 
     return 0;

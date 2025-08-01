@@ -450,17 +450,19 @@ static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 }
 
 /* ------------------------------------------------------------------------- */
-static void gfx_gles2_draw(
-    struct gfx*          gfx,
-    const struct world*  world,
-    const struct ui*     ui,
-    const struct camera* camera)
+static void gfx_gles2_draw_begin(struct gfx* gfx)
 {
-    int16_t                  idx;
-    uint16_t                 snake_id;
-    const struct snake*      snake;
-    const struct ui_element* ui_elem;
+    glBindFramebuffer(GL_FRAMEBUFFER, gfx->background.fbo);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+/* ------------------------------------------------------------------------- */
+static struct aspect_ratio calculate_aspect_ratio(const struct gfx* gfx)
+{
     struct aspect_ratio ar = {1.0, 1.0, 0.0, 0.0};
     if (gfx->width > gfx->height)
     {
@@ -472,12 +474,19 @@ static void gfx_gles2_draw(
         ar.scale_y = (GLfloat)gfx->height / gfx->width;
         ar.pad_y = (ar.scale_y - 1.0) / 2.0;
     }
+    return ar;
+}
 
-    glBindFramebuffer(GL_FRAMEBUFFER, gfx->background.fbo);
-    glClearColor(0.0, 0.0, 0.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+/* ------------------------------------------------------------------------- */
+static void gfx_gles2_draw_world(
+    struct gfx* gfx, const struct world* world, const struct camera* camera)
+{
+    int16_t             idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+    struct aspect_ratio ar = calculate_aspect_ratio(gfx);
 
+    /* Shadows render to a separate frame buffer */
 #if 0
      bmap_for_each (world->snakes, idx, snake_id, snake)
     {
@@ -491,9 +500,11 @@ static void gfx_gles2_draw(
          world->food_bmap, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
 #endif
 
+    /* Background uses the shadow frame buffer */
     gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
     gfx_gles2_draw_food(world->food_bmap, gfx, camera, &ar);
 
+    /* Snakes */
     bmap_for_each (world->snakes, idx, snake_id, snake)
     {
         (void)snake_id;
@@ -501,6 +512,33 @@ static void gfx_gles2_draw(
             continue;
         gfx_gles2_draw_snake(&gfx->snake, gfx, snake, camera, &ar);
     }
+
+    /* Snake usernames */
+    gfx_gles2_text_prepare_draw(&gfx->font, &ar);
+    bmap_for_each (world->snakes, idx, snake_id, snake)
+    {
+        gfx_gles2_text_draw(
+            str_view(snake->data.name),
+            &gfx->font,
+            snake->head.pos,
+            make_fpos(0, 0.1),
+            0xA0FFFFFF,
+            1.0 / 64,
+            UI_ALIGN_CENTER,
+            camera);
+    }
+    gfx_gles2_text_end_draw();
+
+#if defined(CLITHER_GFX_DEBUG)
+    gfx_gles2_debug_draw(&gfx->debug, &gfx->quad_mesh, camera, &ar);
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
+static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
+{
+    const struct ui_element* ui_elem;
+    struct aspect_ratio      ar = calculate_aspect_ratio(gfx);
 
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
@@ -545,18 +583,6 @@ static void gfx_gles2_draw(
         }
 
     gfx_gles2_text_prepare_draw(&gfx->font, &ar);
-    bmap_for_each (world->snakes, idx, snake_id, snake)
-    {
-        gfx_gles2_text_draw(
-            str_view(snake->data.name),
-            &gfx->font,
-            snake->head.pos,
-            make_fpos(0, 0.1),
-            0xA0FFFFFF,
-            1.0 / 64,
-            UI_ALIGN_CENTER,
-            camera);
-    }
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
@@ -590,12 +616,13 @@ static void gfx_gles2_draw(
                 break;
             case UI_CONTROLLER: break;
         }
-    gfx_gles2_text_end_draw(&gfx->font);
+    gfx_gles2_text_end_draw();
+}
 
-#if defined(CLITHER_GFX_DEBUG)
-    gfx_gles2_debug_draw(&gfx->debug, &gfx->quad_mesh, camera, &ar);
-#endif
-
+/* ------------------------------------------------------------------------- */
+static void gfx_gles2_draw_end(struct gfx* gfx)
+{
+    gfx_gles2_text_clear_unused_from_cache(&gfx->font);
     glfwSwapBuffers(gfx->window);
 }
 
@@ -624,7 +651,10 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_unload_resource_pack,
     &gfx_gles2_poll_input,
     &gfx_gles2_step_anim,
-    &gfx_gles2_draw,
+    &gfx_gles2_draw_begin,
+    &gfx_gles2_draw_world,
+    &gfx_gles2_draw_ui,
+    &gfx_gles2_draw_end,
 #if defined(CLITHER_GFX_DEBUG)
     &gfx_gles2_draw_debug_circle
 #endif

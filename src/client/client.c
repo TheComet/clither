@@ -225,7 +225,6 @@ static struct client_recv_result process_message(
 {
     union parsed_payload pp;
 
-    log_net("Parsing msg type=%d, len=%d\n", msg_type, msg_len);
     switch (msg_parse_payload(&pp, msg_type, msg_data, msg_len))
     {
         case MSG_JOIN_REQUEST: break;
@@ -291,16 +290,6 @@ static struct client_recv_result process_message(
             if (snake == NULL)
                 return client_recv_error();
             snake_head_init(&snake->remote.ack.head, pp.join_accept.spawn);
-
-            log_net(
-                "MSG_JOIN_ACCEPT:\n"
-                "  server frame=%d, client frame=%d, rtt=%d\n"
-                "  spawn=%d, %d\n",
-                pp.join_accept.server_frame,
-                client->frame_number,
-                rtt,
-                pp.join_accept.spawn.x,
-                pp.join_accept.spawn.y);
 
             /* Apply world settings from server */
             settings_world_set_defaults(&settings_world);
@@ -656,7 +645,8 @@ static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
 
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
-void* client_run(
+int client_run(
+    struct client* client,
 #    if defined(CLITHER_GFX)
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
@@ -674,7 +664,6 @@ void* client_run(
     struct input     input;
     struct cmd       cmd;
     struct camera    camera;
-    struct client    client;
     struct tick      sim_tick;
     struct tick      net_tick;
     union ui_cmd     ui_cmd;
@@ -693,23 +682,9 @@ void* client_run(
             goto watch_resource_pack_failed;
     }
 
-    ui = ui_create();
+    ui = ui_create_in_game();
     if (ui == NULL)
         goto create_ui_failed;
-
-    client_init(&client);
-    /*
-     * TODO: In the future the GUI will take care of connecting. Here we do
-     * it immediately because there is no menu.
-     */
-    if (client_connect(
-            &client,
-            settings->connect_addr,
-            settings->connect_port,
-            settings->username) < 0)
-    {
-        goto client_connect_failed;
-    }
 
     input_init(&input);
     camera_init(&camera);
@@ -718,36 +693,31 @@ void* client_run(
 
     log_info("Client started\n");
 
-    tick_cfg(&sim_tick, client.sim_tick_rate);
-    tick_cfg(&net_tick, client.net_tick_rate);
-    while (signals_exit_requested() == 0)
+    tick_cfg(&sim_tick, client->sim_tick_rate);
+    tick_cfg(&net_tick, client->net_tick_rate);
+    while (1)
     {
         int net_update;
 
 #    if defined(CLITHER_GFX)
         if (*gfx != NULL)
             (*igfx)->poll_input(*gfx, &input);
-        switch (ui_update(ui, &ui_cmd, &input, client.sim_tick_rate))
+#    endif
+
+#    if defined(CLITHER_GFX)
+        switch (ui_update(ui, &ui_cmd, &input, client->sim_tick_rate))
         {
             case UI_CMD_NONE: break;
             case UI_CMD_QUIT: input.quit = 1; break;
-            case UI_CMD_JOIN:
-                log_dbg(
-                    "UI_CMD_JOIN: %s:%s, username: %s\n",
-                    ui_cmd.join.address,
-                    ui_cmd.join.port,
-                    strview_cstr(ui_cmd.join.username));
-                break;
-            case UI_CMD_HOST:
-                log_dbg(
-                    "UI_CMD_HOST: %s:%s, username: %s\n",
-                    ui_cmd.host.address,
-                    ui_cmd.host.port,
-                    strview_cstr(ui_cmd.host.username));
-                break;
+            case UI_CMD_JOIN: break;
+            case UI_CMD_HOST: break;
         }
 #    endif
-        if (input.quit)
+
+        if (signals_exit_requested())
+            input.quit = 1;
+
+        if (input.quit || input.escape)
         {
             retval = 0;
             break;
@@ -836,9 +806,9 @@ void* client_run(
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
-        if (net_update && client.state != CLIENT_DISCONNECTED)
+        if (net_update && client->state != CLIENT_DISCONNECTED)
         {
-            struct client_recv_result result = client_recv(&client, &world);
+            struct client_recv_result result = client_recv(client, &world);
             if (result.error)
                 break;
 
@@ -851,20 +821,20 @@ void* client_run(
                  * to their default values, so in this case we also want to
                  * update the tick rate.
                  */
-                tick_cfg(&sim_tick, client.sim_tick_rate);
-                tick_cfg(&net_tick, client.net_tick_rate);
+                tick_cfg(&sim_tick, client->sim_tick_rate);
+                tick_cfg(&net_tick, client->net_tick_rate);
                 log_dbg(
                     "Sim tick rate: %d, net tick rate: %d\n",
-                    client.sim_tick_rate,
-                    client.net_tick_rate);
+                    client->sim_tick_rate,
+                    client->net_tick_rate);
             }
         }
 
         /* sim_update */
-        if (client.state == CLIENT_CONNECTED)
+        if (client->state == CLIENT_CONNECTED)
         {
             struct snake* snake =
-                snake_bmap_find(world.snakes, client.snake_id);
+                snake_bmap_find(world.snakes, client->snake_id);
             CLITHER_DEBUG_ASSERT(snake != NULL);
             if (!snake_is_dead(snake))
             {
@@ -885,7 +855,7 @@ void* client_run(
                             cmd,
                             &world,
                             snake,
-                            client.sim_tick_rate) != 0)
+                            client->sim_tick_rate) != 0)
                         break;
                 }
 #    endif
@@ -909,7 +879,7 @@ void* client_run(
                  * remove all commands that date back before and up to that
                  * point in time from the list again.
                  */
-                cmd_queue_put(&snake->cmdq, cmd, client.frame_number);
+                cmd_queue_put(&snake->cmdq, cmd, client->frame_number);
 
                 /* Update snake */
                 snake_eat_food(&snake->head, &snake->param, world.food_bmap);
@@ -921,7 +891,7 @@ void* client_run(
                         &snake->head,
                         &snake->param,
                         cmd,
-                        client.sim_tick_rate));
+                        client->sim_tick_rate));
             }
 
             camera_update(
@@ -929,12 +899,12 @@ void* client_run(
                 &snake->head,
                 &snake->param,
                 &input,
-                client.sim_tick_rate);
+                client->sim_tick_rate);
 
             /* Simulate other snakes */
             {
                 struct sim_other_snakes_ctx ctx;
-                ctx.client = &client;
+                ctx.client = client;
                 ctx.world = &world;
                 snake_bmap_retain(world.snakes, sim_other_snakes, &ctx);
             }
@@ -942,19 +912,19 @@ void* client_run(
             if (net_update)
             {
                 /* Send all unconfirmed commands (unreliable) */
-                msg_commands(&client.pending_msgs, &snake->cmdq);
+                msg_commands(&client->pending_msgs, &snake->cmdq);
             }
         }
 
-        if (net_update && client.state != CLIENT_DISCONNECTED)
+        if (net_update && client->state != CLIENT_DISCONNECTED)
         {
-            if (client_send_pending_data(&client) < 0)
+            if (client_send_pending_data(client) < 0)
                 break;
         }
 
 #    if defined(CLITHER_GFX)
         if (*gfx != NULL)
-            (*igfx)->step_anim(*gfx, client.sim_tick_rate);
+            (*igfx)->step_anim(*gfx, client->sim_tick_rate);
 #    endif
 
         /*
@@ -963,43 +933,46 @@ void* client_run(
          * should be, quit.
          */
         tick_lag =
-            tick_wait_warp(&sim_tick, client.warp, client.sim_tick_rate * 10);
-        client.warp = 0;
+            tick_wait_warp(&sim_tick, client->warp, client->sim_tick_rate * 10);
+        client->warp = 0;
         if (tick_lag == 0)
         {
 #    if defined(CLITHER_GFX)
             if (*gfx != NULL)
-                (*igfx)->draw(*gfx, &world, ui, &camera);
+            {
+                (*igfx)->draw_begin(*gfx);
+                (*igfx)->draw_world(*gfx, &world, &camera);
+                (*igfx)->draw_ui(*gfx, ui);
+                (*igfx)->draw_end(*gfx);
+            }
 #    endif
         }
         else
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
-            if (tick_lag > client.sim_tick_rate * 3) /* 3 seconds */
+            if (tick_lag > client->sim_tick_rate * 3) /* 3 seconds */
             {
                 tick_skip(&sim_tick);
                 break;
             }
         }
 
-        client.frame_number++;
+        client->frame_number++;
     }
     log_info("Stopping client\n");
 
     /* Send quit message to server to be nice */
-    if (client.state == CLIENT_CONNECTED)
+    if (client->state == CLIENT_CONNECTED)
     {
-        client.timeout_counter = 0;
-        client_queue(&client, msg_leave());
-        client_send_pending_data(&client);
+        client->timeout_counter = 0;
+        client_queue(client, msg_leave());
+        client_send_pending_data(client);
     }
 
     world_deinit(&world);
-    if (client.state != CLIENT_DISCONNECTED)
-        client_disconnect(&client);
+    if (client->state != CLIENT_DISCONNECTED)
+        client_disconnect(client);
     input_deinit(&input);
-client_connect_failed:
-    client_deinit(&client);
     ui_destroy(ui);
 create_ui_failed:
     if (pack_watch != NULL)
@@ -1007,6 +980,6 @@ create_ui_failed:
 watch_resource_pack_failed:
     log_set_prefix("");
     log_set_colors("", "");
-    return (void*)(intptr_t)retval;
+    return retval;
 }
 #endif

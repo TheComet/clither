@@ -35,3 +35,9 @@ char signals_exit_requested(void)
 {
     return ctrl_c_pressed;
 }
+
+/* ------------------------------------------------------------------------- */
+void signals_reset_exit_requested(void)
+{
+    ctrl_c_pressed = 0;
+}

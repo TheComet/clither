@@ -177,48 +177,6 @@ static void log_file_write(const char* fmt, ...)
     log_file_vwrite(fmt, ap);
     va_end(ap);
 }
-
-void log_net_open(const char* log_file)
-{
-    if (g_net_log)
-    {
-        log_warn(
-            "log_net_open() called, but a log file is already open. Closing "
-            "previous file...\n");
-        log_net_close();
-    }
-
-    log_info("Opening networking log file \"%s\"\n", log_file);
-    g_net_log = fopen(log_file, "w");
-    if (g_net_log == NULL)
-        log_err(
-            "Failed to open log file \"%s\": %s\n", log_file, strerror(errno));
-}
-void log_net_close(void)
-{
-    if (g_net_log)
-    {
-        log_info("Closing net log file\n");
-        fclose(g_net_log);
-        g_net_log = NULL;
-    }
-}
-static void log_net_vwrite(const char* fmt, va_list ap)
-{
-    if (g_net_log)
-    {
-        fprintf(g_net_log, "%s", g_out_log.prefix);
-        vfprintf(g_net_log, fmt, ap);
-        fflush(g_net_log);
-    }
-}
-static void log_net_write(const char* fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    log_net_vwrite(fmt, ap);
-    va_end(ap);
-}
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -321,24 +279,6 @@ int log_err_win32(const char* fmt, ...)
     return -1;
 }
 #endif
-
-/* ------------------------------------------------------------------------- */
-void log_net(const char* fmt, ...)
-{
-#if defined(CLITHER_LOG)
-    if (g_net_log)
-    {
-        va_list va;
-        fprintf(g_net_log, "%s", g_out_log.prefix);
-        va_start(va, fmt);
-        vfprintf(g_net_log, fmt, va);
-        va_end(va);
-        fflush(g_net_log);
-    }
-#else
-    (void)fmt;
-#endif
-}
 
 /* ------------------------------------------------------------------------- */
 int log_oom(int bytes, const char* func_name)

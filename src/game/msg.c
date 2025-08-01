@@ -2,7 +2,6 @@
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/wrap.h"
-#include "clither/platform/net.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include <assert.h>
@@ -170,8 +169,6 @@ int msg_parse_payload(
             }
 
             pp->command.frame_number = (payload[0] << 8) | (payload[1] << 0);
-            log_net(
-                "MSG_COMMANDS: frame_number=%x\n", pp->command.frame_number);
             return type;
         }
 
@@ -184,10 +181,6 @@ int msg_parse_payload(
 
             pp->feedback.frame_number = (payload[0] << 8) | (payload[1] << 0);
             pp->feedback.diff = payload[2];
-            log_net(
-                "MSG_FEEDBACK: frame=%d, diff=%d\n",
-                pp->feedback.frame_number,
-                pp->feedback.diff);
             return type;
         }
 
@@ -578,22 +571,6 @@ struct msg* msg_join_accept(
     m->payload[15] = spawn_pos->y >> 8;
     m->payload[16] = spawn_pos->y & 0xFF;
 
-    log_net(
-        "MSG_JOIN_ACCEPT: sim_tick_rate=%d, net_tick_rate=%d, "
-        "world_inner_radius=%d, world_ring_start=%d, world_ring_end=%d, "
-        "client_frame=%d, server_frame=%d, snake_id=%d, spawn_pos=[%.2f, "
-        "%.2f]\n",
-        sim_tick_rate,
-        net_tick_rate,
-        world_inner_radius,
-        world_ring_start,
-        world_ring_end,
-        client_frame,
-        server_frame,
-        snake_id,
-        qw_to_float(spawn_pos->x),
-        qw_to_float(spawn_pos->y));
-
     return m;
 }
 
@@ -680,12 +657,6 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
                 3 +
                 (12 * send_count + 8) / 8); /* upper bound for all commands */
 
-        log_net(
-            "Packing command for frames %d-%d, payload_len=%d\n",
-            first_frame_number,
-            (uint16_t)(first_frame_number + send_count - 1),
-            m->payload_len);
-
         m->payload[0] = first_frame_number >> 8;
         m->payload[1] = first_frame_number & 0xFF;
 
@@ -698,8 +669,6 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
         m->payload[5] = c->action; /* 3 bits */
         bit = 3;
         byte = 5;
-        log_net(
-            "  angle=%x, speed=%x, action=%x\n", c->angle, c->speed, c->action);
 
         /*
          * Delta compress rest of command. Note that the frame number doesn't
@@ -786,11 +755,6 @@ void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq)
                     next->speed);
 
             m->payload[byte++] = ((dv << 3) & 0xF8) | (da & 0x07);
-            log_net(
-                "  angle=%x, speed=%x, action=%x\n",
-                next->angle,
-                next->speed,
-                next->action);
         }
 
         /* Adjust the actual payload length */
@@ -817,11 +781,6 @@ int msg_commands_unpack_into(
     first_frame_number = (payload[0] << 8) | (payload[1] & 0xFF);
     command_count = payload[2];
 
-    log_net(
-        "Unpacking command from frames %d-%d, current frame=%d\n",
-        first_frame_number,
-        (uint16_t)(first_frame_number + command_count),
-        frame_number);
     *first_frame = first_frame_number;
     *last_frame = first_frame_number + command_count;
 
@@ -831,7 +790,6 @@ int msg_commands_unpack_into(
     c.action = (payload[5] & 0x07);
     if (u16_ge_wrap(first_frame_number, frame_number))
         cmd_queue_put(cmdq, c, first_frame_number);
-    log_net("  angle=%x, speed=%x, action=%x\n", c.angle, c.speed, c.action);
 
     if (command_count == 0)
         return 0;
@@ -910,8 +868,6 @@ int msg_commands_unpack_into(
 
         if (u16_ge_wrap(first_frame_number + i + 1, frame_number))
             cmd_queue_put(cmdq, c, first_frame_number + i + 1);
-        log_net(
-            "  angle=%x, speed=%x, action=%x\n", c.angle, c.speed, c.action);
     }
 
     return 0;
@@ -928,8 +884,6 @@ struct msg* msg_feedback(int8_t diff, uint16_t frame_number)
 
     m->payload[2] = diff;
 
-    log_net("MSG_FEEDBACK: frame=%d, diff=%d\n", frame_number, diff);
-
     return m;
 }
 
@@ -943,8 +897,6 @@ struct msg* msg_snake_username(uint16_t snake_id, const char* username)
 
     m->payload[0] = snake_id >> 8;
     m->payload[1] = snake_id & 0xFF;
-
-    log_net("MSG_SNAKE_USERNAME: snake_id=%d\n", snake_id);
 
     return m;
 }
@@ -1002,7 +954,6 @@ struct msg* msg_snake_death(void)
 /* ------------------------------------------------------------------------- */
 struct msg* msg_snake_death_ack(void)
 {
-    log_net("MSG_SNAKE_DEATH_ACK\n");
     return msg_alloc(MSG_SNAKE_DEATH_ACK, 0, 0);
 }
 
@@ -1043,16 +994,6 @@ struct msg* msg_snake_head(
     m->payload[12] = (food_eaten >> 8) & 0xFF;
     m->payload[13] = food_eaten & 0xFF;
 
-    log_net(
-        "MSG_SNAKE_HEAD: frame=%d, pos=[%.2f,%.2f], angle=%.2f, speed=%d, "
-        "food_eaten=%d\n",
-        frame_number,
-        qw_to_float(pos.x),
-        qw_to_float(pos.y),
-        qa_to_float(angle),
-        speed,
-        food_eaten);
-
     return m;
 }
 
@@ -1073,9 +1014,6 @@ struct msg* msg_snake_param(uint16_t snake_id, uint32_t food_eaten)
     m->payload[2] = (food_eaten >> 16) & 0xFF;
     m->payload[3] = (food_eaten >> 8) & 0xFF;
     m->payload[4] = (food_eaten & 0xFF);
-
-    log_net(
-        "MSG_SNAKE_PARAM: snake_id=%d, food_eaten=%d\n", snake_id, food_eaten);
 
     return m;
 }
@@ -1179,15 +1117,6 @@ struct msg* msg_knot(
     m->payload[12] = len_backwards;
     m->payload[13] = len_forwards;
 
-    log_net(
-        "MSG_KNOT: pos=[%.2f,%.2f], angle=%.2f, len_backwards=%d, "
-        "len_forwards=%d\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y),
-        qa_to_float(angle),
-        len_backwards,
-        len_forwards);
-
     return m;
 }
 
@@ -1234,14 +1163,6 @@ struct msg* msg_food_create(struct qwpos pos, struct qwpos dir)
     a = make_qa(atan2(qw_to_float(dir.y), qw_to_float(dir.x)));
     m->payload[6] = qa_to_u8(a);
 
-    log_net(
-        "MSG_FOOD_CREATE: pos=[%.2f,%.2f], dir=[%.2f,%.2f], angle=%.2f\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y),
-        qw_to_float(dir.x),
-        qw_to_float(dir.y),
-        qa_to_float(a));
-
     return m;
 }
 
@@ -1260,11 +1181,6 @@ struct msg* msg_food_create_ack(struct qwpos pos)
     m->payload[3] = (pos.y >> 16) & 0xFF;
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
-
-    log_net(
-        "MSG_FOOD_CREATE_ACK: pos=[%.2f,%.2f]\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y));
 
     return m;
 }
@@ -1285,11 +1201,6 @@ struct msg* msg_food_destroy(struct qwpos pos)
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
 
-    log_net(
-        "MSG_FOOD_DESTROY: pos=[%.2f,%.2f]\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y));
-
     return m;
 }
 
@@ -1308,11 +1219,6 @@ struct msg* msg_food_destroy_ack(struct qwpos pos)
     m->payload[3] = (pos.y >> 16) & 0xFF;
     m->payload[4] = (pos.y >> 8) & 0xFF;
     m->payload[5] = pos.y & 0xFF;
-
-    log_net(
-        "MSG_FOOD_DESTROY_ACK: pos=[%.2f,%.2f]\n",
-        qw_to_float(pos.x),
-        qw_to_float(pos.y));
 
     return m;
 }

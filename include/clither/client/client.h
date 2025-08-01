@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/util/strview.h"
 
 #if defined(CLITHER_CLIENT)
 #    include <stdint.h>
@@ -115,14 +116,10 @@ int client_send_pending_data(struct client* client);
 struct client_recv_result
 client_recv(struct client* client, struct world* world);
 
-/*! \brief The main loop of the client. \warning This should function assumes
- * that cs_init_threadlocal() was called. If you want to run this function in a
- * thread, then you have to manage all threadlocal global state at the
- * call-sight. This function was designed this way because in all cases, after
- * everything is initialized, the client will run in the foreground. \param[in]
- * a Command line arguments.
- */
-void* client_run(
+/*! \brief The main loop of the client. Designed to be called from the main
+ * thread. */
+int client_run(
+    struct client* client,
 #    if defined(CLITHER_GFX)
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,

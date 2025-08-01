@@ -2,6 +2,8 @@
 #include "clither/bot/bot.h"
 #include "clither/client/client.h"
 #include "clither/game/args.h"
+#include "clither/game/camera.h"
+#include "clither/game/input.h"
 #include "clither/game/mcd_wifi.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/settings.h"
@@ -10,10 +12,13 @@
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
 #include "clither/platform/thread.h"
+#include "clither/platform/tick.h"
 #include "clither/server/server.h"
 #include "clither/tests.h"
+#include "clither/ui/ui.h"
 #include "clither/util/log.h"
 #include "clither/util/tracker.h"
+#include "gfx/gles2/internal/gfx.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,20 +27,136 @@
 static struct args     args;
 static struct settings settings;
 
+static int ui_run(
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx,
+#if defined(CLITHER_BOT_API)
+    const struct bot_interface* ibot,
+    struct bot*                 bot,
+#endif
+    const struct settings* settings,
+    struct resource_pack** pack)
+{
+    struct ui*    ui;
+    union ui_cmd  ui_cmd;
+    struct input  input;
+    struct client client;
+    struct tick   sim_tick;
+    int           retval = -1;
+
+    ui = ui_create_main_menu();
+    if (ui == NULL)
+        goto create_ui_failed;
+
+    input_init(&input);
+    client_init(&client);
+
+    tick_cfg(&sim_tick, client.sim_tick_rate);
+    while (1)
+    {
+        (*igfx)->poll_input(*gfx, &input);
+
+        switch (ui_update(ui, &ui_cmd, &input, client.sim_tick_rate))
+        {
+            case UI_CMD_NONE: break;
+            case UI_CMD_QUIT: {
+                input.quit = 1;
+                break;
+            }
+
+            case UI_CMD_JOIN:
+                if (client_connect(
+                        &client,
+                        ui_cmd.join.address,
+                        ui_cmd.join.port,
+                        ui_cmd.join.username) < 0)
+                {
+                }
+                client_run(
+                    &client,
+                    igfx,
+                    gfx,
+#if defined(CLITHER_BOT_API)
+                    ibot,
+                    bot,
+#endif
+                    &settings->client,
+                    pack);
+                break;
+
+            case UI_CMD_HOST: {
+                struct thread* server_thread;
+
+                log_dbg("Starting server in background thread\n");
+                server_thread = thread_start(server_run, &settings->server);
+                if (server_thread == NULL)
+                    break;
+
+                /* The server should be running, so try to join as a client */
+                if (client_connect(
+                        &client,
+                        ui_cmd.join.address,
+                        ui_cmd.join.port,
+                        ui_cmd.join.username) < 0)
+                {
+                }
+                client_run(
+                    &client,
+                    igfx,
+                    gfx,
+#if defined(CLITHER_BOT_API)
+                    ibot,
+                    bot,
+#endif
+                    &settings->client,
+                    pack);
+
+                /* Signal server to stop */
+                thread_sigint(server_thread);
+                thread_join(server_thread);
+                log_dbg("Joined background server thread\n");
+                signals_reset_exit_requested();
+                break;
+            }
+        }
+
+        if (signals_exit_requested())
+            input.quit = 1;
+
+        if (input.quit)
+        {
+            retval = 0;
+            break;
+        }
+
+        (*igfx)->step_anim(*gfx, client.sim_tick_rate);
+        (*igfx)->draw_begin(*gfx);
+        (*igfx)->draw_ui(*gfx, ui);
+        (*igfx)->draw_end(*gfx);
+        tick_wait(&sim_tick);
+    }
+
+    client_deinit(&client);
+    input_deinit(&input);
+    ui_destroy(ui);
+create_ui_failed:
+    return retval;
+}
+
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
 #if defined(CLITHER_CLIENT)
-    struct resource_pack*       pack;
-    const struct gfx_interface* igfx;
-    struct gfx*                 gfx;
+    struct resource_pack*       pack = NULL;
+    const struct gfx_interface* igfx = NULL;
+    struct gfx*                 gfx = NULL;
 #endif
 #if defined(CLITHER_BOT_API)
-    const struct bot_interface* ibot;
-    struct bot*                 bot;
+    const struct bot_interface* ibot = NULL;
+    struct bot*                 bot = NULL;
 #endif
 #if defined(CLITHER_MCD)
-    struct thread* mcd_thread;
+    struct thread* mcd_thread = NULL;
 #endif
     int retval = -1;
 
@@ -44,6 +165,9 @@ int main(int argc, char* argv[])
     log_init();
     if (asm_optimizations_init() != 0)
         goto asm_optimizations_failed;
+
+    /* Install signal handlers for CTRL+C and (on win32) console close events */
+    signals_install();
 
     /*
      * Parse command line args before doing anything else. This function
@@ -57,31 +181,33 @@ int main(int argc, char* argv[])
         default: goto parse_args_failed;
     }
 
+#if defined(CLITHER_TESTS)
+    if (args.mode == MODE_TESTS)
+    {
+        retval = tests_run(argc, argv);
+        goto tests_or_benchmarks_run;
+    }
+#endif
+#if defined(CLITHER_BENCHMARKS)
+    if (args.mode == MODE_BENCHMARKS)
+    {
+        retval = benchmarks_run(argc, argv);
+        goto tests_or_benchmarks_run;
+    }
+#endif
+
     log_info("Reading settings from file \"%s\"\n", args.settings_file);
     if (settings_load(&settings, args.settings_file) != 0)
         goto parse_args_failed;
     if (settings_apply_args(&settings, &args) != 0)
         goto parse_args_failed;
 
-    /* Install signal handlers for CTRL+C and (on windows) console close events
-     */
-    signals_install();
-
 #if defined(CLITHER_LOG)
-    /* Open log files */
     if (args.log_file)
         log_file_open(args.log_file);
-    if (args.netlog_file)
-        log_net_open(args.netlog_file);
 #endif
 
-#if defined(CLITHER_CLIENT)
-    pack = NULL;
-    igfx = NULL;
-    gfx = NULL;
-#    if defined(CLITHER_GFX)
-    /* Create graphics backend if specified on the command line, or if no bot
-     * was specified. */
+#if defined(CLITHER_GFX)
     if (args.gfx_backend >= 0 && gfx_backends[args.gfx_backend] != NULL)
     {
         pack = resource_pack_parse(args.pack);
@@ -98,13 +224,9 @@ int main(int argc, char* argv[])
         if (igfx->load_resource_pack(gfx, pack) < 0)
             goto load_resource_pack_failed;
     }
-#    endif
 #endif
 
 #if defined(CLITHER_BOT_API)
-    /* Create bot if specified on the command line */
-    ibot = NULL;
-    bot = NULL;
     if (args.bot_script != NULL && bot_backends[0] != NULL)
     {
         ibot = bot_backends[0];
@@ -116,7 +238,6 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    /* Init networking */
     if (net_init() < 0)
         goto net_init_failed;
 
@@ -134,16 +255,10 @@ int main(int argc, char* argv[])
     {
         case MODE_NONE: break;
 #if defined(CLITHER_TESTS)
-        case MODE_TESTS: {
-            retval = tests_run(argc, argv);
-            break;
-        }
+        case MODE_TESTS: break;
 #endif
 #if defined(CLITHER_BENCHMARKS)
-        case MODE_BENCHMARKS: {
-            retval = benchmarks_run(argc, argv);
-            break;
-        }
+        case MODE_BENCHMARKS: break;
 #endif
 #if defined(CLITHER_SERVER)
         case MODE_SERVER: {
@@ -161,10 +276,23 @@ int main(int argc, char* argv[])
 #endif
 #if defined(CLITHER_CLIENT)
         case MODE_CLIENT: {
+            struct client client;
+            client_init(&client);
+            if (client_connect(
+                    &client,
+                    settings.client.connect_addr,
+                    settings.client.connect_port,
+                    settings.client.username) != 0)
+            {
+                client_deinit(&client);
+                break;
+            }
+
             /* NOTE: client_run() is the only function that expects to be run
              * in the main thread. It does not call any threadlocal init
              * functions. */
-            retval = (int)(intptr_t)client_run(
+            retval = client_run(
+                &client,
 #    if defined(CLITHER_GFX)
                 &igfx,
                 &gfx,
@@ -175,52 +303,21 @@ int main(int argc, char* argv[])
 #    endif
                 &settings.client,
                 &pack);
+            client_deinit(&client);
             break;
         }
 #endif
-#if defined(CLITHER_CLIENT) && defined(CLITHER_SERVER)
-        case MODE_HOST: {
-            struct thread* server_thread;
-
-            log_dbg("Starting server in background thread\n");
-            server_thread = thread_start(server_run, &settings.server);
-            if (server_thread == NULL)
-                break;
-
-            /* The server should be running, so try to join as a client */
-            retval = (int)(intptr_t)client_run(
-#    if defined(CLITHER_GFX)
+#if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
+        case MODE_UI: {
+            retval = ui_run(
                 &igfx,
                 &gfx,
-#    endif
 #    if defined(CLITHER_BOT_API)
                 ibot,
                 bot,
 #    endif
-                &settings.client,
+                &settings,
                 &pack);
-
-            /* The server continues after the client exits -- clean up the
-             * "visible" client state (i.e. close the window) */
-            if (gfx != NULL && pack != NULL)
-                igfx->unload_resource_pack(gfx, pack);
-            if (pack != NULL)
-                resource_pack_destroy(pack);
-            if (gfx != NULL)
-                igfx->destroy(gfx);
-            pack = NULL;
-            gfx = NULL;
-
-            if (!signals_exit_requested())
-            {
-                log_note("The server will continue to run.\n");
-                log_note("You can stop it by pressing CTRL+C\n");
-                thread_sigint(server_thread);
-            }
-
-            if ((intptr_t)thread_join(server_thread) != 0)
-                retval = -1;
-            log_dbg("Joined background server thread\n");
             break;
         }
 #endif
@@ -265,12 +362,12 @@ parse_resource_pack_failed:
 #endif
 
 #if defined(CLITHER_LOG)
-    log_net_close();
     log_file_close();
 #endif
 
-    signals_remove();
+tests_or_benchmarks_run:
 parse_args_failed:
+    signals_remove();
 asm_optimizations_failed:
     trackers_deinit_tls();
 mem_init_failed:

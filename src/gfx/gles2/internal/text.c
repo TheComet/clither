@@ -590,40 +590,21 @@ struct fpos gfx_gles2_text_screen_size(
 void gfx_gles2_text_prepare_draw(
     struct gfx_font* font, const struct aspect_ratio* ar)
 {
-    int16_t           idx;
-    const struct str* str;
-    struct gfx_text*  text;
-
     glUseProgram(font->program);
     glUniform2f(font->uAspectRatio, ar->scale_x, ar->scale_y);
     glUniform1i(font->sAtlas, 0);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->tex_atlas);
-
-    hmap_for_each (font->text_hmap, idx, str, text)
-        (void)idx, (void)str, text->was_used = 0;
 }
 
 /* ------------------------------------------------------------------------- */
-void gfx_gles2_text_end_draw(struct gfx_font* font)
+void gfx_gles2_text_end_draw(void)
 {
-    int16_t           idx;
-    const struct str* str;
-    struct gfx_text*  text;
-
     glUseProgram(0);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    hmap_for_each (font->text_hmap, idx, str, text)
-        if (text->was_used == 0)
-        {
-            (void)str;
-            gfx_gles2_text_deinit(text);
-            gfx_text_hmap_erase_slot(font->text_hmap, idx);
-        }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -740,4 +721,23 @@ void gfx_gles2_text_draw_screen(
         sizeof(struct vertex),
         (void*)offsetof(struct vertex, uv));
     glDrawArrays(GL_TRIANGLES, 0, text->vertex_count);
+}
+
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_text_clear_unused_from_cache(struct gfx_font* font)
+{
+    int16_t           idx;
+    const struct str* str;
+    struct gfx_text*  text;
+
+    hmap_for_each (font->text_hmap, idx, str, text)
+        if (text->was_used == 0)
+        {
+            (void)str;
+            gfx_gles2_text_deinit(text);
+            gfx_text_hmap_erase_slot(font->text_hmap, idx);
+        }
+
+    hmap_for_each (font->text_hmap, idx, str, text)
+        (void)idx, (void)str, text->was_used = 0;
 }
