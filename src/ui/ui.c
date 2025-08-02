@@ -37,7 +37,7 @@ struct ui* ui_create(int** screens, int count)
     ui = mem_alloc(header + data);
     if (ui == NULL)
         return NULL;
-    memset(ui, 0x00, sizeof(*ui));
+    memset(ui, 0x00, header + data);
     ui->screens = screens;
     ui->count = count;
 
