@@ -329,7 +329,9 @@ static void gfx_gles2_global_deinit(void)
 {
     glfwTerminate();
     glfwSetErrorCallback(NULL);
+#if defined(CLITHER_DEBUG_MEMORY)
     tracker_gfx_deinit();
+#endif
 }
 
 /* ------------------------------------------------------------------------- */

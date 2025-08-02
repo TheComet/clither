@@ -15,7 +15,6 @@ static CLITHER_THREADLOCAL struct log_interface g_out_log;
 
 #if defined(CLITHER_LOG)
 static FILE* g_file_log = NULL;
-static FILE* g_net_log = NULL;
 #endif
 
 enum log_severity

@@ -196,6 +196,7 @@ int args_parse(struct args* a, int argc, char* argv[])
 {
     int  i;
     char tests_flag = 0;
+    char bot_flag = 0;
     char bench_flag = 0;
 #if defined(CLITHER_SERVER)
     char server_flag = 0;
@@ -227,7 +228,7 @@ int args_parse(struct args* a, int argc, char* argv[])
     a->bot_script = NULL;
 #endif
 #if defined(CLITHER_GFX)
-    a->pack = "packs/horror";
+    a->pack = "packs/liam-playground";
     a->gfx_backend = -1;
 #endif
 #if defined(CLITHER_MCD)
@@ -237,9 +238,6 @@ int args_parse(struct args* a, int argc, char* argv[])
     a->mcd_loss = -1;
     a->mcd_reorder = -1;
 #endif
-
-    if (argc == 1)
-        return print_help(argv[0]);
 
     for (i = 1; i < argc; ++i)
     {
@@ -323,6 +321,7 @@ int args_parse(struct args* a, int argc, char* argv[])
                         return -1;
                     }
                     a->bot_script = argv[i];
+                    bot_flag = 1;
                 }
 #endif
 #if defined(CLITHER_GFX)
@@ -338,25 +337,11 @@ int args_parse(struct args* a, int argc, char* argv[])
                 }
                 else if (strcmp(arg, "gfx") == 0)
                 {
-                    int count;
                     a->gfx_backend = 0;
-
                     if (i + 1 >= argc || !*argv[i + 1] || argv[i + 1][0] == '-')
                         continue;
                     ++i;
-
                     a->gfx_backend = atoi(argv[i]);
-
-                    for (count = 0; gfx_backends[count]; ++count)
-                        ;
-                    if (a->gfx_backend >= count || a->gfx_backend < 0)
-                    {
-                        log_err(
-                            "Graphics backend index \"%d\" is out of "
-                            "range!\n",
-                            a->gfx_backend);
-                        return -1;
-                    }
                 }
 #endif
 #if defined(CLITHER_LOG)
@@ -449,27 +434,13 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_GFX)
                     else if (*p == 'g')
                     {
-                        int count;
                         a->gfx_backend = 0;
-
                         if (p[1])
                             continue;
                         ++i;
                         if (i >= argc || !*argv[i])
                             continue;
-
                         a->gfx_backend = atoi(argv[i]);
-
-                        for (count = 0; gfx_backends[count]; ++count)
-                            ;
-                        if (a->gfx_backend >= count || a->gfx_backend < 0)
-                        {
-                            log_err(
-                                "Graphics backend index \"%d\" is out of "
-                                "range!\n",
-                                a->gfx_backend);
-                            return -1;
-                        }
                     }
 #endif
 #if defined(CLITHER_LOG)
@@ -506,6 +477,11 @@ int args_parse(struct args* a, int argc, char* argv[])
         }
     }
 
+#if defined(CLITHER_SERVER) && defined(CLITHER_BOT_API)
+    if (server_flag && bot_flag)
+        return log_err("Cannot use --server and --bot at the same time.\n");
+#endif
+
     if (0)
     {
     }
@@ -520,6 +496,26 @@ int args_parse(struct args* a, int argc, char* argv[])
 #if defined(CLITHER_SERVER)
     else if (server_flag)
         a->mode = MODE_SERVER;
+#endif
+#if defined(CLITHER_BOT_API)
+    else if (bot_flag)
+        a->mode = MODE_CLIENT;
+#endif
+
+    if (a->gfx_backend == -1 && a->mode == MODE_UI)
+        a->gfx_backend = 0;
+
+#if defined(CLITHER_GFX)
+    if (a->gfx_backend != -1)
+    {
+        int count;
+        for (count = 0; gfx_backends[count]; ++count)
+            ;
+        if (a->gfx_backend >= count || a->gfx_backend < 0)
+            return log_err(
+                "Graphics backend index \"%d\" is out of range!\n",
+                a->gfx_backend);
+    }
 #endif
 
     return 0;

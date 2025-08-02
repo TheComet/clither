@@ -365,7 +365,10 @@ parse_resource_pack_failed:
     log_file_close();
 #endif
 
+#if defined(CLITHER_TESTS) || defined(CLITHER_BENCHMARKS)
 tests_or_benchmarks_run:
+#endif
+
 parse_args_failed:
     signals_remove();
 asm_optimizations_failed:

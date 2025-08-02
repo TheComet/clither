@@ -924,8 +924,6 @@ struct msg* msg_snake_destroy(uint16_t snake_id)
     m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
-    log_dbg("MSG_SNAKE_DESTROY: snake_id=%d\n", snake_id);
-
     return m;
 }
 
@@ -939,15 +937,12 @@ struct msg* msg_snake_destroy_ack(uint16_t snake_id)
     m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
-    log_dbg("MSG_SNAKE_DESTROY_ACK: snake_id=%d\n", snake_id);
-
     return m;
 }
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_snake_death(void)
 {
-    log_dbg("MSG_SNAKE_DEATH\n");
     return msg_alloc(MSG_SNAKE_DEATH, 10, 0);
 }
 
