@@ -942,7 +942,7 @@ int client_run(
             {
                 (*igfx)->draw_begin(*gfx);
                 (*igfx)->draw_world(*gfx, &world, &camera);
-                (*igfx)->draw_ui(*gfx, ui);
+                //(*igfx)->draw_ui(*gfx, ui);
                 (*igfx)->draw_end(*gfx);
             }
 #    endif

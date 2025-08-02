@@ -31,6 +31,15 @@ enum ui_cmd_type
     UI_CMD_HOST
 };
 
+enum ui_screen
+{
+    UI_MAIN_SCREEN_TITLE = 0,
+    UI_MAIN_SCREEN_HOST,
+    UI_MAIN_SCREEN_JOIN,
+    UI_MAIN_SCREEN_HOST_ERROR,
+    UI_MAIN_SCREEN_JOIN_ERROR
+};
+
 union ui_cmd
 {
     struct
@@ -63,11 +72,11 @@ struct ui_text_style
 
 struct ui_text
 {
-    struct strview str;
-    struct fpos    pos;
-    uint32_t       color;
-    float          size;
-    enum ui_align  align;
+    struct str*   str;
+    struct fpos   pos;
+    uint32_t      color;
+    float         size;
+    enum ui_align align;
 };
 
 struct ui_textinput
@@ -111,6 +120,7 @@ struct ui_element
         union ui_cmd*      cmd,
         struct ui_element* elem,
         struct input*      input);
+    void (*set_message)(struct ui_element* elem, const char* message);
 
     union
     {
@@ -125,13 +135,52 @@ struct ui_element
 
 struct ui
 {
+    int**             screens;
     int               count;
     struct ui_element elements[1];
 };
 
+extern struct ui_button_style ui_style_button;
+extern struct ui_text_style   ui_style_text_title;
+extern struct ui_text_style   ui_style_text_subtitle;
+extern struct ui_text_style   ui_style_text_subsubtitle;
+extern struct ui_text_style   ui_style_text_normal;
+
+void ui_element_init(struct ui_element* elem, enum ui_element_type type);
+
+struct ui_element
+ui_rectangle(struct fpos pos, struct fpos size, uint32_t color);
+
+struct ui_text_style ui_text_style(uint32_t color, float size);
+
+struct ui_element ui_text(
+    struct strview       str,
+    struct fpos          pos,
+    struct ui_text_style style,
+    enum ui_align        align,
+    void (*set_message)(struct ui_element* elem, const char* message));
+void ui_text_set_message(struct ui_element* elem, const char* message);
+
+struct ui_element ui_textinput(struct fpos pos, struct ui_text_style style);
+
+struct ui_element ui_button(
+    struct strview         str,
+    struct fpos            pos,
+    struct ui_button_style style,
+    int (*is_mouse_over)(struct ui_element*, const struct input*),
+    enum ui_cmd_type (*interact)(
+        struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+
+struct ui_element ui_controller(enum ui_cmd_type (*interact)(
+    struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+
+struct ui* ui_create(int** screens, int count);
 struct ui* ui_create_main_menu(void);
 struct ui* ui_create_in_game(void);
 void       ui_destroy(struct ui* ui);
+
+void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx);
+void ui_set_message_on_active_screen(struct ui* ui, const char* message);
 
 enum ui_cmd_type ui_update(
     struct ui*    ui,
@@ -146,3 +195,5 @@ enum ui_cmd_type ui_update(
 
 #define ui_for_each(ui, elem)                                                  \
     for (elem = (ui)->elements; elem != ((ui)->elements + (ui)->count); ++elem)
+
+#define check_and_clear(cond) ((cond) && ((cond) = 0, 1))

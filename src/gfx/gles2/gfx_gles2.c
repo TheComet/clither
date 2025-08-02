@@ -120,6 +120,7 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
         case GLFW_KEY_F1:
             gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
             break;
+        case GLFW_KEY_SPACE:
         case GLFW_KEY_1:
             if (action == GLFW_PRESS)
                 gfx->input_buffer.boost = 1;
@@ -137,6 +138,31 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
                 gfx->input_buffer.split = 1;
             if (action == GLFW_RELEASE)
                 gfx->input_buffer.split = 0;
+            break;
+
+        case GLFW_KEY_A:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.mousex = -1.0;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.mousex = 0.0;
+            break;
+        case GLFW_KEY_D:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.mousex = 1.0;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.mousex = 0.0;
+            break;
+        case GLFW_KEY_S:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.mousey = -1.0;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.mousey = 0.0;
+            break;
+        case GLFW_KEY_W:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.mousey = 1.0;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.mousey = 0.0;
             break;
 
         case GLFW_KEY_ENTER:
@@ -558,7 +584,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
             case UI_TEXTINPUT: {
                 struct fpos text_size = gfx_gles2_text_screen_size(
                     &gfx->font,
-                    ui_elem->u.textinput.text.str,
+                    str_view(ui_elem->u.textinput.text.str),
                     ui_elem->u.textinput.text.size);
                 GLfloat     padding = 1.0 / gfx->width * 8;
                 struct fpos cursor_size = make_fpos(
@@ -591,7 +617,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
             case UI_RECTANGLE: break;
             case UI_TEXT:
                 gfx_gles2_text_draw_screen(
-                    ui_elem->u.text.str,
+                    str_view(ui_elem->u.text.str),
                     &gfx->font,
                     ui_elem->u.text.pos,
                     ui_elem->u.text.color,
@@ -600,7 +626,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                 break;
             case UI_TEXTINPUT:
                 gfx_gles2_text_draw_screen(
-                    ui_elem->u.textinput.text.str,
+                    str_view(ui_elem->u.textinput.text.str),
                     &gfx->font,
                     ui_elem->u.textinput.text.pos,
                     ui_elem->u.textinput.text.color,
@@ -609,7 +635,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                 break;
             case UI_BUTTON:
                 gfx_gles2_text_draw_screen(
-                    ui_elem->u.button.text.str,
+                    str_view(ui_elem->u.button.text.str),
                     &gfx->font,
                     ui_elem->u.button.text.pos,
                     ui_elem->u.button.text.color,

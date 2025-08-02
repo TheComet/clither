@@ -200,6 +200,14 @@ list (APPEND ClitherSources
     "src/game/world.c"
 
     "src/ui/ui.c"
+    "src/ui/button.c"
+    "src/ui/controller.c"
+    "src/ui/element.c"
+    "src/ui/rectangle.c"
+    "src/ui/screen_main.c"
+    "src/ui/style.c"
+    "src/ui/text.c"
+    "src/ui/textinput.c"
 
     "src/util/base64.c"
     "src/util/hash.c"

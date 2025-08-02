@@ -27,6 +27,14 @@
 static struct args     args;
 static struct settings settings;
 
+static void run_host_mode()
+{
+}
+
+static void run_client_mode()
+{
+}
+
 static int ui_run(
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
@@ -47,6 +55,7 @@ static int ui_run(
     ui = ui_create_main_menu();
     if (ui == NULL)
         goto create_ui_failed;
+    ui_switch_screen(ui, UI_MAIN_SCREEN_TITLE);
 
     input_init(&input);
     client_init(&client);
@@ -64,25 +73,34 @@ static int ui_run(
                 break;
             }
 
-            case UI_CMD_JOIN:
+            case UI_CMD_JOIN: {
                 if (client_connect(
                         &client,
                         ui_cmd.join.address,
                         ui_cmd.join.port,
-                        ui_cmd.join.username) < 0)
+                        ui_cmd.join.username) != 0)
                 {
+                    ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN_ERROR);
+                    ui_set_message_on_active_screen(
+                        ui, "Failed to connect to server");
+                    break;
                 }
-                client_run(
-                    &client,
-                    igfx,
-                    gfx,
+                if (client_run(
+                        &client,
+                        igfx,
+                        gfx,
 #if defined(CLITHER_BOT_API)
-                    ibot,
-                    bot,
+                        ibot,
+                        bot,
 #endif
-                    &settings->client,
-                    pack);
+                        &settings->client,
+                        pack) != 0)
+                {
+                    ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN_ERROR);
+                    ui_set_message_on_active_screen(ui, "Client Disconnected");
+                }
                 break;
+            }
 
             case UI_CMD_HOST: {
                 struct thread* server_thread;
@@ -90,7 +108,7 @@ static int ui_run(
                 log_dbg("Starting server in background thread\n");
                 server_thread = thread_start(server_run, &settings->server);
                 if (server_thread == NULL)
-                    break;
+                    goto start_server_thread_failed;
 
                 /* The server should be running, so try to join as a client */
                 if (client_connect(
@@ -99,23 +117,33 @@ static int ui_run(
                         ui_cmd.join.port,
                         ui_cmd.join.username) < 0)
                 {
+                    ui_switch_screen(ui, UI_MAIN_SCREEN_HOST_ERROR);
+                    ui_set_message_on_active_screen(
+                        ui, "Failed to connect to server");
+                    goto client_connect_failed;
                 }
-                client_run(
-                    &client,
-                    igfx,
-                    gfx,
+                if (client_run(
+                        &client,
+                        igfx,
+                        gfx,
 #if defined(CLITHER_BOT_API)
-                    ibot,
-                    bot,
+                        ibot,
+                        bot,
 #endif
-                    &settings->client,
-                    pack);
+                        &settings->client,
+                        pack) != 0)
+                {
+                    ui_switch_screen(ui, UI_MAIN_SCREEN_HOST_ERROR);
+                    ui_set_message_on_active_screen(ui, "Client Disconnected");
+                }
 
+            client_connect_failed:
                 /* Signal server to stop */
                 thread_sigint(server_thread);
                 thread_join(server_thread);
                 log_dbg("Joined background server thread\n");
                 signals_reset_exit_requested();
+            start_server_thread_failed:
                 break;
             }
         }
