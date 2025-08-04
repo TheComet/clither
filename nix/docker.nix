@@ -7,7 +7,7 @@ pkgs.dockerTools.buildImage {
   tag = "latest";
   copyToRoot = [ clither-server ];
   config = {
-    Cmd = [ "${clither-server}/clither" "--server" ];
+    Cmd = [ "${clither-server}/mechasnek" "--server" ];
     WorkingDir = "/";
     ExposedPorts = {
         "5555/tcp" = {};
