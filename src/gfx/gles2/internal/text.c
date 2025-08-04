@@ -33,17 +33,6 @@
 #define TO_Q26_6(x)  ((x) * PIXEL_FORMAT)
 #define TO_PIXELS(x) ((x) / PIXEL_FORMAT)
 
-/* Emscripten ships with an old version of FreeType2 that does not have
- * FT_Error_String */
-#if defined(__EMSCRIPTEN__)
-static const char* FT_Error_String(FT_Error error)
-{
-    static char buf[32];
-    snprintf(buf, sizeof(buf), "0x%04x", error);
-    return buf;
-}
-#endif
-
 HMAP_DECLARE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
 HMAP_DEFINE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
 
