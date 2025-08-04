@@ -3,11 +3,11 @@
     "clither-assets": {
       "flake": false,
       "locked": {
-        "lastModified": 1753643922,
-        "narHash": "sha256-/1MIh7Qcw2+mUX9FRsq4sUNw0RHPZ0YhaRYL7d2Knjc=",
+        "lastModified": 1754340784,
+        "narHash": "sha256-Xww5DTv8tK06v4S5TcW+wa3Fso+DiVBoA5h71aH5XvE=",
         "owner": "thecomet",
         "repo": "clither-assets",
-        "rev": "4a53eb0345fdf4baaec9facf1e3a79a37e780b7b",
+        "rev": "13754ae4dce65c7e0f1c8963c705c80003561175",
         "type": "github"
       },
       "original": {

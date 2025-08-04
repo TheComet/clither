@@ -467,7 +467,8 @@ set_target_properties (clither
         INSTALL_RPATH ${CLITHER_INSTALL_LIBDIR}
         MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>
         VS_DEBUGGER_WORKING_DIRECTORY ${CLITHER_BUILD_BINDIR}
-        VS_DEBUGGER_COMMAND_ARGUMENTS "--host --gfx")
+        #VS_DEBUGGER_COMMAND_ARGUMENTS ""
+        OUTPUT_NAME "mechasnek")
 set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
     VS_STARTUP_PROJECT clither)
 
@@ -495,19 +496,15 @@ endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set (EXE "clither.exe")
     set (PACK "packs\\liam-playground")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/host.bat" "${EXE} --host --gfx --pack ${PACK}\r\n@PAUSE")
-    file (WRITE "${CLITHER_BUILD_BINDIR}/join.bat" "${EXE} --addr localhost --gfx --pack ${PACK}\r\n@PAUSE")
     file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server\r\n@PAUSE")
     install (
         FILES
-            "${CLITHER_BUILD_BINDIR}/host.bat"
-            "${CLITHER_BUILD_BINDIR}/join.bat"
             "${CLITHER_BUILD_BINDIR}/server.bat"
         DESTINATION ${CLITHER_INSTALL_BINDIR})
 
     if (CLITHER_BOT_API_LUA)
-        file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --host --gfx --pack ${PACK} --bot lua\\bot.lua\r\n@PAUSE")
-        file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --host --pack ${PACK} --gfx --bot lua\\figure8.lua\r\n@PAUSE")
+        file (WRITE "${CLITHER_BUILD_BINDIR}/bot.bat" "${EXE} --addr localhost --gfx --pack ${PACK} --bot lua\\bot.lua\r\n@PAUSE")
+        file (WRITE "${CLITHER_BUILD_BINDIR}/bot-simple.bat" "${EXE} --addr localhost --pack ${PACK} --gfx --bot lua\\figure8.lua\r\n@PAUSE")
     install (
         FILES
             "${CLITHER_BUILD_BINDIR}/bot.bat"
@@ -551,9 +548,9 @@ if (EMSCRIPTEN)
         CONFIGURE_DEPENS "${CLITHER_BUILD_BINDIR}/packs/*")
     add_custom_command (
         OUTPUT "${PROJECT_BINARY_DIR}/.clither_emscripten_deps"
-        COMMAND ${CMAKE_COMMAND} -E remove "${CLITHER_BUILD_BINDIR}/clither.html"
+        COMMAND ${CMAKE_COMMAND} -E remove "${CLITHER_BUILD_BINDIR}/mechasnek.html"
         COMMAND ${CMAKE_COMMAND} -E touch  "${PROJECT_BINARY_DIR}/.clither_emscripten_deps"
-        COMMENT "Forcing re-link of clither.html"
+        COMMENT "Forcing re-link of mechasnek.html"
         DEPENDS
             "src/shell.html"
             "${preamble}"
@@ -563,10 +560,10 @@ if (EMSCRIPTEN)
     add_dependencies (clither clither_emscripten_deps)
     install (
         FILES
-            "${CLITHER_BUILD_BINDIR}/clither.html"
-            "${CLITHER_BUILD_BINDIR}/clither.js"
-            "${CLITHER_BUILD_BINDIR}/clither.wasm"
-            "${CLITHER_BUILD_BINDIR}/clither.data"
+            "${CLITHER_BUILD_BINDIR}/mechasnek.html"
+            "${CLITHER_BUILD_BINDIR}/mechasnek.js"
+            "${CLITHER_BUILD_BINDIR}/mechasnek.wasm"
+            "${CLITHER_BUILD_BINDIR}/mechasnek.data"
         DESTINATION
             "${CLITHER_INSTALL_BINDIR}")
 endif ()

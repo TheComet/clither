@@ -58,10 +58,10 @@ server.
 cmake --preset server
 cmake --build build-server --parallel $(nproc)
 cd build-server/bin
-./clither --server
+./mechasnek --server
 ```
 
-Then open your browser and go to [http://localhost:8000/clither.html](http://localhost:8000/clither.html).
+Then open your browser and go to [http://localhost:8000/mechasnek.html](http://localhost:8000/mechasnek.html).
 
 ## Nix
 
