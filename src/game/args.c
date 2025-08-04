@@ -196,7 +196,9 @@ int args_parse(struct args* a, int argc, char* argv[])
 {
     int  i;
     char tests_flag = 0;
+#if defined(CLITHER_BOT_API)
     char bot_flag = 0;
+#endif
     char bench_flag = 0;
 #if defined(CLITHER_SERVER)
     char server_flag = 0;
@@ -501,11 +503,9 @@ int args_parse(struct args* a, int argc, char* argv[])
     else if (bot_flag)
         a->mode = MODE_CLIENT;
 #endif
-
+#if defined(CLITHER_GFX)
     if (a->gfx_backend == -1 && a->mode == MODE_UI)
         a->gfx_backend = 0;
-
-#if defined(CLITHER_GFX)
     if (a->gfx_backend != -1)
     {
         int count;

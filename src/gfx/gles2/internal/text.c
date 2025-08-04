@@ -9,6 +9,7 @@
 #endif
 #include "ft2build.h"
 #include FT_BITMAP_H
+#include FT_ERRORS_H
 #if defined(__clang__)
 #    pragma clang diagnostic pop
 #elif defined(__GNUC__)
@@ -31,6 +32,17 @@
 #define PIXEL_FORMAT 64
 #define TO_Q26_6(x)  ((x) * PIXEL_FORMAT)
 #define TO_PIXELS(x) ((x) / PIXEL_FORMAT)
+
+/* Emscripten ships with an old version of FreeType2 that does not have
+ * FT_Error_String */
+#if defined(__EMSCRIPTEN__)
+static const char* FT_Error_String(FT_Error error)
+{
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "0x%04x", error);
+    return buf;
+}
+#endif
 
 HMAP_DECLARE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
 HMAP_DEFINE(static, text_glyph_hmap, uint32_t, struct gfx_glyph_info, 16)
@@ -412,9 +424,11 @@ int gfx_gles2_font_init(struct gfx_font* font)
 {
     FT_Error ft_error = FT_Init_FreeType(&font->ft_lib);
     if (ft_error)
+    {
         return log_err(
             "Failed to initialize FreeType library: %s\n",
             FT_Error_String(ft_error));
+    }
     track_mem(font->ft_lib, 0);
 
     font->program = INVALID_HANDLE;

@@ -22,4 +22,7 @@ int  server_instance_start(
      const char*             port);
 void server_instance_wait_for_ready(struct server_instance* instance);
 int  server_instance_is_running(const struct server_instance* instance);
+
+/* Both of these functions also destroy the server instance */
+void server_instance_wait_for_finish(struct server_instance* instance);
 void server_instance_stop(struct server_instance* instance);

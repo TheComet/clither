@@ -7,6 +7,7 @@
 #include "clither/platform/signals.h"
 #include "clither/platform/tick.h"
 #include "clither/server/server_instance.h"
+#include "clither/ui/main_menu.h"
 #include "clither/ui/ui.h"
 #include "clither/util/cli_colors.h"
 #include "clither/util/str.h"
@@ -20,6 +21,7 @@ enum ui_element_index
     BUTTON_HOST,
     BUTTON_JOIN,
     BUTTON_GARAGE,
+    BUTTON_OPTIONS,
     BUTTON_QUIT,
 
     TEXT_ENTER_USERNAME,
@@ -45,10 +47,15 @@ enum ui_element_index
 static int title_screen[] = {
     CONTROLLER_VIM,
     TEXT_TITLE,
+#if defined(CLITHER_SERVER)
     BUTTON_HOST,
+#endif
     BUTTON_JOIN,
     BUTTON_GARAGE,
+    BUTTON_OPTIONS,
+#if defined(CLITHER_SERVER)
     BUTTON_QUIT,
+#endif
     0
 };
 static int host_screen[] = {
@@ -283,7 +290,18 @@ static enum ui_cmd_type button_join_game_interact(
         check_and_clear(input->enter))
     {
         *cmd = make_ui_join_cmd(
-            str_cstr(textinput->input_buffer_utf8), "localhost", "5555");
+            str_cstr(textinput->input_buffer_utf8),
+#if !defined(__EMSCRIPTEN__)
+            "localhost",
+            "5555"
+#elif defined(CLITHER_DEBUG)
+            "ws://localhost:5555",
+            ""
+#else
+            "wss://classic.mechasnek.io:443",
+            ""
+#endif
+        );
         return UI_CMD_JOIN;
     }
 
@@ -396,9 +414,15 @@ struct ui* ui_create_main_menu(void)
         ui_style_button,
         button_is_mouse_over,
         button_garage_interact);
+    ui->elements[BUTTON_OPTIONS] = ui_button(
+        cstr_view("Options"),
+        make_fpos(0, -0.6),
+        ui_style_button,
+        button_is_mouse_over,
+        button_garage_interact);
     ui->elements[BUTTON_QUIT] = ui_button(
         cstr_view("Quit"),
-        make_fpos(0, -0.6),
+        make_fpos(0, -0.8),
         ui_style_button,
         button_is_mouse_over,
         button_quit_interact);
@@ -528,6 +552,11 @@ int main_menu_run(
             case UI_CMD_JOIN: {
                 struct client client;
                 client_init(&client);
+                log_dbg(
+                    "Joining server %s:%s as %s\n",
+                    ui_cmd.join.address,
+                    ui_cmd.join.port,
+                    ui_cmd.join.username);
                 if (client_connect(
                         &client,
                         ui_cmd.join.address,
@@ -550,13 +579,14 @@ int main_menu_run(
                 {
                     ui_switch_screen(main_menu, UI_MAIN_SCREEN_JOIN_ERROR);
                     ui_set_message_on_active_screen(
-                        main_menu, "Failed to connect to server");
+                        main_menu, "Server Disconnected");
                 }
                 client_deinit(&client);
                 break;
             }
 
             case UI_CMD_HOST: {
+#if defined(CLITHER_SERVER)
                 struct server_instance server;
                 struct client          client;
 
@@ -606,6 +636,7 @@ int main_menu_run(
                 server_instance_stop(&server);
             start_server_failed:
                 client_deinit(&client);
+#endif
                 break;
             }
 

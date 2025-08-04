@@ -20,7 +20,6 @@ include (CMakeDependentOption)
 option (CLITHER_BENCHMARKS "Compile benchmarks (requires C++)" OFF)
 option (CLITHER_CAPACITY_WARNING "Enable capacity warnings for data structures" OFF)
 option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
-option (CLITHER_DEBUG_PREAMBLEJS "Use the debug version of preamble.js (required to test local builds)" ON)
 option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_FETCH_ASSETS "Download and install assets automatically" ON)
@@ -200,16 +199,6 @@ list (APPEND ClitherSources
     "src/game/snake_split_rb.c"
     "src/game/world.c"
 
-    "src/ui/ui.c"
-    "src/ui/button.c"
-    "src/ui/controller.c"
-    "src/ui/element.c"
-    "src/ui/rectangle.c"
-    "src/ui/main_menu.c"
-    "src/ui/style.c"
-    "src/ui/text.c"
-    "src/ui/textinput.c"
-
     "src/util/base64.c"
     "src/util/hash.c"
     "src/util/log.c"
@@ -266,7 +255,17 @@ if (CLITHER_CLIENT)
 endif ()
 
 if (CLITHER_GFX)
-    list (APPEND ClitherSources "src/gfx/gfx.c")
+    list (APPEND ClitherSources
+        "src/gfx/gfx.c"
+        "src/ui/ui.c"
+        "src/ui/button.c"
+        "src/ui/controller.c"
+        "src/ui/element.c"
+        "src/ui/rectangle.c"
+        "src/ui/main_menu.c"
+        "src/ui/style.c"
+        "src/ui/text.c"
+        "src/ui/textinput.c")
     if (CLITHER_GFX_SDL)
         list (APPEND ClitherSources "src/gfx/sdl/gfx_sdl.c")
     endif ()
@@ -518,11 +517,15 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif ()
 
 if (EMSCRIPTEN)
-    if (CLITHER_DEBUG_PREAMBLEJS)
-        set (preamble "${PROJECT_SOURCE_DIR}/src/preamble_debug.js")
-    else ()
-        set (preamble "${PROJECT_SOURCE_DIR}/src/preamble.js")
-    endif ()
+    target_compile_options (clither
+        PRIVATE
+            # Forward-declaring FT and hb_t types causes warnings
+            -Wno-typedef-redefinition
+            # Containers are implemented using [1] instead of [] which causes
+            # bounds warnings that are incorrect
+            -Wno-array-bounds
+            # Should probably write a 32-bit compatible version of morton.c
+            -Wno-long-long)
 
     set_target_properties (clither
         PROPERTIES
@@ -541,7 +544,7 @@ if (EMSCRIPTEN)
                 -s EXIT_RUNTIME=1 \
                 --preload-file ${CLITHER_BUILD_BINDIR}/packs@/packs \
                 --bind \
-                --pre-js ${preamble} \
+                --pre-js ${PROJECT_SOURCE_DIR}/src/preamble.js \
                 --shell-file ${PROJECT_SOURCE_DIR}/src/shell.html")
 
     file (GLOB_RECURSE PackFiles

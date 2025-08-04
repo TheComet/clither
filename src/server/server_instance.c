@@ -60,6 +60,8 @@ static void* server_instance_run(const void* arg)
         int           tick_lag, net_update;
         uint16_t      uid;
 
+        if (signals_exit_requested())
+            break;
         if (semaphore_try_take(instance->stop))
             break;
 
@@ -198,12 +200,18 @@ void server_instance_wait_for_ready(struct server_instance* instance)
 }
 
 /* ------------------------------------------------------------------------- */
-void server_instance_stop(struct server_instance* instance)
+void server_instance_wait_for_finish(struct server_instance* instance)
 {
-    semaphore_give(instance->stop);
     thread_join(instance->thread);
     semaphore_destroy(instance->stop);
     semaphore_destroy(instance->ready);
 
     instance->thread = NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+void server_instance_stop(struct server_instance* instance)
+{
+    semaphore_give(instance->stop);
+    server_instance_wait_for_finish(instance);
 }

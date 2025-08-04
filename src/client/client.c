@@ -74,13 +74,6 @@ int client_connect(
         return -1;
     }
 
-    if (port == NULL || !*port)
-    {
-        log_err("No server port was specified! Can't init client socket\n");
-        log_err("You can use --port <port> to specify a port to connect to\n");
-        return -1;
-    }
-
 #if defined(__EMSCRIPTEN__)
     client->inet = &net_ws_client;
 #else

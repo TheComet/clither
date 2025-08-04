@@ -1176,7 +1176,7 @@ void* server_run(const void* p)
                 instance,
                 settings,
                 settings->server.bind_addr,
-                settings->server.bind_addr) != 0)
+                settings->server.bind_port) != 0)
         {
             log_err(
                 "Failed to start the default server instance! Can't "
@@ -1191,7 +1191,7 @@ void* server_run(const void* p)
         uint16_t                port;
         struct server_instance* instance;
         bmap_for_each (instances, idx, port, instance)
-            (void)port, server_instance_stop(instance);
+            (void)port, server_instance_wait_for_finish(instance);
         log_info("Joined all server instances\n");
     }
 

@@ -16,7 +16,6 @@
 #include "clither/ui/main_menu.h"
 #include "clither/util/log.h"
 #include "clither/util/tracker.h"
-#include "gfx/gles2/internal/gfx.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,14 +33,14 @@ int main(int argc, char* argv[])
     struct gfx*                 gfx = NULL;
     struct fs_watch*            pack_watch = NULL;
 #endif
-#if defined(CLITHER_BOT_API)
     const struct bot_interface* ibot = NULL;
     struct bot*                 bot = NULL;
-#endif
 #if defined(CLITHER_MCD)
     struct thread* mcd_thread = NULL;
 #endif
     int retval = -1;
+
+    (void)ibot, (void)bot;
 
     if (trackers_init_tls() != 0)
         goto mem_init_failed;
