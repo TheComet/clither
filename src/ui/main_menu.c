@@ -1,5 +1,14 @@
+#include "clither/client/client.h"
 #include "clither/game/input.h"
+#include "clither/game/resource_pack.h"
+#include "clither/game/settings.h"
+#include "clither/gfx/gfx.h"
+#include "clither/platform/fs.h"
+#include "clither/platform/signals.h"
+#include "clither/platform/tick.h"
+#include "clither/server/server_instance.h"
 #include "clither/ui/ui.h"
+#include "clither/util/cli_colors.h"
 #include "clither/util/str.h"
 
 enum ui_element_index
@@ -144,6 +153,22 @@ static enum ui_cmd_type button_join_interact(
         ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN);
     }
     (void)cmd;
+    return UI_CMD_NONE;
+}
+
+/* ------------------------------------------------------------------------- */
+static enum ui_cmd_type button_garage_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
+{
+    if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
+                                 check_and_clear(input->enter)))
+    {
+        return UI_CMD_GARAGE;
+    }
+    (void)ui, (void)cmd;
     return UI_CMD_NONE;
 }
 
@@ -370,7 +395,7 @@ struct ui* ui_create_main_menu(void)
         make_fpos(0, -0.4),
         ui_style_button,
         button_is_mouse_over,
-        NULL);
+        button_garage_interact);
     ui->elements[BUTTON_QUIT] = ui_button(
         cstr_view("Quit"),
         make_fpos(0, -0.6),
@@ -456,4 +481,198 @@ struct ui* ui_create_main_menu(void)
         button_back_to_join_interact);
 
     return ui;
+}
+
+/* ------------------------------------------------------------------------- */
+int main_menu_run(
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx,
+    struct resource_pack**       pack,
+    struct fs_watch**            pack_watch,
+    const struct bot_interface*  ibot,
+    struct bot*                  bot,
+    const struct settings*       settings)
+{
+    struct ui*    main_menu;
+    struct input  input;
+    struct tick   sim_tick;
+    union ui_cmd  ui_cmd;
+    int           retval = -1;
+    const uint8_t sim_tick_rate = 60;
+
+    /* Change log prefix and color for server log messages */
+    log_set_prefix(settings->client.log_prefix);
+    log_set_colors(COL_B_GREEN, COL_RESET);
+
+    main_menu = ui_create_main_menu();
+    if (main_menu == NULL)
+        goto create_main_menu_failed;
+    ui_switch_screen(main_menu, UI_MAIN_SCREEN_TITLE);
+
+    input_init(&input);
+
+    tick_cfg(&sim_tick, sim_tick_rate);
+    while (1)
+    {
+        (*igfx)->poll_input(*gfx, &input);
+
+        switch (ui_update(main_menu, &ui_cmd, &input, sim_tick_rate))
+        {
+            case UI_CMD_NONE: break;
+
+            case UI_CMD_QUIT: {
+                input.quit = 1;
+                break;
+            }
+
+            case UI_CMD_JOIN: {
+                struct client client;
+                client_init(&client);
+                if (client_connect(
+                        &client,
+                        ui_cmd.join.address,
+                        ui_cmd.join.port,
+                        ui_cmd.join.username) != 0)
+                {
+                    ui_switch_screen(main_menu, UI_MAIN_SCREEN_JOIN_ERROR);
+                    ui_set_message_on_active_screen(
+                        main_menu, "Failed to connect to server");
+                }
+                if (client_run(
+                        &client,
+                        settings,
+                        igfx,
+                        gfx,
+                        pack,
+                        pack_watch,
+                        ibot,
+                        bot) != 0)
+                {
+                    ui_switch_screen(main_menu, UI_MAIN_SCREEN_JOIN_ERROR);
+                    ui_set_message_on_active_screen(
+                        main_menu, "Failed to connect to server");
+                }
+                client_deinit(&client);
+                break;
+            }
+
+            case UI_CMD_HOST: {
+                struct server_instance server;
+                struct client          client;
+
+                server_instance_init(&server);
+                client_init(&client);
+
+                log_dbg("Starting server in background thread\n");
+                if (server_instance_start(
+                        &server,
+                        settings,
+                        ui_cmd.host.address,
+                        ui_cmd.host.port) != 0)
+                {
+                    goto start_server_failed;
+                }
+
+                server_instance_wait_for_ready(&server);
+
+                /* The server should be running, so try to join as a client */
+                if (client_connect(
+                        &client,
+                        "localhost",
+                        ui_cmd.host.port,
+                        ui_cmd.host.username) != 0)
+                {
+                    ui_switch_screen(main_menu, UI_MAIN_SCREEN_HOST_ERROR);
+                    ui_set_message_on_active_screen(
+                        main_menu, "Failed to connect to server");
+                    goto client_connect_failed;
+                }
+                if (client_run(
+                        &client,
+                        settings,
+                        igfx,
+                        gfx,
+                        pack,
+                        pack_watch,
+                        ibot,
+                        bot) != 0)
+                {
+                    ui_switch_screen(main_menu, UI_MAIN_SCREEN_JOIN_ERROR);
+                    ui_set_message_on_active_screen(
+                        main_menu, "Failed to run client");
+                }
+
+            client_connect_failed:
+                server_instance_stop(&server);
+            start_server_failed:
+                client_deinit(&client);
+                break;
+            }
+
+            case UI_CMD_GARAGE: break; ;
+        }
+
+        /* CTRL+C */
+        if (signals_exit_requested())
+            input.quit = 1;
+
+        /* Window close event */
+        if (input.quit)
+        {
+            retval = 0;
+            break;
+        }
+
+        /* Switch graphics backends */
+        if (*gfx != NULL && input.next_gfx_backend)
+        {
+            gfx_next_backend(igfx, gfx, *pack);
+            input.next_gfx_backend = 0;
+        }
+        if (*gfx != NULL && input.prev_gfx_backend)
+        {
+            gfx_prev_backend(igfx, gfx, *pack);
+            input.prev_gfx_backend = 0;
+        }
+
+        /* Check for resource pack changes */
+        if (*pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
+        {
+            struct resource_pack* new_pack;
+            log_info("Resource pack changed, reloading\n");
+
+            new_pack = resource_pack_parse((*pack)->path);
+            if (new_pack)
+            {
+                if (*gfx != NULL)
+                {
+                    (*igfx)->unload_resource_pack(*gfx, *pack);
+                    (*igfx)->load_resource_pack(*gfx, new_pack);
+                }
+
+                resource_pack_destroy(*pack);
+                *pack = new_pack;
+            }
+
+            fs_watch_deinit(*pack_watch);
+            *pack_watch = resource_pack_watch_create(*pack);
+        }
+
+        if (*gfx != NULL)
+        {
+            (*igfx)->step_anim(*gfx, sim_tick_rate);
+            (*igfx)->draw_begin(*gfx);
+            (*igfx)->draw_ui(*gfx, main_menu);
+            (*igfx)->draw_end(*gfx);
+        }
+
+        tick_wait(&sim_tick);
+    }
+
+    input_deinit(&input);
+    ui_destroy(main_menu);
+create_main_menu_failed:
+    log_set_prefix("");
+    log_set_colors("", "");
+    return retval;
 }

@@ -2,20 +2,18 @@
 #include "clither/bot/bot.h"
 #include "clither/client/client.h"
 #include "clither/game/args.h"
-#include "clither/game/camera.h"
-#include "clither/game/input.h"
 #include "clither/game/mcd_wifi.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/settings.h"
 #include "clither/gfx/gfx.h"
 #include "clither/platform/asm_optimizations.h"
+#include "clither/platform/fs.h"
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
 #include "clither/platform/thread.h"
-#include "clither/platform/tick.h"
 #include "clither/server/server.h"
 #include "clither/tests.h"
-#include "clither/ui/ui.h"
+#include "clither/ui/main_menu.h"
 #include "clither/util/log.h"
 #include "clither/util/tracker.h"
 #include "gfx/gles2/internal/gfx.h"
@@ -27,150 +25,6 @@
 static struct args     args;
 static struct settings settings;
 
-static void run_host_mode()
-{
-}
-
-static void run_client_mode()
-{
-}
-
-static int ui_run(
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-#if defined(CLITHER_BOT_API)
-    const struct bot_interface* ibot,
-    struct bot*                 bot,
-#endif
-    const struct settings* settings,
-    struct resource_pack** pack)
-{
-    struct ui*    ui;
-    union ui_cmd  ui_cmd;
-    struct input  input;
-    struct client client;
-    struct tick   sim_tick;
-    int           retval = -1;
-
-    ui = ui_create_main_menu();
-    if (ui == NULL)
-        goto create_ui_failed;
-    ui_switch_screen(ui, UI_MAIN_SCREEN_TITLE);
-
-    input_init(&input);
-    client_init(&client);
-
-    tick_cfg(&sim_tick, client.sim_tick_rate);
-    while (1)
-    {
-        (*igfx)->poll_input(*gfx, &input);
-
-        switch (ui_update(ui, &ui_cmd, &input, client.sim_tick_rate))
-        {
-            case UI_CMD_NONE: break;
-            case UI_CMD_QUIT: {
-                input.quit = 1;
-                break;
-            }
-
-            case UI_CMD_JOIN: {
-                if (client_connect(
-                        &client,
-                        ui_cmd.join.address,
-                        ui_cmd.join.port,
-                        ui_cmd.join.username) != 0)
-                {
-                    ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN_ERROR);
-                    ui_set_message_on_active_screen(
-                        ui, "Failed to connect to server");
-                    break;
-                }
-                if (client_run(
-                        &client,
-                        igfx,
-                        gfx,
-#if defined(CLITHER_BOT_API)
-                        ibot,
-                        bot,
-#endif
-                        &settings->client,
-                        pack) != 0)
-                {
-                    ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN_ERROR);
-                    ui_set_message_on_active_screen(ui, "Client Disconnected");
-                }
-                break;
-            }
-
-            case UI_CMD_HOST: {
-                struct thread* server_thread;
-
-                log_dbg("Starting server in background thread\n");
-                server_thread = thread_start(server_run, &settings->server);
-                if (server_thread == NULL)
-                    goto start_server_thread_failed;
-
-                /* The server should be running, so try to join as a client */
-                if (client_connect(
-                        &client,
-                        ui_cmd.join.address,
-                        ui_cmd.join.port,
-                        ui_cmd.join.username) < 0)
-                {
-                    ui_switch_screen(ui, UI_MAIN_SCREEN_HOST_ERROR);
-                    ui_set_message_on_active_screen(
-                        ui, "Failed to connect to server");
-                    goto client_connect_failed;
-                }
-                if (client_run(
-                        &client,
-                        igfx,
-                        gfx,
-#if defined(CLITHER_BOT_API)
-                        ibot,
-                        bot,
-#endif
-                        &settings->client,
-                        pack) != 0)
-                {
-                    ui_switch_screen(ui, UI_MAIN_SCREEN_HOST_ERROR);
-                    ui_set_message_on_active_screen(ui, "Client Disconnected");
-                }
-
-            client_connect_failed:
-                /* Signal server to stop */
-                thread_sigint(server_thread);
-                thread_join(server_thread);
-                log_dbg("Joined background server thread\n");
-                signals_reset_exit_requested();
-            start_server_thread_failed:
-                break;
-            }
-        }
-
-        if (signals_exit_requested())
-            input.quit = 1;
-
-        if (input.quit)
-        {
-            retval = 0;
-            break;
-        }
-
-        (*igfx)->step_anim(*gfx, client.sim_tick_rate);
-        (*igfx)->draw_begin(*gfx);
-        (*igfx)->draw_ui(*gfx, ui);
-        (*igfx)->draw_end(*gfx);
-        tick_wait(&sim_tick);
-    }
-
-    client_deinit(&client);
-    input_deinit(&input);
-    ui_destroy(ui);
-create_ui_failed:
-    return retval;
-}
-
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
@@ -178,6 +32,7 @@ int main(int argc, char* argv[])
     struct resource_pack*       pack = NULL;
     const struct gfx_interface* igfx = NULL;
     struct gfx*                 gfx = NULL;
+    struct fs_watch*            pack_watch = NULL;
 #endif
 #if defined(CLITHER_BOT_API)
     const struct bot_interface* ibot = NULL;
@@ -241,6 +96,10 @@ int main(int argc, char* argv[])
         pack = resource_pack_parse(args.pack);
         if (pack == NULL)
             goto parse_resource_pack_failed;
+
+        pack_watch = resource_pack_watch_create(pack);
+        if (pack_watch == NULL)
+            goto watch_resource_pack_failed;
 
         igfx = gfx_backends[args.gfx_backend];
         log_info("Using graphics backend: %s\n", igfx->name);
@@ -320,32 +179,15 @@ int main(int argc, char* argv[])
              * in the main thread. It does not call any threadlocal init
              * functions. */
             retval = client_run(
-                &client,
-#    if defined(CLITHER_GFX)
-                &igfx,
-                &gfx,
-#    endif
-#    if defined(CLITHER_BOT_API)
-                ibot,
-                bot,
-#    endif
-                &settings.client,
-                &pack);
+                &client, &settings, &igfx, &gfx, &pack, &pack_watch, ibot, bot);
             client_deinit(&client);
             break;
         }
 #endif
 #if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
         case MODE_UI: {
-            retval = ui_run(
-                &igfx,
-                &gfx,
-#    if defined(CLITHER_BOT_API)
-                ibot,
-                bot,
-#    endif
-                &settings,
-                &pack);
+            retval = main_menu_run(
+                &igfx, &gfx, &pack, &pack_watch, ibot, bot, &settings);
             break;
         }
 #endif
@@ -384,6 +226,9 @@ create_gfx_failed:
     if (igfx != NULL)
         igfx->deinit();
 init_gfx_failed:
+    if (pack_watch != NULL)
+        fs_watch_deinit(pack_watch);
+watch_resource_pack_failed:
     if (pack != NULL)
         resource_pack_destroy(pack);
 parse_resource_pack_failed:

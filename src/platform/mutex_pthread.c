@@ -10,6 +10,7 @@ struct mutex
     pthread_mutex_t handle;
 };
 
+/* ------------------------------------------------------------------------- */
 struct mutex* mutex_create(void)
 {
     pthread_mutexattr_t attr;
@@ -34,6 +35,7 @@ alloc_mutex_failed:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------- */
 struct mutex* mutex_create_recursive(void)
 {
     pthread_mutexattr_t attr;
@@ -59,22 +61,26 @@ alloc_mutex_failed:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------- */
 void mutex_destroy(struct mutex* m)
 {
     pthread_mutex_destroy(&m->handle);
     mem_free(m);
 }
 
+/* ------------------------------------------------------------------------- */
 void mutex_lock(struct mutex* m)
 {
     pthread_mutex_lock(&m->handle);
 }
 
+/* ------------------------------------------------------------------------- */
 int mutex_trylock(struct mutex* m)
 {
     return pthread_mutex_trylock(&m->handle) == 0;
 }
 
+/* ------------------------------------------------------------------------- */
 void mutex_unlock(struct mutex* m)
 {
     pthread_mutex_unlock(&m->handle);

@@ -28,7 +28,8 @@ enum ui_cmd_type
     UI_CMD_NONE,
     UI_CMD_QUIT,
     UI_CMD_JOIN,
-    UI_CMD_HOST
+    UI_CMD_HOST,
+    UI_CMD_GARAGE
 };
 
 enum ui_screen
@@ -179,6 +180,7 @@ struct ui* ui_create_main_menu(void);
 struct ui* ui_create_in_game(void);
 void       ui_destroy(struct ui* ui);
 
+void ui_deactivate_all(struct ui* ui);
 void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx);
 void ui_set_message_on_active_screen(struct ui* ui, const char* message);
 

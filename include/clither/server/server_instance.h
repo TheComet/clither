@@ -1,16 +1,25 @@
 #pragma once
 
-struct settings_server;
-struct settings_world;
+struct semaphore;
+struct settings;
 struct thread;
 
 struct server_instance
 {
-    const struct settings_server* settings_server;
-    const struct settings_world*  settings_world;
-    struct thread*                thread;
-    const char*                   addr;
-    const char*                   port;
+    struct thread*         thread;
+    struct semaphore*      ready;
+    struct semaphore*      stop;
+    const struct settings* settings;
+    const char*            addr;
+    const char*            port;
 };
 
-void* server_instance_run(const void* args);
+void server_instance_init(struct server_instance* instance);
+int  server_instance_start(
+     struct server_instance* instance,
+     const struct settings*  settings,
+     const char*             addr,
+     const char*             port);
+void server_instance_wait_for_ready(struct server_instance* instance);
+int  server_instance_is_running(const struct server_instance* instance);
+void server_instance_stop(struct server_instance* instance);

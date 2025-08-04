@@ -14,7 +14,10 @@
 #include "clither/platform/fs.h"
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
+#include "clither/platform/thread.h"
 #include "clither/platform/tick.h"
+#include "clither/server/server.h"
+#include "clither/server/server_instance.h"
 #include "clither/ui/ui.h"
 #include "clither/util/bmap.h"
 #include "clither/util/cli_colors.h"
@@ -94,6 +97,7 @@ int client_connect(
         client, msg_join_request(0x0000, client->frame_number, username));
 
     client->state = CLIENT_JOINING;
+    log_info("Client started\n");
 
     return 0;
 }
@@ -120,6 +124,7 @@ void client_disconnect(struct client* client)
     msg_vec_clear(client->pending_msgs);
 
     client->state = CLIENT_DISCONNECTED;
+    log_info("Client disconnected\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -646,52 +651,32 @@ static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
 int client_run(
-    struct client* client,
-#    if defined(CLITHER_GFX)
+    struct client*               client,
+    const struct settings*       settings,
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
-#    endif
-#    if defined(CLITHER_BOT_API)
-    const struct bot_interface* ibot,
-    struct bot*                 bot,
-#    endif
-    const struct settings_client* settings,
-    struct resource_pack**        pack)
+    struct resource_pack**       pack,
+    struct fs_watch**            pack_watch,
+    const struct bot_interface*  ibot,
+    struct bot*                  bot)
 {
-    struct fs_watch* pack_watch;
-    struct world     world;
-    struct ui*       ui;
-    struct input     input;
-    struct cmd       cmd;
-    struct camera    camera;
-    struct tick      sim_tick;
-    struct tick      net_tick;
-    union ui_cmd     ui_cmd;
-    int              tick_lag;
-    int              retval = -1;
+    struct world  world;
+    struct input  input;
+    struct cmd    cmd;
+    struct camera camera;
+    struct tick   sim_tick;
+    struct tick   net_tick;
+    int           tick_lag;
+    int           retval = -1;
 
     /* Change log prefix and color for server log messages */
-    log_set_prefix(settings->log_prefix);
+    log_set_prefix(settings->client.log_prefix);
     log_set_colors(COL_B_GREEN, COL_RESET);
-
-    pack_watch = NULL;
-    if (*pack != NULL)
-    {
-        pack_watch = resource_pack_watch(*pack);
-        if (pack_watch == NULL)
-            goto watch_resource_pack_failed;
-    }
-
-    ui = ui_create_in_game();
-    if (ui == NULL)
-        goto create_ui_failed;
 
     input_init(&input);
     camera_init(&camera);
     world_init(&world);
     cmd = cmd_default();
-
-    log_info("Client started\n");
 
     tick_cfg(&sim_tick, client->sim_tick_rate);
     tick_cfg(&net_tick, client->net_tick_rate);
@@ -704,20 +689,16 @@ int client_run(
             (*igfx)->poll_input(*gfx, &input);
 #    endif
 
-#    if defined(CLITHER_GFX)
-        switch (ui_update(ui, &ui_cmd, &input, client->sim_tick_rate))
-        {
-            case UI_CMD_NONE: break;
-            case UI_CMD_QUIT: input.quit = 1; break;
-            case UI_CMD_JOIN: break;
-            case UI_CMD_HOST: break;
-        }
-#    endif
-
+        /* CTRL+C */
         if (signals_exit_requested())
             input.quit = 1;
 
-        if (input.quit || input.escape)
+        /* Quit client if escape is pressed */
+        if (input.escape)
+            input.quit = 1;
+
+        /* Window close event */
+        if (input.quit)
         {
             retval = 0;
             break;
@@ -725,72 +706,25 @@ int client_run(
 
 #    if defined(CLITHER_GFX)
         /* Switch graphics backends */
-        if (*gfx != NULL && (input.next_gfx_backend || input.prev_gfx_backend))
+        if (*gfx != NULL && input.next_gfx_backend)
         {
-            int count;
-            int idx, new_idx;
-
-            for (count = 0; gfx_backends[count]; ++count)
-                ;
-            for (idx = 0; gfx_backends[idx]; ++idx)
-                if (*igfx == gfx_backends[idx])
-                    break;
-
-            if (input.next_gfx_backend)
-                new_idx = idx + 1 >= count ? 0 : idx + 1;
-            else
-                new_idx = idx - 1 < 0 ? count - 1 : idx - 1;
-
-            /*
-             * On Windows it is possible to create a new backend and then
-             * destroy the previous backend, however, on linux this doesn't
-             * seem to work. GL contexts aren't properly transferred to the
-             * new instance. This is why we destroy first - then create
-             */
-            (*igfx)->unload_resource_pack(*gfx, *pack);
-            (*igfx)->destroy(*gfx);
-            (*igfx)->deinit();
-
-            *igfx = gfx_backends[new_idx];
-            if ((*igfx)->init() < 0)
-                goto init_new_gfx_failed;
-            *gfx = (*igfx)->create(640, 480);
-            if (*gfx == NULL)
-                goto create_new_gfx_failed;
-            if ((*igfx)->load_resource_pack(*gfx, *pack) < 0)
-                goto load_new_resource_pack_failed;
-
-            /* Clears the button press for switching graphics backends */
-            input_init(&input);
-            (*igfx)->poll_input(*gfx, &input);
-
-            goto create_new_gfx_success;
-
-        load_new_resource_pack_failed:
-            (*igfx)->destroy(*gfx);
-        create_new_gfx_failed:
-            (*igfx)->deinit();
-        init_new_gfx_failed:
-            /* Try to restore to previous backend. Shouldn't fail but who knows
-             */
-            (*igfx) = gfx_backends[idx];
-            if ((*igfx)->init() < 0)
-                break;
-            *gfx = (*igfx)->create(640, 480);
-            if (*gfx == NULL)
-                break;
-            if ((*igfx)->load_resource_pack(*gfx, *pack) < 0)
-                break;
+            gfx_next_backend(igfx, gfx, *pack);
+            input.next_gfx_backend = 0;
         }
-    create_new_gfx_success:;
+        if (*gfx != NULL && input.prev_gfx_backend)
+        {
+            gfx_prev_backend(igfx, gfx, *pack);
+            input.prev_gfx_backend = 0;
+        }
+#    endif
 
+#    if defined(CLITHER_GFX)
         /* Check for resource pack changes */
-        if (pack_watch != NULL && fs_watch_check(pack_watch) > 0)
+        if (pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
         {
             struct resource_pack* new_pack;
 
             log_info("Resource pack changed, reloading\n");
-            fs_watch_deinit(pack_watch);
 
             new_pack = resource_pack_parse((*pack)->path);
             if (new_pack && *gfx != NULL)
@@ -800,7 +734,9 @@ int client_run(
                 (*igfx)->load_resource_pack(*gfx, new_pack);
                 *pack = new_pack;
             }
-            pack_watch = resource_pack_watch(*pack);
+
+            fs_watch_deinit(*pack_watch);
+            *pack_watch = resource_pack_watch_create(*pack);
         }
 #    endif
 
@@ -846,9 +782,7 @@ int client_run(
                  * If a bot was created, then it has precedence over the mouse
                  * controls of the graphics interface.
                  */
-#    if defined(CLITHER_BOT_API)
                 if (bot != NULL)
-                {
                     if (ibot->next_cmd(
                             bot,
                             &cmd,
@@ -856,19 +790,12 @@ int client_run(
                             &world,
                             snake,
                             client->sim_tick_rate) != 0)
+                    {
                         break;
-                }
-#    endif
-#    if defined(CLITHER_GFX)
-#        if defined(CLITHER_BOT_API)
+                    }
+
                 if (*gfx != NULL && bot == NULL)
-#        else
-                if (*gfx != NULL)
-#        endif
-                {
                     cmd = cmd_next(cmd, &input);
-                }
-#    endif
 
                 /*
                  * Append the new command to the ring buffer of unconfirmed
@@ -922,32 +849,18 @@ int client_run(
                 break;
         }
 
-#    if defined(CLITHER_GFX)
         if (*gfx != NULL)
+        {
             (*igfx)->step_anim(*gfx, client->sim_tick_rate);
-#    endif
+            (*igfx)->draw_begin(*gfx);
+            (*igfx)->draw_world(*gfx, &world, &camera);
+            (*igfx)->draw_end(*gfx);
+        }
 
-        /*
-         * Skip rendering if we are lagging, as this is most likely the source
-         * of the delay. If for some reason we end up 3 seconds behind where we
-         * should be, quit.
-         */
         tick_lag =
             tick_wait_warp(&sim_tick, client->warp, client->sim_tick_rate * 10);
         client->warp = 0;
-        if (tick_lag == 0)
-        {
-#    if defined(CLITHER_GFX)
-            if (*gfx != NULL)
-            {
-                (*igfx)->draw_begin(*gfx);
-                (*igfx)->draw_world(*gfx, &world, &camera);
-                //(*igfx)->draw_ui(*gfx, ui);
-                (*igfx)->draw_end(*gfx);
-            }
-#    endif
-        }
-        else
+        if (tick_lag > 0)
         {
             log_dbg("Client is lagging! %d frames behind\n", tick_lag);
             if (tick_lag > client->sim_tick_rate * 3) /* 3 seconds */
@@ -959,7 +872,6 @@ int client_run(
 
         client->frame_number++;
     }
-    log_info("Stopping client\n");
 
     /* Send quit message to server to be nice */
     if (client->state == CLIENT_CONNECTED)
@@ -973,11 +885,6 @@ int client_run(
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);
     input_deinit(&input);
-    ui_destroy(ui);
-create_ui_failed:
-    if (pack_watch != NULL)
-        fs_watch_deinit(pack_watch);
-watch_resource_pack_failed:
     log_set_prefix("");
     log_set_colors("", "");
     return retval;

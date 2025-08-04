@@ -15,6 +15,7 @@ HMAP_DEFINE_STR(extern, resource_sprite_hmap, struct resource_sprite, 16)
 HMAP_DEFINE_STR(extern, resource_snake_hmap, struct resource_snake, 16)
 HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
 
+/* ------------------------------------------------------------------------- */
 static void resource_shader_init(struct resource_shader* res)
 {
     strlist_init(&res->text);
@@ -24,6 +25,7 @@ static void resource_shader_init(struct resource_shader* res)
     strlist_init(&res->spine);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_shader_deinit(struct resource_shader* res)
 {
     strlist_deinit(res->spine);
@@ -33,16 +35,19 @@ static void resource_shader_deinit(struct resource_shader* res)
     strlist_deinit(res->text);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_background_init(struct resource_background* res)
 {
     strlist_init(&res->textures);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_background_deinit(struct resource_background* res)
 {
     strlist_deinit(res->textures);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_text_init(struct resource_text* res)
 {
     str_init(&res->font);
@@ -50,11 +55,13 @@ static void resource_text_init(struct resource_text* res)
     res->dpi = 72;
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_text_deinit(struct resource_text* res)
 {
     str_deinit(res->font);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_layer_init(struct resource_layer* res)
 {
     strlist_init(&res->textures);
@@ -65,11 +72,13 @@ static void resource_layer_init(struct resource_layer* res)
     res->scale = 1.0;
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_layer_deinit(struct resource_layer* res)
 {
     strlist_deinit(res->textures);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_sprite_init(struct resource_sprite* res)
 {
     int i;
@@ -77,6 +86,7 @@ static void resource_sprite_init(struct resource_sprite* res)
         resource_layer_init(&res->layer[i]);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_sprite_deinit(struct resource_sprite* res)
 {
     int i;
@@ -84,28 +94,33 @@ static void resource_sprite_deinit(struct resource_sprite* res)
         resource_layer_deinit(&res->layer[i]);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_spine_init(struct resource_spine* res)
 {
     strlist_init(&res->textures);
     res->width = 1.0;
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_spine_deinit(struct resource_spine* res)
 {
     strlist_deinit(res->textures);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_food_init(struct resource_food* res)
 {
     str_init(&res->sprite);
     res->scale = 1.0;
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_food_deinit(struct resource_food* res)
 {
     str_deinit(res->sprite);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_snake_init(struct resource_snake* res)
 {
     str_init(&res->head_sprite);
@@ -115,6 +130,7 @@ static void resource_snake_init(struct resource_snake* res)
     res->part_spacing = 0.15;
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_snake_deinit(struct resource_snake* res)
 {
     str_deinit(res->spine);
@@ -123,6 +139,7 @@ static void resource_snake_deinit(struct resource_snake* res)
     str_deinit(res->head_sprite);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_pack_init(struct resource_pack* pack)
 {
     pack->path = "";
@@ -138,6 +155,7 @@ static void resource_pack_init(struct resource_pack* pack)
     resource_snake_hmap_init(&pack->snakes);
 }
 
+/* ------------------------------------------------------------------------- */
 static void resource_pack_deinit(struct resource_pack* pack)
 {
     int16_t                 slot;
@@ -170,6 +188,7 @@ static void resource_pack_deinit(struct resource_pack* pack)
     str_deinit(pack->pack_ini);
 }
 
+/* ------------------------------------------------------------------------- */
 enum token
 {
     TOK_ERROR = -1,
@@ -317,6 +336,7 @@ static enum token scan_next_token(struct parser* p)
     return TOK_END;
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_string_list(
     struct parser* p, struct strlist** list, const char* path_prefix)
 {
@@ -357,6 +377,7 @@ error:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_section_shader(
     struct parser*                p,
     struct resource_shader_hmap** shaders,
@@ -433,6 +454,7 @@ static int parse_section_shader(
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_section_background(
     struct parser* p, struct resource_background* bg, const char* path_prefix)
 {
@@ -465,6 +487,7 @@ static int parse_section_background(
     }
 }
 
+/* ------------------------------------------------------------------------- */
 enum token parse_section_text(
     struct parser* p, struct resource_text* text, const char* path_prefix)
 {
@@ -514,6 +537,7 @@ enum token parse_section_text(
     }
 }
 
+/* ------------------------------------------------------------------------- */
 enum token parse_section_food(struct parser* p, struct resource_food* food)
 {
     enum token tok;
@@ -560,6 +584,7 @@ enum token parse_section_food(struct parser* p, struct resource_food* food)
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_section_sprite(
     struct parser*                p,
     struct resource_sprite_hmap** sprites,
@@ -723,6 +748,7 @@ static int parse_section_sprite(
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_section_spine(
     struct parser*               p,
     struct resource_spine_hmap** spines,
@@ -800,6 +826,7 @@ static int parse_section_spine(
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static int
 parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
 {
@@ -909,6 +936,7 @@ parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static int parse_section(
     struct parser*        p,
     struct strview        section,
@@ -939,6 +967,7 @@ static int parse_section(
         p->source + section.off);
 }
 
+/* ------------------------------------------------------------------------- */
 static int
 parse_ini(struct parser* p, struct resource_pack* pack, const char* path_prefix)
 {
@@ -975,6 +1004,7 @@ parse_ini(struct parser* p, struct resource_pack* pack, const char* path_prefix)
     }
 }
 
+/* ------------------------------------------------------------------------- */
 static void
 parser_init(struct parser* p, const struct mfile* mf, const char* filename)
 {
@@ -985,6 +1015,7 @@ parser_init(struct parser* p, const struct mfile* mf, const char* filename)
     p->end = mf->size;
 }
 
+/* ------------------------------------------------------------------------- */
 struct resource_pack* resource_pack_parse(const char* pack_path)
 {
     struct mfile          mf;
@@ -1022,13 +1053,15 @@ alloc_pack_failed:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------- */
 void resource_pack_destroy(struct resource_pack* pack)
 {
     resource_pack_deinit(pack);
     mem_free(pack);
 }
 
-struct fs_watch* resource_pack_watch(struct resource_pack* pack)
+/* ------------------------------------------------------------------------- */
+struct fs_watch* resource_pack_watch_create(struct resource_pack* pack)
 {
     struct fs_watch* watch = fs_watch_init();
     if (watch == NULL)

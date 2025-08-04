@@ -1,19 +1,19 @@
 #pragma once
 
 #include "clither/config.h"
-#include "clither/util/strview.h"
 
 #if defined(CLITHER_CLIENT)
 #    include <stdint.h>
 
 struct bot;
 struct bot_interface;
+struct fs_watch;
 struct gfx;
 struct gfx_interface;
 struct msg;
 struct msg_vec;
 struct resource_pack;
-struct settings_client;
+struct settings;
 struct settings_gfx;
 struct settings_world;
 struct world;
@@ -119,16 +119,13 @@ client_recv(struct client* client, struct world* world);
 /*! \brief The main loop of the client. Designed to be called from the main
  * thread. */
 int client_run(
-    struct client* client,
-#    if defined(CLITHER_GFX)
+    struct client*               client,
+    const struct settings*       settings,
     const struct gfx_interface** igfx,
     struct gfx**                 gfx,
-#    endif
-#    if defined(CLITHER_BOT_API)
-    const struct bot_interface* ibot,
-    struct bot*                 bot,
-#    endif
-    const struct settings_client* settings,
-    struct resource_pack**        pack);
+    struct resource_pack**       pack,
+    struct fs_watch**            pack_watch,
+    const struct bot_interface*  ibot,
+    struct bot*                  bot);
 
 #endif

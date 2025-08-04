@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+/* ------------------------------------------------------------------------- */
 int fs_list(
     const char* path, int (*on_entry)(const char* name, void* user), void* user)
 {
@@ -38,6 +39,7 @@ first_file_failed:
     return ret;
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_file_exists(const char* file_path)
 {
     struct stat st;
@@ -46,6 +48,7 @@ int fs_file_exists(const char* file_path)
     return S_ISREG(st.st_mode);
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_dir_exists(const char* file_path)
 {
     struct stat st;
@@ -54,6 +57,7 @@ int fs_dir_exists(const char* file_path)
     return S_ISDIR(st.st_mode);
 }
 
+/* ------------------------------------------------------------------------- */
 struct fs_watch* fs_watch_init(void)
 {
     int fd = inotify_init1(IN_NONBLOCK);
@@ -66,6 +70,7 @@ struct fs_watch* fs_watch_init(void)
     return (struct fs_watch*)(intptr_t)fd;
 }
 
+/* ------------------------------------------------------------------------- */
 void fs_watch_deinit(struct fs_watch* w)
 {
     int fd = (int)(intptr_t)w;
@@ -73,6 +78,7 @@ void fs_watch_deinit(struct fs_watch* w)
     close(fd);
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_watch_file(struct fs_watch* w, const char* path)
 {
     int fd = (int)(intptr_t)w;
@@ -83,6 +89,7 @@ int fs_watch_file(struct fs_watch* w, const char* path)
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_watch_check(struct fs_watch* w)
 {
     char* ptr;

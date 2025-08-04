@@ -2,7 +2,9 @@
 #include "clither/game/snake_bmap.h"
 #include "clither/game/world.h"
 #include "clither/platform/net.h"
+#include "clither/platform/semaphore.h"
 #include "clither/platform/signals.h"
+#include "clither/platform/thread.h"
 #include "clither/platform/tick.h"
 #include "clither/server/server.h"
 #include "clither/server/server_instance.h"
@@ -14,7 +16,7 @@
 #include <stdlib.h> /* atoi */
 
 /* ------------------------------------------------------------------------- */
-void* server_instance_run(const void* args)
+static void* server_instance_run(const void* arg)
 {
     struct world                  world;
     struct server                 server;
@@ -22,7 +24,7 @@ void* server_instance_run(const void* args)
     struct tick                   net_tick;
     uint16_t                      frame_number;
     char                          log_prefix[] = "S:xxxxx ";
-    const struct server_instance* instance = args;
+    const struct server_instance* instance = arg;
 
     static const char* colors[] = {
         COL_N_CYAN, COL_N_MAGENTA, COL_N_BLUE, COL_N_GREEN, COL_N_RED};
@@ -37,7 +39,7 @@ void* server_instance_run(const void* args)
     log_set_colors(colors[atoi(instance->port) % 5], COL_RESET);
 
     world_init(&world);
-    world_update_settings(&world, instance->settings_world);
+    world_update_settings(&world, &instance->settings->world);
     if (world_respawn_food(&world) != 0)
         goto world_spawn_food_failed;
 
@@ -45,25 +47,30 @@ void* server_instance_run(const void* args)
         goto server_init_failed;
     net_log_host_ips();
 
+    semaphore_give(instance->ready);
+
     log_dbg("Started server instance\n");
-    tick_cfg(&sim_tick, instance->settings_server->sim_tick_rate);
-    tick_cfg(&net_tick, instance->settings_server->net_tick_rate);
+    tick_cfg(&sim_tick, instance->settings->server.sim_tick_rate);
+    tick_cfg(&net_tick, instance->settings->server.net_tick_rate);
     frame_number = 0;
-    while (signals_exit_requested() == 0)
+    while (1)
     {
         struct snake* snake;
         int16_t       idx;
         int           tick_lag, net_update;
         uint16_t      uid;
 
+        if (semaphore_try_take(instance->stop))
+            break;
+
         net_update = tick_advance(&net_tick);
         if (net_update)
         {
             if (server_recv(
                     &server,
-                    instance->settings_server,
+                    &instance->settings->server,
                     &world,
-                    instance->settings_world,
+                    &instance->settings->world,
                     frame_number) != 0)
                 break;
         }
@@ -87,7 +94,7 @@ void* server_instance_run(const void* args)
                     &snake->head,
                     &snake->param,
                     cmd,
-                    instance->settings_server->sim_tick_rate));
+                    instance->settings->server.sim_tick_rate));
             if (server_update_snakes_in_range(&server, &world) != 0)
                 break;
             if (server_kill_snake_checks(&server, &world) != 0)
@@ -130,4 +137,73 @@ world_spawn_food_failed:
     trackers_deinit_tls();
 mem_init_failed:
     return (void*)-1;
+}
+
+/* ------------------------------------------------------------------------- */
+void server_instance_init(struct server_instance* instance)
+{
+    instance->settings = NULL;
+    instance->addr = NULL;
+    instance->port = NULL;
+    instance->thread = NULL;
+    instance->ready = NULL;
+    instance->stop = NULL;
+    instance->thread = NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+int server_instance_is_running(const struct server_instance* instance)
+{
+    return instance->thread != NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+int server_instance_start(
+    struct server_instance* instance,
+    const struct settings*  settings,
+    const char*             addr,
+    const char*             port)
+{
+    instance->settings = settings;
+    instance->addr = addr;
+    instance->port = port;
+    instance->thread = NULL;
+
+    instance->ready = semaphore_create(0);
+    if (instance->ready == NULL)
+        goto alloc_ready_failed;
+
+    instance->stop = semaphore_create(0);
+    if (instance->stop == NULL)
+        goto alloc_stop_failed;
+
+    instance->thread = thread_start(server_instance_run, instance);
+    if (instance->thread == NULL)
+        goto start_thread_failed;
+
+    return 0;
+
+start_thread_failed:
+    semaphore_destroy(instance->stop);
+alloc_stop_failed:
+    semaphore_destroy(instance->ready);
+alloc_ready_failed:
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+void server_instance_wait_for_ready(struct server_instance* instance)
+{
+    semaphore_take(instance->ready);
+}
+
+/* ------------------------------------------------------------------------- */
+void server_instance_stop(struct server_instance* instance)
+{
+    semaphore_give(instance->stop);
+    thread_join(instance->thread);
+    semaphore_destroy(instance->stop);
+    semaphore_destroy(instance->ready);
+
+    instance->thread = NULL;
 }

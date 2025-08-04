@@ -5,13 +5,19 @@
 #include <stddef.h>
 
 /* ------------------------------------------------------------------------- */
-void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx)
+void ui_deactivate_all(struct ui* ui)
 {
     struct ui_element* elem;
-    int*               screen;
-
     ui_for_each (ui, elem)
         elem->active = 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx)
+{
+    int* screen;
+
+    ui_deactivate_all(ui);
 
     screen = ui->screens[screen_idx];
     while (*screen != 0)

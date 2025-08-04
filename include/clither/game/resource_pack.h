@@ -108,4 +108,5 @@ struct resource_pack
 
 struct resource_pack* resource_pack_parse(const char* pack_path);
 void                  resource_pack_destroy(struct resource_pack* pack);
-struct fs_watch*      resource_pack_watch(struct resource_pack* pack);
+
+struct fs_watch* resource_pack_watch_create(struct resource_pack* pack);

@@ -83,5 +83,17 @@ struct gfx_interface
 };
 
 #if defined(CLITHER_GFX)
+
 extern const struct gfx_interface* gfx_backends[];
+
+int gfx_prev_backend(
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx,
+    struct resource_pack*        pack);
+
+int gfx_next_backend(
+    const struct gfx_interface** igfx,
+    struct gfx**                 gfx,
+    struct resource_pack*        pack);
+
 #endif
