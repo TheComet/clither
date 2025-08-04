@@ -136,7 +136,7 @@ struct ui_element
 
 struct ui
 {
-    int**             screens;
+    const int**       screens;
     int               count;
     struct ui_element elements[1];
 };
@@ -175,7 +175,7 @@ struct ui_element ui_button(
 struct ui_element ui_controller(enum ui_cmd_type (*interact)(
     struct ui*, union ui_cmd*, struct ui_element*, struct input*));
 
-struct ui* ui_create(int** screens, int count);
+struct ui* ui_create(const int** screens, int count);
 struct ui* ui_create_main_menu(void);
 struct ui* ui_create_in_game(void);
 void       ui_destroy(struct ui* ui);

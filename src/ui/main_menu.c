@@ -7,6 +7,7 @@
 #include "clither/platform/signals.h"
 #include "clither/platform/tick.h"
 #include "clither/server/server_instance.h"
+#include "clither/ui/garage_menu.h"
 #include "clither/ui/main_menu.h"
 #include "clither/ui/ui.h"
 #include "clither/util/cli_colors.h"
@@ -27,7 +28,7 @@ enum ui_element_index
     TEXT_ENTER_USERNAME,
     TEXT_HOST_GAME,
     TEXT_JOIN_GAME,
-    TEXTEDIT_USERNAME,
+    TEXTINPUT_USERNAME,
     BUTTON_HOST_GAME,
     BUTTON_JOIN_GAME,
     BUTTON_BACK_TO_MAIN,
@@ -44,7 +45,8 @@ enum ui_element_index
 };
 
 /* clang-format off */
-static int title_screen[] = {
+#if !defined(CLITHER_WEB_MENU)
+static const int title_screen[] = {
     CONTROLLER_VIM,
     TEXT_TITLE,
 #if defined(CLITHER_SERVER)
@@ -53,34 +55,44 @@ static int title_screen[] = {
     BUTTON_JOIN,
     BUTTON_GARAGE,
     BUTTON_OPTIONS,
-#if defined(CLITHER_SERVER)
     BUTTON_QUIT,
-#endif
     0
 };
-static int host_screen[] = {
-    TEXT_HOST_GAME,
-    TEXT_ENTER_USERNAME,
-    TEXTEDIT_USERNAME,
-    BUTTON_HOST_GAME,
-    BUTTON_BACK_TO_MAIN,
-    0
-};
-static int join_screen[] = {
+static const int join_screen[] = {
     TEXT_JOIN_GAME,
     TEXT_ENTER_USERNAME,
-    TEXTEDIT_USERNAME,
+    TEXTINPUT_USERNAME,
     BUTTON_JOIN_GAME,
     BUTTON_BACK_TO_MAIN,
     0
 };
-static int host_error[] = {
+#else
+static const int title_screen[] = {
+    TEXT_TITLE,
+    TEXT_ENTER_USERNAME,
+    TEXTINPUT_USERNAME,
+    BUTTON_JOIN_GAME,
+    BUTTON_GARAGE,
+    BUTTON_OPTIONS,
+    0
+};
+static const int* const join_screen = title_screen;
+#endif
+static const int host_screen[] = {
+    TEXT_HOST_GAME,
+    TEXT_ENTER_USERNAME,
+    TEXTINPUT_USERNAME,
+    BUTTON_HOST_GAME,
+    BUTTON_BACK_TO_MAIN,
+    0
+};
+static const int host_error[] = {
     TEXT_HOST_ERROR_TITLE,
     TEXT_HOST_ERROR_MESSAGE,
     BUTTON_BACK_TO_HOST,
     0
 };
-static int join_error[] = {
+static const int join_error[] = {
     TEXT_JOIN_ERROR_TITLE,
     TEXT_JOIN_ERROR_MESSAGE,
     BUTTON_BACK_TO_JOIN,
@@ -88,7 +100,7 @@ static int join_error[] = {
 };
 /* clang-format on */
 
-static int* screens[] = {
+static const int* screens[] = {
     title_screen, host_screen, join_screen, host_error, join_error, NULL};
 
 /* ------------------------------------------------------------------------- */
@@ -125,8 +137,8 @@ button_is_mouse_over(struct ui_element* elem, const struct input* input)
 static int
 button_is_mouse_over_smaller(struct ui_element* elem, const struct input* input)
 {
-    return input->mousex_ar >= elem->u.button.text.pos.x - 0.1 &&
-           input->mousex_ar <= elem->u.button.text.pos.x + 0.1 &&
+    return input->mousex_ar >= elem->u.button.text.pos.x - 0.15 &&
+           input->mousex_ar <= elem->u.button.text.pos.x + 0.15 &&
            input->mousey_ar >= elem->u.button.text.pos.y - 0.05 &&
            input->mousey_ar <= elem->u.button.text.pos.y + 0.15;
 }
@@ -254,7 +266,7 @@ static enum ui_cmd_type button_host_game_interact(
     struct input*      input)
 {
     const struct ui_textinput* textinput;
-    textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+    textinput = &ui->elements[TEXTINPUT_USERNAME].u.textinput;
 
     elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
     if (!elem->u.button.enabled)
@@ -280,7 +292,7 @@ static enum ui_cmd_type button_join_game_interact(
     struct input*      input)
 {
     const struct ui_textinput* textinput;
-    textinput = &ui->elements[TEXTEDIT_USERNAME].u.textinput;
+    textinput = &ui->elements[TEXTINPUT_USERNAME].u.textinput;
 
     elem->u.button.enabled = vec_count(textinput->input_buffer) > 0;
     if (!elem->u.button.enabled)
@@ -316,7 +328,7 @@ static enum ui_cmd_type controller_vim(
     struct input*      input)
 {
     const uint32_t*       codepoint;
-    int*                  idx;
+    const int*            idx;
     enum ui_element_index old_idx;
 
     enum direction
@@ -445,7 +457,7 @@ struct ui* ui_create_main_menu(void)
         ui_style_text_normal,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[TEXTEDIT_USERNAME] =
+    ui->elements[TEXTINPUT_USERNAME] =
         ui_textinput(make_fpos(-0.22, 0.0), ui_style_text_normal);
     ui->elements[BUTTON_HOST_GAME] = ui_button(
         cstr_view("Host"),
@@ -503,6 +515,14 @@ struct ui* ui_create_main_menu(void)
         ui_style_button,
         button_is_mouse_over_smaller,
         button_back_to_join_interact);
+
+#if defined(CLITHER_WEB_MENU)
+    ui->elements[TEXT_ENTER_USERNAME].u.text.pos = make_fpos(-0.08, 0.0);
+    ui->elements[TEXTINPUT_USERNAME].u.textinput.text.pos = make_fpos(00, 0.0);
+    ui->elements[BUTTON_JOIN_GAME].u.button.text.pos = make_fpos(0.0, -0.3);
+    ui->elements[BUTTON_GARAGE].u.button.text.pos = make_fpos(-0.65, -0.8);
+    ui->elements[BUTTON_OPTIONS].u.button.text.pos = make_fpos(0.65, -0.8);
+#endif
 
     return ui;
 }
@@ -640,7 +660,10 @@ int main_menu_run(
                 break;
             }
 
-            case UI_CMD_GARAGE: break; ;
+            case UI_CMD_GARAGE: {
+                garage_menu_run(igfx, gfx, pack, pack_watch, settings);
+                break;
+            }
         }
 
         /* CTRL+C */
@@ -667,6 +690,7 @@ int main_menu_run(
         }
 
         /* Check for resource pack changes */
+#if defined(CLITHER_HOT_RELOAD)
         if (*pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
         {
             struct resource_pack* new_pack;
@@ -688,6 +712,7 @@ int main_menu_run(
             fs_watch_deinit(*pack_watch);
             *pack_watch = resource_pack_watch_create(*pack);
         }
+#endif
 
         if (*gfx != NULL)
         {

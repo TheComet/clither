@@ -15,7 +15,7 @@ void ui_deactivate_all(struct ui* ui)
 /* ------------------------------------------------------------------------- */
 void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx)
 {
-    int* screen;
+    const int* screen;
 
     ui_deactivate_all(ui);
 
@@ -34,7 +34,7 @@ void ui_set_message_on_active_screen(struct ui* ui, const char* message)
 }
 
 /* ------------------------------------------------------------------------- */
-struct ui* ui_create(int** screens, int count)
+struct ui* ui_create(const int** screens, int count)
 {
     struct ui* ui;
     int        header = offsetof(struct ui, elements);

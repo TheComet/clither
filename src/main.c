@@ -96,9 +96,11 @@ int main(int argc, char* argv[])
         if (pack == NULL)
             goto parse_resource_pack_failed;
 
+#    if defined(CLITHER_HOT_RELOAD)
         pack_watch = resource_pack_watch_create(pack);
         if (pack_watch == NULL)
             goto watch_resource_pack_failed;
+#    endif
 
         igfx = gfx_backends[args.gfx_backend];
         log_info("Using graphics backend: %s\n", igfx->name);
@@ -225,9 +227,11 @@ create_gfx_failed:
     if (igfx != NULL)
         igfx->deinit();
 init_gfx_failed:
+#    if defined(CLITHER_HOT_RELOAD)
     if (pack_watch != NULL)
         fs_watch_deinit(pack_watch);
 watch_resource_pack_failed:
+#    endif
     if (pack != NULL)
         resource_pack_destroy(pack);
 parse_resource_pack_failed:

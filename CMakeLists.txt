@@ -23,10 +23,12 @@ option (CLITHER_DEBUG_ASSERT "Enable the CLITHER_DEBUG_ASSERT macro" OFF)
 option (CLITHER_DEBUG_ZOOM "Enable camera zooming using the mouse wheel" OFF)
 option (CLITHER_DOC "Compile LaTeX documents" ON)
 option (CLITHER_FETCH_ASSETS "Download and install assets automatically" ON)
+option (CLITHER_HOT_RELOAD "Enable hot-reloading of the game assets" ON)
 option (CLITHER_MCD "Add McDonald's WiFi support (network latency and packet loss simulation)" OFF)
 option (CLITHER_LOG "Enable logging functionality" ON)
 option (CLITHER_LOG_DEBUG "Enable log_dbg()" OFF)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
+option (CLITHER_WEB_MENU "Optimize main menu for the web build" OFF)
 
 set (CLITHER_ASM_OPTIMIZATIONS "HOTPATCH" CACHE STRING "")
 set_property (CACHE CLITHER_ASM_OPTIMIZATIONS
@@ -261,8 +263,9 @@ if (CLITHER_GFX)
         "src/ui/button.c"
         "src/ui/controller.c"
         "src/ui/element.c"
-        "src/ui/rectangle.c"
+        "src/ui/garage_menu.c"
         "src/ui/main_menu.c"
+        "src/ui/rectangle.c"
         "src/ui/style.c"
         "src/ui/text.c"
         "src/ui/textinput.c")

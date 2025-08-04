@@ -21,8 +21,8 @@ void camera_update(
     const struct input*       input,
     int                       sim_tick_rate)
 {
-    qw leadx = qa_cos(head->angle) / 4;
-    qw leady = qa_sin(head->angle) / 4;
+    qw leadx = qa_cos(head->angle) / 8;
+    qw leady = qa_sin(head->angle) / 8;
     qw targetx = qw_add(head->pos.x, leadx);
     qw targety = qw_add(head->pos.y, leady);
     qw dx = qw_mul(qw_sub(targetx, camera->pos.x), make_qw2(1, 4));

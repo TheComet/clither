@@ -8,10 +8,12 @@
 #cmakedefine CLITHER_DEBUG_ASSERT
 #cmakedefine CLITHER_DEBUG_ZOOM
 #cmakedefine CLITHER_DOC
+#cmakedefine CLITHER_HOT_RELOAD
 #cmakedefine CLITHER_MCD
 #cmakedefine CLITHER_LOG
 #cmakedefine CLITHER_LOG_DEBUG
 #cmakedefine CLITHER_TESTS
+#cmakedefine CLITHER_WEB_MENU
 
 #define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
 

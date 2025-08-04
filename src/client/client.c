@@ -711,7 +711,7 @@ int client_run(
         }
 #    endif
 
-#    if defined(CLITHER_GFX)
+#    if defined(CLITHER_HOT_RELOAD)
         /* Check for resource pack changes */
         if (pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
         {
