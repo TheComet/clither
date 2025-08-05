@@ -7,18 +7,26 @@ struct str;
 
 void        str_init(struct str** str);
 void        str_deinit(struct str* str);
+int         str_ensure_capacity(struct str** str, int capacity);
+int         str_capacity(const struct str* str);
+int         str_len(const struct str* str);
+char*       str_data(struct str* str);
+int         str_append_char(struct str** str, char c);
+void        str_pop_char(struct str* str);
+void        str_set_char(struct str* str, int index, char c);
+void        str_clear(struct str* str);
+void        str_set_len(struct str* str, int new_len);
 int         str_set(struct str** str, struct strview view);
 int         str_set_utf32(struct str** str, const uint32_t* utf32, int len);
 int         str_set_cstr(struct str** str, const char* cstr);
-int         str_set_path_cstr(struct str** str, const char* path);
-int         str_join_path(struct str** str, struct strview path);
-int         str_join_path_cstr(struct str** str, const char* path);
-int         str_append_char(struct str** str, char c);
-void        str_pop_char(struct str* str);
-void        str_clear(struct str* str);
 const char* str_cstr(const struct str* str);
-int         str_len(const struct str* str);
-int         cstr_ends_with(const char* cstr, const char* suffix);
+
+int  str_set_path_cstr(struct str** str, const char* path);
+int  str_join_path(struct str** str, struct strview path);
+int  str_join_path_cstr(struct str** str, const char* path);
+void str_dirname(struct str* str);
+
+int cstr_ends_with(const char* cstr, const char* suffix);
 
 static struct strview str_view(const struct str* str)
 {

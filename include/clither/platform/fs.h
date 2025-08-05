@@ -1,15 +1,18 @@
 #pragma once
 
-#include "clither/config.h"
-
 struct fs_watch;
+struct str;
 
 int fs_list(
     const char* path,
     int (*on_entry)(const char* name, void* user),
     void* user);
+
 int fs_file_exists(const char* path);
 int fs_dir_exists(const char* path);
+int fs_make_dir(const char* path);
+int fs_make_path(const char* path);
+int fs_appdata_dir(struct str** path);
 
 struct fs_watch* fs_watch_init(void);
 void             fs_watch_deinit(struct fs_watch* w);

@@ -64,6 +64,7 @@ void ui_destroy(struct ui* ui)
     {
         switch (elem->type)
         {
+            case UI_CONTROLLER: break;
             case UI_RECTANGLE: break;
 
             case UI_TEXT: {
@@ -83,7 +84,7 @@ void ui_destroy(struct ui* ui)
                 break;
             }
 
-            case UI_CONTROLLER: break;
+            case UI_SLIDER: break;
         }
     }
 

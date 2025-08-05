@@ -196,7 +196,10 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     if (button == GLFW_MOUSE_BUTTON_LEFT)
     {
         gfx->input_buffer.boost = (action == GLFW_PRESS);
-        gfx->input_buffer.screen_clicked = (action == GLFW_PRESS);
+        gfx->input_buffer.mouse_down = (action == GLFW_PRESS);
+
+        if (action == GLFW_PRESS)
+            gfx->input_buffer.screen_clicked = 1;
     }
 }
 
@@ -571,6 +574,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
+            case UI_CONTROLLER: break;
             case UI_RECTANGLE:
                 gfx_gles2_rectangle_draw(
                     &gfx->rect,
@@ -607,13 +611,42 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                 break;
             }
             case UI_BUTTON: break;
-            case UI_CONTROLLER: break;
+            case UI_SLIDER: {
+                GLfloat x1 = ui_elem->u.slider.start.x;
+                GLfloat x2 = ui_elem->u.slider.end.x;
+                GLfloat y1 = ui_elem->u.slider.start.y;
+                GLfloat y2 = ui_elem->u.slider.end.y;
+                GLfloat t = ui_elem->u.slider.value;
+                GLfloat x = x1 + (x2 - x1) * t;
+                GLfloat y = y1 + (y2 - y1) * t;
+                GLfloat h = 1.0 / gfx->width * 2;
+
+                gfx_gles2_rectangle_draw(
+                    &gfx->rect,
+                    &gfx->quad_mesh,
+                    make_fpos(x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2),
+                    y1 == y2 ? make_fpos((x2 - x1) / 2, h)
+                             : make_fpos(h, (y2 - y1) / 2),
+                    ui_elem->u.slider.normal_color,
+                    &ar);
+                gfx_gles2_rectangle_draw(
+                    &gfx->rect,
+                    &gfx->quad_mesh,
+                    make_fpos(x, y),
+                    make_fpos(
+                        ui_elem->u.slider.knob_diameter / 2,
+                        ui_elem->u.slider.knob_diameter / 2),
+                    ui_elem->u.slider.color,
+                    &ar);
+                break;
+            }
         }
 
     gfx_gles2_text_prepare_draw(&gfx->font, &ar);
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
+            case UI_CONTROLLER: break;
             case UI_RECTANGLE: break;
             case UI_TEXT:
                 gfx_gles2_text_draw_screen(
@@ -642,7 +675,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     ui_elem->u.button.text.size,
                     ui_elem->u.button.text.align);
                 break;
-            case UI_CONTROLLER: break;
+            case UI_SLIDER: break;
         }
     gfx_gles2_text_end_draw();
 }

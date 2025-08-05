@@ -706,7 +706,7 @@ static enum process_message_result process_message(
                     return PROCESS_MESSAGE_OOM;
 
                 snake_id = world_spawn_snake(world, pp.join_request.username);
-                if (snake_id == 0)
+                if (snake_id == WORLD_SPAWN_SNAKE_FAILED)
                 {
                     server_client_hmap_erase(server->clients, addr);
                     return PROCESS_MESSAGE_OOM;

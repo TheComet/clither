@@ -1,15 +1,15 @@
-#include "clither/util/log.h"
 #include "clither/platform/thread.h"
+#include "clither/util/log.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-struct thread*
-thread_start(void* (*func)(const void*), const void* args)
+/* ------------------------------------------------------------------------- */
+struct thread* thread_start(void* (*func)(const void*), const void* args)
 {
     HANDLE hThread = CreateThread(
-        NULL,  /* Security attributes*/
-        0,     /* Initial stack size */
+        NULL, /* Security attributes*/
+        0,    /* Initial stack size */
         (LPTHREAD_START_ROUTINE)func,
         (void*)args,
         0,     /* Run thread immediately */
@@ -23,10 +23,10 @@ thread_start(void* (*func)(const void*), const void* args)
     return (struct thread*)hThread;
 }
 
-void*
-thread_join(struct thread* t)
+/* ------------------------------------------------------------------------- */
+void* thread_join(struct thread* t)
 {
-    DWORD ret;
+    DWORD  ret;
     HANDLE hThread = (HANDLE)t;
     if (WaitForSingleObject(hThread, INFINITE) != 0)
     {
@@ -39,8 +39,8 @@ thread_join(struct thread* t)
     return (void*)(intptr_t)ret;
 }
 
-void
-thread_kill(struct thread* t)
+/* ------------------------------------------------------------------------- */
+void thread_kill(struct thread* t)
 {
     HANDLE hThread = (HANDLE)t;
     if (TerminateThread(hThread, (DWORD)-1) == FALSE)
@@ -48,8 +48,8 @@ thread_kill(struct thread* t)
     CloseHandle(hThread);
 }
 
-void
-thread_sigint(struct thread* t)
+/* ------------------------------------------------------------------------- */
+void thread_sigint(struct thread* t)
 {
     HANDLE hThread = (HANDLE)t;
     if (TerminateThread(hThread, (DWORD)-1) == FALSE)

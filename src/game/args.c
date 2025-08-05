@@ -205,7 +205,7 @@ int args_parse(struct args* a, int argc, char* argv[])
 #endif
 
     /* Set defaults */
-    a->settings_file = "settings.ini";
+    a->settings_file = NULL;
 #if defined(CLITHER_CLIENT) || defined(CLITHER_SERVER) || defined(CLITHER_MCD)
     a->addr = NULL;
     a->port = NULL;

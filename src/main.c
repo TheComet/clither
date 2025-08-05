@@ -21,12 +21,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-static struct args     args;
-static struct settings settings;
-
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
+    struct args     args;
+    struct settings settings;
+    struct str*     settings_file;
 #if defined(CLITHER_CLIENT)
     struct resource_pack*       pack = NULL;
     const struct gfx_interface* igfx = NULL;
@@ -78,11 +78,29 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    log_info("Reading settings from file \"%s\"\n", args.settings_file);
-    if (settings_load(&settings, args.settings_file) != 0)
-        goto parse_args_failed;
+    str_init(&settings_file);
+    if (args.settings_file)
+    {
+        if (str_set_cstr(&settings_file, args.settings_file) != 0)
+            goto read_settings_failed;
+    }
+    else
+    {
+        if (fs_appdata_dir(&settings_file) != 0)
+            goto read_settings_failed;
+        if (str_join_path_cstr(&settings_file, "mechasnek") != 0)
+            goto read_settings_failed;
+        if (fs_make_path(str_cstr(settings_file)) != 0)
+            goto read_settings_failed;
+        if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
+            goto read_settings_failed;
+    }
+
+    log_info("Reading settings from file \"%s\"\n", str_cstr(settings_file));
+    if (settings_load(&settings, str_cstr(settings_file)) != 0)
+        goto read_settings_failed;
     if (settings_apply_args(&settings, &args) != 0)
-        goto parse_args_failed;
+        goto read_settings_failed;
 
 #if defined(CLITHER_LOG)
     if (args.log_file)
@@ -245,6 +263,8 @@ parse_resource_pack_failed:
 tests_or_benchmarks_run:
 #endif
 
+read_settings_failed:
+    str_deinit(settings_file);
 parse_args_failed:
     signals_remove();
 asm_optimizations_failed:

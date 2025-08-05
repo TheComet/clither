@@ -9,11 +9,12 @@ struct ui;
 
 enum ui_element_type
 {
+    UI_CONTROLLER,
     UI_RECTANGLE,
     UI_TEXT,
     UI_TEXTINPUT,
     UI_BUTTON,
-    UI_CONTROLLER
+    UI_SLIDER
 };
 
 enum ui_align
@@ -92,7 +93,7 @@ struct ui_textinput
 struct ui_button_style
 {
     uint32_t color;
-    uint32_t mouseover_color;
+    uint32_t hover_color;
     uint32_t disabled_color;
     float    text_size;
 };
@@ -100,13 +101,36 @@ struct ui_button_style
 struct ui_button
 {
     struct ui_text text;
-    uint32_t       normal_color;
-    uint32_t       mouseover_color;
-    uint32_t       disabled_color;
-    int            hover_crossfade;
-    unsigned       enabled : 1;
-    unsigned       hover : 1;
-    unsigned       mouse_controlled : 1;
+
+    uint32_t normal_color;
+    uint32_t hover_color;
+    uint32_t disabled_color;
+    int      hover_crossfade;
+    unsigned enabled : 1;
+    unsigned hover : 1;
+    unsigned mouse_controlled : 1;
+};
+
+struct ui_slider_style
+{
+    uint32_t normal_color;
+    uint32_t hover_color;
+    float    knob_diameter;
+};
+
+struct ui_slider
+{
+    struct fpos start;
+    struct fpos end;
+    float       value; /* 0.0 - 1.0 */
+    uint32_t    color;
+    float       knob_diameter;
+
+    uint32_t normal_color;
+    uint32_t hover_color;
+    int      hover_crossfade;
+    unsigned knob_hover : 1;
+    unsigned grabbed : 1;
 };
 
 struct ui_element
@@ -129,6 +153,7 @@ struct ui_element
         struct ui_text      text;
         struct ui_button    button;
         struct ui_textinput textinput;
+        struct ui_slider    slider;
     } u;
     enum ui_element_type type;
     unsigned             active : 1;
@@ -146,8 +171,13 @@ extern struct ui_text_style   ui_style_text_title;
 extern struct ui_text_style   ui_style_text_subtitle;
 extern struct ui_text_style   ui_style_text_subsubtitle;
 extern struct ui_text_style   ui_style_text_normal;
+extern struct ui_text_style   ui_style_text_small;
+extern struct ui_slider_style ui_style_slider;
 
 void ui_element_init(struct ui_element* elem, enum ui_element_type type);
+
+struct ui_element ui_controller(enum ui_cmd_type (*interact)(
+    struct ui*, union ui_cmd*, struct ui_element*, struct input*));
 
 struct ui_element
 ui_rectangle(struct fpos pos, struct fpos size, uint32_t color);
@@ -172,8 +202,12 @@ struct ui_element ui_button(
     enum ui_cmd_type (*interact)(
         struct ui*, union ui_cmd*, struct ui_element*, struct input*));
 
-struct ui_element ui_controller(enum ui_cmd_type (*interact)(
-    struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+struct ui_element ui_slider(
+    struct fpos            start,
+    struct fpos            end,
+    struct ui_slider_style style,
+    enum ui_cmd_type (*interact)(
+        struct ui*, union ui_cmd*, struct ui_element*, struct input*));
 
 struct ui* ui_create(const int** screens, int count);
 struct ui* ui_create_main_menu(void);

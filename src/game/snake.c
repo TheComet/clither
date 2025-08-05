@@ -199,7 +199,7 @@ void snake_step_head(
     if (angle_diff > snake_turn_speed(param))
         head->angle = qa_sub(
             head->angle,
-            qa_mul(snake_turn_speed(param), make_qa2(sim_tick_rate, 60)));
+            qa_mul(snake_turn_speed(param), make_qa2(60, sim_tick_rate)));
     else if (angle_diff < -snake_turn_speed(param))
         head->angle = qa_add(head->angle, snake_turn_speed(param));
     else

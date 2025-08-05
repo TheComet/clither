@@ -13,7 +13,25 @@ VEC_DECLARE(str_impl, char, 16)
 VEC_DEFINE(str_impl, char, 16)
 
 /* ------------------------------------------------------------------------- */
-static int ensure_capacity(struct str** str, int capacity)
+static int is_sep(char c)
+{
+    return c == '/' || c == '\\';
+}
+
+/* ------------------------------------------------------------------------- */
+void str_init(struct str** str)
+{
+    str_impl_init((struct str_impl**)str);
+}
+
+/* ------------------------------------------------------------------------- */
+void str_deinit(struct str* str)
+{
+    str_impl_deinit((struct str_impl*)str);
+}
+
+/* ------------------------------------------------------------------------- */
+int str_ensure_capacity(struct str** str, int capacity)
 {
     struct str_impl* impl = (struct str_impl*)*str;
     if (impl == NULL)
@@ -36,15 +54,79 @@ static int ensure_capacity(struct str** str, int capacity)
 }
 
 /* ------------------------------------------------------------------------- */
-void str_init(struct str** str)
+int str_capacity(const struct str* str)
 {
-    str_impl_init((struct str_impl**)str);
+    return vec_capacity((const struct str_impl*)str);
 }
 
 /* ------------------------------------------------------------------------- */
-void str_deinit(struct str* str)
+int str_len(const struct str* str)
 {
-    str_impl_deinit((struct str_impl*)str);
+    if (str != NULL)
+    {
+        assert(((const struct str_impl*)str)->count > 0);
+    }
+    return str ? ((const struct str_impl*)str)->count - 1 : 0;
+}
+
+/* ------------------------------------------------------------------------- */
+char* str_data(struct str* str)
+{
+    return str ? ((struct str_impl*)str)->data : NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+int str_append_char(struct str** str, char c)
+{
+    struct str_impl* impl;
+    int              len = str_len(*str);
+
+    if (str_ensure_capacity(str, len + 1) != 0)
+        return -1;
+    impl = (struct str_impl*)*str;
+
+    impl->data[len] = c;
+    impl->data[len + 1] = '\0';
+    impl->count = len + 2;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void str_pop_char(struct str* str)
+{
+    struct str_impl* impl = (struct str_impl*)str;
+    if (str_len(str) == 0)
+        return;
+    impl->data[--impl->count] = '\0';
+}
+
+/* ------------------------------------------------------------------------- */
+void str_set_char(struct str* str, int index, char c)
+{
+    struct str_impl* impl = (struct str_impl*)str;
+    assert(index >= 0 && index < vec_capacity(impl) - 1);
+    impl->data[index] = c;
+}
+
+/* ------------------------------------------------------------------------- */
+void str_clear(struct str* str)
+{
+    struct str_impl* impl = (struct str_impl*)str;
+    if (impl == NULL)
+        return;
+    impl->data[0] = '\0';
+    impl->count = 1;
+}
+
+/* ------------------------------------------------------------------------- */
+void str_set_len(struct str* str, int new_len)
+{
+    struct str_impl* impl = (struct str_impl*)str;
+    assert(new_len >= 0 && new_len <= vec_capacity(impl) - 1);
+
+    impl->data[new_len] = '\0';
+    impl->count = new_len + 1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -52,7 +134,7 @@ int str_set(struct str** str, struct strview view)
 {
     struct str_impl* impl;
 
-    if (ensure_capacity(str, view.len) != 0)
+    if (str_ensure_capacity(str, view.len) != 0)
         return -1;
     impl = (struct str_impl*)*str;
 
@@ -70,7 +152,7 @@ int str_set_utf32(struct str** str, const uint32_t* utf32, int len)
     if (utf32 == NULL || len == 0)
         return 0;
 
-    if (ensure_capacity(str, len * (int)sizeof(uint32_t)) != 0)
+    if (str_ensure_capacity(str, len * (int)sizeof(uint32_t)) != 0)
         return -1;
 
     while (len--)
@@ -114,13 +196,19 @@ int str_set_cstr(struct str** str, const char* cstr)
 }
 
 /* ------------------------------------------------------------------------- */
+const char* str_cstr(const struct str* str)
+{
+    return str ? ((const struct str_impl*)str)->data : "";
+}
+
+/* ------------------------------------------------------------------------- */
 int str_set_path_cstr(struct str** str, const char* path)
 {
     int              i;
     struct str_impl* impl;
     int              len = (int)strlen(path);
 
-    if (ensure_capacity(str, len) != 0)
+    if (str_ensure_capacity(str, len) != 0)
         return -1;
     impl = (struct str_impl*)*str;
 
@@ -142,11 +230,11 @@ int str_join_path(struct str** str, struct strview path)
     int              len = str_len(*str);
     int              sep_len = 1;
 
-    if (ensure_capacity(str, len + path.len + sep_len) != 0)
+    if (str_ensure_capacity(str, len + path.len + sep_len) != 0)
         return -1;
     impl = (struct str_impl*)*str;
 
-    if (impl->data[len] != SEP)
+    if (!is_sep(impl->data[len]))
     {
         impl->data[len] = SEP;
         len++;
@@ -168,55 +256,25 @@ int str_join_path_cstr(struct str** str, const char* path)
 }
 
 /* ------------------------------------------------------------------------- */
-int str_append_char(struct str** str, char c)
-{
-    struct str_impl* impl;
-    int              len = str_len(*str);
-
-    if (ensure_capacity(str, len + 1) != 0)
-        return -1;
-    impl = (struct str_impl*)*str;
-
-    impl->data[len] = c;
-    impl->data[len + 1] = '\0';
-    impl->count = len + 2;
-
-    return 0;
-}
-
-/* ------------------------------------------------------------------------- */
-void str_pop_char(struct str* str)
+void str_dirname(struct str* str)
 {
     struct str_impl* impl = (struct str_impl*)str;
-    if (str_len(str) == 0)
-        return;
-    impl->data[--impl->count] = '\0';
-}
 
-/* ------------------------------------------------------------------------- */
-void str_clear(struct str* str)
-{
-    struct str_impl* impl = (struct str_impl*)str;
-    if (impl == NULL)
-        return;
-    impl->data[0] = '\0';
-    impl->count = 1;
-}
+    /* Remove trailing slashes (if not root) */
+    while (impl->count > 2 && is_sep(impl->data[impl->count - 2]))
+        impl->count--;
+    /* Remove file name */
+    while (impl->count > 2 && !is_sep(impl->data[impl->count - 2]))
+        impl->count--;
+    /* Remove joining slash if not root directory */
+    while (impl->count > 2 && is_sep(impl->data[impl->count - 2]))
+        impl->count--;
+    /* Special case on linux -- root directory */
+    if (impl->count == 2 && !is_sep(impl->data[impl->count - 2]))
+        impl->count--;
 
-/* ------------------------------------------------------------------------- */
-const char* str_cstr(const struct str* str)
-{
-    return str ? ((const struct str_impl*)str)->data : "";
-}
-
-/* ------------------------------------------------------------------------- */
-int str_len(const struct str* str)
-{
-    if (str != NULL)
-    {
-        assert(((const struct str_impl*)str)->count > 0);
-    }
-    return str ? ((const struct str_impl*)str)->count - 1 : 0;
+    assert(impl->count > 1);
+    impl->data[impl->count - 1] = '\0';
 }
 
 /* ------------------------------------------------------------------------- */

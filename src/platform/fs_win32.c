@@ -2,10 +2,11 @@
 #include "clither/util/str.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <knownfolders.h>
 #include <shlobj.h>
+#include <windows.h>
 
+/* ------------------------------------------------------------------------- */
 int fs_list(
     const char* path, int (*on_entry)(const char* name, void* user), void* user)
 {
@@ -46,8 +47,8 @@ str_set_failed:
     return ret;
 }
 
-int
-fs_file_exists(const char* path)
+/* ------------------------------------------------------------------------- */
+int fs_file_exists(const char* path)
 {
     DWORD attr = GetFileAttributes(path);
     if (attr == INVALID_FILE_ATTRIBUTES)
@@ -55,8 +56,8 @@ fs_file_exists(const char* path)
     return !(attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-int
-fs_dir_exists(const char* path)
+/* ------------------------------------------------------------------------- */
+int fs_dir_exists(const char* path)
 {
     DWORD attr = GetFileAttributes(path);
     if (attr == INVALID_FILE_ATTRIBUTES)
@@ -64,22 +65,26 @@ fs_dir_exists(const char* path)
     return !!(attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+/* ------------------------------------------------------------------------- */
 struct fs_watch* fs_watch_init(void)
 {
     return (void*)1;
 }
 
+/* ------------------------------------------------------------------------- */
 void fs_watch_deinit(struct fs_watch* w)
 {
     (void)w;
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_watch_file(struct fs_watch* w, const char* path)
 {
     (void)w, (void)path;
     return 0;
 }
 
+/* ------------------------------------------------------------------------- */
 int fs_watch_check(struct fs_watch* w)
 {
     (void)w;

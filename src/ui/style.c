@@ -18,4 +18,12 @@ struct ui_text_style ui_style_text_subsubtitle = {
 struct ui_text_style ui_style_text_normal = {
     0xA0FFFFFF,
     1.0 / 64};
+struct ui_text_style ui_style_text_small = {
+    0xA0FFFFFF,
+    1.0 / 96};
+struct ui_slider_style ui_style_slider = {
+    0xA0FFFFFF,
+    0xA0FF78FF,
+    1.0 / 32
+};
 /* clang-format on */

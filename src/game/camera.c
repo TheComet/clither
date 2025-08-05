@@ -28,8 +28,8 @@ void camera_update(
     qw dx = qw_mul(qw_sub(targetx, camera->pos.x), make_qw2(1, 4));
     qw dy = qw_mul(qw_sub(targety, camera->pos.y), make_qw2(1, 4));
 
-    dx = qw_mul(dx, make_qw2(sim_tick_rate, 60));
-    dy = qw_mul(dy, make_qw2(sim_tick_rate, 60));
+    dx = qw_mul(dx, make_qw2(60, sim_tick_rate));
+    dy = qw_mul(dy, make_qw2(60, sim_tick_rate));
 
     camera->pos.x = qw_add(camera->pos.x, dx);
     camera->pos.y = qw_add(camera->pos.y, dy);

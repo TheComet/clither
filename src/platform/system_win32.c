@@ -1,17 +1,18 @@
 #include "clither/platform/system.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <intrin.h>
+#include <windows.h>
 
-int
-system_cpu_count(void)
+/* ------------------------------------------------------------------------- */
+int system_cpu_count(void)
 {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     return (int)si.dwNumberOfProcessors;
 }
 
+/* ------------------------------------------------------------------------- */
 int system_cpuid_bmi2(void)
 {
     int cpu_info[4];

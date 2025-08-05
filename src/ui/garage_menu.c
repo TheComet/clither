@@ -18,6 +18,17 @@ enum ui_element_index
 {
     NONE,
 
+    TEXT_SPACING,
+    SLIDER_SPACING,
+    TEXT_SPINE_WIDTH,
+    SLIDER_SPINE_WIDTH,
+    TEXT_HEAD_SIZE,
+    SLIDER_HEAD_SIZE,
+    TEXT_TAIL_SIZE,
+    SLIDER_TAIL_SIZE,
+    TEXT_DECAY,
+    SLIDER_DECAY,
+
     BUTTON_BACK_TO_MAIN,
 
     ELEMENT_COUNT
@@ -25,6 +36,17 @@ enum ui_element_index
 
 /* clang-format off */
 static const int garage_screen[] = {
+    TEXT_SPACING,
+    SLIDER_SPACING,
+    TEXT_SPINE_WIDTH,
+    SLIDER_SPINE_WIDTH,
+    TEXT_HEAD_SIZE,
+    SLIDER_HEAD_SIZE,
+    TEXT_TAIL_SIZE,
+    SLIDER_TAIL_SIZE,
+    TEXT_DECAY,
+    SLIDER_DECAY,
+
     BUTTON_BACK_TO_MAIN,
     0
 };
@@ -40,6 +62,37 @@ button_is_mouse_over(struct ui_element* elem, const struct input* input)
            input->mousex_ar <= elem->u.button.text.pos.x + 0.15 &&
            input->mousey_ar >= elem->u.button.text.pos.y - 0.05 &&
            input->mousey_ar <= elem->u.button.text.pos.y + 0.15;
+}
+
+/* ------------------------------------------------------------------------- */
+static enum ui_cmd_type slider_spacing_interact(
+    struct ui*         ui,
+    union ui_cmd*      cmd,
+    struct ui_element* elem,
+    struct input*      input)
+{
+    if (!elem->u.slider.grabbed && elem->u.slider.knob_hover &&
+        check_and_clear(input->screen_clicked))
+    {
+        elem->u.slider.grabbed = 1;
+    }
+
+    if (!input->mouse_down)
+        elem->u.slider.grabbed = 0;
+
+    if (elem->u.slider.grabbed)
+    {
+        float x1 = elem->u.slider.start.x;
+        float x2 = elem->u.slider.end.x;
+        float y1 = elem->u.slider.start.y;
+        float y2 = elem->u.slider.end.y;
+        float value = y1 == y2 ? (input->mousex_ar - x1) / (x2 - x1)
+                               : (input->mousey_ar - y1) / (y2 - y1);
+        elem->u.slider.value = value < 0.0 ? 0.0 : value > 1.0 ? 1.0 : value;
+    }
+
+    (void)ui, (void)cmd;
+    return UI_CMD_NONE;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -65,9 +118,64 @@ struct ui* ui_create_garage_menu(void)
     if (ui == NULL)
         return NULL;
 
+    ui->elements[TEXT_SPACING] = ui_text(
+        cstr_view("Spacing"),
+        make_fpos(.65, .9),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_SPACING] = ui_slider(
+        make_fpos(.7, .91),
+        make_fpos(.95, .91),
+        ui_style_slider,
+        slider_spacing_interact);
+    ui->elements[TEXT_SPINE_WIDTH] = ui_text(
+        cstr_view("Spine"),
+        make_fpos(.65, .85),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_SPINE_WIDTH] = ui_slider(
+        make_fpos(.7, .86),
+        make_fpos(.95, .86),
+        ui_style_slider,
+        slider_spacing_interact);
+    ui->elements[TEXT_HEAD_SIZE] = ui_text(
+        cstr_view("Head size"),
+        make_fpos(.65, .8),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_HEAD_SIZE] = ui_slider(
+        make_fpos(.7, .81),
+        make_fpos(.95, .81),
+        ui_style_slider,
+        slider_spacing_interact);
+    ui->elements[TEXT_TAIL_SIZE] = ui_text(
+        cstr_view("Tail size"),
+        make_fpos(.65, .75),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_TAIL_SIZE] = ui_slider(
+        make_fpos(.7, .76),
+        make_fpos(.95, .76),
+        ui_style_slider,
+        slider_spacing_interact);
+    ui->elements[TEXT_DECAY] = ui_text(
+        cstr_view("Decay"),
+        make_fpos(.65, .7),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_DECAY] = ui_slider(
+        make_fpos(.7, .71),
+        make_fpos(.95, .71),
+        ui_style_slider,
+        slider_spacing_interact);
     ui->elements[BUTTON_BACK_TO_MAIN] = ui_button(
         cstr_view("Back"),
-        make_fpos(-0.75, -0.9),
+        make_fpos(-.75, -.9),
         ui_style_button,
         button_is_mouse_over,
         button_back_to_main_interact);
@@ -112,6 +220,8 @@ int garage_menu_run(
     world_init(&world);
 
     snake_id = world_spawn_snake(&world, "");
+    if (snake_id == WORLD_SPAWN_SNAKE_FAILED)
+        goto spawn_snake_failed;
     snake = snake_bmap_find(world.snakes, snake_id);
     cmd = cmd_default();
 
@@ -180,7 +290,9 @@ int garage_menu_run(
         cmd_angle += cmd_direction * 0.008f;
         cmd = cmd_make(cmd, cmd_angle, 1.0, CMD_ACTION_NONE);
         if (cmd_angle > 0.3f || cmd_angle < -0.3f)
+        {
             cmd_direction *= -1;
+        }
 
         snake_remove_stale_segments(
             &snake->data,
@@ -188,7 +300,7 @@ int garage_menu_run(
                 &snake->data, &snake->head, &snake->param, cmd, sim_tick_rate));
 
         head = snake->head;
-        head.pos = make_qwposqw(qw_sub(head.pos.x, make_qw(1.5)), make_qw(0));
+        head.pos = make_qwposqw(qw_sub(head.pos.x, make_qw(1.5)), head.pos.y);
         camera_update(&camera, &head, &snake->param, &input, sim_tick_rate);
 
         if (*gfx != NULL)
@@ -203,6 +315,7 @@ int garage_menu_run(
         tick_wait(&sim_tick);
     }
 
+spawn_snake_failed:
     world_deinit(&world);
     input_deinit(&input);
     ui_destroy(garage_menu);

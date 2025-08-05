@@ -25,6 +25,7 @@ struct input
     unsigned split : 1; /* Split snake button is pressed */
 
     unsigned mouse_moved : 1;
+    unsigned mouse_down : 1;
     unsigned screen_clicked : 1; /* User clicked on the screen -- used for UI */
     unsigned backspace : 1;      /* User pressed the backspace key */
     unsigned enter : 1;          /* Enter key */

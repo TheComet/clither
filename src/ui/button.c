@@ -20,10 +20,10 @@ crossfade_color(uint32_t c1, uint32_t c2, int cross, int cross_max)
 }
 
 /* ------------------------------------------------------------------------- */
-void button_step_anim(
+static void button_step_anim(
     struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
 {
-    const int crossfade_speed = sim_tick_rate / 12;
+    const int crossfade_period = sim_tick_rate / 12;
 
     if (!elem->u.button.enabled)
     {
@@ -31,12 +31,12 @@ void button_step_anim(
         return;
     }
 
-    if (elem->u.button.mouse_controlled)
+    if (elem->u.button.mouse_controlled && elem->is_mouse_over)
         elem->u.button.hover = elem->is_mouse_over(elem, input) != 0;
 
     if (elem->u.button.hover)
     {
-        if (elem->u.button.hover_crossfade < crossfade_speed)
+        if (elem->u.button.hover_crossfade < crossfade_period)
             elem->u.button.hover_crossfade++;
     }
     else
@@ -47,9 +47,9 @@ void button_step_anim(
 
     elem->u.button.text.color = crossfade_color(
         elem->u.button.normal_color,
-        elem->u.button.mouseover_color,
+        elem->u.button.hover_color,
         elem->u.button.hover_crossfade,
-        crossfade_speed);
+        crossfade_period);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -61,7 +61,7 @@ struct ui_button_style make_ui_button_style(
 {
     struct ui_button_style style;
     style.color = color;
-    style.mouseover_color = mouseover_color;
+    style.hover_color = mouseover_color;
     style.disabled_color = disabled_color;
     style.text_size = size;
     return style;
@@ -84,7 +84,7 @@ struct ui_element ui_button(
 
     elem.u.button.text =
         ui_text(str, pos, text_style, UI_ALIGN_CENTER, NULL).u.text;
-    elem.u.button.mouseover_color = style.mouseover_color;
+    elem.u.button.hover_color = style.hover_color;
     elem.u.button.disabled_color = style.disabled_color;
     elem.u.button.normal_color = style.color;
     elem.u.button.hover_crossfade = 0;

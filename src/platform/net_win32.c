@@ -365,6 +365,8 @@ int net_host_tcp(const char* bind_address, const char* port)
     }
     return fd;
 }
+
+/* ------------------------------------------------------------------------- */
 int net_accept(int sockfd, struct net_addr* addr)
 {
     socklen_t addrlen = sizeof(addr->sockaddr_storage);

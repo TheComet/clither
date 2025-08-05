@@ -266,6 +266,7 @@ if (CLITHER_GFX)
         "src/ui/garage_menu.c"
         "src/ui/main_menu.c"
         "src/ui/rectangle.c"
+        "src/ui/slider.c"
         "src/ui/style.c"
         "src/ui/text.c"
         "src/ui/textinput.c")
@@ -497,7 +498,7 @@ if (CLITHER_BOT_API_LUA)
 endif ()
 
 if (WIN32)
-    set (EXE "clither.exe")
+    set (EXE "mechasnek.exe")
     set (PACK "packs\\liam-playground")
     file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server\r\n@PAUSE")
     install (

@@ -1066,5 +1066,5 @@ void settings_save(const struct settings* s, const char* filename)
     WRITE_STR_AS_INT(fp, mcd, connect_port, "Port to connect to");
     /* clang-format on */
 
-    fclose(fp);
+    utf8_fclose(fp);
 }

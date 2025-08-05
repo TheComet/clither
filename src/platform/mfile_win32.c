@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+/* ------------------------------------------------------------------------- */
 int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
 {
     HANDLE        hFile;
@@ -93,6 +94,7 @@ utf16_conv_failed:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
 {
     HANDLE   hFile;
@@ -163,6 +165,7 @@ utf16_conv_failed:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 int mfile_map_mem(struct mfile* mf, int size)
 {
     HANDLE mapping = CreateFileMapping(
@@ -203,6 +206,7 @@ create_file_mapping_failed:
     return -1;
 }
 
+/* ------------------------------------------------------------------------- */
 void mfile_unmap(struct mfile* mf)
 {
     untrack_mem(mf->address);

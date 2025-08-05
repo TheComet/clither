@@ -1,19 +1,18 @@
 #include "clither/platform/backtrace.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <process.h>
-#include <windows.h>
 #include <dbghelp.h>
-#include <stdlib.h>
+#include <process.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
 
 #define BACKTRACE_FUNC_LEN 1024
 
 static HANDLE hProcess;
 
 /* ------------------------------------------------------------------------- */
-int
-backtrace_init(void)
+int backtrace_init(void)
 {
     hProcess = GetCurrentProcess();
     if (SymInitialize(hProcess, NULL, TRUE) != TRUE)
@@ -22,27 +21,27 @@ backtrace_init(void)
 }
 
 /* ------------------------------------------------------------------------- */
-void
-backtrace_deinit(void)
+void backtrace_deinit(void)
 {
     /* This crashes for some reason?
     SymCleanup(hProcess);*/
 }
 
 /* ------------------------------------------------------------------------- */
-char**
-backtrace_get(int* size)
+char** backtrace_get(int* size)
 {
     char** result;
     char** current_ptr;
-    char* current_str;
-    void* stack[CLITHER_BACKTRACE_SIZE];
-    char sym_buf[sizeof(SYMBOL_INFO) + (BACKTRACE_FUNC_LEN - 1) * sizeof(TCHAR)];
-    WORD frames_traced = CaptureStackBackTrace(0, CLITHER_BACKTRACE_SIZE, stack, NULL);
+    char*  current_str;
+    void*  stack[CLITHER_BACKTRACE_SIZE];
+    char
+        sym_buf[sizeof(SYMBOL_INFO) + (BACKTRACE_FUNC_LEN - 1) * sizeof(TCHAR)];
+    WORD frames_traced =
+        CaptureStackBackTrace(0, CLITHER_BACKTRACE_SIZE, stack, NULL);
 
     result = malloc(
-        sizeof(char*) * frames_traced +  /* String table */
-        sizeof(char)  * frames_traced * BACKTRACE_FUNC_LEN);
+        sizeof(char*) * frames_traced + /* String table */
+        sizeof(char) * frames_traced * BACKTRACE_FUNC_LEN);
     current_ptr = result;
     current_str = (char*)(result + frames_traced);
 
@@ -50,7 +49,7 @@ backtrace_get(int* size)
     sym->MaxNameLen = BACKTRACE_FUNC_LEN;
     sym->SizeOfStruct = sizeof(SYMBOL_INFO);
 
-    DWORD displacement;
+    DWORD           displacement;
     IMAGEHLP_LINE64 line;
     for (int i = 0; i < frames_traced; ++i)
     {
@@ -58,20 +57,34 @@ backtrace_get(int* size)
         SymFromAddr(hProcess, address, NULL, sym);
         *current_ptr = current_str;
         current_ptr++;
-        if (SymGetLineFromAddr64(hProcess, address, &displacement, &line) == TRUE)
-            current_str += snprintf(current_str, BACKTRACE_FUNC_LEN, "%d: (0x%llx+0x%x) %s:%d", i, sym->Address, displacement, sym->Name, line.LineNumber) + 1;
+        if (SymGetLineFromAddr64(hProcess, address, &displacement, &line) ==
+            TRUE)
+            current_str += snprintf(
+                               current_str,
+                               BACKTRACE_FUNC_LEN,
+                               "%d: (0x%llx+0x%x) %s:%d",
+                               i,
+                               sym->Address,
+                               displacement,
+                               sym->Name,
+                               line.LineNumber) +
+                           1;
         else
-            current_str += sprintf(current_str, "%d: (0x%llx) SymGetLineFromAddr64() failed: %d", i, address, GetLastError()) + 1;
-
+            current_str += sprintf(
+                               current_str,
+                               "%d: (0x%llx) SymGetLineFromAddr64() failed: %d",
+                               i,
+                               address,
+                               GetLastError()) +
+                           1;
     }
-    
+
     *size = (int)frames_traced;
     return result;
 }
 
 /* ------------------------------------------------------------------------- */
-void
-backtrace_free(char** bt)
+void backtrace_free(char** bt)
 {
     free(bt);
 }

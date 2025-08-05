@@ -842,14 +842,6 @@ int client_run(
                 break;
         }
 
-        if (*gfx != NULL)
-        {
-            (*igfx)->step_anim(*gfx, client->sim_tick_rate);
-            (*igfx)->draw_begin(*gfx);
-            (*igfx)->draw_world(*gfx, &world, &camera);
-            (*igfx)->draw_end(*gfx);
-        }
-
         tick_lag =
             tick_wait_warp(&sim_tick, client->warp, client->sim_tick_rate * 10);
         client->warp = 0;
@@ -861,6 +853,14 @@ int client_run(
                 tick_skip(&sim_tick);
                 break;
             }
+        }
+
+        if (*gfx != NULL && tick_lag == 0)
+        {
+            (*igfx)->step_anim(*gfx, client->sim_tick_rate);
+            (*igfx)->draw_begin(*gfx);
+            (*igfx)->draw_world(*gfx, &world, &camera);
+            (*igfx)->draw_end(*gfx);
         }
 
         client->frame_number++;

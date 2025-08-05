@@ -77,12 +77,12 @@ struct client
 
     struct str* username;
 
-    int               timeout_counter;
-    uint16_t          frame_number; /* Counts upwards at sim_tick_rate */
-    uint16_t          snake_id;
-    int16_t           warp;
-    uint8_t           sim_tick_rate;
-    uint8_t           net_tick_rate;
+    int      timeout_counter;
+    uint16_t frame_number; /* Increments at a frequency of sim_tick_rate */
+    uint16_t snake_id;
+    int16_t  warp;
+    uint8_t  sim_tick_rate;
+    uint8_t  net_tick_rate;
     enum client_state state;
 };
 

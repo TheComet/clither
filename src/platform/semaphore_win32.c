@@ -1,6 +1,6 @@
 #include "clither/platform/mutex.h"
-#include "clither/util/tracker.h"
 #include "clither/util/log.h"
+#include "clither/util/tracker.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

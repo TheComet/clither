@@ -35,6 +35,10 @@ void world_update_settings(
  * returned.
  */
 uint16_t world_spawn_snake(struct world* world, const char* username);
+enum
+{
+    WORLD_SPAWN_SNAKE_FAILED = 0
+};
 
 /*!
  * \brief Same as world_spawn_snake(), except the spawn position and snake ID
