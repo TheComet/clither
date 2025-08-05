@@ -71,14 +71,17 @@ struct fs_watch* fs_watch_init(void)
 
 void fs_watch_deinit(struct fs_watch* w)
 {
+    (void)w;
 }
 
 int fs_watch_file(struct fs_watch* w, const char* path)
 {
+    (void)w, (void)path;
     return 0;
 }
 
 int fs_watch_check(struct fs_watch* w)
 {
+    (void)w;
     return 0;
 }

@@ -13,7 +13,7 @@ VEC_DEFINE(sockfd_vec, int, 8)
 int net_set_nonblock_reuse(int sockfd)
 {
     unsigned long nonblock = 1;
-    int           enable = 1;
+    char          enable = 1;
     if (ioctlsocket(sockfd, FIONBIO, &nonblock) != 0)
         return log_err(
             "ioctlsocket() failed for socket: %d\n", WSAGetLastError());
@@ -237,7 +237,7 @@ static int net_connect(
          * connect(), otherwise connect() will return EINPROGRESS */
         if (net_set_nonblock_reuse(sockfd) < 0)
         {
-            close(sockfd);
+            closesocket(sockfd);
             continue;
         }
 

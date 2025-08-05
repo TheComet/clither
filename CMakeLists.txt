@@ -221,10 +221,10 @@ if (CLITHER_ASM_OPTIMIZATIONS)
         set (Flavor "masm")
         set (Ext "asm")
     endif ()
-    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    if (WIN32)
         set (Abi "win64")
     endif ()
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_PLATFORM_ID STREQUAL "Darwin")
+    if (UNIX)
         set (Abi "sysv64")
     endif ()
 
@@ -322,7 +322,7 @@ if (CLITHER_SERVER)
     endif ()
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if (WIN32)
     list (APPEND ClitherSources
         "src/platform/asm_optimizations_win32.c"
         "src/platform/fs_win32.c"
@@ -341,7 +341,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     endif ()
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if (LINUX)
     list (APPEND ClitherSources
         "src/platform/asm_optimizations_posix.c"
         "src/platform/fs_linux.c"
@@ -359,7 +359,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif ()
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if (APPLE)
     list (APPEND ClitherSources
         "src/platform/asm_optimizations_posix.c"
         "src/platform/fs_linux.c"
@@ -377,7 +377,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     endif ()
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+if (EMSCRIPTEN)
     list (APPEND ClitherSources
         "src/platform/asm_optimizations_em.c"
         "src/platform/fs_em.c"
@@ -496,7 +496,7 @@ if (CLITHER_BOT_API_LUA)
         DESTINATION ${CLITHER_INSTALL_BINDIR}/lua)
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if (WIN32)
     set (EXE "clither.exe")
     set (PACK "packs\\liam-playground")
     file (WRITE "${CLITHER_BUILD_BINDIR}/server.bat" "${EXE} --server\r\n@PAUSE")
@@ -526,7 +526,9 @@ if (EMSCRIPTEN)
             -Wno-array-bounds
             # Should probably write a 32-bit compatible version of morton.c
             -Wno-long-long)
-
+    target_link_libraries (clither
+        PRIVATE
+            websocket.js)
     set_target_properties (clither
         PROPERTIES
             SUFFIX ".html"
@@ -589,7 +591,7 @@ if (CLITHER_FETCH_ASSETS)
     add_dependencies (clither clither-assets)
 
     # Emscripten packs the assets as part of the linker step already
-    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    if (NOT EMSCRIPTEN)
         install (
             DIRECTORY "${CLITHER_BUILD_BINDIR}/packs/"
             DESTINATION "${CLITHER_INSTALL_BINDIR}/packs")
@@ -600,16 +602,16 @@ endif ()
 # Dependencies
 ###############################################################################
 
-target_link_libraries (clither
-    PRIVATE
-        $<$<PLATFORM_ID:Windows>:
-            ws2_32
-            $<$<BOOL:${CLITHER_BACKTRACE}>:Dbghelp>>
-        $<$<PLATFORM_ID:Linux>:m>
-        $<$<PLATFORM_ID:Darwin>:m>
-        $<$<PLATFORM_ID:Emscripten>:websocket.js>)
-
-if (NOT EMSCRIPTEN)
+if (WIN32)
+    target_link_libraries (clither PRIVATE ws2_32)
+    if (CLITHER_BACKTRACE)
+        target_link_libraries (clither PRIVATE Dbghelp)
+    endif ()
+endif ()
+if (UNIX)
+    target_link_libraries (clither PRIVATE m)
+endif ()
+if (NOT EMSCRIPTEN AND NOT WIN32)
     find_package (Threads REQUIRED)
     target_link_libraries (clither PRIVATE Threads::Threads)
 endif ()
@@ -628,8 +630,19 @@ if (CLITHER_GFX AND NOT EMSCRIPTEN)
     find_package (HarfBuzz)
     if (NOT HarfBuzz_FOUND)
         set (HB_BUILD_SUBSET ON CACHE STRING "")
+        set (HB_HAVE_FREETYPE ON CACHE STRING "")
         add_subdirectory ("thirdparty/harfbuzz-11.0.0")
         set_target_properties (harfbuzz PROPERTIES MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
+        if (WIN32)
+            target_compile_options (harfbuzz PRIVATE
+                $<$<C_COMPILER_ID:GNU>:-Wa,-mbig-obj>
+                $<$<C_COMPILER_ID:Clang>:-Wa,-mbig-obj>
+                $<$<C_COMPILER_ID:MSVC>:/bigobj>)
+            target_compile_options (harfbuzz-subset PRIVATE
+                $<$<C_COMPILER_ID:GNU>:-Wa,-mbig-obj>
+                $<$<C_COMPILER_ID:Clang>:-Wa,-mbig-obj>
+                $<$<C_COMPILER_ID:MSVC>:/bigobj>)
+        endif ()
         add_library (HarfBuzz::HarfBuzz ALIAS harfbuzz)
     endif ()
     target_link_libraries (clither PRIVATE HarfBuzz::HarfBuzz)
