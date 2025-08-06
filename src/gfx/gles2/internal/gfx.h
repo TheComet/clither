@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./background.h"
+#include "./food.h"
 #include "./quad.h"
 #include "./rectangle.h"
 #include "./snake.h"
@@ -51,8 +52,8 @@ struct gfx
     struct gfx_sprite_mat        sprite_mat;
     struct gfx_sprite_shadow_mat sprite_shadow_mat;
     struct gfx_snake             snake;
-    struct gfx_sprite_tex        food;
-    struct gfx_rectangle_mat         rect;
+    struct gfx_food              food;
+    struct gfx_rectangle_mat     rect;
 
 #if defined(CLITHER_GFX_DEBUG)
     struct gfx_debug debug;

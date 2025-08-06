@@ -74,7 +74,6 @@ void gfx_gles2_sprite_tex_init(struct gfx_sprite_tex* tex)
     for (i = 0; i < MAX_TEXTURE_SAMPLERS; ++i)
         tex->tex[i] = INVALID_HANDLE;
 
-    tex->scale = 1.0;
     tex->tile_x = 1;
     tex->tile_y = 1;
     tex->tile_count = 1;
@@ -135,7 +134,6 @@ void gfx_gles2_sprite_tex_load(
     tex->tile_x = res->tile_x;
     tex->tile_y = res->tile_y;
     tex->tile_count = res->num_frames;
-    tex->scale = res->scale;
     tex->fps = res->fps;
     tex->sim_time = 0;
     tex->anim_frame = 0;
@@ -197,7 +195,7 @@ int gfx_gles2_sprite_update_uniforms(
     const struct gfx_sprite_tex* tex,
     struct qwpos                 pos,
     struct qwpos                 dir,
-    qw                           scale,
+    GLfloat                      scale,
     const struct camera*         camera)
 {
     int tile_x, tile_y;
@@ -214,7 +212,7 @@ int gfx_gles2_sprite_update_uniforms(
     tile_x = tex->anim_frame % tex->tile_x;
     tile_y = (tex->anim_frame / tex->tile_x) % tex->tile_y;
 
-    glUniform1f(mat->uSize, tex->scale * qw_to_float(scale));
+    glUniform1f(mat->uSize, scale);
     glUniform3f(
         mat->uPosCameraSpace,
         pos_cameraSpace.x,

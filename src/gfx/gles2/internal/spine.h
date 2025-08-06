@@ -25,7 +25,6 @@ struct spine
     GLuint tex[MAX_TEXTURE_SAMPLERS];
     GLuint sTex[MAX_TEXTURE_SAMPLERS];
 
-    GLfloat spine_width;
     GLfloat tex_aspect_ratio;
 };
 
@@ -43,6 +42,7 @@ void gfx_gles2_spine_draw(
     const struct bezier_segment_rb* segments,
     qw                              snake_scale,
     qw                              snake_length,
+    GLfloat                         spine_width,
     const struct camera*            camera,
     const struct aspect_ratio*      ar);
 void gfx_gles2_spine_end_draw(void);

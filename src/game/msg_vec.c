@@ -48,6 +48,36 @@ void msg_vec_remove_snake_username(struct msg_vec* msgq, uint16_t snake_id)
 }
 
 /* ------------------------------------------------------------------------- */
+static int retain_snake_cosmetic_params(struct msg** pmsg, void* user)
+{
+    int                  parse_result;
+    union parsed_payload pp;
+    uint16_t             snake_id = *(uint16_t*)user;
+    struct msg*          msg = *pmsg;
+
+    if (msg->type != MSG_SNAKE_COSMETIC_PARAMS)
+        return VEC_RETAIN;
+
+    parse_result = msg_parse_payload(
+        &pp, MSG_SNAKE_COSMETIC_PARAMS, msg->payload, msg->payload_len);
+    CLITHER_DEBUG_ASSERT(parse_result == MSG_SNAKE_COSMETIC_PARAMS);
+    (void)parse_result;
+    if (pp.snake_cosmetic_params.snake_id == snake_id)
+    {
+        log_dbg("Removing snake cosmetic params for snake_id=%d\n", snake_id);
+        msg_free(msg);
+        return VEC_ERASE;
+    }
+
+    return VEC_RETAIN;
+}
+void msg_vec_remove_snake_cosmetic_params(
+    struct msg_vec* msgq, uint16_t snake_id)
+{
+    msg_vec_retain(msgq, retain_snake_cosmetic_params, &snake_id);
+}
+
+/* ------------------------------------------------------------------------- */
 static int retain_snake_destroy(struct msg** pmsg, void* user)
 {
     int                  parse_result;

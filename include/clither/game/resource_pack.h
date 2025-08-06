@@ -57,7 +57,6 @@ struct resource_layer
     int             tile_x, tile_y;
     int             num_frames;
     int             fps;
-    float           scale;
 };
 
 struct resource_sprite
@@ -67,7 +66,6 @@ struct resource_sprite
 struct resource_spine
 {
     struct strlist* textures;
-    float           width;
 };
 
 struct resource_food
@@ -82,8 +80,6 @@ struct resource_snake
     struct str*     tail_sprite;
     struct strlist* body_sprites;
     struct str*     spine;
-
-    float part_spacing;
 };
 
 HMAP_DECLARE_STR(extern, resource_shader_hmap, struct resource_shader, 16)

@@ -1,3 +1,4 @@
+#include "clither/game/settings.h"
 #include "clither/game/snake_param.h"
 
 /* ------------------------------------------------------------------------- */
@@ -20,7 +21,20 @@ void snake_param_init(struct snake_param* param)
     param->upgrades.armor = 0;
     param->upgrades.gather = 0;
 
+#define X(name, NAME, def, min, max) param->cosmetic.name = def;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
     snake_param_update(param, param->upgrades, param->food_eaten);
+}
+
+/* ------------------------------------------------------------------------- */
+void snake_param_apply_settings(
+    struct snake_param* param, const struct settings_snake* settings)
+{
+#define X(name, NAME, def, min, max) param->cosmetic.name = settings->name;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
 }
 
 /* ------------------------------------------------------------------------- */
@@ -49,8 +63,8 @@ void snake_param_update(
     param->cached_stats.max_speed = param->base_stats.max_speed;
     param->cached_stats.boost_speed = param->base_stats.boost_speed;
 
-    param->cached_stats.scale
-        = qw_add(make_qw(1), make_qw2(food_eaten, 1024 * 4));
+    param->cached_stats.scale =
+        qw_add(make_qw(1), make_qw2(food_eaten, 1024 * 4));
     param->cached_stats.length = make_qw2(food_eaten, 128);
 
     param->cached_stats.acceleration = param->base_stats.acceleration;

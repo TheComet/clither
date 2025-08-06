@@ -1,6 +1,8 @@
 #include "clither/game/cmd.h"
+#include "clither/game/math.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
+#include "clither/game/snake_param.h"
 #include "clither/game/wrap.h"
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
@@ -52,13 +54,19 @@ int msg_parse_payload(
     switch (type)
     {
         case MSG_JOIN_REQUEST: {
+            int i;
             /*
              * 2 bytes for protocol version
              * 2 bytes for frame number
              * 1 byte for name length
-             * 1 byte for string (strings are always null-terminated)
+             * 1 byte for string (minimum, strings are always null-terminated)
+             * n bytes for cosmetic parameters
              */
-            if (payload_len < 6)
+            if (payload_len < 6
+#define X(name, NAME, def, min, max) +1
+                SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+            )
             {
                 log_warn(
                     "MSG_JOIN_REQUEST: Payload size %d too small\n",
@@ -87,6 +95,13 @@ int msg_parse_payload(
                 log_warn("Name string is not properly null-terminated\n");
                 return -4;
             }
+
+            i = 5 + pp->join_request.username_len + 1;
+#define X(name, NAME, def, min, max)                                           \
+    pp->join_request.name = payload[i++];
+            SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
             return type;
         }
 
@@ -221,7 +236,45 @@ int msg_parse_payload(
             pp->snake_username_ack.snake_id =
                 (payload[0] << 8) | (payload[1] << 0);
 
-            break;
+            return type;
+        }
+
+        case MSG_SNAKE_COSMETIC_PARAMS: {
+            int i;
+            if (payload_len < 2
+#define X(name, NAME, def, min, max) +1
+                SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+            )
+            {
+                log_warn("MSG_SNAKE_COSMETIC_PARAMS payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_cosmetic_params.snake_id =
+                (payload[0] << 8) | (payload[1] << 0);
+
+            i = 2;
+#define X(name, NAME, def, min, max)                                           \
+    pp->snake_cosmetic_params.name = payload[i++];
+            SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
+            return type;
+        }
+
+        case MSG_SNAKE_COSMETIC_PARAMS_ACK: {
+            if (payload_len < 2)
+            {
+                log_warn(
+                    "MSG_SNAKE_COSMETIC_PARAMS_ACK payload is too small\n");
+                return -1;
+            }
+
+            pp->snake_cosmetic_params_ack.snake_id =
+                (payload[0] << 8) | (payload[1] << 0);
+
+            return type;
         }
 
         case MSG_SNAKE_DESTROY: {
@@ -498,19 +551,28 @@ int msg_parse_payload(
 
 /* ------------------------------------------------------------------------- */
 struct msg* msg_join_request(
-    uint16_t protocol_version, uint16_t frame_number, const char* username)
+    uint16_t                     protocol_version,
+    uint16_t                     frame_number,
+    const char*                  username,
+    const struct settings_snake* settings)
 {
+    int     i;
     int     name_len_i32 = (int)strlen(username);
     uint8_t name_len = name_len_i32 > 254 ? 254 : (uint8_t)name_len_i32;
 
     struct msg* m = msg_alloc(
         MSG_JOIN_REQUEST,
         1,
-        2 +              /* protocol version */
-            2 +          /* frame number */
-            1 +          /* name length */
-            name_len + 1 /* we need to include the null terminator */
+        2 +     /* protocol version */
+            2 + /* frame number */
+            1 + /* name length */
+            name_len +
+            1 /* we need to include the null terminator */
+#define X(name, NAME, def, min, max) +1
+            SNAKE_COSMETIC_PARAMS_LIST
+#undef X
     );
+
     m->payload[0] = protocol_version >> 8;
     m->payload[1] = protocol_version & 0xFF;
     m->payload[2] = frame_number >> 8;
@@ -518,6 +580,13 @@ struct msg* msg_join_request(
     m->payload[4] = name_len;
     /* we need to include the null terminator */
     memcpy(m->payload + 5, username, name_len + 1);
+
+    i = 5 + name_len + 1;
+#define X(name, NAME, def, min, max)                                           \
+    m->payload[i++] = (uint8_t)(unlerp(min, max, settings->name) * 255);
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
     return m;
 }
 
@@ -891,7 +960,7 @@ struct msg* msg_feedback(int8_t diff, uint16_t frame_number)
 struct msg* msg_snake_username(uint16_t snake_id, const char* username)
 {
     struct msg* m = msg_alloc_string_payload(
-        MSG_SNAKE_USERNAME, 0, 2 /* snake_id */, username);
+        MSG_SNAKE_USERNAME, 10, 2 /* snake_id */, username);
     if (m == NULL)
         return NULL;
 
@@ -909,6 +978,47 @@ struct msg* msg_snake_username_ack(uint16_t snake_id)
         return NULL;
 
     m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_snake_cosmetic_params(uint16_t snake_id, const struct snake_param* param)
+{
+    int         i;
+    struct msg* m = msg_alloc(
+        MSG_SNAKE_COSMETIC_PARAMS,
+        10,
+        2
+#define X(name, NAME, def, min, max) +1
+        SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+    );
+    if (m == NULL)
+        return NULL;
+
+    i = 0;
+    m->payload[i++] = (snake_id >> 8) & 0xFF;
+    m->payload[i++] = snake_id & 0xFF;
+
+#define X(name, NAME, def, min, max)                                           \
+    m->payload[i++] = (uint8_t)(unlerp(min, max, param->cosmetic.name) * 255);
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_snake_cosmetic_params_ack(uint16_t snake_id)
+{
+    struct msg* m = msg_alloc(MSG_SNAKE_COSMETIC_PARAMS_ACK, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (snake_id >> 8) & 0xFF;
     m->payload[1] = snake_id & 0xFF;
 
     return m;

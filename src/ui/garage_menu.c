@@ -1,6 +1,7 @@
 #include "clither/client/client.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
+#include "clither/game/math.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake_bmap.h"
@@ -19,14 +20,18 @@ enum ui_element_index
     NONE,
 
     TEXT_SPACING,
-    SLIDER_SPACING,
     TEXT_SPINE_WIDTH,
-    SLIDER_SPINE_WIDTH,
-    TEXT_HEAD_SIZE,
-    SLIDER_HEAD_SIZE,
-    TEXT_TAIL_SIZE,
-    SLIDER_TAIL_SIZE,
+    TEXT_HEAD_SCALE,
+    TEXT_BODY_SCALE,
+    TEXT_TAIL_SCALE,
+    TEXT_GIRTH,
     TEXT_DECAY,
+    SLIDER_PART_SPACING,
+    SLIDER_SPINE_WIDTH,
+    SLIDER_HEAD_SCALE,
+    SLIDER_BODY_SCALE,
+    SLIDER_TAIL_SCALE,
+    SLIDER_GIRTH,
     SLIDER_DECAY,
 
     BUTTON_BACK_TO_MAIN,
@@ -37,14 +42,18 @@ enum ui_element_index
 /* clang-format off */
 static const int garage_screen[] = {
     TEXT_SPACING,
-    SLIDER_SPACING,
     TEXT_SPINE_WIDTH,
-    SLIDER_SPINE_WIDTH,
-    TEXT_HEAD_SIZE,
-    SLIDER_HEAD_SIZE,
-    TEXT_TAIL_SIZE,
-    SLIDER_TAIL_SIZE,
+    TEXT_HEAD_SCALE,
+    TEXT_BODY_SCALE,
+    TEXT_TAIL_SCALE,
+    TEXT_GIRTH,
     TEXT_DECAY,
+    SLIDER_PART_SPACING,
+    SLIDER_SPINE_WIDTH,
+    SLIDER_HEAD_SCALE,
+    SLIDER_BODY_SCALE,
+    SLIDER_TAIL_SCALE,
+    SLIDER_GIRTH,
     SLIDER_DECAY,
 
     BUTTON_BACK_TO_MAIN,
@@ -65,7 +74,20 @@ button_is_mouse_over(struct ui_element* elem, const struct input* input)
 }
 
 /* ------------------------------------------------------------------------- */
-static enum ui_cmd_type slider_spacing_interact(
+static enum ui_cmd_type
+create_snake_properties_command(const struct ui* ui, union ui_cmd* cmd)
+{
+#define X(name, NAME, def, min, max)                                           \
+    cmd->snake_cosmetic_params.name =                                          \
+        ui->elements[SLIDER_##NAME].u.slider.value;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
+    return UI_CMD_SNAKE_COSMETIC_PARAMS;
+}
+
+/* ------------------------------------------------------------------------- */
+static enum ui_cmd_type slider_snake_properties_interact(
     struct ui*         ui,
     union ui_cmd*      cmd,
     struct ui_element* elem,
@@ -89,9 +111,9 @@ static enum ui_cmd_type slider_spacing_interact(
         float value = y1 == y2 ? (input->mousex_ar - x1) / (x2 - x1)
                                : (input->mousey_ar - y1) / (y2 - y1);
         elem->u.slider.value = value < 0.0 ? 0.0 : value > 1.0 ? 1.0 : value;
+        return create_snake_properties_command(ui, cmd);
     }
 
-    (void)ui, (void)cmd;
     return UI_CMD_NONE;
 }
 
@@ -112,7 +134,7 @@ static enum ui_cmd_type button_back_to_main_interact(
 }
 
 /* ------------------------------------------------------------------------- */
-struct ui* ui_create_garage_menu(void)
+struct ui* ui_create_garage_menu(const struct settings_snake* settings)
 {
     struct ui* ui = ui_create(screens, ELEMENT_COUNT);
     if (ui == NULL)
@@ -124,61 +146,89 @@ struct ui* ui_create_garage_menu(void)
         ui_style_text_small,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[SLIDER_SPACING] = ui_slider(
-        make_fpos(.7, .91),
-        make_fpos(.95, .91),
-        ui_style_slider,
-        slider_spacing_interact);
     ui->elements[TEXT_SPINE_WIDTH] = ui_text(
         cstr_view("Spine"),
         make_fpos(.65, .85),
         ui_style_text_small,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[SLIDER_SPINE_WIDTH] = ui_slider(
-        make_fpos(.7, .86),
-        make_fpos(.95, .86),
-        ui_style_slider,
-        slider_spacing_interact);
-    ui->elements[TEXT_HEAD_SIZE] = ui_text(
+    ui->elements[TEXT_HEAD_SCALE] = ui_text(
         cstr_view("Head size"),
         make_fpos(.65, .8),
         ui_style_text_small,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[SLIDER_HEAD_SIZE] = ui_slider(
-        make_fpos(.7, .81),
-        make_fpos(.95, .81),
-        ui_style_slider,
-        slider_spacing_interact);
-    ui->elements[TEXT_TAIL_SIZE] = ui_text(
-        cstr_view("Tail size"),
+    ui->elements[TEXT_BODY_SCALE] = ui_text(
+        cstr_view("Body size"),
         make_fpos(.65, .75),
         ui_style_text_small,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[SLIDER_TAIL_SIZE] = ui_slider(
-        make_fpos(.7, .76),
-        make_fpos(.95, .76),
-        ui_style_slider,
-        slider_spacing_interact);
-    ui->elements[TEXT_DECAY] = ui_text(
-        cstr_view("Decay"),
-        make_fpos(.65, .7),
+    ui->elements[TEXT_TAIL_SCALE] = ui_text(
+        cstr_view("Tail size"),
+        make_fpos(.65, .70),
         ui_style_text_small,
         UI_ALIGN_RIGHT,
         NULL);
-    ui->elements[SLIDER_DECAY] = ui_slider(
+    ui->elements[TEXT_GIRTH] = ui_text(
+        cstr_view("Girth"),
+        make_fpos(.65, .65),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[TEXT_DECAY] = ui_text(
+        cstr_view("Decay"),
+        make_fpos(.65, .6),
+        ui_style_text_small,
+        UI_ALIGN_RIGHT,
+        NULL);
+    ui->elements[SLIDER_PART_SPACING] = ui_slider(
+        make_fpos(.7, .91),
+        make_fpos(.95, .91),
+        ui_style_slider,
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_SPINE_WIDTH] = ui_slider(
+        make_fpos(.7, .86),
+        make_fpos(.95, .86),
+        ui_style_slider,
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_HEAD_SCALE] = ui_slider(
+        make_fpos(.7, .81),
+        make_fpos(.95, .81),
+        ui_style_slider,
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_BODY_SCALE] = ui_slider(
+        make_fpos(.7, .76),
+        make_fpos(.95, .76),
+        ui_style_slider,
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_TAIL_SCALE] = ui_slider(
         make_fpos(.7, .71),
         make_fpos(.95, .71),
         ui_style_slider,
-        slider_spacing_interact);
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_GIRTH] = ui_slider(
+        make_fpos(.7, .66),
+        make_fpos(.95, .66),
+        ui_style_slider,
+        slider_snake_properties_interact);
+    ui->elements[SLIDER_DECAY] = ui_slider(
+        make_fpos(.7, .61),
+        make_fpos(.95, .61),
+        ui_style_slider,
+        slider_snake_properties_interact);
     ui->elements[BUTTON_BACK_TO_MAIN] = ui_button(
         cstr_view("Back"),
         make_fpos(-.75, -.9),
         ui_style_button,
         button_is_mouse_over,
         button_back_to_main_interact);
+
+#define X(name, NAME, def, min, max)                                           \
+    ui->elements[SLIDER_##NAME].u.slider.value =                               \
+        unlerp(settings->name##_min, settings->name##_max, settings->name);
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
 
     return ui;
 }
@@ -189,7 +239,7 @@ int garage_menu_run(
     struct gfx**                 gfx,
     struct resource_pack**       pack,
     struct fs_watch**            pack_watch,
-    const struct settings*       settings)
+    struct settings*             settings)
 {
     struct ui*        garage_menu;
     struct world      world;
@@ -210,7 +260,7 @@ int garage_menu_run(
     log_set_prefix(settings->client.log_prefix);
     log_set_colors(COL_B_GREEN, COL_RESET);
 
-    garage_menu = ui_create_garage_menu();
+    garage_menu = ui_create_garage_menu(&settings->snake);
     if (garage_menu == NULL)
         goto create_main_menu_failed;
     ui_switch_screen(garage_menu, UI_MAIN_SCREEN_TITLE);
@@ -223,6 +273,7 @@ int garage_menu_run(
     if (snake_id == WORLD_SPAWN_SNAKE_FAILED)
         goto spawn_snake_failed;
     snake = snake_bmap_find(world.snakes, snake_id);
+    snake_param_apply_settings(&snake->param, &settings->snake);
     cmd = cmd_default();
 
     tick_cfg(&sim_tick, sim_tick_rate);
@@ -233,11 +284,22 @@ int garage_menu_run(
         switch (ui_update(garage_menu, &ui_cmd, &input, sim_tick_rate))
         {
             case UI_CMD_NONE: break;
+            case UI_CMD_QUIT: {
+                keep_running = 0;
+                break;
+            }
             case UI_CMD_JOIN: break;
             case UI_CMD_HOST: break;
             case UI_CMD_GARAGE: break;
-            case UI_CMD_QUIT: {
-                keep_running = 0;
+            case UI_CMD_SNAKE_COSMETIC_PARAMS: {
+#define X(name, NAME, def, min, max)                                           \
+    settings->snake.name = lerp(                                               \
+        settings->snake.name##_min,                                            \
+        settings->snake.name##_max,                                            \
+        ui_cmd.snake_cosmetic_params.name);
+                SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+                snake_param_apply_settings(&snake->param, &settings->snake);
                 break;
             }
         }

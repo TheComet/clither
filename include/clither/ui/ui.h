@@ -1,10 +1,12 @@
 #pragma once
 
 #include "clither/game/fpos.h"
+#include "clither/game/settings.h"
 #include "clither/util/strview.h"
 #include <stdint.h>
 
 struct input;
+struct settings_snake;
 struct ui;
 
 enum ui_element_type
@@ -30,7 +32,8 @@ enum ui_cmd_type
     UI_CMD_QUIT,
     UI_CMD_JOIN,
     UI_CMD_HOST,
-    UI_CMD_GARAGE
+    UI_CMD_GARAGE,
+    UI_CMD_SNAKE_COSMETIC_PARAMS
 };
 
 enum ui_screen
@@ -57,6 +60,13 @@ union ui_cmd
         const char* address;
         const char* port;
     } join;
+
+    struct
+    {
+#define X(name, NAME, def, min, max) float name;
+        SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+    } snake_cosmetic_params;
 };
 
 struct ui_rectangle
@@ -211,6 +221,7 @@ struct ui_element ui_slider(
 
 struct ui* ui_create(const int** screens, int count);
 struct ui* ui_create_main_menu(void);
+struct ui* ui_create_garage_menu(const struct settings_snake* settings);
 struct ui* ui_create_in_game(void);
 void       ui_destroy(struct ui* ui);
 

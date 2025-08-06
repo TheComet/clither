@@ -57,7 +57,8 @@ protected:
 
 TEST_F(NAME, client_resends_join_request)
 {
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
@@ -68,7 +69,8 @@ TEST_F(NAME, client_resends_join_request)
 
 TEST_F(NAME, server_resends_join_accept)
 {
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
@@ -91,7 +93,8 @@ TEST_F(NAME, server_resends_join_accept)
 
 TEST_F(NAME, server_denies_join_full_server)
 {
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     settings.server.max_players = 0;
@@ -100,14 +103,16 @@ TEST_F(NAME, server_denies_join_full_server)
         Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
-    ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
+    ASSERT_THAT(
+        client_recv(&cl, &settings, &cl_world), Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
 }
 
 TEST_F(NAME, server_denies_join_username_too_long)
 {
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     settings.server.max_username_len = 1;
@@ -116,14 +121,16 @@ TEST_F(NAME, server_denies_join_username_too_long)
         Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
-    ASSERT_THAT(client_recv(&cl, &cl_world), Eq(client_recv_disconnected()));
+    ASSERT_THAT(
+        client_recv(&cl, &settings, &cl_world), Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
 }
 
 TEST_F(NAME, server_accepts_join)
 {
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(
@@ -132,7 +139,8 @@ TEST_F(NAME, server_accepts_join)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
-        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+        client_recv(&cl, &settings, &cl_world),
+        Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
     // Ensure snakes were created
@@ -146,7 +154,8 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
     uint16_t rtt = 8;
     cl.frame_number = 8;
 
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(
@@ -157,7 +166,8 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(
-        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+        client_recv(&cl, &settings, &cl_world),
+        Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
     uint16_t expected_cl_frame_number = sv_frame_number + rtt;
@@ -171,14 +181,16 @@ TEST_F(NAME, client_updates_tick_rates_from_server)
 {
     settings.server.sim_tick_rate = 120;
     settings.server.net_tick_rate = 80;
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(
         server_recv(&sv, &settings.server, &sv_world, &settings.world, 32),
         Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     ASSERT_THAT(
-        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+        client_recv(&cl, &settings, &cl_world),
+        Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
     ASSERT_THAT(cl.sim_tick_rate, Eq(settings.server.sim_tick_rate));
@@ -191,7 +203,8 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
     uint16_t rtt = 8;
     cl.frame_number = 8;
 
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
 
     ASSERT_THAT(
@@ -202,7 +215,8 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(
-        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+        client_recv(&cl, &settings, &cl_world),
+        Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
     uint16_t expected_cl_frame_number = sv_frame_number + rtt;

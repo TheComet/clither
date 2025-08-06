@@ -2,6 +2,7 @@
 #include "clither/client/client.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
+#include "clither/game/math.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/resource_pack.h"
@@ -14,7 +15,6 @@
 #include "clither/platform/fs.h"
 #include "clither/platform/net.h"
 #include "clither/platform/signals.h"
-#include "clither/platform/thread.h"
 #include "clither/platform/tick.h"
 #include "clither/server/server.h"
 #include "clither/server/server_instance.h"
@@ -56,10 +56,11 @@ void client_deinit(struct client* client)
 
 /* ------------------------------------------------------------------------- */
 int client_connect(
-    struct client* client,
-    const char*    server_address,
-    const char*    port,
-    const char*    username)
+    struct client*         client,
+    const struct settings* settings,
+    const char*            server_address,
+    const char*            port,
+    const char*            username)
 {
     CLITHER_DEBUG_ASSERT(client->state == CLIENT_DISCONNECTED);
     CLITHER_DEBUG_ASSERT(client->connection == NULL);
@@ -87,7 +88,9 @@ int client_connect(
         return -1;
 
     client_queue(
-        client, msg_join_request(0x0000, client->frame_number, username));
+        client,
+        msg_join_request(
+            0x0000, client->frame_number, username, &settings->snake));
 
     client->state = CLIENT_JOINING;
     log_info("Client started\n");
@@ -215,11 +218,12 @@ packet_full:
 
 /* ------------------------------------------------------------------------- */
 static struct client_recv_result process_message(
-    struct client* client,
-    struct world*  world,
-    enum msg_type  msg_type,
-    const uint8_t* msg_data,
-    uint8_t        msg_len)
+    struct client*         client,
+    const struct settings* settings,
+    struct world*          world,
+    enum msg_type          msg_type,
+    const uint8_t*         msg_data,
+    uint8_t                msg_len)
 {
     union parsed_payload pp;
 
@@ -288,6 +292,7 @@ static struct client_recv_result process_message(
             if (snake == NULL)
                 return client_recv_error();
             snake_head_init(&snake->remote.ack.head, pp.join_accept.spawn);
+            snake_param_apply_settings(&snake->param, &settings->snake);
 
             /* Apply world settings from server */
             settings_world_set_defaults(&settings_world);
@@ -341,6 +346,29 @@ static struct client_recv_result process_message(
             return client_recv_ok();
         }
         case MSG_SNAKE_USERNAME_ACK: break;
+
+        case MSG_SNAKE_COSMETIC_PARAMS: {
+            struct settings_snake settings;
+            struct snake*         snake = snake_bmap_find(
+                world->snakes, pp.snake_cosmetic_params.snake_id);
+            if (snake == NULL)
+                return client_recv_ok();
+
+#define X(name, NAME, def, min, max)                                           \
+    settings.name = lerp(min, max, pp.snake_cosmetic_params.name / 255.0);     \
+    log_dbg("  %s: %f\n", #name, settings.name);
+            SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+            snake_param_apply_settings(&snake->param, &settings);
+
+            client_queue(
+                client,
+                msg_snake_cosmetic_params_ack(
+                    pp.snake_cosmetic_params.snake_id));
+
+            return client_recv_ok();
+        }
+        case MSG_SNAKE_COSMETIC_PARAMS_ACK: break;
 
         case MSG_SNAKE_DESTROY: {
             if (pp.snake_destroy.snake_id == client->snake_id)
@@ -530,7 +558,10 @@ static struct client_recv_result process_message(
 
 /* ------------------------------------------------------------------------- */
 static struct client_recv_result unpack_packet(
-    struct client* client, struct world* world, const struct net_packet* packet)
+    struct client*           client,
+    const struct settings*   settings,
+    struct world*            world,
+    const struct net_packet* packet)
 {
     int                       i;
     struct client_recv_result result = client_recv_ok();
@@ -557,7 +588,8 @@ static struct client_recv_result unpack_packet(
 
         result = client_recv_result_combine(
             result,
-            process_message(client, world, msg_type, msg_data, msg_len));
+            process_message(
+                client, settings, world, msg_type, msg_data, msg_len));
         /* Want to stop processing messages if an error occurred, or if the
          * client disconnected. */
         if (result.error || result.disconnected)
@@ -570,8 +602,8 @@ static struct client_recv_result unpack_packet(
 }
 
 /* ------------------------------------------------------------------------- */
-struct client_recv_result
-client_recv(struct client* client, struct world* world)
+struct client_recv_result client_recv(
+    struct client* client, const struct settings* settings, struct world* world)
 {
     struct net_packet         packet;
     struct client_recv_result result = client_recv_ok();
@@ -592,7 +624,7 @@ client_recv(struct client* client, struct world* world)
         client->timeout_counter = 0;
 
         result = client_recv_result_combine(
-            result, unpack_packet(client, world, &packet));
+            result, unpack_packet(client, settings, world, &packet));
 
         /* Want to stop processing messages if an error occurred, or if the
          * client disconnected. */
@@ -737,7 +769,8 @@ int client_run(
         net_update = tick_advance(&net_tick);
         if (net_update && client->state != CLIENT_DISCONNECTED)
         {
-            struct client_recv_result result = client_recv(client, &world);
+            struct client_recv_result result =
+                client_recv(client, settings, &world);
             if (result.error)
                 break;
 

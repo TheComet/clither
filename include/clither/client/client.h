@@ -99,10 +99,11 @@ void client_deinit(struct client* client);
  * -1 if unsuccessful.
  */
 int client_connect(
-    struct client* client,
-    const char*    server_address,
-    const char*    port,
-    const char*    username);
+    struct client*         client,
+    const struct settings* settings,
+    const char*            server_address,
+    const char*            port,
+    const char*            username);
 
 void client_disconnect(struct client* client);
 
@@ -113,8 +114,10 @@ int client_send_pending_data(struct client* client);
 /*! \brief \return Returns -1 if an error occurs. Returns 1 if the client's
  * state changed. Returns 0 otherwise.
  */
-struct client_recv_result
-client_recv(struct client* client, struct world* world);
+struct client_recv_result client_recv(
+    struct client*         client,
+    const struct settings* settings,
+    struct world*          world);
 
 /*! \brief The main loop of the client. Designed to be called from the main
  * thread. */

@@ -32,17 +32,17 @@ void gfx_gles2_sprite_shadow_prepare_draw(
     const struct gfx_background*        bg,
     const struct gfx_quad_mesh*         mesh,
     const struct gfx_sprite_shadow_mat* mat,
-    const struct aspect_ratio*      ar,
-    GLint                           gfx_width,
-    GLint                           gfx_height,
-    int                             shadow_map_size_factor);
+    const struct aspect_ratio*          ar,
+    GLint                               gfx_width,
+    GLint                               gfx_height,
+    int                                 shadow_map_size_factor);
 void gfx_gles2_sprite_shadow_end_draw(GLint gfx_width, GLint gfx_height);
 void gfx_gles2_sprite_shadow_bind_textures(const struct gfx_sprite_tex* tex);
 void gfx_gles2_sprite_shadow_update_uniforms(
     const struct gfx_sprite_shadow_mat* mat,
     const struct gfx_sprite_tex*        tex,
-    struct qwpos                    pos,
-    struct qwpos                    dir,
-    qw                              scale,
-    const struct camera*            camera);
+    struct qwpos                        pos,
+    struct qwpos                        dir,
+    GLfloat                             scale,
+    const struct camera*                camera);
 void gfx_gles2_sprite_shadow_draw(void);

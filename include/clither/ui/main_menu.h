@@ -15,4 +15,4 @@ int main_menu_run(
     struct fs_watch**            pack_watch,
     const struct bot_interface*  ibot,
     struct bot*                  bot,
-    const struct settings*       settings);
+    struct settings*             settings);

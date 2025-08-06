@@ -30,7 +30,6 @@ void gfx_gles2_sprite_mat_unload(struct gfx_sprite_mat* mat);
 struct gfx_sprite_tex
 {
     GLuint  tex[MAX_TEXTURE_SAMPLERS];
-    GLfloat scale;
     int8_t  tile_x, tile_y, tile_count, fps, anim_frame;
     float   sim_time;
 };
@@ -52,7 +51,7 @@ int  gfx_gles2_sprite_update_uniforms(
      const struct gfx_sprite_tex* tex,
      struct qwpos                 pos,
      struct qwpos                 dir,
-     qw                           scale,
+     GLfloat                      scale,
      const struct camera*         camera);
 void gfx_gles2_sprite_draw(void);
 

@@ -2,10 +2,12 @@
 
 #include "clither/game/cmd_queue.h"
 #include "clither/game/q.h"
+#include "clither/game/settings.h"
 #include <stdint.h>
 
 struct food;
 struct snake;
+struct snake_param;
 struct msg_vec;
 
 enum msg_type
@@ -22,6 +24,8 @@ enum msg_type
 
     MSG_SNAKE_USERNAME,
     MSG_SNAKE_USERNAME_ACK,
+    MSG_SNAKE_COSMETIC_PARAMS,
+    MSG_SNAKE_COSMETIC_PARAMS_ACK,
     MSG_SNAKE_DESTROY,
     MSG_SNAKE_DESTROY_ACK,
     MSG_SNAKE_DEATH,
@@ -57,6 +61,9 @@ union parsed_payload
         uint16_t    protocol_version;
         uint16_t    frame;
         uint8_t     username_len;
+#define X(name, NAME, def, min, max) uint8_t name;
+        SNAKE_COSMETIC_PARAMS_LIST
+#undef X
     } join_request;
 
     struct
@@ -98,6 +105,19 @@ union parsed_payload
     {
         uint16_t snake_id;
     } snake_username_ack;
+
+    struct
+    {
+        uint16_t snake_id;
+#define X(name, NAME, def, min, max) uint8_t name;
+        SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+    } snake_cosmetic_params;
+
+    struct
+    {
+        uint16_t snake_id;
+    } snake_cosmetic_params_ack;
 
     struct
     {
@@ -187,7 +207,10 @@ void msg_free(struct msg* m);
 #define msg_is_unreliable(m) ((m)->resend_period == 0)
 
 struct msg* msg_join_request(
-    uint16_t protocol_version, uint16_t frame_number, const char* username);
+    uint16_t                     protocol_version,
+    uint16_t                     frame_number,
+    const char*                  username,
+    const struct settings_snake* settings);
 
 struct msg* msg_join_accept(
     uint16_t      client_frame,
@@ -217,6 +240,9 @@ struct msg* msg_feedback(int8_t diff, uint16_t frame_number);
 
 struct msg* msg_snake_username(uint16_t snake_id, const char* username);
 struct msg* msg_snake_username_ack(uint16_t snake_id);
+struct msg*
+msg_snake_cosmetic_params(uint16_t snake_id, const struct snake_param* param);
+struct msg* msg_snake_cosmetic_params_ack(uint16_t snake_id);
 struct msg* msg_snake_destroy(uint16_t snake_id);
 struct msg* msg_snake_destroy_ack(uint16_t snake_id);
 struct msg* msg_snake_death(void);

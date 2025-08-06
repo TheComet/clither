@@ -1,6 +1,7 @@
 #include "clither/game/args.h"
 #include "clither/game/bezier_knot_rb.h"
 #include "clither/game/bezier_segment_rb.h"
+#include "clither/game/math.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/qwaabb_rb.h"
 #include "clither/game/settings.h"
@@ -400,6 +401,17 @@ int server_update_snakes_in_range(
                                     knot_acks, knot_idx, 0) == BMAP_OOM)
                                 return -1;
                         }
+
+                        server_queue(
+                            client,
+                            msg_snake_username(
+                                other_client->snake_id,
+                                str_cstr(other_snake->data.name)));
+                        server_queue(
+                            client,
+                            msg_snake_cosmetic_params(
+                                other_client->snake_id, &other_snake->param));
+
                     case BMAP_EXISTS: break;
                 }
             }
@@ -697,8 +709,9 @@ static enum process_message_result process_message(
             /* Create new client */
             if (client == NULL)
             {
-                struct snake* snake;
-                uint16_t      snake_id;
+                struct settings_snake settings;
+                struct snake*         snake;
+                uint16_t              snake_id;
                 log_info("%s joined the game\n", pp.join_request.username);
 
                 client = server_client_hmap_emplace_new(&server->clients, addr);
@@ -717,6 +730,14 @@ static enum process_message_result process_message(
                 snake = snake_bmap_find(world->snakes, snake_id);
                 CLITHER_DEBUG_ASSERT(snake != NULL);
                 snake_set_hold(snake);
+
+                /* Apply the cosmetics */
+#define X(name, NAME, def, min, max)                                           \
+    settings.name = lerp(min, max, pp.join_request.name / 255.0);     \
+    log_dbg("  %s: %f\n", #name, settings.name);
+                SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+                snake_param_apply_settings(&snake->param, &settings);
 
                 server_client_init(
                     client,
@@ -852,6 +873,20 @@ static enum process_message_result process_message(
         case MSG_SNAKE_USERNAME_ACK: {
             msg_vec_remove_snake_username(
                 client->pending_msgs, pp.snake_username_ack.snake_id);
+            return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_SNAKE_COSMETIC_PARAMS: {
+            log_warn(
+                "Server received unexpected message type "
+                "MSG_SNAKE_COSMETIC_PARAMS\n");
+            break;
+        }
+
+        case MSG_SNAKE_COSMETIC_PARAMS_ACK: {
+            log_dbg("MSG_SNAKE_COSMETIC_PARAMS_ACK\n");
+            msg_vec_remove_snake_cosmetic_params(
+                client->pending_msgs, pp.snake_cosmetic_params_ack.snake_id);
             return PROCESS_MESSAGE_OK;
         }
 

@@ -102,7 +102,8 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
 {
     uint16_t rtt = 3;
     uint16_t sv_frame = 32;
-    ASSERT_THAT(client_connect(&cl, "127.0.0.1", "5555", "test"), Eq(0));
+    ASSERT_THAT(
+        client_connect(&cl, &settings, "127.0.0.1", "5555", "test"), Eq(0));
     ASSERT_THAT(client_send_pending_data(&cl), Eq(0));
     ASSERT_THAT(
         server_recv(
@@ -111,7 +112,8 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
-        client_recv(&cl, &cl_world), Eq(client_recv_tick_rate_changed()));
+        client_recv(&cl, &settings, &cl_world),
+        Eq(client_recv_tick_rate_changed()));
 
     // The client has calculated a frame number based on sv_frame+rtt+(some
     // buffer).
@@ -123,7 +125,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     auto RunServerClient = [this, &sv_frame]()
     {
         struct snake* cl_snake = snake_bmap_find(cl_world.snakes, cl.snake_id);
-        client_recv(&cl, &cl_world);
+        client_recv(&cl, &settings, &cl_world);
         SimClient();
         SimClient();
         SimClient();

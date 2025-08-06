@@ -281,17 +281,7 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         gfx_gles2_snake_load(&gfx->snake, snake, pack, shader);
     }
 
-    if (str_len(pack->food.sprite) > 0)
-    {
-        struct resource_sprite* sprite = resource_sprite_hmap_find(
-            pack->sprites, str_view(pack->food.sprite));
-        if (sprite != NULL)
-        {
-            gfx_gles2_sprite_tex_load(
-                &gfx->food, &sprite->layer[RESOURCE_LAYER_BASE]);
-            gfx->food.scale *= pack->food.scale;
-        }
-    }
+    gfx_gles2_food_load(&gfx->food, pack);
 
 #if defined(CLITHER_GFX_DEBUG)
     gfx_gles2_debug_load(&gfx->debug);
@@ -319,7 +309,7 @@ static void gfx_gles2_unload_resource_pack(
     gfx_gles2_debug_unload(&gfx->debug);
 #endif
 
-    gfx_gles2_sprite_tex_unload(&gfx->food);
+    gfx_gles2_food_unload(&gfx->food);
     gfx_gles2_snake_unload(&gfx->snake);
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_unload(&gfx->sprite_shadow_mat);
@@ -413,7 +403,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_sprite_shadow_init(&gfx->sprite_shadow_mat);
     gfx_gles2_sprite_mat_init(&gfx->sprite_mat);
     gfx_gles2_snake_init(&gfx->snake);
-    gfx_gles2_sprite_tex_init(&gfx->food);
+    gfx_gles2_food_init(&gfx->food);
     gfx_gles2_rectangle_init(&gfx->rect);
 
     glEnable(GL_BLEND);
@@ -450,7 +440,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
 #endif
 
     gfx_gles2_rectangle_deinit(&gfx->rect);
-    gfx_gles2_sprite_tex_deinit(&gfx->food);
+    gfx_gles2_food_deinit(&gfx->food);
     gfx_gles2_snake_deinit(&gfx->snake);
     gfx_gles2_sprite_mat_deinit(&gfx->sprite_mat);
     gfx_gles2_sprite_shadow_deinit(&gfx->sprite_shadow_mat);
@@ -476,7 +466,7 @@ static void gfx_gles2_poll_input(struct gfx* gfx, struct input* input)
 /* ------------------------------------------------------------------------- */
 static void gfx_gles2_step_anim(struct gfx* gfx, int sim_tick_rate)
 {
-    gfx_gles2_sprite_step_anim(&gfx->food, sim_tick_rate);
+    gfx_gles2_food_step_anim(&gfx->food, sim_tick_rate);
     gfx_gles2_snake_step_anim(&gfx->snake, sim_tick_rate);
 }
 
@@ -533,7 +523,7 @@ static void gfx_gles2_draw_world(
 
     /* Background uses the shadow frame buffer */
     gfx_gles2_background_draw(world, gfx, camera, &ar, SHADOW_MAP_SIZE_FACTOR);
-    gfx_gles2_draw_food(world->food_bmap, gfx, camera, &ar);
+    gfx_gles2_draw_food(world->food_bmap, gfx, &gfx->food, camera, &ar);
 
     /* Snakes */
     bmap_for_each (world->snakes, idx, snake_id, snake)

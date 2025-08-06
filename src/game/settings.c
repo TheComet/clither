@@ -193,6 +193,21 @@ void settings_mcd_set_defaults(struct settings_mcd* s)
     strcpy(s->connect_addr, "localhost");
     strcpy(s->connect_port, "5555");
 }
+void settings_snake_set_defaults(struct settings_snake* s)
+{
+    /* These are not loaded or saved, but are used for validation and for
+     * limiting the values in the UI */
+#define X(name, NAME, def, min, max)                                           \
+    s->name##_min = min;                                                       \
+    s->name##_max = max;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+
+    /* [snake] */
+#define X(name, NAME, def, min, max) s->name = def;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+}
 void settings_set_defaults(struct settings* s)
 {
     settings_server_set_defaults(&s->server);
@@ -200,6 +215,7 @@ void settings_set_defaults(struct settings* s)
     settings_client_set_defaults(&s->client);
     settings_gfx_set_defaults(&s->gfx);
     settings_mcd_set_defaults(&s->mcd);
+    settings_snake_set_defaults(&s->snake);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -264,6 +280,18 @@ int settings_apply_args(struct settings* s, const struct args* a)
 #endif
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+void settings_apply_constraings(struct settings* s)
+{
+#define X(name, NAME, def, min, max)                                           \
+    if (s->snake.name < s->snake.name##_min)                                   \
+        s->snake.name = s->snake.name##_min;                                   \
+    if (s->snake.name > s->snake.name##_max)                                   \
+        s->snake.name = s->snake.name##_max;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
 }
 
 /* ------------------------------------------------------------------------- */
@@ -895,6 +923,73 @@ static int parse_mcd_key_values(struct parser* p, struct settings_mcd* s)
 }
 
 /* ------------------------------------------------------------------------- */
+#define X(name, NAME, def, min, max)                                           \
+    static int parse_snake_##name(struct parser* p, struct settings_snake* s)  \
+    {                                                                          \
+        if (scan_next_token(p) != TOK_FLOAT)                                   \
+            return parser_error(p, "Expected a float value\n");                \
+                                                                               \
+        if (p->value.float_literal < s->name##_min ||                          \
+            p->value.float_literal > s->name##_max)                            \
+        {                                                                      \
+            return parser_error(                                               \
+                p,                                                             \
+                "\"" #name "\" must be %.3f or %.3f\n",                        \
+                s->name##_min,                                                 \
+                s->name##_max);                                                \
+        }                                                                      \
+                                                                               \
+        s->name = p->value.float_literal;                                      \
+        return 0;                                                              \
+    }
+SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+static int parse_snake_key_values(struct parser* p, struct settings_snake* s)
+{
+    enum token     tok;
+    struct strview key;
+
+    while (1)
+    {
+        switch ((tok = scan_next_token(p)))
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                key = p->value.string;
+                if (0)
+                {
+                }
+                /* clang-format off */
+#define X(name, NAME, def, min, max)                                           \
+                else if (strview_eq_cstr(key, #name))                          \
+                {                                                              \
+                    if (scan_next_token(p) != '=')                             \
+                        return parser_error(p, "Expected \"=\" after key\n");  \
+                    if (parse_snake_##name(p, s) != 0)                         \
+                        return -1;                                             \
+                }
+                SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+                /* clang-format on */
+                else
+                {
+                    return parser_error(
+                        p,
+                        "Unknown key \"%.*s\"\n",
+                        key.len,
+                        key.data + key.off);
+                }
+                break;
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 static int parse_ini(struct parser* p, struct settings* s)
 {
     enum token tok;
@@ -904,7 +999,8 @@ static int parse_ini(struct parser* p, struct settings* s)
         SEC_WORLD,
         SEC_CLIENT,
         SEC_GFX,
-        SEC_MCD
+        SEC_MCD,
+        SEC_SNAKE
     };
 
     while (1)
@@ -934,6 +1030,8 @@ static int parse_ini(struct parser* p, struct settings* s)
                     sec = SEC_GFX;
                 else if (strview_eq_cstr(p->value.string, "mcd"))
                     sec = SEC_MCD;
+                else if (strview_eq_cstr(p->value.string, "snake"))
+                    sec = SEC_SNAKE;
                 else
                     return parser_error(
                         p,
@@ -957,6 +1055,9 @@ static int parse_ini(struct parser* p, struct settings* s)
                         break;
                     case SEC_GFX: tok = parse_gfx_key_values(p, &s->gfx); break;
                     case SEC_MCD: tok = parse_mcd_key_values(p, &s->mcd); break;
+                    case SEC_SNAKE:
+                        tok = parse_snake_key_values(p, &s->snake);
+                        break;
                 }
                 goto reswitch_tok;
             }
@@ -1006,6 +1107,7 @@ void settings_save(const struct settings* s, const char* filename)
     const struct settings_client* cl = &s->client;
     const struct settings_gfx*    gfx = &s->gfx;
     const struct settings_mcd*    mcd = &s->mcd;
+    const struct settings_snake*  snake = &s->snake;
 
     if (!*filename)
         return;
@@ -1028,6 +1130,8 @@ void settings_save(const struct settings* s, const char* filename)
     fprintf(fp, #prop " = \"%s\" ; " desc "\n", s->prop)
 #define WRITE_STR_AS_INT(fp, s, prop, desc)                                    \
     fprintf(fp, #prop " = %s ; " desc "\n", s->prop)
+#define WRITE_FLOAT(fp, s, prop, desc)                                         \
+    fprintf(fp, #prop " = %f ; " desc "\n", s->prop)
 
     /* clang-format off */
     fprintf(fp, "[server]\n");
@@ -1070,6 +1174,13 @@ void settings_save(const struct settings* s, const char* filename)
     WRITE_STR(fp, mcd, connect_addr, "Address to connect to");
     WRITE_STR_AS_INT(fp, mcd, connect_port, "Port to connect to");
     /* clang-format on */
+
+    fprintf(fp, "\n[snake]\n");
+#define X(name, def, min, max)                                                 \
+    WRITE_FLOAT(fp, snake, name, "");                                          \
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+    (void)snake;
 
     utf8_fclose(fp);
 }

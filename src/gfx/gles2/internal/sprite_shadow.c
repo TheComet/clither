@@ -67,10 +67,10 @@ void gfx_gles2_sprite_shadow_prepare_draw(
     const struct gfx_background*        bg,
     const struct gfx_quad_mesh*         mesh,
     const struct gfx_sprite_shadow_mat* mat,
-    const struct aspect_ratio*      ar,
-    GLint                           gfx_width,
-    GLint                           gfx_height,
-    int                             shadow_map_size_factor)
+    const struct aspect_ratio*          ar,
+    GLint                               gfx_width,
+    GLint                               gfx_height,
+    int                                 shadow_map_size_factor)
 {
     int i;
 
@@ -114,10 +114,10 @@ void gfx_gles2_sprite_shadow_bind_textures(const struct gfx_sprite_tex* tex)
 void gfx_gles2_sprite_shadow_update_uniforms(
     const struct gfx_sprite_shadow_mat* mat,
     const struct gfx_sprite_tex*        tex,
-    struct qwpos                    pos,
-    struct qwpos                    dir,
-    qw                              scale,
-    const struct camera*            camera)
+    struct qwpos                        pos,
+    struct qwpos                        dir,
+    GLfloat                             scale,
+    const struct camera*                camera)
 {
     int          tile_x, tile_y;
     struct qwpos pos_cameraSpace;
@@ -134,7 +134,7 @@ void gfx_gles2_sprite_shadow_update_uniforms(
     tile_x = tex->anim_frame % tex->tile_x;
     tile_y = (tex->anim_frame / tex->tile_x) % tex->tile_y;
 
-    glUniform1f(mat->uSize, tex->scale * qw_to_float(scale));
+    glUniform1f(mat->uSize, scale);
     glUniform3f(
         mat->uPosCameraSpace,
         qw_to_float(pos_cameraSpace.x),

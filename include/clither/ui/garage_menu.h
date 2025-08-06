@@ -11,5 +11,4 @@ int garage_menu_run(
     struct gfx**                 gfx,
     struct resource_pack**       pack,
     struct fs_watch**            pack_watch,
-    const struct settings*       settings);
-
+    struct settings*             settings);

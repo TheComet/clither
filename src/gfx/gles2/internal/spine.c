@@ -45,7 +45,6 @@ void gfx_gles2_spine_init(struct spine* spine)
     spine->uScrollScaleOffset = INVALID_UNIFORM_LOCATION;
     spine->uCutoff = INVALID_UNIFORM_LOCATION;
 
-    spine->spine_width = 1.0;
     spine->tex_aspect_ratio = 0;
 
     for (i = 0; i <= QUADS; ++i)
@@ -110,8 +109,6 @@ int gfx_gles2_spine_load(
     int         img_width, img_height, img_channels;
     stbi_uc*    img_data;
     const char* tex_filename;
-
-    spine->spine_width = res->width;
 
     CLITHER_DEBUG_ASSERT(spine->program == 0);
     spine->program = gfx_gles2_load_shader(shader->spine, attr_bindings);
@@ -218,6 +215,7 @@ void gfx_gles2_spine_draw(
     const struct bezier_segment_rb* segments,
     qw                              snake_scale,
     qw                              snake_length,
+    GLfloat                         spine_width,
     const struct camera*            camera,
     const struct aspect_ratio*      ar)
 {
@@ -226,8 +224,8 @@ void gfx_gles2_spine_draw(
     GLfloat                      coeff[6];
     GLfloat                      scroll_offset;
     GLfloat                      total_length;
-    GLfloat width = spine->spine_width * qw_to_float(snake_scale);
-    GLfloat snake_length_f = qw_to_float(snake_length);
+    GLfloat                      width = spine_width * qw_to_float(snake_scale);
+    GLfloat                      snake_length_f = qw_to_float(snake_length);
 
     glBindBuffer(GL_ARRAY_BUFFER, spine->vbo);
     glEnableVertexAttribArray(0);

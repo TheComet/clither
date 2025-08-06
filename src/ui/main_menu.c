@@ -535,7 +535,7 @@ int main_menu_run(
     struct fs_watch**            pack_watch,
     const struct bot_interface*  ibot,
     struct bot*                  bot,
-    const struct settings*       settings)
+    struct settings*             settings)
 {
     struct ui*    main_menu;
     struct input  input;
@@ -579,6 +579,7 @@ int main_menu_run(
                     ui_cmd.join.username);
                 if (client_connect(
                         &client,
+                        settings,
                         ui_cmd.join.address,
                         ui_cmd.join.port,
                         ui_cmd.join.username) != 0)
@@ -628,6 +629,7 @@ int main_menu_run(
                 /* The server should be running, so try to join as a client */
                 if (client_connect(
                         &client,
+                        settings,
                         "localhost",
                         ui_cmd.host.port,
                         ui_cmd.host.username) != 0)
@@ -664,6 +666,7 @@ int main_menu_run(
                 garage_menu_run(igfx, gfx, pack, pack_watch, settings);
                 break;
             }
+            case UI_CMD_SNAKE_COSMETIC_PARAMS: break;
         }
 
         /* CTRL+C */

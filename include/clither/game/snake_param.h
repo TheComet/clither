@@ -1,7 +1,10 @@
 #pragma once
 
 #include "clither/game/q.h"
+#include "clither/game/settings.h"
 #include <stdint.h>
+
+struct settings_snake;
 
 struct snake_upgrades
 {
@@ -36,10 +39,20 @@ struct snake_param
         uint8_t acceleration;
     } cached_stats;
 
+    struct
+    {
+#define X(name, NAME, def, min, max) float name;
+        SNAKE_COSMETIC_PARAMS_LIST
+#undef X
+    } cosmetic;
+
     struct snake_upgrades upgrades;
 };
 
 void snake_param_init(struct snake_param* param);
+
+void snake_param_apply_settings(
+    struct snake_param* param, const struct settings_snake* settings);
 
 void snake_param_update(
     struct snake_param*   param,

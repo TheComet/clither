@@ -69,7 +69,6 @@ static void resource_layer_init(struct resource_layer* res)
     res->tile_y = 1;
     res->num_frames = 1;
     res->fps = 0;
-    res->scale = 1.0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -98,7 +97,6 @@ static void resource_sprite_deinit(struct resource_sprite* res)
 static void resource_spine_init(struct resource_spine* res)
 {
     strlist_init(&res->textures);
-    res->width = 1.0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -127,7 +125,6 @@ static void resource_snake_init(struct resource_snake* res)
     str_init(&res->tail_sprite);
     strlist_init(&res->body_sprites);
     str_init(&res->spine);
-    res->part_spacing = 0.15;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -727,18 +724,6 @@ static int parse_section_sprite(
                     break;
                 }
 
-                if (strview_eq_cstr(key, "scale"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_FLOAT)
-                        return parser_error(
-                            p,
-                            "Expected a float value. Example: scale = 2.0\n");
-                    layer->scale = p->value.float_literal;
-                    break;
-                }
-
                 return parser_error(
                     p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
             }
@@ -803,18 +788,6 @@ static int parse_section_spine(
                         return parser_error(p, "Expected '=' after key\n");
                     tok = parse_string_list(p, &spine->textures, path_prefix);
                     goto reswitch_tok;
-                }
-
-                if (strview_eq_cstr(key, "width"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_FLOAT)
-                        return parser_error(
-                            p,
-                            "Expected a float value. Example: scale = 2.0\n");
-                    spine->width = p->value.float_literal;
-                    break;
                 }
 
                 return parser_error(
@@ -911,19 +884,6 @@ parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
                         return parser_error(p, "Expected a string value\n");
                     if (str_set(&snake->spine, p->value.string) != 0)
                         return -1;
-                    break;
-                }
-
-                if (strview_eq_cstr(key, "part_spacing"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_FLOAT)
-                        return parser_error(
-                            p,
-                            "Expected a float value. Example: part_spacing = "
-                            "0.5\n");
-                    snake->part_spacing = p->value.float_literal;
                     break;
                 }
 

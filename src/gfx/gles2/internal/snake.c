@@ -23,8 +23,6 @@ int gfx_gles2_snake_init(struct gfx_snake* gfx)
 
     gfx_part_sample_vec_init(&gfx->part_samples);
 
-    gfx->part_spacing = 0.15;
-
     return 0;
 }
 
@@ -89,8 +87,6 @@ int gfx_gles2_snake_load(
         gfx_gles2_sprite_tex_load(
             &snake->tail_base, &sprite->layer[RESOURCE_LAYER_BASE]);
     }
-
-    snake->part_spacing = res->part_spacing;
 
     spine = resource_spine_hmap_find(pack->spines, str_view(res->spine));
     if (spine != NULL)
@@ -216,8 +212,8 @@ void gfx_gles2_draw_snake(
     /* If the spacing is really far apart, then we undersample the bezier curve
      * and the accumulated distance becomes inaccurate. This compensates for
      * that */
-    sample_spacing =
-        qw_mul(snake_scale(&snake->param), make_qw(gfx_snake->part_spacing));
+    sample_spacing = qw_mul(
+        snake_scale(&snake->param), make_qw(snake->param.cosmetic.part_spacing));
     oversample_factor = 1;
     while (sample_spacing > make_qw(0.1))
     {
@@ -253,6 +249,7 @@ void gfx_gles2_draw_snake(
         vec_count(gfx_snake->part_samples) > 0
             ? vec_last(gfx_snake->part_samples)->length
             : make_qw(0),
+        snake->param.cosmetic.spine_width,
         camera,
         ar);
     gfx_gles2_spine_end_draw();
@@ -268,7 +265,8 @@ void gfx_gles2_draw_snake(
                     &gfx_snake->head_base,
                     part_sample->pos,
                     part_sample->dir,
-                    snake_scale(&snake->param),
+                    qw_to_float(snake_scale(&snake->param)) *
+                        snake->param.cosmetic.head_scale,
                     camera) &&
                 gfx_gles2_sprite_bind_textures(&gfx_snake->head_base))
             {
@@ -280,7 +278,8 @@ void gfx_gles2_draw_snake(
                     &gfx_snake->head_base,
                     part_sample->pos,
                     part_sample->dir,
-                    snake_scale(&snake->param),
+                    qw_to_float(snake_scale(&snake->param)) *
+                        snake->param.cosmetic.head_scale,
                     camera) &&
                 gfx_gles2_sprite_bind_textures(&gfx_snake->head_gather))
             {
@@ -294,7 +293,8 @@ void gfx_gles2_draw_snake(
                     &gfx_snake->tail_base,
                     part_sample->pos,
                     part_sample->dir,
-                    snake_scale(&snake->param),
+                    qw_to_float(snake_scale(&snake->param)) *
+                        snake->param.cosmetic.tail_scale,
                     camera) &&
                 gfx_gles2_sprite_bind_textures(&gfx_snake->tail_base))
             {
@@ -304,13 +304,15 @@ void gfx_gles2_draw_snake(
         else if (vec_count(gfx_snake->body_base) > 0) /* body */
         {
             const struct gfx_sprite_tex* tex = vec_get(
-                gfx_snake->body_base, (i - 1) % vec_count(gfx_snake->body_base));
+                gfx_snake->body_base,
+                (i - 1) % vec_count(gfx_snake->body_base));
             if (gfx_gles2_sprite_update_uniforms(
                     &gfx->sprite_mat,
                     tex,
                     part_sample->pos,
                     part_sample->dir,
-                    snake_scale(&snake->param),
+                    qw_to_float(snake_scale(&snake->param)) *
+                        snake->param.cosmetic.body_scale,
                     camera) &&
                 gfx_gles2_sprite_bind_textures(tex))
             {

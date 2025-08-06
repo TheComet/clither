@@ -186,6 +186,7 @@ int main(int argc, char* argv[])
             client_init(&client);
             if (client_connect(
                     &client,
+                    &settings,
                     settings.client.connect_addr,
                     settings.client.connect_port,
                     settings.client.username) != 0)
