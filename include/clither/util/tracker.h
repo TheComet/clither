@@ -26,12 +26,12 @@ void untrack_fd(int fd);
 #else
 
 /* clang-format off */
-#   define trackers_init_tls()    (0)
-#   define trackers_deinit_tls()  do {} while (0)
-#   define track_mem(p, size)     do {} while (0)
-#   define untrack_mem(p)         do {} while (0)
-#   define track_fd(fd)           do {} while (0)
-#   define untrack_fd(fd)         do {} while (0)
+#   define trackers_init_tls()      (0)
+#   define trackers_deinit_tls()    do {} while (0)
+#   define track_mem(p, size, name) do {} while (0)
+#   define untrack_mem(p)           do {} while (0)
+#   define track_fd(fd, name)       do {} while (0)
+#   define untrack_fd(fd)           do {} while (0)
 /* clang-format on */
 
 #endif

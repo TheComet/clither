@@ -12,6 +12,7 @@ pkgs.stdenv.mkDerivation {
     "-DCLITHER_CLIENT=OFF"
     "-DCLITHER_DOC=OFF"
     "-DCLITHER_GFX=OFF"
+    "-DCLITHER_HOT_RELOAD=OFF"
     "-DCLITHER_TESTS=OFF"
   ];
   postInstall = let

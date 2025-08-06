@@ -5,7 +5,6 @@
 #include "./shader.h"
 
 static const char* vs =
-    "#version 330\n"
     "precision mediump float;\n"
     "attribute vec2 vPosition;\n"
     "uniform vec2 uAspectRatio;\n"
@@ -19,7 +18,6 @@ static const char* vs =
     "    gl_Position = vec4(pos, 0.0, 1.0);\n"
     "}\n";
 static const char* fs =
-    "#version 330\n"
     "precision mediump float;\n"
     "uniform vec4 uColor;\n"
     "void main()\n"

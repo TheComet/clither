@@ -26,15 +26,15 @@ void gfx_untrack_fbo(GLuint fbo);
 void gfx_untrack_shader(GLuint shader);
 #else
 /* clang-format off */
-#    define gfx_track_tex(tex) do {} while (0)
-#    define gfx_track_buf(buf) do {} while (0)
-#    define gfx_track_fbo(fbo) do {} while (0)
-#    define gfx_track_shader(shader) do {} while (0)
+#    define gfx_track_tex(tex, name)       do {} while (0)
+#    define gfx_track_buf(buf, name)       do {} while (0)
+#    define gfx_track_fbo(fbo, name)       do {} while (0)
+#    define gfx_track_shader(shader, name) do {} while (0)
 
-#    define gfx_untrack_tex(tex) do {} while (0)
-#    define gfx_untrack_buf(buf) do {} while (0)
-#    define gfx_untrack_fbo(fbo) do {} while (0)
-#    define gfx_untrack_shader(shader) do {} while (0)
+#    define gfx_untrack_tex(tex)           do {} while (0)
+#    define gfx_untrack_buf(buf)           do {} while (0)
+#    define gfx_untrack_fbo(fbo)           do {} while (0)
+#    define gfx_untrack_shader(shader)     do {} while (0)
 /* clang-format on */
 #endif
 
