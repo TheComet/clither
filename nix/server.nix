@@ -1,10 +1,12 @@
-{ pkgs, settings }:
+{ pkgs }:
 pkgs.stdenv.mkDerivation {
   name = "clither-server";
   src = ../.;
+
   nativeBuildInputs = with pkgs.buildPackages; [
     cmake
   ];
+
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE=Release"
     "-DCLITHER_FETCH_ASSETS=OFF"
@@ -15,11 +17,7 @@ pkgs.stdenv.mkDerivation {
     "-DCLITHER_HOT_RELOAD=OFF"
     "-DCLITHER_TESTS=OFF"
   ];
-  postInstall = let
-    settingsFileExists = builtins.readFileType settings == "regular";
-  in pkgs.lib.optional (settingsFileExists) ''
-    cp ${settings} $out/settings.ini
-    '';
+
   postFixup = let
     isWindows = builtins.match ".*-windows" pkgs.stdenv.hostPlatform.system != null;
   in pkgs.lib.optional (isWindows) ''

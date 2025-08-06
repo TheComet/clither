@@ -1,14 +1,20 @@
 { pkgs, settings }:
 let
-  clither-server = (import ./server.nix { inherit pkgs settings; });
-in
-pkgs.dockerTools.buildImage {
+  clither-server = (import ./server.nix { inherit pkgs; });
+  settingsFileExists = builtins.readFileType settings == "regular";
+in pkgs.dockerTools.buildImage {
   name = "clither";
   tag = "latest";
+
   copyToRoot = [
     clither-server
-    pkgs.fakeNss  # fs_appdata_dir() calls getpwuid(), which requires /etc/passwd
-  ];
+    pkgs.fakeNss
+  ] ++ (pkgs.lib.optional settingsFileExists
+    (pkgs.runCommand "mechasnek-settings" {} ''
+      mkdir -p $out/var/empty/.local/share/mechasnek
+      cp ${settings} $out/var/empty/.local/share/mechasnek/settings.ini
+    ''));
+
   config = {
     Cmd = [ "${clither-server}/mechasnek" "--server" ];
     WorkingDir = "/";
@@ -18,3 +24,4 @@ pkgs.dockerTools.buildImage {
     };
   };
 }
+
