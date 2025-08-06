@@ -14,10 +14,10 @@
 #endif
 
 #if defined(CLITHER_DEBUG_MEMORY)
-void gfx_track_tex(GLuint tex);
-void gfx_track_buf(GLuint buf);
-void gfx_track_fbo(GLuint fbo);
-void gfx_track_shader(GLuint shader);
+void gfx_track_tex(GLuint tex, const char* name);
+void gfx_track_buf(GLuint buf, const char* name);
+void gfx_track_fbo(GLuint fbo, const char* name);
+void gfx_track_shader(GLuint shader, const char* name);
 
 void gfx_untrack_tex(GLuint tex);
 void gfx_untrack_buf(GLuint buf);

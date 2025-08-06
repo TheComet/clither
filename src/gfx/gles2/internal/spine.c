@@ -55,7 +55,7 @@ void gfx_gles2_spine_init(struct spine* spine)
         spine_vertices[i * 2 + 1] = vertex(x, 1);
     }
     glGenBuffers(1, &spine->vbo);
-    gfx_track_buf(spine->vbo);
+    gfx_track_buf(spine->vbo, "spine->vbo");
     glBindBuffer(GL_ARRAY_BUFFER, spine->vbo);
     glBufferData(
         GL_ARRAY_BUFFER,
@@ -152,7 +152,7 @@ int gfx_gles2_spine_load(
         spine->tex_aspect_ratio = (GLfloat)img_height / (GLfloat)img_width;
 
         glGenTextures(1, &spine->tex[i]);
-        gfx_track_tex(spine->tex[i]);
+        gfx_track_tex(spine->tex[i], "spine->tex[i]");
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, spine->tex[i]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);

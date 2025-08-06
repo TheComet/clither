@@ -108,7 +108,7 @@ void gfx_gles2_sprite_tex_load(
         }
 
         glGenTextures(1, &tex->tex[i]);
-        gfx_track_tex(tex->tex[i]);
+        gfx_track_tex(tex->tex[i], "tex->tex[i]");
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, tex->tex[i]);

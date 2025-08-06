@@ -20,7 +20,7 @@ const char* gfx_gles2_quad_attr_bindings[2] = {
 void gfx_gles2_quad_mesh_init(struct gfx_quad_mesh* mesh)
 {
     glGenBuffers(1, &mesh->vbo);
-    gfx_track_buf(mesh->vbo);
+    gfx_track_buf(mesh->vbo, "quad.c::mesh->vbo");
     glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
     glBufferData(
         GL_ARRAY_BUFFER,

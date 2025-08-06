@@ -25,7 +25,7 @@ FILE* utf8_fopen_wb(const char* utf8_filename, int utf8_filename_bytes)
     FILE* fp;
     (void)utf8_filename_bytes;
     fp = fopen(utf8_filename, "wb");
-    track_mem(fp, 0);
+    track_mem(fp, 0, utf8_filename);
     return fp;
 }
 
@@ -35,7 +35,7 @@ FILE* utf8_fopen_rb(const char* utf8_filename, int utf8_filename_bytes)
     FILE* fp;
     (void)utf8_filename_bytes;
     fp = fopen(utf8_filename, "rb");
-    track_mem(fp, 0);
+    track_mem(fp, 0, utf8_filename);
     return fp;
 }
 

@@ -7,7 +7,8 @@
 
 struct data
 {
-    int size;
+    int         size;
+    struct str* name;
 #if defined(CLITHER_BACKTRACE)
     int    backtrace_size;
     char** backtrace;
@@ -81,7 +82,11 @@ void tracker_destroy(struct tracker* t)
     hmap_for_each (t->hmap, slot, p, data)
     {
         (void)slot;
-        log_err("Un-freed %s 0x%" PRIxPTR, str_cstr(t->name), p);
+        log_err(
+            "Un-freed %s 0x%" PRIxPTR " \"%s\"",
+            str_cstr(t->name),
+            p,
+            str_cstr(data->name));
         if (data->size)
             log_raw(", size %d", data->size);
         log_raw("\n");
@@ -89,6 +94,7 @@ void tracker_destroy(struct tracker* t)
         print_backtrace(data);
         backtrace_free(data->backtrace);
 #endif
+        str_deinit(data->name);
 #if defined(CLITHER_HEX_DUMP)
         if (data->size <= CLITHER_HEX_DUMP_SIZE)
             log_hex_ascii((void*)p, data->size);
@@ -109,7 +115,7 @@ void tracker_destroy(struct tracker* t)
 }
 
 /* ------------------------------------------------------------------------- */
-void tracker_track(struct tracker* t, void* p, int size)
+void tracker_track(struct tracker* t, void* p, int size, const char* name)
 {
     struct data* data;
     ++t->tracks;
@@ -118,6 +124,8 @@ void tracker_track(struct tracker* t, void* p, int size)
     {
         case HMAP_OOM: break;
         case HMAP_NEW: {
+            str_init(&data->name);
+            str_set_cstr(&data->name, name);
             data->size = size;
 #if defined(CLITHER_BACKTRACE)
             data->backtrace = backtrace_get(&data->backtrace_size);
@@ -160,6 +168,7 @@ void tracker_untrack(struct tracker* t, void* p)
     if (data->backtrace)
         backtrace_free(data->backtrace);
 #endif
+    str_deinit(data->name);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -175,8 +184,11 @@ int trackers_init_tls(void)
     if (g_tracker_mem == NULL)
         goto tracker_mem_create_failed;
     g_ignore_malloc = 0;
-    track_mem(g_tracker_mem, sizeof *g_tracker_mem);
-    track_mem(g_tracker_mem->name, str_len(g_tracker_mem->name));
+    track_mem(g_tracker_mem, sizeof *g_tracker_mem, "g_tracker_mem");
+    track_mem(
+        g_tracker_mem->name,
+        str_len(g_tracker_mem->name),
+        "g_tracker_mem->name");
 
     g_tracker_fd = tracker_create("file descriptor");
     if (g_tracker_fd == NULL)
@@ -202,18 +214,18 @@ void trackers_deinit_tls(void)
     g_ignore_malloc = 0;
 }
 
-void track_mem(void* p, int size)
+void track_mem(void* p, int size, const char* name)
 {
     if (!g_ignore_malloc)
     {
         g_ignore_malloc = 1;
-        tracker_track(g_tracker_mem, p, size);
+        tracker_track(g_tracker_mem, p, size, name);
         g_ignore_malloc = 0;
     }
 }
-void track_fd(int fd)
+void track_fd(int fd, const char* name)
 {
-    tracker_track(g_tracker_fd, (void*)(intptr_t)fd, 0);
+    tracker_track(g_tracker_fd, (void*)(intptr_t)fd, 0, name);
 }
 
 void untrack_mem(void* p)

@@ -24,7 +24,7 @@ void* mem_alloc(int size)
         return NULL;
     }
 
-    track_mem(p, size);
+    track_mem(p, size, "");
     return p;
 }
 
@@ -53,7 +53,7 @@ void* mem_realloc(void* p, int new_size)
 
     if (old_addr)
         untrack_mem((void*)old_addr);
-    track_mem(p, new_size);
+    track_mem(p, new_size, "");
 
     return p;
 }

@@ -183,6 +183,11 @@ void settings_gfx_set_defaults(struct settings_gfx* s)
 void settings_mcd_set_defaults(struct settings_mcd* s)
 {
     /* [mcd] */
+    s->enable = 0;
+    s->latency_ms = 400;
+    s->loss_percent = 20;
+    s->dup_percent = 20;
+    s->reorder_percent = 20;
     strcpy(s->bind_addr, "");
     strcpy(s->bind_port, "5554");
     strcpy(s->connect_addr, "localhost");

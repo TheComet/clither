@@ -75,14 +75,14 @@ static void tracker_gfx_deinit(void)
 }
 
 /* clang-format off */
-void gfx_track_tex(GLuint tex)
-    {tracker_track(g_tracker_gfx.tex, (void*)(uintptr_t)tex, 0);}
-void gfx_track_buf(GLuint buf)
-    {tracker_track(g_tracker_gfx.buf, (void*)(uintptr_t)buf, 0);}
-void gfx_track_fbo(GLuint fbo)
-    {tracker_track(g_tracker_gfx.fbo, (void*)(uintptr_t)fbo, 0);}
-void gfx_track_shader(GLuint shader)
-    {tracker_track(g_tracker_gfx.shader, (void*)(uintptr_t)shader, 0);}
+void gfx_track_tex(GLuint tex, const char* name)
+    {tracker_track(g_tracker_gfx.tex, (void*)(uintptr_t)tex, 0, name);}
+void gfx_track_buf(GLuint buf, const char* name)
+    {tracker_track(g_tracker_gfx.buf, (void*)(uintptr_t)buf, 0, name);}
+void gfx_track_fbo(GLuint fbo, const char* name)
+    {tracker_track(g_tracker_gfx.fbo, (void*)(uintptr_t)fbo, 0, name);}
+void gfx_track_shader(GLuint shader, const char* name)
+    {tracker_track(g_tracker_gfx.shader, (void*)(uintptr_t)shader, 0, name);}
 
 void gfx_untrack_tex(GLuint tex)
     {tracker_untrack(g_tracker_gfx.tex, (void*)(uintptr_t)tex);}

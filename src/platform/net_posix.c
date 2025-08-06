@@ -184,7 +184,7 @@ static int net_bind(const char* bind_address, const char* port, int socktype)
         ipstr.cstr,
         port);
 
-    track_fd(sockfd);
+    track_fd(sockfd, "net_bind::sockfd");
     return sockfd;
 }
 
@@ -262,7 +262,7 @@ static int net_connect(
             socktype == SOCK_DGRAM ? "UDP" : "TCP",
             ipstr.cstr,
             port);
-        track_fd(sockfd);
+        track_fd(sockfd, "net_connect::sockfd");
         sockfd_vec_push(sockfds, sockfd);
     }
     freeaddrinfo(candidates);

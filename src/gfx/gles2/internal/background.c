@@ -19,7 +19,7 @@ int gfx_gles2_background_init(
 
     /* Set up shadow framebuffer */
     glGenTextures(1, &bg->texShadow);
-    gfx_track_tex(bg->texShadow);
+    gfx_track_tex(bg->texShadow, "bg->texShadow");
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, bg->texShadow);
     glTexImage2D(
@@ -38,7 +38,7 @@ int gfx_gles2_background_init(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glGenFramebuffers(1, &bg->fbo);
-    gfx_track_fbo(bg->fbo);
+    gfx_track_fbo(bg->fbo, "bg->fbo");
     glBindFramebuffer(GL_FRAMEBUFFER, bg->fbo);
     glFramebufferTexture2D(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bg->texShadow, 0);
@@ -153,7 +153,7 @@ int gfx_gles2_background_load(
         }
 
         glGenTextures(1, &bg->tex[i]);
-        gfx_track_tex(bg->tex[i]);
+        gfx_track_tex(bg->tex[i], "bg->tex[i]");
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, bg->tex[i]);

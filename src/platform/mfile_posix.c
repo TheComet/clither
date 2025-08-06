@@ -69,7 +69,7 @@ int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
     close(fd);
 
     mf->size = (int)stbuf.st_size;
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, filepath);
     return 0;
 
 mmap_failed:
@@ -123,7 +123,7 @@ int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
     close(fd);
 
     mf->size = size;
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, filepath);
     return 0;
 
 mmap_failed:
@@ -144,7 +144,7 @@ int mfile_map_mem(struct mfile* mf, int size)
     }
 
     mf->size = size;
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, "mfile_map_mem");
     return 0;
 }
 

@@ -418,7 +418,7 @@ int gfx_gles2_font_init(struct gfx_font* font)
             "Failed to initialize FreeType library: %s\n",
             FT_Error_String(ft_error));
     }
-    track_mem(font->ft_lib, 0);
+    track_mem(font->ft_lib, 0, "font->ft_lib");
 
     font->program = INVALID_HANDLE;
     font->tex_atlas = INVALID_UNIFORM_LOCATION;
@@ -429,7 +429,7 @@ int gfx_gles2_font_init(struct gfx_font* font)
     font->uColor = INVALID_UNIFORM_LOCATION;
 
     glGenTextures(1, &font->tex_atlas);
-    gfx_track_tex(font->tex_atlas);
+    gfx_track_tex(font->tex_atlas, "font->tex_atlas");
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->tex_atlas);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -482,7 +482,7 @@ int gfx_gles2_font_load(
             FT_Error_String(error));
         goto ft_new_face_failed;
     }
-    track_mem(font->ft_face, 0);
+    track_mem(font->ft_face, 0, "font->ft_face");
     force_ucs2_charmap(font->ft_face);
 
     /* NOTE: Don't use this if using FreeType's cache API */
@@ -495,7 +495,7 @@ int gfx_gles2_font_load(
         log_err("Failed to create HarfBuzz font from FreeType face\n");
         goto hb_ft_font_create_failed;
     }
-    track_mem(font->hb_font, 0);
+    track_mem(font->hb_font, 0, "font->hb_font");
 
     font->hb_buf = hb_buffer_create();
     if (font->hb_buf == NULL)
@@ -503,7 +503,7 @@ int gfx_gles2_font_load(
         log_err("Failed to create HarfBuzz buffer\n");
         goto hb_buffer_create_failed;
     }
-    track_mem(font->hb_buf, 0);
+    track_mem(font->hb_buf, 0, "font->hb_buf");
 
     CLITHER_DEBUG_ASSERT(font->program == 0);
     font->program = gfx_gles2_load_shader(shader->text, attr_bindings);
@@ -529,6 +529,7 @@ hb_buffer_create_failed:
     untrack_mem(font->hb_font);
     hb_font_destroy(font->hb_font);
 hb_ft_font_create_failed:
+    untrack_mem(font->ft_face);
     FT_Done_Face(font->ft_face);
 ft_new_face_failed:
     return -1;
@@ -565,7 +566,7 @@ void gfx_gles2_font_unload(struct gfx_font* font)
 void gfx_gles2_text_init(struct gfx_text* text)
 {
     glGenBuffers(1, &text->vbo);
-    gfx_track_buf(text->vbo);
+    gfx_track_buf(text->vbo, "text->vbo");
 
     text->dimensions = make_fpos(0, 0);
     text->was_used = 0;

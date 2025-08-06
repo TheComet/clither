@@ -54,7 +54,7 @@ GLuint gfx_gles2_load_shader_str(
         log_err("glCreateProgram() failed\n");
         goto create_program_failed;
     }
-    gfx_track_shader(program);
+    gfx_track_shader(program, "");
 
     shader = gfx_gles2_load_shader_type(vs, strlen(vs), GL_VERTEX_SHADER);
     if (shader == 0)
@@ -118,7 +118,7 @@ GLuint gfx_gles2_load_shader(
         log_err("glCreateProgram() failed\n");
         goto create_program_failed;
     }
-    gfx_track_shader(program);
+    gfx_track_shader(program, strlist_cstr(shader_fnames, 0));
 
     strlist_for_each_cstr (shader_fnames, i, fname)
     {
@@ -166,6 +166,7 @@ GLuint gfx_gles2_load_shader(
 
 link_program_failed:
 load_shaders_failed:
+    gfx_untrack_shader(program);
     glDeleteProgram(program);
 create_program_failed:
     log_err("Failed to compile shader: %s\n", fname);

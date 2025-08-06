@@ -8,8 +8,8 @@
 struct tracker;
 struct tracker* tracker_create(const char* name);
 void            tracker_destroy(struct tracker* t);
-void            tracker_track(struct tracker* t, void* p, int size);
-void            tracker_untrack(struct tracker* t, void* p);
+void tracker_track(struct tracker* t, void* p, int size, const char* name);
+void tracker_untrack(struct tracker* t, void* p);
 
 /* Specific trackers for different resources. These are accessed globally
  * (stored per thread). The reason is so other API function signatures don't
@@ -17,10 +17,10 @@ void            tracker_untrack(struct tracker* t, void* p);
 int  trackers_init_tls(void);
 void trackers_deinit_tls(void);
 
-void track_mem(void* p, int size);
+void track_mem(void* p, int size, const char* name);
 void untrack_mem(void* p);
 
-void track_fd(int fd);
+void track_fd(int fd, const char* name);
 void untrack_fd(int fd);
 
 #else

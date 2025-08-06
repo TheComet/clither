@@ -176,7 +176,7 @@ struct fs_watch* fs_watch_init(void)
         log_err("inotify_init() failed: %s\n", strerror(errno));
         return NULL;
     }
-    track_fd(fd);
+    track_fd(fd, "inotify_init1()");
     return (struct fs_watch*)(intptr_t)fd;
 }
 
