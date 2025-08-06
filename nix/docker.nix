@@ -5,7 +5,10 @@ in
 pkgs.dockerTools.buildImage {
   name = "clither";
   tag = "latest";
-  copyToRoot = [ clither-server ];
+  copyToRoot = [
+    clither-server
+    pkgs.fakeNss  # fs_appdata_dir() calls getpwuid(), which requires /etc/passwd
+  ];
   config = {
     Cmd = [ "${clither-server}/mechasnek" "--server" ];
     WorkingDir = "/";
