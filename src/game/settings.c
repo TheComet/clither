@@ -1080,10 +1080,8 @@ int settings_load(struct settings* s, const char* filepath)
     if (mfile_map_read(&mf, filepath, 0) != 0)
     {
         log_warn(
-            "Failed to open file \"%s\". Creating default settings.\n",
-            filepath);
-        settings_save(s, filepath);
-        return 0;
+            "Failed to open file \"%s\". Using default settings.\n", filepath);
+        return -1;
     }
 
     parser_init(&p, &mf, filepath);

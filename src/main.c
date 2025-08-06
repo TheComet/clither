@@ -90,15 +90,22 @@ int main(int argc, char* argv[])
             goto read_settings_failed;
         if (str_join_path_cstr(&settings_file, "mechasnek") != 0)
             goto read_settings_failed;
-        if (fs_make_path(str_cstr(settings_file)) != 0)
-            goto read_settings_failed;
         if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
             goto read_settings_failed;
     }
 
     log_info("Reading settings from file \"%s\"\n", str_cstr(settings_file));
     if (settings_load(&settings, str_cstr(settings_file)) != 0)
-        goto read_settings_failed;
+    {
+        /* settings have default values, try to save it */
+        str_dirname(settings_file);
+        if (fs_make_path(str_cstr(settings_file)) == 0)
+        {
+            if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
+                goto read_settings_failed;
+            settings_save(&settings, str_cstr(settings_file));
+        }
+    }
     if (settings_apply_args(&settings, &args) != 0)
         goto read_settings_failed;
 

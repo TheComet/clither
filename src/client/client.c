@@ -355,8 +355,7 @@ static struct client_recv_result process_message(
                 return client_recv_ok();
 
 #define X(name, NAME, def, min, max)                                           \
-    settings.name = lerp(min, max, pp.snake_cosmetic_params.name / 255.0);     \
-    log_dbg("  %s: %f\n", #name, settings.name);
+    settings.name = lerp(min, max, pp.snake_cosmetic_params.name / 255.0);
             SNAKE_COSMETIC_PARAMS_LIST
 #undef X
             snake_param_apply_settings(&snake->param, &settings);
@@ -449,11 +448,6 @@ static struct client_recv_result process_message(
                     pp.bezier.frame_number,
                     snake->remote.replica.head_frame_numbers[0]))
             {
-                log_dbg(
-                    "Received outdated MSG_BEZIER: received frame=%d, replica "
-                    "frame=%d\n",
-                    pp.bezier.frame_number,
-                    snake->remote.replica.head_frame_numbers[0]);
                 return client_recv_ok();
             }
 

@@ -431,7 +431,7 @@ struct ui* ui_create_main_menu(void)
         make_fpos(0, -0.6),
         ui_style_button,
         button_is_mouse_over,
-        button_garage_interact);
+        NULL);
     ui->elements[BUTTON_QUIT] = ui_button(
         cstr_view("Quit"),
         make_fpos(0, -0.8),

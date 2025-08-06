@@ -64,7 +64,6 @@ static int retain_snake_cosmetic_params(struct msg** pmsg, void* user)
     (void)parse_result;
     if (pp.snake_cosmetic_params.snake_id == snake_id)
     {
-        log_dbg("Removing snake cosmetic params for snake_id=%d\n", snake_id);
         msg_free(msg);
         return VEC_ERASE;
     }

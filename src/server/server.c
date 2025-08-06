@@ -733,8 +733,7 @@ static enum process_message_result process_message(
 
                 /* Apply the cosmetics */
 #define X(name, NAME, def, min, max)                                           \
-    settings.name = lerp(min, max, pp.join_request.name / 255.0);     \
-    log_dbg("  %s: %f\n", #name, settings.name);
+    settings.name = lerp(min, max, pp.join_request.name / 255.0);
                 SNAKE_COSMETIC_PARAMS_LIST
 #undef X
                 snake_param_apply_settings(&snake->param, &settings);
@@ -884,7 +883,6 @@ static enum process_message_result process_message(
         }
 
         case MSG_SNAKE_COSMETIC_PARAMS_ACK: {
-            log_dbg("MSG_SNAKE_COSMETIC_PARAMS_ACK\n");
             msg_vec_remove_snake_cosmetic_params(
                 client->pending_msgs, pp.snake_cosmetic_params_ack.snake_id);
             return PROCESS_MESSAGE_OK;

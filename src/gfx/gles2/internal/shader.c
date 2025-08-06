@@ -169,7 +169,7 @@ load_shaders_failed:
     gfx_untrack_shader(program);
     glDeleteProgram(program);
 create_program_failed:
-    log_err("Failed to compile shader: %s\n", fname);
+    log_err("Failed to compile shader: %s\n", strlist_cstr(shader_fnames, 0));
     return 0;
 }
 

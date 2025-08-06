@@ -2,6 +2,7 @@
 #include "clither/util/log.h"
 #include "clither/util/rb.h"
 #include <emscripten/websocket.h>
+#include <stdbool.h>
 
 RB_DECLARE(packet_rb, struct net_packet, 16)
 RB_DEFINE(packet_rb, struct net_packet, 16)
