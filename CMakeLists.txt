@@ -409,7 +409,7 @@ if (CLITHER_TESTS)
         "tests/clither/test_msg.cpp"
         "tests/clither/test_q.cpp"
         "tests/clither/test_rb.cpp"
-        "tests/clither/test_snake.cpp"
+        "tests/clither/test_snake_rollback.cpp"
         "tests/clither/test_strlist.cpp"
         "tests/clither/test_strview.cpp"
         "tests/clither/test_tick.cpp"

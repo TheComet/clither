@@ -79,6 +79,9 @@ def plot_segments(rb, color):
         read = (read + 1) % capacity
     return handle
 
+def plot_point(x, y, color):
+    return plt.scatter([x], [y], color=color)
+
 def plot_head_trail(vec, color):
     count = vec["count"]
     data = vec["data"]
@@ -154,6 +157,20 @@ class Plot(gdb.Command):
                 plot_segments(val["segments"], colors[2])
                 plot_segment_bbs(val["segment_bbs"], colors[1])
                 handle = plot_aabb(val["bb"], colors[1])
+
+            if str(val.type).endswith("snake_head *"):
+                val = val.dereference()
+            if str(val.type).endswith("snake_head"):
+                x = qw_to_float(val["pos"]["x"])
+                y = qw_to_float(val["pos"]["y"])
+                handle = plot_point(x, y, colors[0])
+
+            if str(val.type).endswith("qwpos *"):
+                val = val.dereference()
+            if str(val.type).endswith("qwpos"):
+                x = qw_to_float(val["x"])
+                y = qw_to_float(val["y"])
+                handle = plot_point(x, y, colors[0])
 
             if str(val.type).endswith("bezier_knot_rb *"):
                 handle = plot_knots(val, colors[2])

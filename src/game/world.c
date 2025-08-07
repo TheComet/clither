@@ -181,8 +181,8 @@ int world_spawn_food_corpse(
             qw           dy = qw_rescale(rng(w) & 0x7FFFFFFF, scale, 1 << 31);
             qa           a = (qa)(rng(w));
             struct qwpos dir = make_qwposqw(qa_cos(a), qa_sin(a));
-            struct qwpos pos = make_qwposqw(
-                qw_add(sample.pos.x, dx), qw_add(sample.pos.y, dy));
+            struct qwpos pos = bezier_sample_pos(&sample);
+            pos = make_qwposqw(qw_add(pos.x, dx), qw_add(pos.y, dy));
             if (food_bmap_create_food(&w->food_bmap, pos, dir) != 0)
                 return -1;
         }

@@ -24,14 +24,14 @@
       let
         client = import ./nix/client.nix { inherit pkgs clither-assets; };
         docker = import ./nix/docker.nix { inherit pkgs settings; };
-        server = import ./nix/server.nix { inherit pkgs settings; };
+        server = import ./nix/server.nix { inherit pkgs; };
         web    = import ./nix/web.nix    { inherit pkgs; };
 
         client-win64 = import ./nix/client.nix { pkgs = win64; inherit clither-assets; };
-        server-win64 = import ./nix/server.nix { pkgs = win64; inherit settings; };
+        server-win64 = import ./nix/server.nix { pkgs = win64; };
 
         client-win32 = import ./nix/client.nix { pkgs = win32; inherit clither-assets; };
-        server-win32 = import ./nix/server.nix { pkgs = win32; inherit settings; };
+        server-win32 = import ./nix/server.nix { pkgs = win32; };
       in {
         inherit client docker server web;
         inherit client-win64 server-win64;

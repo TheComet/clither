@@ -91,7 +91,7 @@ struct bezier_sample
     struct qwpos pos;
 
     q16_16 spacing_sq;
-    q16_16 total_spacing;
+    q16_16 accumulated_length;
     q16_16 snake_length;
     qw     t;
 };
@@ -104,6 +104,9 @@ void bezier_sample_next(struct bezier_sample* it);
 #define bezier_sample_end(it)     ((it)->t < 0)
 #define bezier_sample_segment(it) (rb_peek((it)->segments, (it)->segment_idx))
 #define bezier_sample_idx(it)     ((it)->segment_idx)
+#define bezier_sample_pos(it)     ((it)->pos)
+#define bezier_sample_length(it)  (q16_16_to_qw((it)->accumulated_length))
+#define bezier_sample_t(it)       ((it)->t)
 
 int bezier_test_radius(
     const struct bezier_segment* segment, struct qwpos pos, qw radius);

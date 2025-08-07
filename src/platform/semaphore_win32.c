@@ -15,7 +15,7 @@ struct semaphore* semaphore_create(int initial_count)
         return NULL;
     }
 
-    track_fd((int)(intptr_t)hSem);
+    track_fd((int)(intptr_t)hSem, "hSem");
     return (struct semaphore*)hSem;
 }
 

@@ -239,10 +239,10 @@ void bezier_calc_aabb(struct qwaabb* bb, const struct bezier_segment* segment)
         }
     }
 
-    bb->x1 = q16_16_to_qw(x1);
-    bb->y1 = q16_16_to_qw(y1);
-    bb->x2 = q16_16_to_qw(x2);
-    bb->y2 = q16_16_to_qw(y2);
+    bb->x1 = qw_add(q16_16_to_qw(x1), segment->p[0].x);
+    bb->y1 = qw_add(q16_16_to_qw(y1), segment->p[0].y);
+    bb->x2 = qw_add(q16_16_to_qw(x2), segment->p[0].x);
+    bb->y2 = qw_add(q16_16_to_qw(y2), segment->p[0].y);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -667,7 +667,7 @@ void bezier_sample_begin(
     it->segment_idx = 0;
 
     it->spacing_sq = q16_16_sq(qw_to_q16_16(spacing));
-    it->total_spacing = make_q16_16(0);
+    it->accumulated_length = make_q16_16(0);
     it->snake_length = qw_to_q16_16(snake_length);
     it->t = make_qw(0);
 
@@ -736,8 +736,8 @@ again:
     it->pos = make_qwposqw(
         qw_add(next.x, segment->p[0].x), qw_add(next.y, segment->p[0].y));
 
-    it->total_spacing = q16_16_add(it->total_spacing, q16_16_sqrt(dist_sq));
-    if (it->total_spacing >= it->snake_length)
+    it->accumulated_length = q16_16_add(it->accumulated_length, q16_16_sqrt(dist_sq));
+    if (it->accumulated_length >= it->snake_length)
     {
         it->t = -1;
         return;

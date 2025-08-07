@@ -40,3 +40,22 @@ inline testing::Matcher<const LogOutput&> LogEq(const char* expected)
 {
     return testing::MakeMatcher(new LogEqMatcher(expected));
 }
+
+struct LogStartsWithMatcher : testing::MatcherInterface<const LogOutput&>
+{
+    explicit LogStartsWithMatcher(const char* expected) : expected(expected) {}
+
+    bool MatchAndExplain(
+        const LogOutput&              logOutput,
+        testing::MatchResultListener* listener) const override;
+
+    void DescribeTo(::std::ostream* os) const override;
+    void DescribeNegationTo(::std::ostream* os) const override;
+
+    std::string expected;
+};
+
+inline testing::Matcher<const LogOutput&> LogStartsWith(const char* expected)
+{
+    return testing::MakeMatcher(new LogStartsWithMatcher(expected));
+}

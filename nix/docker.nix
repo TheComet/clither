@@ -1,5 +1,4 @@
-{ pkgs, settings }:
-let
+{ pkgs, settings }: let
   clither-server = (import ./server.nix { inherit pkgs; });
   settingsFileExists = builtins.readFileType settings == "regular";
 in pkgs.dockerTools.buildImage {

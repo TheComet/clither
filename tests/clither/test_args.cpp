@@ -18,8 +18,11 @@ TEST_F(NAME, no_args_check_defaults)
 {
     const char* argv[] = {"./clither"};
     struct args a;
-    ASSERT_THAT(args_parse(&a, 1, (char**)argv), Eq(1)) << log().text;
-    EXPECT_THAT(a.settings_file, StrEq("settings.ini"));
+    ASSERT_THAT(args_parse(&a, 1, (char**)argv), Eq(0)) << log().text;
+    EXPECT_THAT(a.settings_file, IsNull());
+#if defined(CLITHER_BOT_API)
+    EXPECT_THAT(a.bot_script, IsNull());
+#endif
 #if defined(CLITHER_SERVER) || defined(CLITHER_CLIENT) || defined(CLITHER_MCD)
     EXPECT_THAT(a.addr, IsNull());
     EXPECT_THAT(a.port, IsNull());
@@ -31,22 +34,25 @@ TEST_F(NAME, no_args_check_defaults)
     EXPECT_THAT(a.log_file, StrEq("clither.txt"));
     EXPECT_THAT(a.prefix, IsNull());
 #endif
-#if defined(CLITHER_CLIENT)
+#if defined(CLITHER_MCD)
+    EXPECT_THAT(a.mcd_port, IsNull());
+    EXPECT_THAT(a.mcd_latency, Eq(-1));
+    EXPECT_THAT(a.mcd_loss, Eq(-1));
+    EXPECT_THAT(a.mcd_dup, Eq(-1));
+    EXPECT_THAT(a.mcd_reorder, Eq(-1));
+#endif
+#if defined(CLITHER_GFX)
+    EXPECT_THAT(a.pack, StrEq("packs/liam-playground"));
+    EXPECT_THAT(a.gfx_backend, Eq(0));
+#endif
+#if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
+    EXPECT_THAT(a.mode, Eq(MODE_UI));
+#elif defined(CLITHER_CLIENT)
     EXPECT_THAT(a.mode, Eq(MODE_CLIENT));
 #elif defined(CLITHER_SERVER)
     EXPECT_THAT(a.mode, Eq(MODE_SERVER));
 #else
     EXPECT_THAT(a.mode, Eq(MODE_NONE));
-#endif
-#if defined(CLITHER_GFX)
-    EXPECT_THAT(a.gfx_backend, Eq(-1));
-#endif
-#if defined(CLITHER_MCD)
-    EXPECT_THAT(a.mcd_port, IsNull());
-    EXPECT_THAT(a.mcd_latency, Eq(-1));
-    EXPECT_THAT(a.mcd_dup, Eq(-1));
-    EXPECT_THAT(a.mcd_loss, Eq(-1));
-    EXPECT_THAT(a.mcd_reorder, Eq(-1));
 #endif
 }
 
@@ -128,13 +134,6 @@ TEST_F(NAME, set_log_file_short)
     EXPECT_THAT(a.log_file, StrEq("mylog.txt"));
 }
 
-TEST_F(NAME, set_netlog_file_long)
-{
-    const char* argv[] = {"./clither", "--netlog", "mylog.txt"};
-    struct args a;
-    ASSERT_THAT(args_parse(&a, 3, (char**)argv), Eq(0)) << log().text;
-}
-
 TEST_F(NAME, set_prefix_long)
 {
     const char* argv[] = {"./clither", "--prefix", "MyPrefix"};
@@ -194,10 +193,10 @@ TEST_F(NAME, set_log_file_short_missing_arg)
 }
 #endif
 
-#if defined(CLITHER_LOG) && defined(CLITHER_GFX)
+#if defined(CLITHER_SERVER) && defined(CLITHER_LOG)
 TEST_F(NAME, set_log_file_short_missing_arg_other_options)
 {
-    const char* argv[] = {"./clither", "-hl"};
+    const char* argv[] = {"./clither", "-sl"};
     struct args a;
     ASSERT_THAT(args_parse(&a, 2, (char**)argv), Eq(-1)) << log().text;
 }

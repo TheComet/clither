@@ -6,7 +6,7 @@ in pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = with pkgs.buildPackages; [
     cmake
-  ] ++ lib.optional (pkgs.stdenv.isLinux) [
+  ] ++ lib.optional pkgs.stdenv.isLinux [
     texliveFull
     makeWrapper
   ];
@@ -14,7 +14,7 @@ in pkgs.stdenv.mkDerivation {
   buildInputs = with pkgs; [
     freetype
     glfw3
-  ] ++ lib.optional (pkgs.stdenv.isLinux) [
+  ] ++ lib.optional pkgs.stdenv.isLinux [
     # On windows we use the included version of harfbuzz because nix pulls in
     # the ENTIRE gtk here
     harfbuzz
@@ -24,7 +24,7 @@ in pkgs.stdenv.mkDerivation {
     "-DCMAKE_BUILD_TYPE=Release"
     "-DCLITHER_FETCH_ASSETS=OFF"  # Assets come in from flake.nix
     "-DCLITHER_TESTS=OFF"
-  ] ++ pkgs.lib.optional (pkgs.stdenv.is32bit) [
+  ] ++ pkgs.lib.optional pkgs.stdenv.is32bit [
     "-DCLITHER_ASM_OPTIMIZATIONS=OFF"
   ];
 
@@ -33,12 +33,12 @@ in pkgs.stdenv.mkDerivation {
     '';
 
   postFixup =
-    pkgs.lib.optional(pkgs.stdenv.isLinux) ''
+    pkgs.lib.optional pkgs.stdenv.isLinux ''
       # Hack so GLFW finds the X11 system libraries
-      wrapProgram $out/clither \
+      wrapProgram $out/mechasnek \
         --set LD_LIBRARY_PATH "/usr/lib64"
       '' ++
-    pkgs.lib.optional (isWindows) ''
+    pkgs.lib.optional isWindows ''
       # Windows DLLs that are not system DLLs
       cp -u ${pkgs.freetype}/bin/*freetype*.dll $out/
       cp -u ${pkgs.windows.mcfgthreads}/bin/*mcfgthread*.dll $out/

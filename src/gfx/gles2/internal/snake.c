@@ -166,8 +166,8 @@ void gfx_gles2_draw_snake_shadow(
         gfx_gles2_sprite_shadow_update_uniforms(
             &gfx->sprite_shadow_mat,
             vec_first(gfx_snake->body_base),
-            sample.pos,
-            bezier_tangent(segment, sample.t),
+            bezier_sample_pos(&sample),
+            bezier_tangent(segment, bezier_sample_t(&sample)),
             snake_scale(&snake->param),
             camera);
         gfx_gles2_sprite_shadow_draw();
@@ -213,7 +213,8 @@ void gfx_gles2_draw_snake(
      * and the accumulated distance becomes inaccurate. This compensates for
      * that */
     sample_spacing = qw_mul(
-        snake_scale(&snake->param), make_qw(snake->param.cosmetic.part_spacing));
+        snake_scale(&snake->param),
+        make_qw(snake->param.cosmetic.part_spacing));
     oversample_factor = 1;
     while (sample_spacing > make_qw(0.1))
     {
@@ -235,9 +236,10 @@ void gfx_gles2_draw_snake(
         {
             struct gfx_part_sample* ps =
                 gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
-            ps->pos = sample.pos;
-            ps->dir = bezier_tangent(bezier_sample_segment(&sample), sample.t);
-            ps->length = q16_16_to_qw(sample.total_spacing);
+            ps->pos = bezier_sample_pos(&sample);
+            ps->dir = bezier_tangent(
+                bezier_sample_segment(&sample), bezier_sample_t(&sample));
+            ps->length = bezier_sample_length(&sample);
         }
     }
 

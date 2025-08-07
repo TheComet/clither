@@ -74,7 +74,7 @@ int mfile_map_read(struct mfile* mf, const char* filepath, int log_error)
         goto map_view_failed;
     }
 
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, filepath);
 
     /* Don't need these anymore */
     CloseHandle(hMapping);
@@ -146,7 +146,7 @@ int mfile_map_overwrite(struct mfile* mf, int size, const char* filepath)
         goto map_view_failed;
     }
 
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, filepath);
 
     /* Don't need these anymore */
     CloseHandle(hMapping);
@@ -196,7 +196,7 @@ int mfile_map_mem(struct mfile* mf, int size)
     CloseHandle(mapping);
 
     mf->size = size;
-    track_mem(mf->address, mf->size);
+    track_mem(mf->address, mf->size, "mfile_map_mem");
 
     return 0;
 

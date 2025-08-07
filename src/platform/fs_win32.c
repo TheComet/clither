@@ -1,10 +1,13 @@
 #include "clither/platform/fs.h"
+#include "clither/platform/utf8.h"
+#include "clither/util/log.h"
 #include "clither/util/str.h"
 
 #define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+/* must be included after windows.h */
 #include <knownfolders.h>
 #include <shlobj.h>
-#include <windows.h>
 
 /* ------------------------------------------------------------------------- */
 int fs_list(
@@ -63,6 +66,84 @@ int fs_dir_exists(const char* path)
     if (attr == INVALID_FILE_ATTRIBUTES)
         return 0;
     return !!(attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+/* ------------------------------------------------------------------------- */
+int fs_make_dir(const char* path)
+{
+    if (CreateDirectory(path, NULL))
+        return 0;
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+static int make_path_impl(struct str* intermediary)
+{
+    while (1)
+    {
+        if (CreateDirectory(str_cstr(intermediary), NULL))
+            return 0;
+
+        if (GetLastError() == ERROR_ALREADY_EXISTS)
+            return 0;
+
+        if (GetLastError() == ERROR_PATH_NOT_FOUND)
+        {
+            int result;
+            int len_store = str_len(intermediary);
+
+            str_dirname(intermediary);
+            result = make_path_impl(intermediary);
+
+            str_set_char(intermediary, str_len(intermediary), '/');
+            str_set_len(intermediary, len_store);
+            if (result == 0)
+                continue;
+        }
+
+        return -1;
+    }
+}
+int fs_make_path(const char* path)
+{
+    struct str* intermediary;
+    str_init(&intermediary);
+    if (str_set_cstr(&intermediary, path) != 0)
+        goto failed;
+
+    if (make_path_impl(intermediary) != 0)
+    {
+        log_err_win32("Failed to create path %s\n", path);
+        goto failed;
+    }
+
+    str_deinit(intermediary);
+    return 0;
+
+failed:
+    str_deinit(intermediary);
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+int fs_appdata_dir(struct str** path)
+{
+    PWSTR   utf16_path = NULL;
+    HRESULT hr =
+        SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &utf16_path);
+    if (FAILED(hr))
+        goto get_folder_failed;
+
+    if (utf16_to_utf8(path, utf16_path, (int)wcslen(utf16_path)) != 0)
+        goto utf_conversion_failed;
+
+    CoTaskMemFree(utf16_path);
+    return 0;
+
+utf_conversion_failed:
+    CoTaskMemFree(utf16_path);
+get_folder_failed:
+    return -1;
 }
 
 /* ------------------------------------------------------------------------- */

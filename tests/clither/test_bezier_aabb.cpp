@@ -46,8 +46,8 @@ TEST_F(NAME, aabb_x_extremities_1)
     qwaabb bb;
     bezier_calc_aabb(&bb, &seg);
 
-    EXPECT_THAT(bb.x1, Eq(make_qw2(-1458, 1 << 14)));
-    EXPECT_THAT(bb.x2, Eq(make_qw2(8004, 1 << 14)));
+    EXPECT_THAT(bb.x1, Eq(make_qw2(-1453, 1 << 14)));
+    EXPECT_THAT(bb.x2, Eq(make_qw2(8005, 1 << 14)));
     EXPECT_THAT(bb.y1, Eq(make_qw(0.1)));
     EXPECT_THAT(bb.y2, Eq(make_qw(0.9)));
 }
@@ -87,7 +87,7 @@ TEST_F(NAME, aabb_x_extremities_3)
     bezier_calc_aabb(&bb, &seg);
 
     EXPECT_THAT(bb.x1, Eq(make_qw(0.2)));
-    EXPECT_THAT(bb.x2, Eq(make_qw2(10560, 1 << 14)));
+    EXPECT_THAT(bb.x2, Eq(make_qw2(10557, 1 << 14)));
     EXPECT_THAT(bb.y1, Eq(make_qw(0.1)));
     EXPECT_THAT(bb.y2, Eq(make_qw(0.9)));
 }
@@ -108,8 +108,8 @@ TEST_F(NAME, aabb_y_extremities_1)
 
     EXPECT_THAT(bb.x1, Eq(make_qw(0.1)));
     EXPECT_THAT(bb.x2, Eq(make_qw(0.9)));
-    EXPECT_THAT(bb.y1, Eq(make_qw2(-1457, 1 << 14)));
-    EXPECT_THAT(bb.y2, Eq(make_qw2(8003, 1 << 14)));
+    EXPECT_THAT(bb.y1, Eq(make_qw2(-1453, 1 << 14)));
+    EXPECT_THAT(bb.y2, Eq(make_qw2(8005, 1 << 14)));
 }
 
 TEST_F(NAME, aabb_y_extremities_2)
@@ -149,5 +149,5 @@ TEST_F(NAME, aabb_y_extremities_3)
     EXPECT_THAT(bb.x1, Eq(make_qw(0.1)));
     EXPECT_THAT(bb.x2, Eq(make_qw(0.9)));
     EXPECT_THAT(bb.y1, Eq(make_qw(0.2)));
-    EXPECT_THAT(bb.y2, Eq(make_qw2(10560, 1 << 14)));
+    EXPECT_THAT(bb.y2, Eq(make_qw2(10556, 1 << 14)));
 }

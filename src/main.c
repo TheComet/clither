@@ -262,6 +262,8 @@ watch_resource_pack_failed:
         resource_pack_destroy(pack);
 parse_resource_pack_failed:
 #endif
+read_settings_failed:
+    str_deinit(settings_file);
 
 #if defined(CLITHER_LOG)
     log_file_close();
@@ -271,8 +273,6 @@ parse_resource_pack_failed:
 tests_or_benchmarks_run:
 #endif
 
-read_settings_failed:
-    str_deinit(settings_file);
 parse_args_failed:
     signals_remove();
 asm_optimizations_failed:

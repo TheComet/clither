@@ -156,7 +156,7 @@ TEST_F(NAME, parse_join_request_payload_too_small)
 TEST_F(NAME, parse_join_request_empty_username)
 {
     // clang-format off
-    uint8_t payload[] = {
+    uint8_t payload[16] = {
         0x00, 0x00, // Protocol version
         0x00, 0x00, // Frame number
         0,          // Username length
@@ -164,30 +164,27 @@ TEST_F(NAME, parse_join_request_empty_username)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, sizeof(payload)),
-        Eq(-2));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 16), Eq(-2));
 }
 
 TEST_F(NAME, parse_join_request_incorrect_username_length)
 {
     // clang-format off
-    uint8_t payload[7] = {
+    uint8_t payload[16] = {
         0x00, 0x00, // Protocol version
         0x00, 0x00, // Frame number
-        1,          // Username length
-        '\0', '\0'
+        11,         // Username length
     };
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 6), Eq(-3));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 16), Eq(-3));
 }
 
 TEST_F(NAME, parse_join_request_incorrect_username_not_null_terminated)
 {
     // clang-format off
-    uint8_t payload[7] = {
+    uint8_t payload[16] = {
         0x00, 0x00, // Protocol version
         0x00, 0x00, // Frame number
         1,          // Username length
@@ -196,28 +193,37 @@ TEST_F(NAME, parse_join_request_incorrect_username_not_null_terminated)
     // clang-format on
 
     parsed_payload pp;
-    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 7), Eq(-4));
+    ASSERT_THAT(msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 16), Eq(-4));
 }
 
 TEST_F(NAME, parse_join_request)
 {
     // clang-format off
-    uint8_t payload[9] = {
+    uint8_t payload[16] = {
         0xAA, 0xBB, // Protocol version
         0xCC, 0xDD, // Frame number
         3,         // Username length
-        'a', 'b', 'c', '\0'
+        'a', 'b', 'c', '\0',
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07  // cosmetic params
     };
     // clang-format on
 
     parsed_payload pp;
     ASSERT_THAT(
-        msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 9),
+        msg_parse_payload(&pp, MSG_JOIN_REQUEST, payload, 16),
         Eq(MSG_JOIN_REQUEST));
     EXPECT_THAT(pp.join_request.protocol_version, Eq(0xAABB));
     EXPECT_THAT(pp.join_request.frame, Eq(0xCCDD));
     EXPECT_THAT(pp.join_request.username_len, Eq(3));
     EXPECT_THAT(pp.join_request.username, StrEq("abc"));
+    EXPECT_THAT(pp.join_request.username[3], Eq('\0'));
+    EXPECT_THAT(pp.join_request.part_spacing, Eq(0x01));
+    EXPECT_THAT(pp.join_request.spine_width, Eq(0x02));
+    EXPECT_THAT(pp.join_request.head_scale, Eq(0x03));
+    EXPECT_THAT(pp.join_request.body_scale, Eq(0x04));
+    EXPECT_THAT(pp.join_request.tail_scale, Eq(0x05));
+    EXPECT_THAT(pp.join_request.girth, Eq(0x06));
+    EXPECT_THAT(pp.join_request.decay, Eq(0x07));
 }
 
 TEST_F(NAME, parse_join_accept_payload_too_small)

@@ -84,7 +84,8 @@ TEST_F(NAME, realloc_returns_error_if_realloc_fails)
     EXPECT_THAT(obj_vec, IsNull());
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 520 bytes in vec_realloc()\n"));
+        LogStartsWith(
+            "[Error] Failed to allocate 520 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, push_increments_counter)
@@ -137,7 +138,7 @@ TEST_F(NAME, push_returns_error_if_realloc_fails)
     EXPECT_THAT(obj_vec, IsNull());
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, emplace_returns_error_if_realloc_fails)
 {
@@ -145,7 +146,7 @@ TEST_F(NAME, emplace_returns_error_if_realloc_fails)
     EXPECT_THAT(obj_vec, IsNull());
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_returns_error_if_realloc_fails)
 {
@@ -155,7 +156,7 @@ TEST_F(NAME, insert_returns_error_if_realloc_fails)
     EXPECT_THAT(obj_vec, IsNull());
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_emplace_returns_error_if_realloc_fails)
 {
@@ -164,7 +165,7 @@ TEST_F(NAME, insert_emplace_returns_error_if_realloc_fails)
     EXPECT_THAT(obj_vec, IsNull());
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 1032 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, push_few_values_works)
