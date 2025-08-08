@@ -11,7 +11,6 @@ pkgs.emscriptenStdenv.mkDerivation {
   ];
   configurePhase = ''
     emcmake cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release \
       -DCLITHER_ASM_OPTIMIZATIONS=OFF \
       -DCLITHER_FETCH_ASSETS=OFF \
       -DCLITHER_BOT_API=OFF \

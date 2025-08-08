@@ -21,7 +21,6 @@ in pkgs.stdenv.mkDerivation {
   ];
 
   cmakeFlags = [
-    "-DCMAKE_BUILD_TYPE=Release"
     "-DCLITHER_FETCH_ASSETS=OFF"  # Assets come in from flake.nix
     "-DCLITHER_TESTS=OFF"
   ] ++ pkgs.lib.optional pkgs.stdenv.is32bit [

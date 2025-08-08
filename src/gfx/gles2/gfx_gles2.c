@@ -357,21 +357,13 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     int         fbwidth, fbheight;
     struct gfx* gfx = mem_alloc(sizeof *gfx);
 
-    /* It appears GLFW will automatically use OpenGL ES 2.0 if necessary, and
-     * use regular OpenGL for desktop. This is fine so far.
-     *
-     *   glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-     *   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-     *   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-     *   glfwWindowHint(
-     *     GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE); // Required for GL ES
-     */
-
+#if defined(__EMSCRIPTEN)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     /* Required for GL ES */
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+#endif
 
     gfx->window =
         glfwCreateWindow(initial_width, initial_height, "Clither", NULL, NULL);
