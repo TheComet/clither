@@ -87,7 +87,7 @@ struct ui_text
     struct str*   str;
     struct fpos   pos;
     uint32_t      color;
-    float         size;
+    float         scale;
     enum ui_align align;
 };
 
@@ -202,7 +202,10 @@ struct ui_element ui_text(
     void (*set_message)(struct ui_element* elem, const char* message));
 void ui_text_set_message(struct ui_element* elem, const char* message);
 
-struct ui_element ui_textinput(struct fpos pos, struct ui_text_style style);
+struct ui_element ui_textinput(
+    struct fpos pos, struct ui_text_style style, const char* current_text);
+int ui_textinput_set_current_text(
+    struct ui_element* elem, const char* current_text);
 
 struct ui_element ui_button(
     struct strview         str,

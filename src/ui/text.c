@@ -30,7 +30,7 @@ struct ui_element ui_text(
     str_set(&elem.u.text.str, str);
     elem.u.text.pos = pos;
     elem.u.text.color = style.color;
-    elem.u.text.size = style.size;
+    elem.u.text.scale = style.size;
     elem.u.text.align = align;
     elem.set_message = set_message;
     return elem;

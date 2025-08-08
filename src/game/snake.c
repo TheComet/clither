@@ -641,7 +641,7 @@ int snake_update_bezier_extents(
 
         head_knot->len_backwards = head_len_backwards;
         second_knot->len_forwards = second_len_forwards;
-        bezier_calc_segment(segment, head_knot, second_knot);
+        update_head_segment(data);
         bezier_calc_aabb(bb, segment);
     }
 

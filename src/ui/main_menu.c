@@ -458,7 +458,7 @@ struct ui* ui_create_main_menu(void)
         UI_ALIGN_RIGHT,
         NULL);
     ui->elements[TEXTINPUT_USERNAME] =
-        ui_textinput(make_fpos(-0.22, 0.0), ui_style_text_normal);
+        ui_textinput(make_fpos(-0.22, 0.0), ui_style_text_normal, "");
     ui->elements[BUTTON_HOST_GAME] = ui_button(
         cstr_view("Host"),
         make_fpos(0.4, -0.6),
@@ -522,6 +522,8 @@ struct ui* ui_create_main_menu(void)
     ui->elements[BUTTON_JOIN_GAME].u.button.text.pos = make_fpos(0.0, -0.3);
     ui->elements[BUTTON_GARAGE].u.button.text.pos = make_fpos(-0.65, -0.8);
     ui->elements[BUTTON_OPTIONS].u.button.text.pos = make_fpos(0.65, -0.8);
+    /* Mobile users can't type text */
+    ui_textinput_set_current_text(&ui->elements[TEXTINPUT_USERNAME], "Snek :D");
 #endif
 
     return ui;
@@ -603,6 +605,7 @@ int main_menu_run(
                         main_menu, "Server Disconnected");
                 }
                 client_deinit(&client);
+                tick_skip(&sim_tick);
                 break;
             }
 
@@ -658,12 +661,14 @@ int main_menu_run(
                 server_instance_stop(&server);
             start_server_failed:
                 client_deinit(&client);
+                tick_skip(&sim_tick);
 #endif
                 break;
             }
 
             case UI_CMD_GARAGE: {
                 garage_menu_run(igfx, gfx, pack, pack_watch, settings);
+                tick_skip(&sim_tick);
                 break;
             }
             case UI_CMD_SNAKE_COSMETIC_PARAMS: break;
@@ -685,11 +690,6 @@ int main_menu_run(
         {
             gfx_next_backend(igfx, gfx, *pack);
             input.next_gfx_backend = 0;
-        }
-        if (*gfx != NULL && input.prev_gfx_backend)
-        {
-            gfx_prev_backend(igfx, gfx, *pack);
-            input.prev_gfx_backend = 0;
         }
 
         /* Check for resource pack changes */

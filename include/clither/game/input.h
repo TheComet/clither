@@ -34,10 +34,8 @@ struct input
 
     unsigned next_gfx_backend : 1; /* User pressed the key for switching to the
                                       next graphics backend*/
-    unsigned prev_gfx_backend : 1; /* User pressed the key for switching to the
-                                      previous graphics backend */
-    unsigned debug_gfx : 1;        /* User pressed the key for
-                                      toggling debug graphics */
+    unsigned debug_gfx : 1;        /* User pressed the key for toggling debug
+                                    * graphics */
 };
 
 void input_init(struct input* i);

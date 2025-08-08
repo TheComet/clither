@@ -111,13 +111,11 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 
     switch (key)
     {
-        case GLFW_KEY_LEFT:
-            gfx->input_buffer.prev_gfx_backend = (action == GLFW_PRESS);
-            break;
-        case GLFW_KEY_RIGHT:
-            gfx->input_buffer.next_gfx_backend = (action == GLFW_PRESS);
-            break;
         case GLFW_KEY_F1:
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.next_gfx_backend = 1;
+            break;
+        case GLFW_KEY_F2:
             gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
             break;
         case GLFW_KEY_SPACE:
@@ -369,6 +367,12 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
      *     GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE); // Required for GL ES
      */
 
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    /* Required for GL ES */
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+
     gfx->window =
         glfwCreateWindow(initial_width, initial_height, "Clither", NULL, NULL);
     if (gfx->window == NULL)
@@ -551,7 +555,7 @@ static void gfx_gles2_draw_world(
     gfx_gles2_text_end_draw();
 
 #if defined(CLITHER_GFX_DEBUG)
-    gfx_gles2_debug_draw(&gfx->debug, &gfx->quad_mesh, camera, &ar);
+    gfx_gles2_debug_draw(gfx, &gfx->debug, &gfx->quad_mesh, camera, &ar);
 #endif
 }
 
@@ -576,24 +580,27 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                 break;
             case UI_TEXT: break;
             case UI_TEXTINPUT: {
-                struct fpos text_size = gfx_gles2_text_screen_size(
-                    &gfx->font,
-                    str_view(ui_elem->u.textinput.text.str),
-                    ui_elem->u.textinput.text.size);
-                GLfloat     padding = 1.0 / gfx->width * 8;
-                struct fpos cursor_size = make_fpos(
-                    1.0 / gfx->width * 2,
-                    text_size.y * 2 /* twice as high as the text looks right */
-                );
+                struct fpos screen_size, cursor_size;
+                GLfloat     cursor_offset, text_scale;
 
                 if (!ui_elem->u.textinput.blink_on)
                     break;
+
+                text_scale = ui_elem->u.textinput.text.scale;
+                cursor_offset = text_scale + 1.0 / gfx->width * 2;
+                screen_size = gfx_gles2_text_screen_size(
+                    &gfx->font,
+                    str_view(ui_elem->u.textinput.text.str),
+                    text_scale);
+                /* twice as high as the text looks right */
+                cursor_size = make_fpos(text_scale, screen_size.y * 2);
 
                 gfx_gles2_rectangle_draw(
                     &gfx->rect,
                     &gfx->quad_mesh,
                     make_fpos(
-                        ui_elem->u.textinput.text.pos.x + text_size.x + padding,
+                        ui_elem->u.textinput.text.pos.x + screen_size.x +
+                            cursor_offset,
                         ui_elem->u.textinput.text.pos.y + cursor_size.y / 2),
                     cursor_size,
                     ui_elem->u.textinput.text.color,
@@ -644,7 +651,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     &gfx->font,
                     ui_elem->u.text.pos,
                     ui_elem->u.text.color,
-                    ui_elem->u.text.size,
+                    ui_elem->u.text.scale,
                     ui_elem->u.text.align);
                 break;
             case UI_TEXTINPUT:
@@ -653,7 +660,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     &gfx->font,
                     ui_elem->u.textinput.text.pos,
                     ui_elem->u.textinput.text.color,
-                    ui_elem->u.textinput.text.size,
+                    ui_elem->u.textinput.text.scale,
                     ui_elem->u.textinput.text.align);
                 break;
             case UI_BUTTON:
@@ -662,7 +669,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     &gfx->font,
                     ui_elem->u.button.text.pos,
                     ui_elem->u.button.text.color,
-                    ui_elem->u.button.text.size,
+                    ui_elem->u.button.text.scale,
                     ui_elem->u.button.text.align);
                 break;
             case UI_SLIDER: break;
@@ -680,14 +687,38 @@ static void gfx_gles2_draw_end(struct gfx* gfx)
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_GFX_DEBUG)
 static void gfx_gles2_draw_debug_circle(
-    struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba)
+    struct gfx* gfx, struct qwpos pos, qw radius, uint32_t argb)
 {
     struct debug_circle* circle = debug_circle_vec_emplace(&gfx->debug.circles);
     if (circle == NULL)
         return;
     circle->pos = pos;
     circle->radius = radius;
-    circle->rgba = rgba;
+    circle->argb = argb;
+}
+static void gfx_gles2_draw_debug_rectangle(
+    struct gfx*  gfx,
+    struct qwpos top_left,
+    struct qwpos bottom_right,
+    uint32_t     argb)
+{
+    struct debug_rectangle* rect =
+        debug_rectangle_vec_emplace(&gfx->debug.rectangles);
+    if (rect == NULL)
+        return;
+    rect->top_left = top_left;
+    rect->bottom_right = bottom_right;
+    rect->argb = argb;
+}
+static void gfx_gles2_draw_debug_line(
+    struct gfx* gfx, struct qwpos start, struct qwpos end, uint32_t argb)
+{
+    struct debug_line* line = debug_line_vec_emplace(&gfx->debug.lines);
+    if (line == NULL)
+        return;
+    line->start = start;
+    line->end = end;
+    line->argb = argb;
 }
 #endif
 
@@ -707,6 +738,8 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_draw_ui,
     &gfx_gles2_draw_end,
 #if defined(CLITHER_GFX_DEBUG)
-    &gfx_gles2_draw_debug_circle
+    &gfx_gles2_draw_debug_circle,
+    &gfx_gles2_draw_debug_rectangle,
+    &gfx_gles2_draw_debug_line,
 #endif
 };

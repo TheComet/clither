@@ -6,7 +6,7 @@
 void textinput_step_anim(
     struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
 {
-    const int period = sim_tick_rate / 4;
+    const int period = sim_tick_rate / 3;
     if (elem->u.textinput.blink_counter++ >= period)
     {
         elem->u.textinput.blink_counter = 0;
@@ -51,7 +51,22 @@ enum ui_cmd_type textinput_interact(
 }
 
 /* ------------------------------------------------------------------------- */
-struct ui_element ui_textinput(struct fpos pos, struct ui_text_style style)
+int ui_textinput_set_current_text(
+    struct ui_element* elem, const char* current_text)
+{
+    struct ui_textinput* ti = &elem->u.textinput;
+    const char*          p = current_text;
+    for (; *p; ++p)
+        if (codepoint_vec_push(&ti->input_buffer, (uint32_t)*p) != 0)
+            return -1;
+    if (str_set_cstr(&ti->input_buffer_utf8, current_text) != 0)
+        return -1;
+    return str_set_cstr(&ti->text.str, current_text);
+}
+
+/* ------------------------------------------------------------------------- */
+struct ui_element ui_textinput(
+    struct fpos pos, struct ui_text_style style, const char* current_text)
 {
     struct ui_element elem;
     ui_element_init(&elem, UI_TEXTINPUT);
@@ -60,6 +75,8 @@ struct ui_element ui_textinput(struct fpos pos, struct ui_text_style style)
         ui_text(cstr_view(""), pos, style, UI_ALIGN_LEFT, NULL).u.text;
     codepoint_vec_init(&elem.u.textinput.input_buffer);
     str_init(&elem.u.textinput.input_buffer_utf8);
+    ui_textinput_set_current_text(&elem, current_text);
+
     elem.u.textinput.blink_counter = 0;
     elem.u.textinput.blink_on = 0;
 

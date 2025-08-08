@@ -318,11 +318,6 @@ int garage_menu_run(
             gfx_next_backend(igfx, gfx, *pack);
             input.next_gfx_backend = 0;
         }
-        if (*gfx != NULL && input.prev_gfx_backend)
-        {
-            gfx_prev_backend(igfx, gfx, *pack);
-            input.prev_gfx_backend = 0;
-        }
 
         /* Check for resource pack changes */
 #if defined(CLITHER_HOT_RELOAD)

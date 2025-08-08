@@ -1,14 +1,17 @@
 #include "clither/bot/bot.h"
 #include "clither/client/client.h"
+#include "clither/game/bezier.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
 #include "clither/game/math.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
+#include "clither/game/qwaabb_rb.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_bmap.h"
+#include "clither/game/snake_param.h"
 #include "clither/game/world.h"
 #include "clither/game/wrap.h"
 #include "clither/gfx/gfx.h"
@@ -23,6 +26,7 @@
 #include "clither/util/cli_colors.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
+#include "clither/util/rb.h"
 #include "clither/util/str.h"
 #include <string.h> /* memcpy */
 
@@ -668,6 +672,86 @@ static int sim_other_snakes(uint16_t snake_id, struct snake* snake, void* user)
 #endif
 
 /* ------------------------------------------------------------------------- */
+#if defined(CLITHER_GFX_DEBUG)
+static void draw_snake_debug_shapes(
+    const struct gfx_interface* igfx,
+    struct gfx*                 gfx,
+    const struct world*         world)
+{
+    int16_t             snake_idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+    (void)snake_id;
+
+    bmap_for_each (world->snakes, snake_idx, snake_id, snake)
+    {
+        struct bezier_sample it;
+        struct qwpos         prev_pos = snake->head.pos;
+        qw spacing = qw_mul(make_qw2(1, 10), snake_scale(&snake->param));
+        for (bezier_sample_begin(
+                 &it,
+                 snake->data.segments,
+                 spacing,
+                 snake_length(&snake->param));
+             !bezier_sample_end(&it);
+             bezier_sample_next(&it))
+        {
+            struct qwpos pos = bezier_sample_pos(&it);
+            igfx->draw_debug_line(gfx, prev_pos, pos, 0xAFFF8000);
+            igfx->draw_debug_circle(
+                gfx,
+                pos,
+                qw_mul(snake_scale(&snake->param), make_qw(0.02)),
+                0xFFFFFF00);
+            prev_pos = pos;
+        }
+    }
+}
+static void draw_snake_debug_bb(
+    const struct gfx_interface* igfx,
+    struct gfx*                 gfx,
+    const struct world*         world)
+{
+    int16_t             snake_idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+    (void)snake_id;
+
+    bmap_for_each (world->snakes, snake_idx, snake_id, snake)
+    {
+        int                  i;
+        const struct qwaabb* bb;
+        rb_for_each (snake->data.segment_bbs, i, bb)
+        {
+            igfx->draw_debug_rectangle(
+                gfx,
+                make_qwposqw(bb->x1, bb->y1),
+                make_qwposqw(bb->x2, bb->y2),
+                0x60FFA000);
+        }
+
+        igfx->draw_debug_rectangle(
+            gfx,
+            make_qwposqw(snake->data.bb.x1, snake->data.bb.y1),
+            make_qwposqw(snake->data.bb.x2, snake->data.bb.y2),
+            0x80FFA000);
+    }
+}
+static void draw_snake_debug(
+    const struct gfx_interface* igfx,
+    struct gfx*                 gfx,
+    const struct world*         world,
+    int                         debug_gfx_state)
+{
+    switch (debug_gfx_state)
+    {
+        case 1: draw_snake_debug_shapes(igfx, gfx, world); break;
+        case 2: draw_snake_debug_bb(igfx, gfx, world); break;
+    }
+}
+#endif
+
+/* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
 int client_run(
     struct client*               client,
@@ -687,6 +771,9 @@ int client_run(
     struct tick   net_tick;
     int           tick_lag;
     int           retval = -1;
+#    if defined(CLITHER_GFX_DEBUG)
+    int debug_gfx_state = 0;
+#    endif
 
     /* Change log prefix and color for server log messages */
     log_set_prefix(settings->client.log_prefix);
@@ -729,11 +816,6 @@ int client_run(
         {
             gfx_next_backend(igfx, gfx, *pack);
             input.next_gfx_backend = 0;
-        }
-        if (*gfx != NULL && input.prev_gfx_backend)
-        {
-            gfx_prev_backend(igfx, gfx, *pack);
-            input.prev_gfx_backend = 0;
         }
 #    endif
 
@@ -869,6 +951,27 @@ int client_run(
                 break;
         }
 
+#    if defined(CLITHER_GFX_DEBUG)
+        if (input.debug_gfx)
+        {
+            debug_gfx_state++;
+            if (debug_gfx_state > 2)
+                debug_gfx_state = 0;
+        }
+        if (*gfx != NULL && tick_lag == 0 && debug_gfx_state)
+            draw_snake_debug(*igfx, *gfx, &world, debug_gfx_state);
+#    endif
+
+        if (*gfx != NULL)
+            (*igfx)->step_anim(*gfx, client->sim_tick_rate);
+
+        if (*gfx != NULL && tick_lag == 0)
+        {
+            (*igfx)->draw_begin(*gfx);
+            (*igfx)->draw_world(*gfx, &world, &camera);
+            (*igfx)->draw_end(*gfx);
+        }
+
         tick_lag =
             tick_wait_warp(&sim_tick, client->warp, client->sim_tick_rate * 10);
         client->warp = 0;
@@ -880,14 +983,6 @@ int client_run(
                 tick_skip(&sim_tick);
                 break;
             }
-        }
-
-        if (*gfx != NULL && tick_lag == 0)
-        {
-            (*igfx)->step_anim(*gfx, client->sim_tick_rate);
-            (*igfx)->draw_begin(*gfx);
-            (*igfx)->draw_world(*gfx, &world, &camera);
-            (*igfx)->draw_end(*gfx);
         }
 
         client->frame_number++;

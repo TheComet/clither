@@ -78,7 +78,14 @@ struct gfx_interface
 
 #if defined(CLITHER_GFX_DEBUG)
     void (*draw_debug_circle)(
-        struct gfx* gfx, const struct qwpos pos, qw radius, uint32_t rgba);
+        struct gfx* gfx, struct qwpos pos, qw radius, uint32_t argb);
+    void (*draw_debug_rectangle)(
+        struct gfx*  gfx,
+        struct qwpos top_left,
+        struct qwpos bottom_right,
+        uint32_t     argb);
+    void (*draw_debug_line)(
+        struct gfx* gfx, struct qwpos start, struct qwpos end, uint32_t argb);
 #endif
 };
 
