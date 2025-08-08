@@ -15,36 +15,31 @@ def qa_to_float(qa):
     Q = 12
     return float(qa) / (1 << Q)
 
-def iter_knots(rb):
+def plot_knot(knot, color):
+    x = qw_to_float(knot["pos"]["x"])
+    y = qw_to_float(knot["pos"]["y"])
+    a = qa_to_float(knot["angle"])
+    lb = float(knot["len_backwards"]) / 255
+    lf = float(knot["len_forwards"]) / 255
+    fx = x - cos(a) * lf
+    fy = y - sin(a) * lf
+    bx = x + cos(a) * lb
+    by = y + sin(a) * lb
+    handle, = plt.plot([bx, fx], [by, fy], color=color, linewidth=0.5)
+    plt.scatter(x, y, color=color, marker=",")
+    plt.scatter(fx, fy, color=color, marker=",", s=10)
+    plt.scatter(bx, by, color=color, marker=",", s=10)
+    return handle
+
+def plot_knots(rb, color):
+    handle = None
     read = rb["read"]
     write = rb["write"]
     capacity = rb["capacity"]
     while read != write:
         knot = rb["data"][read]
-        yield \
-            qw_to_float(knot["pos"]["x"]),\
-            qw_to_float(knot["pos"]["y"]),\
-            qa_to_float(knot["angle"]),\
-            float(knot["len_backwards"]) / 255,\
-            float(knot["len_forwards"]) / 255
+        handle = plot_knot(knot, color)
         read = (read + 1) % capacity
-
-def plot_knots(rb, color):
-    knots = list(iter_knots(rb))
-    handle = None
-    for tail, head in zip(knots[:-1], knots[1:]):
-        p0 = head[0], head[1]
-        p1 = head[0] + cos(head[2]) * head[3],\
-             head[1] + sin(head[2]) * head[3]
-        p2 = tail[0] - cos(tail[2]) * tail[4],\
-             tail[1] - sin(tail[2]) * tail[4]
-        p3 = tail[0], tail[1]
-        handle, = plt.plot([p0[0], p1[0]], [p0[1], p1[1]], color=color, linewidth=0.5)
-        plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color=color, linewidth=0.5)
-        plt.scatter(p0[0], p0[1], color=color, marker=",")
-        plt.scatter(p3[0], p3[1], color=color, marker=",")
-        plt.scatter(p1[0], p1[1], color=color, marker=",", s=10)
-        plt.scatter(p2[0], p2[1], color=color, marker=",", s=10)
     return handle
 
 def plot_segment(segment, color):
@@ -174,6 +169,11 @@ class Plot(gdb.Command):
 
             if str(val.type).endswith("bezier_knot_rb *"):
                 handle = plot_knots(val, colors[2])
+
+            if str(val.type).endswith("bezier_knot *"):
+                val = val.dereference()
+            if str(val.type).endswith("bezier_knot"):
+                handle = plot_knot(val, colors[2])
 
             if str(val.type).endswith("bezier_segment_rb *"):
                 handle = plot_segments(val, colors[2])

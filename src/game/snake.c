@@ -610,7 +610,7 @@ int snake_update_bezier_extents(
         bezier_segment_rb_clear(data->segments);
         qwaabb_rb_clear(data->segment_bbs);
 
-        for (i = 0; i < rb_count(data->knots) - 2; ++i)
+        for (i = 0; i < rb_count(data->knots) - 1; ++i)
         {
             struct bezier_segment*    segment;
             struct qwaabb*            bb;
@@ -633,7 +633,8 @@ int snake_update_bezier_extents(
      * are constantly changing. */
     if (rb_count(data->knots) > 1)
     {
-        struct bezier_knot* head_knot = rb_peek_write(data->knots);
+        struct bezier_knot* head_knot =
+            rb_peek(data->knots, rb_count(data->knots) - 1);
         struct bezier_knot* second_knot =
             rb_peek(data->knots, rb_count(data->knots) - 2);
         struct bezier_segment* segment = rb_peek_write(data->segments);
@@ -804,7 +805,7 @@ int snake_extrapolate(
     dy = qw_mul(qa_sin(head->angle), dy);
     head->pos.y = qw_add(head->pos.y, dy);
 
-    head_knot = rb_peek_write(data->knots);
+    head_knot = rb_peek(data->knots, rb_count(data->knots) - 1);
     prev_knot = rb_peek(data->knots, rb_count(data->knots) - 2);
     segment = rb_peek_write(data->segments);
     segment_bb = rb_peek_write(data->segment_bbs);

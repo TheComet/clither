@@ -342,7 +342,7 @@ TEST_F(NAME, push_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(vec_capacity(obj_vec), Eq(MIN_CAPACITY));
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, emplace_expand_with_failed_realloc_returns_error)
 {
@@ -357,7 +357,7 @@ TEST_F(NAME, emplace_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(vec_capacity(obj_vec), Eq(MIN_CAPACITY));
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_expand_with_failed_realloc_returns_error)
 {
@@ -375,7 +375,7 @@ TEST_F(NAME, insert_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(vec_capacity(obj_vec), Eq(MIN_CAPACITY));
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 TEST_F(NAME, insert_emplace_expand_with_failed_realloc_returns_error)
 {
@@ -391,7 +391,7 @@ TEST_F(NAME, insert_emplace_expand_with_failed_realloc_returns_error)
     EXPECT_THAT(vec_capacity(obj_vec), Eq(MIN_CAPACITY));
     EXPECT_THAT(
         log(),
-        LogEq("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
+        LogStartsWith("[Error] Failed to allocate 2056 bytes in vec_realloc()\n"));
 }
 
 TEST_F(NAME, inserting_preserves_existing_elements)

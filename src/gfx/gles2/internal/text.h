@@ -93,16 +93,16 @@ void gfx_gles2_text_draw(
     struct gfx_font*     font,
     struct qwpos         pos,
     struct fpos          screen_offset,
-    uint32_t             argb,
     GLfloat              scale,
+    uint32_t             argb,
     enum ui_align        align,
     const struct camera* camera);
 void gfx_gles2_text_draw_screen(
     struct strview   str,
     struct gfx_font* font,
     struct fpos      pos,
-    uint32_t         argb,
     GLfloat          scale,
+    uint32_t         argb,
     enum ui_align    align);
 void gfx_gles2_text_end_draw(void);
 

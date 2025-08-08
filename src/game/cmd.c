@@ -63,12 +63,13 @@ struct cmd cmd_next(struct cmd prev, const struct input* input)
     float angle, dist, dx, dy;
     float max_dist;
 
-    /* Scale the speed vector to a quarter of the screen's size */
-    max_dist = 0.25;
+    /* mousex_ar spans from [-1, 1]. Setting a radius to a quarter of the screen
+     * size feels abour right */
+    max_dist = 0.5;
 
     /* Calc angle and distance from mouse position and snake head position */
-    dx = input->mousex;
-    dy = input->mousey;
+    dx = input->mousex_ar;
+    dy = input->mousey_ar;
     angle = atan2(dy, dx);
     dist = sqrt(dx * dx + dy * dy);
     if (dist > max_dist)

@@ -36,13 +36,15 @@ struct gfx_debug
     struct debug_circle_vec*    circles;
     struct debug_rectangle_vec* rectangles;
     struct debug_line_vec*      lines;
+    struct strlist*             strings;
 
     struct
     {
         GLuint program;
         GLuint uPosCameraSpace;
         GLuint uAspectRatio;
-        GLuint uSize;
+        GLuint uRadius;
+        GLuint uThick;
         GLuint uColor;
     } circle_mat;
 

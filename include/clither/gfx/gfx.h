@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clither/config.h"
+#include "clither/game/fpos.h"
 #include "clither/game/q.h"
 
 struct camera;
@@ -86,6 +87,7 @@ struct gfx_interface
         uint32_t     argb);
     void (*draw_debug_line)(
         struct gfx* gfx, struct qwpos start, struct qwpos end, uint32_t argb);
+    void (*draw_debug_text_screen)(struct gfx* gfx, const char* text);
 #endif
 };
 

@@ -14,7 +14,8 @@ class rb_PrettyPrinter:
         read = rb["read"]
         write = rb["write"]
         capacity = rb["capacity"]
-        return f"rb(read={read}, write={write}, capacity={capacity})"
+        count = (write - read) % capacity
+        return f"rb(r={read}, w={write}, n={count}, cap={capacity})"
 
     def children(self):
         if int(self.rb) == 0:

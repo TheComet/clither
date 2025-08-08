@@ -1,6 +1,7 @@
 #include "./gfx.h"
 #include "./shader.h"
 #include "clither/game/camera.h"
+#include "clither/util/strlist.h"
 
 VEC_DEFINE(debug_circle_vec, struct debug_circle, 16)
 VEC_DEFINE(debug_rectangle_vec, struct debug_rectangle, 16)
@@ -11,12 +12,12 @@ static const char circle_vs[] =
     "attribute vec2 vPosition;\n"
     "uniform vec2 uAspectRatio;\n"
     "uniform vec3 uPosCameraSpace;\n"
-    "uniform float uSize;\n"
+    "uniform float uRadius;\n"
     "varying vec2 fTexCoord;\n"
     "void main()\n"
     "{\n"
     "    fTexCoord = vPosition;\n"
-    "    vec2 pos = vPosition * uSize * uPosCameraSpace.z;\n"
+    "    vec2 pos = vPosition * uRadius * uPosCameraSpace.z;\n"
     "    pos += uPosCameraSpace.xy;\n"
     "    pos /= uAspectRatio;\n"
     "    gl_Position = vec4(pos, 0.0, 1.0);\n"
@@ -24,13 +25,13 @@ static const char circle_vs[] =
 static const char circle_fs[] =
     "precision mediump float;\n"
     "uniform vec4 uColor;\n"
-    "uniform float uSize;\n"
+    "uniform float uRadius;\n"
+    "uniform float uThick;\n"
     "varying vec2 fTexCoord;\n"
     "void main()\n"
     "{\n"
-    "    float thick = 0.01 / uSize;\n"
     "    float d = sqrt(dot(fTexCoord, fTexCoord));\n"
-    "    float t = 1.0 - smoothstep(0.0, thick, abs(1.0 - thick - d));\n"
+    "    float t = 1.0 - smoothstep(0.0, uThick, abs(1.0 - uThick - d));\n"
     "    gl_FragColor = vec4(uColor.rgb, t) * uColor.a;\n"
     "}\n";
 
@@ -66,11 +67,13 @@ void gfx_gles2_debug_init(struct gfx_debug* debug)
     debug_circle_vec_init(&debug->circles);
     debug_rectangle_vec_init(&debug->rectangles);
     debug_line_vec_init(&debug->lines);
+    strlist_init(&debug->strings);
 
     debug->circle_mat.program = INVALID_HANDLE;
     debug->circle_mat.uPosCameraSpace = INVALID_UNIFORM_LOCATION;
     debug->circle_mat.uAspectRatio = INVALID_UNIFORM_LOCATION;
-    debug->circle_mat.uSize = INVALID_UNIFORM_LOCATION;
+    debug->circle_mat.uRadius = INVALID_UNIFORM_LOCATION;
+    debug->circle_mat.uThick = INVALID_UNIFORM_LOCATION;
     debug->circle_mat.uColor = INVALID_UNIFORM_LOCATION;
 
     debug->line_mat.program = INVALID_HANDLE;
@@ -95,6 +98,7 @@ void gfx_gles2_debug_deinit(struct gfx_debug* debug)
         glDeleteProgram(debug->circle_mat.program);
     }
 
+    strlist_deinit(debug->strings);
     debug_line_vec_deinit(debug->lines);
     debug_rectangle_vec_deinit(debug->rectangles);
     debug_circle_vec_deinit(debug->circles);
@@ -118,8 +122,10 @@ int gfx_gles2_debug_load(struct gfx_debug* debug)
         debug->circle_mat.program, "uAspectRatio");
     debug->circle_mat.uPosCameraSpace = gfx_gles2_get_uniform_location_and_warn(
         debug->circle_mat.program, "uPosCameraSpace");
-    debug->circle_mat.uSize = gfx_gles2_get_uniform_location_and_warn(
-        debug->circle_mat.program, "uSize");
+    debug->circle_mat.uRadius = gfx_gles2_get_uniform_location_and_warn(
+        debug->circle_mat.program, "uRadius");
+    debug->circle_mat.uThick = gfx_gles2_get_uniform_location_and_warn(
+        debug->circle_mat.program, "uThick");
     debug->circle_mat.uColor = gfx_gles2_get_uniform_location_and_warn(
         debug->circle_mat.program, "uColor");
 
@@ -155,18 +161,18 @@ static void draw_circle(
     const struct camera*       camera,
     GLfloat                    pixel_size)
 {
-    struct qwpos pos_cameraSpace;
-    pos_cameraSpace.x =
-        qw_mul(qw_sub(circle->pos.x, camera->pos.x), camera->scale);
-    pos_cameraSpace.y =
-        qw_mul(qw_sub(circle->pos.y, camera->pos.y), camera->scale);
+    GLfloat x, y;
+    x = qw_to_float(qw_sub(circle->pos.x, camera->pos.x)) *
+        qw_to_float(camera->scale);
+    y = qw_to_float(qw_sub(circle->pos.y, camera->pos.y)) *
+        qw_to_float(camera->scale);
 
-    glUniform1f(dbg->circle_mat.uSize, qw_to_float(circle->radius));
+    glUniform1f(dbg->circle_mat.uRadius, qw_to_float(circle->radius));
+    glUniform1f(
+        dbg->circle_mat.uThick,
+        pixel_size / qw_to_float(circle->radius) / qw_to_float(camera->scale));
     glUniform3f(
-        dbg->circle_mat.uPosCameraSpace,
-        qw_to_float(pos_cameraSpace.x),
-        qw_to_float(pos_cameraSpace.y),
-        qw_to_float(camera->scale));
+        dbg->circle_mat.uPosCameraSpace, x, y, qw_to_float(camera->scale));
     glUniform4f(
         dbg->circle_mat.uColor,
         ((circle->argb >> 16) & 0xFF) / 255.0,
@@ -224,12 +230,14 @@ void gfx_gles2_debug_draw(
     const struct debug_circle*    circle;
     const struct debug_line*      line;
     const struct debug_rectangle* rect;
-    GLfloat                       pixel_size_x, pixel_size_y, pixel_size;
+    struct strview                str;
+    GLfloat pixel_size_x, pixel_size_y, pixel_size, offset_y;
+    int     i;
 
     pixel_size_x = 1.0 / gfx->width;
     pixel_size_y = 1.0 / gfx->height;
     pixel_size = pixel_size_x > pixel_size_y ? pixel_size_x : pixel_size_y;
-    pixel_size *= 2; /* looks better */
+    pixel_size *= 3; /* looks better */
 
     gfx_gles2_quad_mesh_prepare_draw(mesh);
 
@@ -261,7 +269,23 @@ void gfx_gles2_debug_draw(
     glUseProgram(0);
     gfx_gles2_quad_mesh_end_draw();
 
+    offset_y = 0.95;
+    gfx_gles2_text_prepare_draw(&gfx->font, ar);
+    strlist_for_each (debug->strings, i, str)
+    {
+        offset_y -= 1.0 / 96;
+        gfx_gles2_text_draw_screen(
+            str,
+            &gfx->font,
+            make_fpos(-1.0, offset_y),
+            1.0 / 96,
+            0xFFFFFFFF,
+            UI_ALIGN_LEFT);
+    }
+    gfx_gles2_text_end_draw();
+
     debug_circle_vec_clear(debug->circles);
     debug_rectangle_vec_clear(debug->rectangles);
     debug_line_vec_clear(debug->lines);
+    strlist_clear(debug->strings);
 }

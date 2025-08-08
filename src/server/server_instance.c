@@ -66,15 +66,14 @@ static void* server_instance_run(const void* arg)
             break;
 
         net_update = tick_advance(&net_tick);
-        if (net_update)
+        if (server_recv(
+                &server,
+                &instance->settings->server,
+                &world,
+                &instance->settings->world,
+                frame_number) != 0)
         {
-            if (server_recv(
-                    &server,
-                    &instance->settings->server,
-                    &world,
-                    &instance->settings->world,
-                    frame_number) != 0)
-                break;
+            break;
         }
 
         /* sim_update */

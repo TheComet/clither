@@ -115,7 +115,7 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
             if (action == GLFW_PRESS)
                 gfx->input_buffer.next_gfx_backend = 1;
             break;
-        case GLFW_KEY_F2:
+        case GLFW_KEY_F4:
             gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
             break;
         case GLFW_KEY_SPACE:
@@ -547,8 +547,8 @@ static void gfx_gles2_draw_world(
             &gfx->font,
             snake->head.pos,
             make_fpos(0, 0.1),
-            0xA0FFFFFF,
             1.0 / 64,
+            0xA0FFFFFF,
             UI_ALIGN_CENTER,
             camera);
     }
@@ -650,8 +650,8 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     str_view(ui_elem->u.text.str),
                     &gfx->font,
                     ui_elem->u.text.pos,
-                    ui_elem->u.text.color,
                     ui_elem->u.text.scale,
+                    ui_elem->u.text.color,
                     ui_elem->u.text.align);
                 break;
             case UI_TEXTINPUT:
@@ -659,8 +659,8 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     str_view(ui_elem->u.textinput.text.str),
                     &gfx->font,
                     ui_elem->u.textinput.text.pos,
-                    ui_elem->u.textinput.text.color,
                     ui_elem->u.textinput.text.scale,
+                    ui_elem->u.textinput.text.color,
                     ui_elem->u.textinput.text.align);
                 break;
             case UI_BUTTON:
@@ -668,8 +668,8 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
                     str_view(ui_elem->u.button.text.str),
                     &gfx->font,
                     ui_elem->u.button.text.pos,
-                    ui_elem->u.button.text.color,
                     ui_elem->u.button.text.scale,
+                    ui_elem->u.button.text.color,
                     ui_elem->u.button.text.align);
                 break;
             case UI_SLIDER: break;
@@ -720,6 +720,10 @@ static void gfx_gles2_draw_debug_line(
     line->end = end;
     line->argb = argb;
 }
+static void gfx_gles2_draw_debug_text(struct gfx* gfx, const char* text)
+{
+    strlist_add_cstr(&gfx->debug.strings, text);
+}
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -741,5 +745,6 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_draw_debug_circle,
     &gfx_gles2_draw_debug_rectangle,
     &gfx_gles2_draw_debug_line,
+    &gfx_gles2_draw_debug_text
 #endif
 };

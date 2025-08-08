@@ -38,7 +38,7 @@ option (CLITHER_CLIENT "Build the client component. This is required for graphic
 cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
 cmake_dependent_option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON "CLITHER_BOT_API" OFF)
 cmake_dependent_option (CLITHER_GFX "Enable graphics frontends. Turn this off if you only care about running a server, or running bots." ON "CLITHER_CLIENT" OFF)
-cmake_dependent_option (CLITHER_GFX_DEBUG "Enable the graphics debug layer" OFF "CLITHER_GFX" OFF)
+cmake_dependent_option (CLITHER_GFX_DEBUG "Enable the graphics debug layer" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_GLES2 "Enable OpenGL ES 2.0 graphics backend" ON "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_SDL "Enable SDL graphics backend" OFF "CLITHER_GFX" OFF)
 cmake_dependent_option (CLITHER_GFX_VULKAN "Enable Vulkan graphics backend" OFF "CLITHER_GFX" OFF)

@@ -14,7 +14,7 @@ typedef int32_t q16_16;
 typedef int32_t qw;
 #define QW_Q   14
 #define QW_K   (1 << (QW_Q - 1))
-#define QW_MAX ((1 << QW_Q) - 1)
+#define QW_MAX 0x7FFFFF
 
 /*
  * Angles are stored in a Q4.12 fixed point representation (16-bit), which is

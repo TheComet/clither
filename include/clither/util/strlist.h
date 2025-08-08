@@ -34,6 +34,7 @@ int  strlist_add(struct strlist** l, struct strview str);
 int  strlist_add_cstr(struct strlist** l, const char* cstr);
 int  strlist_insert(struct strlist** l, int insert, const char* cstr);
 void strlist_erase(struct strlist* l, int idx);
+void strlist_clear(struct strlist* l);
 
 static struct strspan strlist_span(const struct strlist* l, int i)
 {

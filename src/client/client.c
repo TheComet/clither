@@ -28,6 +28,7 @@
 #include "clither/util/morton.h"
 #include "clither/util/rb.h"
 #include "clither/util/str.h"
+#include <stdio.h>
 #include <string.h> /* memcpy */
 
 /* ------------------------------------------------------------------------- */
@@ -688,26 +689,27 @@ static void draw_snake_debug_shapes(
         struct bezier_sample it;
         struct qwpos         prev_pos = snake->head.pos;
         qw spacing = qw_mul(make_qw2(1, 10), snake_scale(&snake->param));
-        for (bezier_sample_begin(
-                 &it,
-                 snake->data.segments,
-                 spacing,
-                 snake_length(&snake->param));
+        for (bezier_sample_begin(&it, snake->data.segments, spacing, QW_MAX);
              !bezier_sample_end(&it);
              bezier_sample_next(&it))
         {
             struct qwpos pos = bezier_sample_pos(&it);
             igfx->draw_debug_line(gfx, prev_pos, pos, 0xAFFF8000);
-            igfx->draw_debug_circle(
-                gfx,
-                pos,
-                qw_mul(snake_scale(&snake->param), make_qw(0.02)),
-                0xFFFFFF00);
+
+            if (bezier_sample_length(&it) < snake_length(&snake->param))
+            {
+                igfx->draw_debug_circle(
+                    gfx,
+                    pos,
+                    qw_mul(snake_scale(&snake->param), make_qw(0.02)),
+                    0xFFFFFF00);
+            }
+
             prev_pos = pos;
         }
     }
 }
-static void draw_snake_debug_bb(
+static void draw_snake_debug_collision(
     const struct gfx_interface* igfx,
     struct gfx*                 gfx,
     const struct world*         world)
@@ -737,17 +739,65 @@ static void draw_snake_debug_bb(
             0x80FFA000);
     }
 }
-static void draw_snake_debug(
+static void draw_debug_cmd(
+    const struct gfx_interface* igfx,
+    struct gfx*                 gfx,
+    const struct snake*         snake,
+    const struct cmd            cmd,
+    float                       radius,
+    uint32_t                    color)
+{
+    float        angle, scale;
+    struct qwpos pos;
+
+    scale = qw_to_float(snake_scale(&snake->param));
+    angle = cmd.angle / 256.0 * 2 * M_PI + M_PI;
+    pos = snake->head.pos;
+    pos = make_qwposqw(
+        qw_add(make_qw2(cmd.speed * cos(angle) * scale, 255), pos.x),
+        qw_add(make_qw2(cmd.speed * sin(angle) * scale, 255), pos.y));
+    igfx->draw_debug_circle(gfx, pos, make_qw(radius), color);
+}
+static void draw_snake_debug_network(
+    const struct gfx_interface* igfx,
+    struct gfx*                 gfx,
+    const struct world*         world)
+{
+    int16_t             snake_idx;
+    uint16_t            snake_id;
+    const struct snake* snake;
+    struct cmd*         cmd;
+    (void)snake_id;
+
+    bmap_for_each (world->snakes, snake_idx, snake_id, snake)
+    {
+        igfx->draw_debug_circle(
+            gfx,
+            snake->remote.ack.head.pos,
+            qw_mul(snake_scale(&snake->param), make_qw(0.015)),
+            0xFF00FFFF);
+        if (cmd_queue_count(&snake->cmdq) == 0)
+            continue;
+
+        cmd = cmd_queue_peek(&snake->cmdq, 0);
+        draw_debug_cmd(igfx, gfx, snake, *cmd, 0.02, 0xFF00FFFF);
+        cmd = cmd_queue_peek(&snake->cmdq, cmd_queue_count(&snake->cmdq) - 1);
+        draw_debug_cmd(igfx, gfx, snake, *cmd, 0.015, 0xFF0080FF);
+    }
+}
+static void draw_debug(
     const struct gfx_interface* igfx,
     struct gfx*                 gfx,
     const struct world*         world,
-    int                         debug_gfx_state)
+    uint8_t                     debug_gfx_state)
 {
-    switch (debug_gfx_state)
+    if (debug_gfx_state & 0x01)
     {
-        case 1: draw_snake_debug_shapes(igfx, gfx, world); break;
-        case 2: draw_snake_debug_bb(igfx, gfx, world); break;
+        draw_snake_debug_shapes(igfx, gfx, world);
+        draw_snake_debug_network(igfx, gfx, world);
     }
+    if (debug_gfx_state & 0x02)
+        draw_snake_debug_collision(igfx, gfx, world);
 }
 #endif
 
@@ -773,6 +823,10 @@ int client_run(
     int           retval = -1;
 #    if defined(CLITHER_GFX_DEBUG)
     int debug_gfx_state = 0;
+
+    int debug_latency_acc[16];
+    int debug_latency_idx = 0;
+    int debug_latency = 0;
 #    endif
 
     /* Change log prefix and color for server log messages */
@@ -821,7 +875,7 @@ int client_run(
 
 #    if defined(CLITHER_HOT_RELOAD)
         /* Check for resource pack changes */
-        if (pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
+        if (*pack_watch != NULL && fs_watch_check(*pack_watch) > 0)
         {
             struct resource_pack* new_pack;
 
@@ -843,7 +897,7 @@ int client_run(
 
         /* Receive net data */
         net_update = tick_advance(&net_tick);
-        if (net_update && client->state != CLIENT_DISCONNECTED)
+        if (client->state != CLIENT_DISCONNECTED)
         {
             struct client_recv_result result =
                 client_recv(client, settings, &world);
@@ -938,6 +992,19 @@ int client_run(
                 snake_bmap_retain(world.snakes, sim_other_snakes, &ctx);
             }
 
+#    if defined(CLITHER_GFX_DEBUG)
+            debug_latency_acc[debug_latency_idx++] =
+                cmd_queue_count(&snake->cmdq);
+            if (debug_latency_idx >= CLITHER_ARRAY_SIZE(debug_latency_acc))
+            {
+                int i, sum = 0;
+                for (i = 0; i < CLITHER_ARRAY_SIZE(debug_latency_acc); ++i)
+                    sum += debug_latency_acc[i];
+                debug_latency = sum / CLITHER_ARRAY_SIZE(debug_latency_acc);
+                debug_latency_idx = 0;
+            }
+#    endif
+
             if (net_update)
             {
                 /* Send all unconfirmed commands (unreliable) */
@@ -955,11 +1022,21 @@ int client_run(
         if (input.debug_gfx)
         {
             debug_gfx_state++;
-            if (debug_gfx_state > 2)
+            if (debug_gfx_state > 3)
                 debug_gfx_state = 0;
         }
         if (*gfx != NULL && tick_lag == 0 && debug_gfx_state)
-            draw_snake_debug(*igfx, *gfx, &world, debug_gfx_state);
+        {
+            char buf[32];
+            draw_debug(*igfx, *gfx, &world, debug_gfx_state);
+
+            sprintf(
+                buf,
+                "Latency: %df (%d ms)",
+                debug_latency,
+                debug_latency * 1000 / client->sim_tick_rate);
+            (*igfx)->draw_debug_text_screen(*gfx, buf);
+        }
 #    endif
 
         if (*gfx != NULL)
