@@ -385,9 +385,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     initial_height = size.y;
     emscripten_set_resize_callback(
         EMSCRIPTEN_EVENT_TARGET_WINDOW, gfx, 0, on_web_display_size_changed);
-#endif
 
-#if defined(__EMSCRIPTEN__)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);

@@ -34,6 +34,9 @@ set (CLITHER_ASM_OPTIMIZATIONS "HOTPATCH" CACHE STRING "")
 set_property (CACHE CLITHER_ASM_OPTIMIZATIONS
     PROPERTY STRINGS "OFF;HARDCODE;HOTPATCH;FUNCPTR")
 
+option (CLITHER_AUDIO "Enable audio support" ON)
+cmake_dependent_option (CLITHER_AUDIO_OPENAL "Enable OpenAL audio backend" ON "CLITHER_AUDIO" OFF)
+
 option (CLITHER_CLIENT "Build the client component. This is required for graphics, or for running bots." ON)
 cmake_dependent_option (CLITHER_BOT_API "Enable the bot API" ON "CLITHER_CLIENT" OFF)
 cmake_dependent_option (CLITHER_BOT_API_LUA "Enable lua bindings for the bot API" ON "CLITHER_BOT_API" OFF)
@@ -239,6 +242,15 @@ if (CLITHER_ASM_OPTIMIZATIONS)
     if (CLITHER_ASM_OPTIMIZATIONS STREQUAL "HOTPATCH")
         list (APPEND ClitherSources
             "src/platform/asm_trampolines_${Flavor}_${Abi}.${Ext}")
+    endif ()
+endif ()
+
+if (CLITHER_AUDIO)
+    list (APPEND ClitherSources
+        "src/audio/audio.c")
+    if (CLITHER_AUDIO_OPENAL)
+        list (APPEND ClitherSources
+            "src/audio/openal/audio_openal.c")
     endif ()
 endif ()
 
@@ -693,6 +705,11 @@ if (CLITHER_BOT_API_LUA)
     add_subdirectory ("thirdparty/lua-5.4.7")
     set_target_properties (lua-lib PROPERTIES MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
     target_link_libraries (clither PRIVATE lua-lib)
+endif ()
+
+if (CLITHER_AUDIO_OPENAL)
+    find_package (OpenAL REQUIRED)
+    target_link_libraries (clither PRIVATE OpenAL::OpenAL)
 endif ()
 
 if (CLITHER_TESTS)

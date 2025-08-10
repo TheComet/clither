@@ -17,6 +17,11 @@
 
 #define CLITHER_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P}
 
+#cmakedefine CLITHER_AUDIO
+#if defined(CLITHER_AUDIO)
+#   cmakedefine CLITHER_AUDIO_OPENAL
+#endif
+
 #cmakedefine CLITHER_CLIENT
 #if defined(CLITHER_CLIENT)
 #   cmakedefine CLITHER_BOT_API
@@ -112,4 +117,4 @@
 
 #define CLITHER_PRIVATE_API
 
-#define CLITHER_ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
+#define CLITHER_ARRAY_SIZE(array) ((int)sizeof(array) / (int)sizeof(array[0]))

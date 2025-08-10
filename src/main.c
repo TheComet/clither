@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/benchmarks.h"
 #include "clither/bot/bot.h"
 #include "clither/client/client.h"
@@ -28,10 +29,12 @@ int main(int argc, char* argv[])
     struct settings settings;
     struct str*     settings_file;
 #if defined(CLITHER_CLIENT)
-    struct resource_pack*       pack = NULL;
-    const struct gfx_interface* igfx = NULL;
-    struct gfx*                 gfx = NULL;
-    struct fs_watch*            pack_watch = NULL;
+    const struct audio_interface* iaudio = NULL;
+    struct audio*                 audio = NULL;
+    const struct gfx_interface*   igfx = NULL;
+    struct gfx*                   gfx = NULL;
+    struct resource_pack*         pack = NULL;
+    struct fs_watch*              pack_watch = NULL;
 #endif
     const struct bot_interface* ibot = NULL;
     struct bot*                 bot = NULL;
@@ -112,6 +115,11 @@ int main(int argc, char* argv[])
 #if defined(CLITHER_LOG)
     if (args.log_file)
         log_file_open(args.log_file);
+#endif
+
+#if defined(CLITHER_AUDIO)
+    iaudio = audio_backends[0];
+    audio = iaudio->create();
 #endif
 
 #if defined(CLITHER_GFX)
@@ -262,6 +270,12 @@ watch_resource_pack_failed:
         resource_pack_destroy(pack);
 parse_resource_pack_failed:
 #endif
+
+#if defined(CLITHER_AUDIO)
+    if (audio != NULL)
+        iaudio->destroy(audio);
+#endif
+
 read_settings_failed:
     str_deinit(settings_file);
 
