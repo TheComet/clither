@@ -20,6 +20,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#if defined(__EMSCRIPTEN__)
+#    include "emscripten.h"
+#    include "emscripten/html5.h"
+#endif
+
 #define GFX_NAME "OpenGL ES 2.0"
 
 enum
@@ -240,13 +245,30 @@ static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 }
 
 /* ------------------------------------------------------------------------- */
+#if defined(__EMSCRIPTEN__)
+static struct spos get_web_canvas_size(void)
+{
+    double w, h;
+    emscripten_get_element_css_size("#canvas", &w, &h);
+    return make_spos((int)w, (int)h);
+}
+static EM_BOOL on_web_display_size_changed(
+    int event_type, const EmscriptenUiEvent* event, void* user_data)
+{
+    struct gfx* gfx = (struct gfx*)user_data;
+    struct spos size = get_web_canvas_size();
+    glfwSetWindowSize(gfx->window, size.x, size.y);
+    return EM_TRUE;
+}
+#endif
+
+/* ------------------------------------------------------------------------- */
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     struct gfx* gfx = glfwGetWindowUserPointer(window);
     gfx->width = width;
     gfx->height = height;
     glViewport(0, 0, width, height);
-
     gfx_gles2_background_resize(
         &gfx->background, width, height, SHADOW_MAP_SIZE_FACTOR);
 }
@@ -357,7 +379,15 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     int         fbwidth, fbheight;
     struct gfx* gfx = mem_alloc(sizeof *gfx);
 
-#if defined(__EMSCRIPTEN)
+#if defined(__EMSCRIPTEN__)
+    struct spos size = get_web_canvas_size();
+    initial_width = size.x;
+    initial_height = size.y;
+    emscripten_set_resize_callback(
+        EMSCRIPTEN_EVENT_TARGET_WINDOW, gfx, 0, on_web_display_size_changed);
+#endif
+
+#if defined(__EMSCRIPTEN__)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);

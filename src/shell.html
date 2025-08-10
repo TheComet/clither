@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Clither</title>
+    <title>MechaSnek</title>
     <style>
       html, body {
         margin: 0;
@@ -40,6 +40,13 @@
         alert('WebGL context lost. You will need to reload the page.');
         e.preventDefault();
       }, false);
+
+      function onResize() {
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
+      }
+      onResize();
+      window.addEventListener('resize', onResize, false);
 
       var Module = {
         canvas: canvasElement,
