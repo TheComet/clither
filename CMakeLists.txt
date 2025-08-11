@@ -247,7 +247,9 @@ endif ()
 
 if (CLITHER_AUDIO)
     list (APPEND ClitherSources
-        "src/audio/audio.c")
+        "src/audio/audio.c"
+        "src/audio/audio_decoder.c"
+        "src/audio/audio_decoder_flac.c")
     if (CLITHER_AUDIO_OPENAL)
         list (APPEND ClitherSources
             "src/audio/openal/audio_openal.c")
@@ -446,6 +448,10 @@ if (CLITHER_BENCHMARKS)
         "benchmarks/clither/bench_vec.cpp")
 endif ()
 
+###############################################################################
+# Game executable
+###############################################################################
+
 add_executable (clither
     ${ClitherSources}
     "src/main.c")
@@ -506,7 +512,7 @@ if (CLITHER_BOT_API_LUA)
         COMMENT "Copying lua files to build directory")
     install (
         DIRECTORY "${PROJECT_SOURCE_DIR}/lua/"
-        DESTINATION ${CLITHER_INSTALL_BINDIR}/lua)
+        DESTINATION "${CLITHER_INSTALL_BINDIR}/lua")
 endif ()
 
 if (WIN32)
@@ -629,6 +635,33 @@ if (NOT EMSCRIPTEN AND NOT WIN32)
     target_link_libraries (clither PRIVATE Threads::Threads)
 endif ()
 
+if (CLITHER_AUDIO)
+    find_package (FLAC)
+    if (NOT FLAC_FOUND)
+        set (BUILD_CXXLIBS OFF CACHE STRING "")
+        set (BUILD_PROGRAMS OFF CACHE STRING "")
+        set (BUILD_EXAMPLES OFF CACHE STRING "")
+        set (BUILD_TESTING OFF CACHE STRING "")
+        set (BUILD_DOCS OFF CACHE STRING "")
+        set (INSTALL_MANPAGES OFF CACHE STRING "")
+        set (INSTALL_PKGCONFIG_MODULES OFF CACHE STRING "")
+        set (INSTALL_CMAKE_CONFIG_MODULE OFF CACHE STRING "")
+        set (WITH_OGG OFF CACHE STRING "")
+        if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set (WITH_FORTIFY_SOURCE OFF CACHE STRING "")
+        endif ()
+        add_subdirectory ("thirdparty/flac-1.5.0")
+        set_target_properties (FLAC PROPERTIES
+            MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
+    endif ()
+    target_link_libraries (clither PRIVATE FLAC::FLAC)
+
+    if (CLITHER_AUDIO_OPENAL AND NOT EMSCRIPTEN)
+        find_package (OpenAL REQUIRED)
+        target_link_libraries (clither PRIVATE OpenAL::OpenAL)
+    endif ()
+endif ()
+
 # Emscripten has its own freetype + harfbuzz
 if (CLITHER_GFX AND NOT EMSCRIPTEN)
     find_package (Freetype)
@@ -705,11 +738,6 @@ if (CLITHER_BOT_API_LUA)
     add_subdirectory ("thirdparty/lua-5.4.7")
     set_target_properties (lua-lib PROPERTIES MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
     target_link_libraries (clither PRIVATE lua-lib)
-endif ()
-
-if (CLITHER_AUDIO_OPENAL)
-    find_package (OpenAL REQUIRED)
-    target_link_libraries (clither PRIVATE OpenAL::OpenAL)
 endif ()
 
 if (CLITHER_TESTS)

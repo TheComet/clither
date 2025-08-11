@@ -25,25 +25,25 @@
 /* ------------------------------------------------------------------------- */
 int main(int argc, char* argv[])
 {
-    struct args     args;
-    struct settings settings;
-    struct str*     settings_file;
-#if defined(CLITHER_CLIENT)
+    struct args                   args;
+    struct settings               settings;
+    struct str*                   settings_file;
     const struct audio_interface* iaudio = NULL;
     struct audio*                 audio = NULL;
     const struct gfx_interface*   igfx = NULL;
     struct gfx*                   gfx = NULL;
     struct resource_pack*         pack = NULL;
     struct fs_watch*              pack_watch = NULL;
-#endif
-    const struct bot_interface* ibot = NULL;
-    struct bot*                 bot = NULL;
+    const struct bot_interface*   ibot = NULL;
+    struct bot*                   bot = NULL;
 #if defined(CLITHER_MCD)
     struct thread* mcd_thread = NULL;
 #endif
     int retval = -1;
 
+    (void)iaudio, (void)audio;
     (void)ibot, (void)bot;
+    (void)igfx, (void)gfx, (void)pack, (void)pack_watch;
 
     if (trackers_init_tls() != 0)
         goto mem_init_failed;
@@ -119,6 +119,7 @@ int main(int argc, char* argv[])
 
 #if defined(CLITHER_AUDIO)
     iaudio = audio_backends[0];
+    iaudio->init();
     audio = iaudio->create();
 #endif
 
@@ -214,7 +215,16 @@ int main(int argc, char* argv[])
              * in the main thread. It does not call any threadlocal init
              * functions. */
             retval = client_run(
-                &client, &settings, &igfx, &gfx, &pack, &pack_watch, ibot, bot);
+                iaudio,
+                audio,
+                &client,
+                &settings,
+                &igfx,
+                &gfx,
+                &pack,
+                &pack_watch,
+                ibot,
+                bot);
             client_deinit(&client);
             break;
         }
@@ -222,7 +232,15 @@ int main(int argc, char* argv[])
 #if defined(CLITHER_CLIENT) && defined(CLITHER_GFX)
         case MODE_UI: {
             retval = main_menu_run(
-                &igfx, &gfx, &pack, &pack_watch, ibot, bot, &settings);
+                iaudio,
+                audio,
+                &igfx,
+                &gfx,
+                &pack,
+                &pack_watch,
+                ibot,
+                bot,
+                &settings);
             break;
         }
 #endif
@@ -274,6 +292,8 @@ parse_resource_pack_failed:
 #if defined(CLITHER_AUDIO)
     if (audio != NULL)
         iaudio->destroy(audio);
+    if (iaudio != NULL)
+        iaudio->deinit();
 #endif
 
 read_settings_failed:

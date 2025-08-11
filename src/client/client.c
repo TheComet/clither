@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/bot/bot.h"
 #include "clither/client/client.h"
 #include "clither/game/bezier.h"
@@ -804,14 +805,16 @@ static void draw_debug(
 /* ------------------------------------------------------------------------- */
 #if defined(CLITHER_CLIENT)
 int client_run(
-    struct client*               client,
-    const struct settings*       settings,
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-    struct resource_pack**       pack,
-    struct fs_watch**            pack_watch,
-    const struct bot_interface*  ibot,
-    struct bot*                  bot)
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    struct client*                client,
+    const struct settings*        settings,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
+    struct resource_pack**        pack,
+    struct fs_watch**             pack_watch,
+    const struct bot_interface*   ibot,
+    struct bot*                   bot)
 {
     struct world  world;
     struct input  input;
@@ -1017,6 +1020,9 @@ int client_run(
             if (client_send_pending_data(client) < 0)
                 break;
         }
+
+        if (iaudio != NULL)
+            iaudio->update(audio);
 
 #    if defined(CLITHER_GFX_DEBUG)
         if (input.debug_gfx)

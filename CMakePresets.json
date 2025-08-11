@@ -25,6 +25,7 @@
       "binaryDir": "${sourceDir}/build-server",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CLITHER_AUDIO": false,
         "CLITHER_CAPACITY_WARNING": true,
         "CLITHER_DEBUG_ASSERT": true,
         "CLITHER_DEBUG_MEMORY": true,

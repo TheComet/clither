@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/client/client.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
@@ -235,11 +236,13 @@ struct ui* ui_create_garage_menu(const struct settings_snake* settings)
 
 /* ------------------------------------------------------------------------- */
 int garage_menu_run(
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-    struct resource_pack**       pack,
-    struct fs_watch**            pack_watch,
-    struct settings*             settings)
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
+    struct resource_pack**        pack,
+    struct fs_watch**             pack_watch,
+    struct settings*              settings)
 {
     struct ui*        garage_menu;
     struct world      world;
@@ -359,6 +362,9 @@ int garage_menu_run(
         head = snake->head;
         head.pos = make_qwposqw(qw_sub(head.pos.x, make_qw(1.5)), head.pos.y);
         camera_update(&camera, &head, &snake->param, &input, sim_tick_rate);
+
+        if (iaudio != NULL)
+            iaudio->update(audio);
 
         if (*gfx != NULL)
         {

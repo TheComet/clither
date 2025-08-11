@@ -1,5 +1,7 @@
 #pragma once
 
+struct audio_interface;
+struct audio;
 struct fs_watch;
 struct gfx;
 struct gfx_interface;
@@ -7,8 +9,10 @@ struct resource_pack;
 struct settings;
 
 int garage_menu_run(
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-    struct resource_pack**       pack,
-    struct fs_watch**            pack_watch,
-    struct settings*             settings);
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
+    struct resource_pack**        pack,
+    struct fs_watch**             pack_watch,
+    struct settings*              settings);

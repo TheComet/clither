@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/client/client.h"
 #include "clither/game/input.h"
 #include "clither/game/resource_pack.h"
@@ -531,13 +532,15 @@ struct ui* ui_create_main_menu(void)
 
 /* ------------------------------------------------------------------------- */
 int main_menu_run(
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-    struct resource_pack**       pack,
-    struct fs_watch**            pack_watch,
-    const struct bot_interface*  ibot,
-    struct bot*                  bot,
-    struct settings*             settings)
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
+    struct resource_pack**        pack,
+    struct fs_watch**             pack_watch,
+    const struct bot_interface*   ibot,
+    struct bot*                   bot,
+    struct settings*              settings)
 {
     struct ui*    main_menu;
     struct input  input;
@@ -591,6 +594,8 @@ int main_menu_run(
                         main_menu, "Failed to connect to server");
                 }
                 if (client_run(
+                        iaudio,
+                        audio,
                         &client,
                         settings,
                         igfx,
@@ -643,6 +648,8 @@ int main_menu_run(
                     goto client_connect_failed;
                 }
                 if (client_run(
+                        iaudio,
+                        audio,
                         &client,
                         settings,
                         igfx,
@@ -667,7 +674,8 @@ int main_menu_run(
             }
 
             case UI_CMD_GARAGE: {
-                garage_menu_run(igfx, gfx, pack, pack_watch, settings);
+                garage_menu_run(
+                    iaudio, audio, igfx, gfx, pack, pack_watch, settings);
                 tick_skip(&sim_tick);
                 break;
             }
@@ -716,6 +724,9 @@ int main_menu_run(
             *pack_watch = resource_pack_watch_create(*pack);
         }
 #endif
+
+        if (iaudio != NULL)
+            iaudio->update(audio);
 
         if (*gfx != NULL)
         {

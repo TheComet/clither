@@ -278,6 +278,15 @@ void str_dirname(struct str* str)
 }
 
 /* ------------------------------------------------------------------------- */
+const char* cstr_ext(const char* path)
+{
+    const char* ext = strrchr(path, '.');
+    if (ext == NULL || ext == path || is_sep(*(ext - 1)))
+        return "";
+    return ext + 1;
+}
+
+/* ------------------------------------------------------------------------- */
 int cstr_ends_with(const char* cstr, const char* suffix)
 {
     int cstr_len = (int)strlen(cstr);

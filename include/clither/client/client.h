@@ -5,6 +5,8 @@
 #if defined(CLITHER_CLIENT)
 #    include <stdint.h>
 
+struct audio_interface;
+struct audio;
 struct bot;
 struct bot_interface;
 struct fs_watch;
@@ -122,13 +124,15 @@ struct client_recv_result client_recv(
 /*! \brief The main loop of the client. Designed to be called from the main
  * thread. */
 int client_run(
-    struct client*               client,
-    const struct settings*       settings,
-    const struct gfx_interface** igfx,
-    struct gfx**                 gfx,
-    struct resource_pack**       pack,
-    struct fs_watch**            pack_watch,
-    const struct bot_interface*  ibot,
-    struct bot*                  bot);
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    struct client*                client,
+    const struct settings*        settings,
+    const struct gfx_interface**  igfx,
+    struct gfx**                  gfx,
+    struct resource_pack**        pack,
+    struct fs_watch**             pack_watch,
+    const struct bot_interface*   ibot,
+    struct bot*                   bot);
 
 #endif
