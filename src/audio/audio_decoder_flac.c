@@ -8,16 +8,13 @@
 
 struct audio_decoder
 {
-    int (*on_next_buffer)(
-        const struct pcm16_vec*   buffer,
-        int                       sample_rate,
-        enum audio_decoder_format format,
-        void*                     user_data);
-    void*                user_data;
-    FLAC__StreamDecoder* decoder;
-    struct pcm16_vec*    pcm16;
-    struct mfile         mf;
-    int                  offset;
+    FLAC__StreamDecoder*      decoder;
+    struct pcm16_vec*         pcm16;
+    struct mfile              mf;
+    int                       offset;
+    int                       sample_rate;
+    enum audio_decoder_format format;
+    unsigned                  clear_pcm16 : 1;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -100,13 +97,14 @@ static FLAC__StreamDecoderWriteStatus write_callback(
     struct audio_decoder* d = client_data;
     (void)decoder;
 
-    pcm16_vec_clear(d->pcm16);
+    if (d->clear_pcm16)
+        pcm16_vec_clear(d->pcm16);
 
     if (frame->header.channels == 1)
     {
         for (s = 0; s < (int)frame->header.blocksize; ++s)
         {
-            int16_t sample = bps > 16 ? (buffer[0][s] * (1 >> (bps - 16)))
+            int16_t sample = bps > 16 ? (buffer[0][s] / (1 << (bps - 16)))
                                       : (buffer[0][s] * (1 << (16 - bps)));
             if (pcm16_vec_push(&d->pcm16, sample) != 0)
             {
@@ -132,16 +130,6 @@ static FLAC__StreamDecoderWriteStatus write_callback(
         }
     }
 
-    if (d->on_next_buffer(
-            d->pcm16,
-            frame->header.sample_rate,
-            (frame->header.channels == 1) ? AUDIO_DECODER_MONO
-                                          : AUDIO_DECODER_STEREO,
-            d->user_data) != 0)
-    {
-        return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-    }
-
     return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 static void metadata_callback(
@@ -149,21 +137,16 @@ static void metadata_callback(
     const FLAC__StreamMetadata* metadata,
     void*                       client_data)
 {
-    (void)decoder, (void)client_data;
+    struct audio_decoder* d = client_data;
+    (void)decoder;
+
     if (metadata->type == FLAC__METADATA_TYPE_STREAMINFO)
     {
-        int      bps = metadata->data.stream_info.bits_per_sample;
-        int      channels = metadata->data.stream_info.channels;
-        int      sample_rate = metadata->data.stream_info.sample_rate;
-        uint64_t total_samples = metadata->data.stream_info.total_samples;
+        int channels = metadata->data.stream_info.channels;
+        int sample_rate = metadata->data.stream_info.sample_rate;
 
-        log_dbg(
-            "FLAC StreamInfo: %d Hz, %d channels, %d bps, %" PRIu64
-            " total samples\n",
-            sample_rate,
-            channels,
-            bps,
-            total_samples);
+        d->sample_rate = sample_rate;
+        d->format = (channels == 1) ? AUDIO_DECODER_MONO : AUDIO_DECODER_STEREO;
     }
 }
 static void error_callback(
@@ -190,14 +173,7 @@ static void flac_decoder_deinit(void)
 }
 
 /* ------------------------------------------------------------------------- */
-static struct audio_decoder* flac_decoder_open(
-    const char* filename,
-    int (*on_next_buffer)(
-        const struct pcm16_vec*   buffer,
-        int                       sample_rate,
-        enum audio_decoder_format format,
-        void*                     user_data),
-    void* user_data)
+static struct audio_decoder* flac_decoder_open(const char* filename)
 {
     struct audio_decoder* d = mem_alloc(sizeof *d);
     if (d == NULL)
@@ -205,8 +181,6 @@ static struct audio_decoder* flac_decoder_open(
 
     pcm16_vec_init(&d->pcm16);
     d->offset = 0;
-    d->on_next_buffer = on_next_buffer;
-    d->user_data = user_data;
 
     if (mfile_map_read(&d->mf, filename, 1) != 0)
         goto open_file_failed;
@@ -237,9 +211,17 @@ static struct audio_decoder* flac_decoder_open(
         goto init_stream_failed;
     }
 
+    d->sample_rate = 0;
+    d->format = AUDIO_DECODER_MONO;
     if (!FLAC__stream_decoder_process_until_end_of_metadata(d->decoder))
     {
         log_err("Failed to process FLAC metadata\n");
+        goto init_stream_failed;
+    }
+
+    if (d->sample_rate == 0)
+    {
+        log_err("FLAC Decoder Error: No sample rate found in metadata\n");
         goto init_stream_failed;
     }
 
@@ -268,37 +250,44 @@ static void flac_decoder_close(struct audio_decoder* d)
 }
 
 /* ------------------------------------------------------------------------- */
-static int flac_decoder_next_buffer(struct audio_decoder* d)
-{
-    if (FLAC__stream_decoder_process_single(d->decoder))
-        return 0;
-    return -1;
-}
-
-/* ------------------------------------------------------------------------- */
-static int flac_decoder_is_eof(struct audio_decoder* d)
-{
-    switch (FLAC__stream_decoder_get_state(d->decoder))
-    {
-        case FLAC__STREAM_DECODER_SEARCH_FOR_METADATA:
-        case FLAC__STREAM_DECODER_READ_METADATA:
-        case FLAC__STREAM_DECODER_SEARCH_FOR_FRAME_SYNC:
-        case FLAC__STREAM_DECODER_READ_FRAME: {
-            return 0;
-        }
-
-        default: break;
-    }
-    return 1;
-}
-
-/* ------------------------------------------------------------------------- */
 static void flac_decoder_reset(struct audio_decoder* d)
 {
     FLAC__stream_decoder_reset(d->decoder);
     FLAC__stream_decoder_process_until_end_of_metadata(d->decoder);
 }
 
+/* ------------------------------------------------------------------------- */
+static struct pcm16_vec* flac_decoder_next_buffer(struct audio_decoder* d)
+{
+    d->clear_pcm16 = 1;
+    if (FLAC__stream_decoder_process_single(d->decoder))
+        return d->pcm16;
+    return NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+static struct pcm16_vec* flac_decoder_read_all(struct audio_decoder* d)
+{
+    d->clear_pcm16 = 0;
+    if (FLAC__stream_decoder_process_until_end_of_stream(d->decoder))
+        return d->pcm16;
+    return NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+static enum audio_decoder_format
+flac_decoder_get_format(struct audio_decoder* d)
+{
+    return d->format;
+}
+
+/* ------------------------------------------------------------------------- */
+static int flac_decoder_get_sample_rate(struct audio_decoder* d)
+{
+    return d->sample_rate;
+}
+
+/* ------------------------------------------------------------------------- */
 static const char*                   file_ext[] = {"flac", "fla", NULL};
 const struct audio_decoder_interface audio_decoder_flac = {
     "FLAC Decoder",
@@ -307,6 +296,8 @@ const struct audio_decoder_interface audio_decoder_flac = {
     flac_decoder_deinit,
     flac_decoder_open,
     flac_decoder_close,
+    flac_decoder_reset,
     flac_decoder_next_buffer,
-    flac_decoder_is_eof,
-    flac_decoder_reset};
+    flac_decoder_read_all,
+    flac_decoder_get_format,
+    flac_decoder_get_sample_rate};

@@ -252,7 +252,7 @@ if (CLITHER_AUDIO)
         "src/audio/audio_decoder_flac.c")
     if (CLITHER_AUDIO_OPENAL)
         list (APPEND ClitherSources
-            "src/audio/openal/audio_openal.c")
+            "src/audio/audio_openal.c")
     endif ()
 endif ()
 
@@ -651,13 +651,34 @@ if (CLITHER_AUDIO)
             set (WITH_FORTIFY_SOURCE OFF CACHE STRING "")
         endif ()
         add_subdirectory ("thirdparty/flac-1.5.0")
+        target_compile_options (FLAC PRIVATE
+            $<$<C_COMPILER_ID:GNU>:-Wno-cast-function-type>
+            $<$<C_COMPILER_ID:Clang>:-Wno-cast-function-type>)
         set_target_properties (FLAC PROPERTIES
             MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
     endif ()
     target_link_libraries (clither PRIVATE FLAC::FLAC)
 
     if (CLITHER_AUDIO_OPENAL AND NOT EMSCRIPTEN)
-        find_package (OpenAL REQUIRED)
+        find_package (OpenAL)
+        if (NOT OpenAL_FOUND)
+            set (ALSOFT_DLOPEN OFF CACHE STRING "")
+            set (ALSOFT_UTILS OFF CACHE STRING "")
+            set (ALSOFT_EXAMPLES OFF CACHE STRING "")
+            set (ALSOFT_INSTALL OFF CACHE STRING "")
+            set (ALSOFT_INSTALL_CONFIG OFF CACHE STRING "")
+            set (ALSOFT_INSTALL_HRTF_DATA OFF CACHE STRING "")
+            set (ALSOFT_INSTALL_AMBDEC_PRESETS OFF CACHE STRING "")
+            set (ALSOFT_INSTALL_EXAMPLES OFF CACHE STRING "")
+            set (ALSOFT_INSTALL_UTILS OFF CACHE STRING "")
+            add_subdirectory ("thirdparty/openal-soft-1.24.3")
+            target_compile_options (OpenAL PRIVATE
+                $<$<C_COMPILER_ID:GNU>:-Wno-inline -Wno-ignored-attributes>
+                $<$<C_COMPILER_ID:Clang>:-Wno-inline -Wno-ignored-attributes>)
+            set_target_properties (OpenAL PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY ${CLITHER_BUILD_BINDIR}
+                MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
+        endif ()
         target_link_libraries (clither PRIVATE OpenAL::OpenAL)
     endif ()
 endif ()

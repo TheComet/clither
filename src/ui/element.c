@@ -10,4 +10,3 @@ void ui_element_init(struct ui_element* elem, enum ui_element_type type)
     elem->type = type;
     elem->active = 0;
 }
-

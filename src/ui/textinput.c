@@ -1,10 +1,15 @@
+#include "clither/audio/audio.h"
 #include "clither/game/input.h"
 #include "clither/ui/ui.h"
 #include "clither/util/str.h"
 
 /* ------------------------------------------------------------------------- */
 void textinput_step_anim(
-    struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
+    struct ui_element*            elem,
+    const struct input*           input,
+    uint8_t                       sim_tick_rate,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const int period = sim_tick_rate / 3;
     if (elem->u.textinput.blink_counter++ >= period)
@@ -12,15 +17,17 @@ void textinput_step_anim(
         elem->u.textinput.blink_counter = 0;
         elem->u.textinput.blink_on = !elem->u.textinput.blink_on;
     }
-    (void)input;
+    (void)input, (void)iaudio, (void)audio;
 }
 
 /* ------------------------------------------------------------------------- */
 enum ui_cmd_type textinput_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const uint32_t* codepoint;
     vec_for_each (input->keys, codepoint)
@@ -28,14 +35,17 @@ enum ui_cmd_type textinput_interact(
             *codepoint != '\0' && *codepoint != '\n' && *codepoint != '\r')
         {
             codepoint_vec_push(&elem->u.textinput.input_buffer, *codepoint);
+            if (iaudio != NULL)
+                iaudio->play_sound(audio, SFX_TEXTINPUT_TYPE);
         }
     codepoint_vec_clear(input->keys);
 
-    if (input->backspace)
+    if (check_and_clear(input->backspace))
     {
         if (vec_count(elem->u.textinput.input_buffer) > 0)
             codepoint_vec_pop(elem->u.textinput.input_buffer);
-        input->backspace = 0;
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_TEXTINPUT_DELETE);
     }
 
     str_set_utf32(

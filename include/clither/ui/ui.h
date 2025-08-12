@@ -5,6 +5,8 @@
 #include "clither/util/strview.h"
 #include <stdint.h>
 
+struct audio;
+struct audio_interface;
 struct input;
 struct settings_snake;
 struct ui;
@@ -147,14 +149,18 @@ struct ui_element
 {
     int (*is_mouse_over)(struct ui_element* elem, const struct input* input);
     void (*step_anim)(
-        struct ui_element*  elem,
-        const struct input* input,
-        uint8_t             sim_tick_rate);
+        struct ui_element*            elem,
+        const struct input*           input,
+        uint8_t                       sim_tick_rate,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio);
     enum ui_cmd_type (*interact)(
-        struct ui*         ui,
-        union ui_cmd*      cmd,
-        struct ui_element* elem,
-        struct input*      input);
+        struct ui*                    ui,
+        union ui_cmd*                 cmd,
+        struct ui_element*            elem,
+        struct input*                 input,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio);
     void (*set_message)(struct ui_element* elem, const char* message);
 
     union
@@ -187,7 +193,12 @@ extern struct ui_slider_style ui_style_slider;
 void ui_element_init(struct ui_element* elem, enum ui_element_type type);
 
 struct ui_element ui_controller(enum ui_cmd_type (*interact)(
-    struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+    struct ui*,
+    union ui_cmd*,
+    struct ui_element*,
+    struct input*,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio));
 
 struct ui_element
 ui_rectangle(struct fpos pos, struct fpos size, uint32_t color);
@@ -213,14 +224,24 @@ struct ui_element ui_button(
     struct ui_button_style style,
     int (*is_mouse_over)(struct ui_element*, const struct input*),
     enum ui_cmd_type (*interact)(
-        struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+        struct ui*,
+        union ui_cmd*,
+        struct ui_element*,
+        struct input*,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio));
 
 struct ui_element ui_slider(
     struct fpos            start,
     struct fpos            end,
     struct ui_slider_style style,
     enum ui_cmd_type (*interact)(
-        struct ui*, union ui_cmd*, struct ui_element*, struct input*));
+        struct ui*,
+        union ui_cmd*,
+        struct ui_element*,
+        struct input*,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio));
 
 struct ui* ui_create(const int** screens, int count);
 struct ui* ui_create_main_menu(void);
@@ -233,10 +254,12 @@ void ui_switch_screen(struct ui* ui, enum ui_screen screen_idx);
 void ui_set_message_on_active_screen(struct ui* ui, const char* message);
 
 enum ui_cmd_type ui_update(
-    struct ui*    ui,
-    union ui_cmd* cmd,
-    struct input* input,
-    uint8_t       sim_tick_rate);
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct input*                 input,
+    uint8_t                       sim_tick_rate);
 
 #define ui_for_each_active(ui, elem)                                           \
     for (elem = (ui)->elements; elem != ((ui)->elements + (ui)->count);        \

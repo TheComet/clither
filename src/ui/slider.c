@@ -43,7 +43,11 @@ slider_is_mouse_over(struct ui_element* elem, const struct input* input)
 
 /* ------------------------------------------------------------------------- */
 static void slider_step_anim(
-    struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
+    struct ui_element*            elem,
+    const struct input*           input,
+    uint8_t                       sim_tick_rate,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const int crossfade_period = sim_tick_rate / 12;
 
@@ -65,6 +69,8 @@ static void slider_step_anim(
         elem->u.slider.hover_color,
         elem->u.slider.hover_crossfade,
         crossfade_period);
+
+    (void)iaudio, (void)audio;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -73,7 +79,12 @@ struct ui_element ui_slider(
     struct fpos            end,
     struct ui_slider_style style,
     enum ui_cmd_type (*interact)(
-        struct ui*, union ui_cmd*, struct ui_element*, struct input*))
+        struct ui*,
+        union ui_cmd*,
+        struct ui_element*,
+        struct input*,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio))
 {
     struct ui_element elem;
 

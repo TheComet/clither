@@ -74,6 +74,24 @@ struct resource_food
     float       scale;
 };
 
+struct resource_audio
+{
+    struct str* menu_music;
+
+    struct str* button_hover;
+    struct str* button_click;
+    struct str* button_back;
+
+    struct str* slider_click;
+    struct str* slider_drag;
+    struct str* slider_release;
+
+    struct str* textinput_type;
+    struct str* textinput_delete;
+
+    struct str* eat_food;
+};
+
 struct resource_snake
 {
     struct str*     head_sprite;
@@ -95,6 +113,7 @@ struct resource_pack
     struct resource_background background;
     struct resource_text       text;
     struct resource_food       food;
+    struct resource_audio      audio;
 
     struct resource_spine_hmap*  spines;
     struct resource_shader_hmap* shaders;

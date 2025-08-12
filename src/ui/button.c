@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/ui/ui.h"
 
 /* ------------------------------------------------------------------------- */
@@ -21,7 +22,11 @@ crossfade_color(uint32_t c1, uint32_t c2, int cross, int cross_max)
 
 /* ------------------------------------------------------------------------- */
 static void button_step_anim(
-    struct ui_element* elem, const struct input* input, uint8_t sim_tick_rate)
+    struct ui_element*            elem,
+    const struct input*           input,
+    uint8_t                       sim_tick_rate,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const int crossfade_period = sim_tick_rate / 12;
 
@@ -38,6 +43,8 @@ static void button_step_anim(
     {
         if (elem->u.button.hover_crossfade < crossfade_period)
             elem->u.button.hover_crossfade++;
+        if (iaudio != NULL && elem->u.button.hover_crossfade == 1)
+            iaudio->play_sound(audio, SFX_BUTTON_HOVER);
     }
     else
     {
@@ -74,7 +81,12 @@ struct ui_element ui_button(
     struct ui_button_style style,
     int (*is_mouse_over)(struct ui_element*, const struct input*),
     enum ui_cmd_type (*interact)(
-        struct ui*, union ui_cmd*, struct ui_element*, struct input*))
+        struct ui*,
+        union ui_cmd*,
+        struct ui_element*,
+        struct input*,
+        const struct audio_interface* iaudio,
+        struct audio*                 audio))
 {
     struct ui_element    elem;
     struct ui_text_style text_style =

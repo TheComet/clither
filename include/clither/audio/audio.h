@@ -3,6 +3,32 @@
 #include "clither/config.h"
 #include <stdint.h>
 
+#define AUDIO_SFX_LIST                                                         \
+    X(button_hover, BUTTON_HOVER)                                              \
+    X(button_click, BUTTON_CLICK)                                              \
+    X(button_back, BUTTON_BACK)                                                \
+    X(slider_click, SLIDER_CLICK)                                              \
+    X(slider_drag, SLIDER_DRAG)                                                \
+    X(slider_release, SLIDER_RELEASE)                                          \
+    X(textinput_type, TEXTINPUT_TYPE)                                          \
+    X(textinput_delete, TEXTINPUT_DELETE)                                      \
+    X(eat_food, EAT_FOOD)
+
+enum audio_sfx
+{
+#define X(name, NAME) SFX_##NAME,
+    AUDIO_SFX_LIST
+#undef X
+        SFX_COUNT
+};
+
+enum audio_music
+{
+    MUSIC_MENU,
+
+    MUSIC_COUNT
+};
+
 struct resource_audio;
 
 /*! Opaque type. This is implemented differently depending on the audio backend
@@ -23,11 +49,11 @@ struct audio_interface
         struct audio* audio, const struct resource_audio* res);
     void (*unload_resource_pack)(struct audio* audio);
 
-    void (*loop_music)(struct audio* audio, const char* name);
+    void (*loop_music)(struct audio* audio, enum audio_music music);
     void (*stop_music)(struct audio* audio);
     void (*set_music_volume)(struct audio* audio, uint8_t percent);
 
-    void (*play_sound)(struct audio* audio, const char* name);
+    void (*play_sound)(struct audio* audio, enum audio_sfx sfx);
     void (*set_sound_volume)(struct audio* audio, uint8_t percent);
 
     void (*update)(struct audio* audio);

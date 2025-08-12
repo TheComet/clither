@@ -117,25 +117,32 @@ int main(int argc, char* argv[])
         log_file_open(args.log_file);
 #endif
 
+#if defined(CLITHER_GFX)
+    pack = resource_pack_parse(args.pack);
+    if (pack == NULL)
+        goto parse_resource_pack_failed;
+
+#    if defined(CLITHER_HOT_RELOAD)
+    pack_watch = resource_pack_watch_create(pack);
+    if (pack_watch == NULL)
+        goto watch_resource_pack_failed;
+#    endif
+#endif
+
 #if defined(CLITHER_AUDIO)
     iaudio = audio_backends[0];
-    iaudio->init();
+    if (iaudio->init() != 0)
+        goto init_audio_failed;
     audio = iaudio->create();
+    if (audio == NULL)
+        goto create_audio_failed;
+    if (iaudio->load_resource_pack(audio, &pack->audio) != 0)
+        goto load_audio_resources_failed;
 #endif
 
 #if defined(CLITHER_GFX)
     if (args.gfx_backend >= 0 && gfx_backends[args.gfx_backend] != NULL)
     {
-        pack = resource_pack_parse(args.pack);
-        if (pack == NULL)
-            goto parse_resource_pack_failed;
-
-#    if defined(CLITHER_HOT_RELOAD)
-        pack_watch = resource_pack_watch_create(pack);
-        if (pack_watch == NULL)
-            goto watch_resource_pack_failed;
-#    endif
-
         igfx = gfx_backends[args.gfx_backend];
         log_info("Using graphics backend: %s\n", igfx->name);
         if (igfx->init() != 0)
@@ -279,6 +286,21 @@ create_gfx_failed:
     if (igfx != NULL)
         igfx->deinit();
 init_gfx_failed:
+#endif
+
+#if defined(CLITHER_AUDIO)
+    if (audio != NULL && pack != NULL)
+        iaudio->unload_resource_pack(audio);
+load_audio_resources_failed:
+    if (audio != NULL)
+        iaudio->destroy(audio);
+create_audio_failed:
+    if (iaudio != NULL)
+        iaudio->deinit();
+init_audio_failed:
+#endif
+
+#if defined(CLITHER_GFX)
 #    if defined(CLITHER_HOT_RELOAD)
     if (pack_watch != NULL)
         fs_watch_deinit(pack_watch);
@@ -287,13 +309,6 @@ watch_resource_pack_failed:
     if (pack != NULL)
         resource_pack_destroy(pack);
 parse_resource_pack_failed:
-#endif
-
-#if defined(CLITHER_AUDIO)
-    if (audio != NULL)
-        iaudio->destroy(audio);
-    if (iaudio != NULL)
-        iaudio->deinit();
 #endif
 
 read_settings_failed:

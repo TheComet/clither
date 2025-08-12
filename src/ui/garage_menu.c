@@ -89,19 +89,27 @@ create_snake_properties_command(const struct ui* ui, union ui_cmd* cmd)
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type slider_snake_properties_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     if (!elem->u.slider.grabbed && elem->u.slider.knob_hover &&
         check_and_clear(input->screen_clicked))
     {
         elem->u.slider.grabbed = 1;
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_SLIDER_CLICK);
     }
 
-    if (!input->mouse_down)
+    if (elem->u.slider.grabbed && !input->mouse_down)
+    {
         elem->u.slider.grabbed = 0;
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_SLIDER_RELEASE);
+    }
 
     if (elem->u.slider.grabbed)
     {
@@ -120,15 +128,20 @@ static enum ui_cmd_type slider_snake_properties_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_back_to_main_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
-    if (elem->u.button.hover && check_and_clear(input->screen_clicked))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->escape))
+    {
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
         return UI_CMD_QUIT;
-    if (check_and_clear(input->escape))
-        return UI_CMD_QUIT;
+    }
 
     (void)ui, (void)cmd;
     return UI_CMD_NONE;
@@ -284,7 +297,8 @@ int garage_menu_run(
     {
         (*igfx)->poll_input(*gfx, &input);
 
-        switch (ui_update(garage_menu, &ui_cmd, &input, sim_tick_rate))
+        switch (ui_update(
+            iaudio, audio, garage_menu, &ui_cmd, &input, sim_tick_rate))
         {
             case UI_CMD_NONE: break;
             case UI_CMD_QUIT: {

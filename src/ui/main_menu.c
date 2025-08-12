@@ -146,15 +146,19 @@ button_is_mouse_over_smaller(struct ui_element* elem, const struct input* input)
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_host_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
                                  check_and_clear(input->enter)))
     {
         ui_switch_screen(ui, UI_MAIN_SCREEN_HOST);
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_CLICK);
     }
     (void)cmd;
     return UI_CMD_NONE;
@@ -162,15 +166,19 @@ static enum ui_cmd_type button_host_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_join_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
                                  check_and_clear(input->enter)))
     {
         ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN);
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_CLICK);
     }
     (void)cmd;
     return UI_CMD_NONE;
@@ -178,14 +186,18 @@ static enum ui_cmd_type button_join_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_garage_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
                                  check_and_clear(input->enter)))
     {
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_CLICK);
         return UI_CMD_GARAGE;
     }
     (void)ui, (void)cmd;
@@ -194,18 +206,26 @@ static enum ui_cmd_type button_garage_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_quit_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     if (elem->u.button.hover && (check_and_clear(input->screen_clicked) ||
                                  check_and_clear(input->enter)))
     {
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
         return UI_CMD_QUIT;
     }
     if (check_and_clear(input->escape))
+    {
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
         return UI_CMD_QUIT;
+    }
 
     (void)ui, (void)cmd;
     return UI_CMD_NONE;
@@ -213,15 +233,20 @@ static enum ui_cmd_type button_quit_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_back_to_main_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
-    if (elem->u.button.hover && check_and_clear(input->screen_clicked))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->escape))
+    {
         ui_switch_screen(ui, UI_MAIN_SCREEN_TITLE);
-    if (check_and_clear(input->escape))
-        ui_switch_screen(ui, UI_MAIN_SCREEN_TITLE);
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
+    }
 
     (void)cmd;
     return UI_CMD_NONE;
@@ -229,15 +254,20 @@ static enum ui_cmd_type button_back_to_main_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_back_to_host_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
-    if (elem->u.button.hover && check_and_clear(input->screen_clicked))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->escape))
+    {
         ui_switch_screen(ui, UI_MAIN_SCREEN_HOST);
-    if (check_and_clear(input->escape))
-        ui_switch_screen(ui, UI_MAIN_SCREEN_HOST);
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
+    }
 
     (void)cmd;
     return UI_CMD_NONE;
@@ -245,15 +275,20 @@ static enum ui_cmd_type button_back_to_host_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_back_to_join_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
-    if (elem->u.button.hover && check_and_clear(input->screen_clicked))
+    if ((elem->u.button.hover && check_and_clear(input->screen_clicked)) ||
+        check_and_clear(input->escape))
+    {
         ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN);
-    if (check_and_clear(input->escape))
-        ui_switch_screen(ui, UI_MAIN_SCREEN_JOIN);
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_BACK);
+    }
 
     (void)cmd;
     return UI_CMD_NONE;
@@ -261,10 +296,12 @@ static enum ui_cmd_type button_back_to_join_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_host_game_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const struct ui_textinput* textinput;
     textinput = &ui->elements[TEXTINPUT_USERNAME].u.textinput;
@@ -278,6 +315,8 @@ static enum ui_cmd_type button_host_game_interact(
     {
         *cmd = make_ui_host_cmd(
             str_cstr(textinput->input_buffer_utf8), "0.0.0.0", "5555");
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_CLICK);
         return UI_CMD_HOST;
     }
 
@@ -287,10 +326,12 @@ static enum ui_cmd_type button_host_game_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type button_join_game_interact(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const struct ui_textinput* textinput;
     textinput = &ui->elements[TEXTINPUT_USERNAME].u.textinput;
@@ -315,6 +356,8 @@ static enum ui_cmd_type button_join_game_interact(
             ""
 #endif
         );
+        if (iaudio != NULL)
+            iaudio->play_sound(audio, SFX_BUTTON_CLICK);
         return UI_CMD_JOIN;
     }
 
@@ -323,10 +366,12 @@ static enum ui_cmd_type button_join_game_interact(
 
 /* ------------------------------------------------------------------------- */
 static enum ui_cmd_type controller_vim(
-    struct ui*         ui,
-    union ui_cmd*      cmd,
-    struct ui_element* elem,
-    struct input*      input)
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct ui_element*            elem,
+    struct input*                 input,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     const uint32_t*       codepoint;
     const int*            idx;
@@ -391,7 +436,7 @@ static enum ui_cmd_type controller_vim(
         }
     }
 
-    (void)cmd, (void)elem;
+    (void)cmd, (void)elem, (void)iaudio, (void)audio;
     return UI_CMD_NONE;
 }
 
@@ -560,12 +605,16 @@ int main_menu_run(
 
     input_init(&input);
 
+    if (iaudio != NULL)
+        iaudio->loop_music(audio, MUSIC_MENU);
+
     tick_cfg(&sim_tick, sim_tick_rate);
     while (1)
     {
         (*igfx)->poll_input(*gfx, &input);
 
-        switch (ui_update(main_menu, &ui_cmd, &input, sim_tick_rate))
+        switch (
+            ui_update(iaudio, audio, main_menu, &ui_cmd, &input, sim_tick_rate))
         {
             case UI_CMD_NONE: break;
 

@@ -968,7 +968,12 @@ int client_run(
                 cmd_queue_put(&snake->cmdq, cmd, client->frame_number);
 
                 /* Update snake */
-                snake_eat_food(&snake->head, &snake->param, world.food_bmap);
+                if (snake_eat_food(
+                        &snake->head, &snake->param, world.food_bmap))
+                {
+                    if (iaudio != NULL)
+                        iaudio->play_sound(audio, SFX_EAT_FOOD);
+                }
                 snake_remove_stale_segments_with_rollback_constraint(
                     &snake->data,
                     &snake->remote.ack,

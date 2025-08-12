@@ -21,19 +21,14 @@ struct audio_decoder_interface
     int (*init)(void);
     void (*deinit)(void);
 
-    struct audio_decoder* (*open)(
-        const char* filename,
-        int (*on_next_buffer)(
-            const struct pcm16_vec*   buffer,
-            int                       sample_rate,
-            enum audio_decoder_format format,
-            void*                     user_data),
-        void* user_data);
+    struct audio_decoder* (*open)(const char* filename);
     void (*close)(struct audio_decoder* decoder);
 
-    int (*next_buffer)(struct audio_decoder* decoder);
-    int (*is_eof)(struct audio_decoder* decoder);
     void (*reset)(struct audio_decoder* decoder);
+    struct pcm16_vec* (*next_buffer)(struct audio_decoder* decoder);
+    struct pcm16_vec* (*read_all)(struct audio_decoder* decoder);
+    enum audio_decoder_format (*get_format)(struct audio_decoder* decoder);
+    int (*get_sample_rate)(struct audio_decoder* decoder);
 };
 
 const struct audio_decoder_interface*

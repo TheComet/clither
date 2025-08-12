@@ -1,3 +1,4 @@
+#include "clither/audio/audio.h"
 #include "clither/game/resource_pack.h"
 #include "clither/platform/fs.h"
 #include "clither/platform/mfile.h"
@@ -14,6 +15,44 @@ HMAP_DEFINE_STR(extern, resource_shader_hmap, struct resource_shader, 16)
 HMAP_DEFINE_STR(extern, resource_sprite_hmap, struct resource_sprite, 16)
 HMAP_DEFINE_STR(extern, resource_snake_hmap, struct resource_snake, 16)
 HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
+
+#define HANDLE_STR(name, key, resource)                                        \
+    if (strview_eq_cstr(key, #name))                                           \
+    {                                                                          \
+        if (scan_next_token(p) != '=')                                         \
+            return parser_error(p, "Expected '=' after \"" #name "\"\n");      \
+        if (scan_next_token(p) != TOK_STRING)                                  \
+            return parser_error(p, "Expected a string value\n");               \
+        if (str_set(&food->name, p->value.string) != 0)                        \
+            return -1;                                                         \
+        break;                                                                 \
+    }
+
+#define HANDLE_FLOAT(name, key, resource)                                      \
+    if (strview_eq_cstr(key, #name))                                           \
+    {                                                                          \
+        if (scan_next_token(p) != '=')                                         \
+            return parser_error(p, "Expected '=' after \"" #name "\"\n");      \
+        if (scan_next_token(p) != TOK_FLOAT)                                   \
+            return parser_error(                                               \
+                p, "Expected a float value. Example: scale = 2.0\n");          \
+        food->scale = p->value.float_literal;                                  \
+        break;                                                                 \
+    }
+
+#define HANDLE_PATH(name, key, resource, path_prefix)                          \
+    if (strview_eq_cstr(key, #name))                                           \
+    {                                                                          \
+        if (scan_next_token(p) != '=')                                         \
+            return parser_error(p, "Expected '=' after \"" #name "\"\n");      \
+        if (scan_next_token(p) != TOK_STRING)                                  \
+            return parser_error(p, "Expected a string value\n");               \
+        if (str_set_cstr(&resource->name, path_prefix) != 0)                   \
+            return -1;                                                         \
+        if (str_join_path(&resource->name, p->value.string) != 0)              \
+            return -1;                                                         \
+        break;                                                                 \
+    }
 
 /* ------------------------------------------------------------------------- */
 static void resource_shader_init(struct resource_shader* res)
@@ -119,6 +158,44 @@ static void resource_food_deinit(struct resource_food* res)
 }
 
 /* ------------------------------------------------------------------------- */
+static void resource_audio_init(struct resource_audio* res)
+{
+    str_init(&res->menu_music);
+
+    str_init(&res->button_hover);
+    str_init(&res->button_click);
+    str_init(&res->button_back);
+
+    str_init(&res->slider_click);
+    str_init(&res->slider_drag);
+    str_init(&res->slider_release);
+
+    str_init(&res->textinput_type);
+    str_init(&res->textinput_delete);
+
+    str_init(&res->eat_food);
+}
+
+/* ------------------------------------------------------------------------- */
+static void resource_audio_deinit(struct resource_audio* res)
+{
+    str_deinit(res->eat_food);
+
+    str_deinit(res->textinput_delete);
+    str_deinit(res->textinput_type);
+
+    str_deinit(res->slider_release);
+    str_deinit(res->slider_drag);
+    str_deinit(res->slider_click);
+
+    str_deinit(res->button_back);
+    str_deinit(res->button_click);
+    str_deinit(res->button_hover);
+
+    str_deinit(res->menu_music);
+}
+
+/* ------------------------------------------------------------------------- */
 static void resource_snake_init(struct resource_snake* res)
 {
     str_init(&res->head_sprite);
@@ -145,6 +222,7 @@ static void resource_pack_init(struct resource_pack* pack)
     resource_background_init(&pack->background);
     resource_text_init(&pack->text);
     resource_food_init(&pack->food);
+    resource_audio_init(&pack->audio);
 
     resource_spine_hmap_init(&pack->spines);
     resource_shader_hmap_init(&pack->shaders);
@@ -178,6 +256,7 @@ static void resource_pack_deinit(struct resource_pack* pack)
         (void)slot, (void)name, resource_spine_deinit(spine);
     resource_spine_hmap_deinit(pack->spines);
 
+    resource_audio_deinit(&pack->audio);
     resource_food_deinit(&pack->food);
     resource_text_deinit(&pack->text);
     resource_background_deinit(&pack->background);
@@ -549,28 +628,38 @@ enum token parse_section_food(struct parser* p, struct resource_food* food)
             case TOK_KEY: {
                 struct strview key = p->value.string;
 
-                if (strview_eq_cstr(key, "sprite"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_STRING)
-                        return parser_error(p, "Expected a string value\n");
-                    if (str_set(&food->sprite, p->value.string) != 0)
-                        return -1;
-                    break;
-                }
+                HANDLE_STR(sprite, key, food)
+                HANDLE_FLOAT(scale, key, food)
 
-                if (strview_eq_cstr(key, "scale"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_FLOAT)
-                        return parser_error(
-                            p,
-                            "Expected a float value. Example: scale = 2.0\n");
-                    food->scale = p->value.float_literal;
-                    break;
-                }
+                return parser_error(
+                    p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
+            }
+
+            default: return tok;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static enum token parse_section_audio(
+    struct parser* p, struct resource_audio* audio, const char* path_prefix)
+{
+    enum token tok;
+    while (1)
+    {
+        tok = scan_next_token(p);
+        switch (tok)
+        {
+            case TOK_ERROR: return -1;
+            case TOK_END: return 0;
+
+            case TOK_KEY: {
+                struct strview key = p->value.string;
+                HANDLE_PATH(menu_music, key, audio, path_prefix)
+
+#define X(name, NAME) HANDLE_PATH(name, key, audio, path_prefix)
+                AUDIO_SFX_LIST
+#undef X
 
                 return parser_error(
                     p, "Unknown key \"%.*s\"\n", key.len, key.data + key.off);
@@ -911,6 +1000,8 @@ static int parse_section(
         return parse_section_text(p, &pack->text, path_prefix);
     if (strview_eq_cstr(section, "food"))
         return parse_section_food(p, &pack->food);
+    if (strview_eq_cstr(section, "audio"))
+        return parse_section_audio(p, &pack->audio, path_prefix);
     if (strview_eq_cstr(section, "sprite"))
         return parse_section_sprite(p, &pack->sprites, path_prefix);
     if (strview_eq_cstr(section, "spine"))

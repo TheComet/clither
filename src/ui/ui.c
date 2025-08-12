@@ -93,20 +93,23 @@ void ui_destroy(struct ui* ui)
 
 /* ------------------------------------------------------------------------- */
 enum ui_cmd_type ui_update(
-    struct ui*    ui,
-    union ui_cmd* cmd,
-    struct input* input,
-    uint8_t       sim_tick_rate)
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    struct ui*                    ui,
+    union ui_cmd*                 cmd,
+    struct input*                 input,
+    uint8_t                       sim_tick_rate)
 {
     struct ui_element* elem;
     ui_for_each_active (ui, elem)
         if (elem->step_anim)
-            elem->step_anim(elem, input, sim_tick_rate);
+            elem->step_anim(elem, input, sim_tick_rate, iaudio, audio);
 
     ui_for_each_active (ui, elem)
         if (elem->interact)
         {
-            enum ui_cmd_type cmd_type = elem->interact(ui, cmd, elem, input);
+            enum ui_cmd_type cmd_type =
+                elem->interact(ui, cmd, elem, input, iaudio, audio);
             if (cmd_type != UI_CMD_NONE)
                 return cmd_type;
         }

@@ -1009,6 +1009,9 @@ int snake_eat_food(
     struct qwpos mouth_pos = make_qwposqw(
         qw_add(head->pos.x, qw_mul(qa_cos(head->angle), mouth_radius)),
         qw_add(head->pos.y, qw_mul(qa_sin(head->angle), mouth_radius)));
-    return food_bmap_for_each_in_radius(
+
+    int count_before = bmap_count(food_bmap);
+    food_bmap_for_each_in_radius(
         food_bmap, mouth_pos, mouth_radius, remove_food_in_radius, param);
+    return bmap_count(food_bmap) != count_before;
 }
