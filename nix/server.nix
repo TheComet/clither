@@ -9,6 +9,7 @@ pkgs.stdenv.mkDerivation {
 
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE=Release"
+    "-DCLITHER_AUDIO=OFF"
     "-DCLITHER_FETCH_ASSETS=OFF"
     "-DCLITHER_BOT_API=OFF"
     "-DCLITHER_CLIENT=OFF"

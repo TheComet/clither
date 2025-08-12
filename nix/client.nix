@@ -18,6 +18,7 @@ in pkgs.stdenv.mkDerivation {
     # On windows we use the included version of harfbuzz because nix pulls in
     # the ENTIRE gtk here
     harfbuzz
+    openal
   ];
 
   cmakeFlags = [
