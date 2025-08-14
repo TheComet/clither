@@ -97,8 +97,7 @@ int msg_parse_payload(
             }
 
             i = 5 + pp->join_request.username_len + 1;
-#define X(name, NAME, def, min, max)                                           \
-    pp->join_request.name = payload[i++];
+#define X(name, NAME, def, min, max) pp->join_request.name = payload[i++];
             SNAKE_COSMETIC_PARAMS_LIST
 #undef X
 
@@ -169,6 +168,30 @@ int msg_parse_payload(
         }
 
         case MSG_LEAVE: return type;
+
+        case MSG_VOICE: {
+            if (payload_len < 4)
+            {
+                log_warn("MSG_VOICE payload is too small\n");
+                return -1;
+            }
+
+            pp->voice.snake_id = (payload[0] << 8) | (payload[1] << 0);
+            pp->voice.sequence_number = payload[2];
+            pp->voice.size = payload[3];
+            pp->voice.data = &payload[4];
+
+            if (pp->voice.size > payload_len - 4)
+            {
+                log_warn(
+                    "Voice data size %d exceeds payload length %d\n",
+                    pp->voice.size,
+                    payload_len - 4);
+                return -2;
+            }
+
+            return type;
+        }
 
         case MSG_COMMANDS: {
             /*
@@ -685,6 +708,29 @@ struct msg* msg_join_deny_server_full(const char* error)
 struct msg* msg_leave(void)
 {
     return msg_alloc(MSG_LEAVE, 0, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_voice(
+    uint16_t snake_id, const void* data, uint8_t size, uint8_t sequence_number)
+{
+    struct msg* m = msg_alloc(
+        MSG_VOICE,
+        0,
+        2 +     /* snake id */
+            1 + /* sequence number */
+            1 + /* size */
+            size);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = snake_id >> 8;
+    m->payload[1] = snake_id & 0xFF;
+    m->payload[2] = sequence_number;
+    m->payload[3] = size;
+    memcpy(&m->payload[4], data, size);
+
+    return m;
 }
 
 /* ------------------------------------------------------------------------- */

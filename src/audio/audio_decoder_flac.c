@@ -13,7 +13,7 @@ struct audio_decoder
     struct mfile              mf;
     int                       offset;
     int                       sample_rate;
-    enum audio_decoder_format format;
+    enum audio_format format;
     unsigned                  clear_pcm16 : 1;
 };
 
@@ -146,7 +146,7 @@ static void metadata_callback(
         int sample_rate = metadata->data.stream_info.sample_rate;
 
         d->sample_rate = sample_rate;
-        d->format = (channels == 1) ? AUDIO_DECODER_MONO : AUDIO_DECODER_STEREO;
+        d->format = (channels == 1) ? AUDIO_MONO : AUDIO_STEREO;
     }
 }
 static void error_callback(
@@ -212,7 +212,7 @@ static struct audio_decoder* flac_decoder_open(const char* filename)
     }
 
     d->sample_rate = 0;
-    d->format = AUDIO_DECODER_MONO;
+    d->format = AUDIO_MONO;
     if (!FLAC__stream_decoder_process_until_end_of_metadata(d->decoder))
     {
         log_err("Failed to process FLAC metadata\n");
@@ -250,7 +250,7 @@ static void flac_decoder_close(struct audio_decoder* d)
 }
 
 /* ------------------------------------------------------------------------- */
-static void flac_decoder_reset(struct audio_decoder* d)
+static void flac_decoder_rewind(struct audio_decoder* d)
 {
     FLAC__stream_decoder_reset(d->decoder);
     FLAC__stream_decoder_process_until_end_of_metadata(d->decoder);
@@ -275,7 +275,7 @@ static struct pcm16_vec* flac_decoder_read_all(struct audio_decoder* d)
 }
 
 /* ------------------------------------------------------------------------- */
-static enum audio_decoder_format
+static enum audio_format
 flac_decoder_get_format(struct audio_decoder* d)
 {
     return d->format;
@@ -296,7 +296,7 @@ const struct audio_decoder_interface audio_decoder_flac = {
     flac_decoder_deinit,
     flac_decoder_open,
     flac_decoder_close,
-    flac_decoder_reset,
+    flac_decoder_rewind,
     flac_decoder_next_buffer,
     flac_decoder_read_all,
     flac_decoder_get_format,

@@ -35,5 +35,6 @@ void input_set_and_clear(struct input* i1, struct input* i2)
     i2->escape = 0;
     i2->enter = 0;
     i2->debug_gfx = 0;
+    i2->voice_toggled = 0;
     codepoint_vec_clear(i2->keys);
 }

@@ -117,9 +117,11 @@ int client_send_pending_data(struct client* client);
  * state changed. Returns 0 otherwise.
  */
 struct client_recv_result client_recv(
-    struct client*         client,
-    const struct settings* settings,
-    struct world*          world);
+    struct client*                client,
+    const struct settings*        settings,
+    struct world*                 world,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio);
 
 /*! \brief The main loop of the client. Designed to be called from the main
  * thread. */

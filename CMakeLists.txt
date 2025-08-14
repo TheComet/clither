@@ -603,7 +603,10 @@ if (CLITHER_FETCH_ASSETS)
         GIT_TAG master
         GIT_SHALLOW ON
         SOURCE_DIR ${PROJECT_BINARY_DIR}/clither-assets
-        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${PROJECT_BINARY_DIR}/clither-assets/packs" "${CLITHER_BUILD_BINDIR}/packs"
+        CONFIGURE_COMMAND ${CMAKE_COMMAND}
+            -E copy_directory_if_different
+            "${PROJECT_BINARY_DIR}/clither-assets/packs"
+            "${CLITHER_BUILD_BINDIR}/packs"
         BUILD_COMMAND ""
         INSTALL_COMMAND ""
         TEST_COMMAND "")
@@ -659,6 +662,11 @@ if (CLITHER_AUDIO)
     endif ()
     target_link_libraries (clither PRIVATE FLAC::FLAC)
 
+    add_subdirectory ("thirdparty/speex-1.2.1")
+    set_target_properties (speex PROPERTIES
+        MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
+    target_link_libraries (clither PRIVATE speex)
+
     if (CLITHER_AUDIO_OPENAL AND NOT EMSCRIPTEN)
         find_package (OpenAL)
         if (NOT OpenAL_FOUND)
@@ -688,6 +696,7 @@ if (CLITHER_GFX AND NOT EMSCRIPTEN)
     find_package (Freetype)
     if (NOT FREETYPE_FOUND)
         set (FT_DISABLE_HARFBUZZ ON CACHE STRING "")
+        set (SKIP_INSTALL_ALL ON CACHE STRING "")
         add_subdirectory ("thirdparty/freetype-2.13.3")
         set_target_properties (freetype PROPERTIES MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
         add_library (Freetype::Freetype ALIAS freetype)
@@ -698,6 +707,7 @@ if (CLITHER_GFX AND NOT EMSCRIPTEN)
     if (NOT HarfBuzz_FOUND)
         set (HB_BUILD_SUBSET ON CACHE STRING "")
         set (HB_HAVE_FREETYPE ON CACHE STRING "")
+        set (SKIP_INSTALL_ALL ON CACHE STRING "")
         add_subdirectory ("thirdparty/harfbuzz-11.0.0")
         set_target_properties (harfbuzz PROPERTIES MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
         if (WIN32)

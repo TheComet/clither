@@ -104,7 +104,8 @@ TEST_F(NAME, server_denies_join_full_server)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world), Eq(client_recv_disconnected()));
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
+        Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
 }
@@ -122,7 +123,8 @@ TEST_F(NAME, server_denies_join_username_too_long)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world), Eq(client_recv_disconnected()));
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
+        Eq(client_recv_disconnected()));
     ASSERT_THAT(cl.state, Eq(CLIENT_DISCONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
 }
@@ -139,7 +141,7 @@ TEST_F(NAME, server_accepts_join)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
 
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world),
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
     ASSERT_THAT(vec_count(cl.pending_msgs), Eq(0));
@@ -166,7 +168,7 @@ TEST_F(NAME, client_calculates_frame_number_with_buffer)
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world),
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
@@ -189,7 +191,7 @@ TEST_F(NAME, client_updates_tick_rates_from_server)
         Eq(0));
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world),
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 
@@ -215,7 +217,7 @@ TEST_F(NAME, client_rejects_server_if_given_incorrect_rtt)
 
     cl.frame_number += rtt; // simulate rtt frames passing since joining
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world),
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
     ASSERT_THAT(cl.state, Eq(CLIENT_CONNECTED));
 

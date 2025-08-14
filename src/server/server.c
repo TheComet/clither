@@ -764,7 +764,7 @@ static enum process_message_result process_message(
                     settings_world->ring_end,
                     client->snake_id,
                     &snake->head.pos);
-                if (msg_vec_push(&client->pending_msgs, response) != 0)
+                if (server_queue(client, response) != 0)
                     return PROCESS_MESSAGE_OOM;
             }
             return PROCESS_MESSAGE_OK;
@@ -781,6 +781,26 @@ static enum process_message_result process_message(
         case MSG_LEAVE: {
             server_client_remove(server, world, addr, client);
             return PROCESS_MESSAGE_CLIENT_DROPPED;
+        }
+
+        case MSG_VOICE: {
+            int16_t               slot;
+            struct net_addr       other_addr;
+            struct server_client* other_client;
+            hmap_for_each (server->clients, slot, other_addr, other_client)
+            {
+                (void)slot, (void)other_addr;
+                if (other_client == client)
+                    continue;
+                server_queue(
+                    other_client,
+                    msg_voice(
+                        client->snake_id,
+                        pp.voice.data,
+                        pp.voice.size,
+                        pp.voice.sequence_number));
+            }
+            return PROCESS_MESSAGE_OK;
         }
 
         case MSG_COMMANDS: {

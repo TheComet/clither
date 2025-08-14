@@ -101,7 +101,7 @@ void bezier_sample_begin(
     qw                              spacing,
     qw                              snake_length);
 void bezier_sample_next(struct bezier_sample* it);
-#define bezier_sample_end(it)     ((it)->t < 0)
+#define bezier_sample_end(it)     ((it)->spacing_sq < 0)
 #define bezier_sample_segment(it) (rb_peek((it)->segments, (it)->segment_idx))
 #define bezier_sample_idx(it)     ((it)->segment_idx)
 #define bezier_sample_pos(it)     ((it)->pos)

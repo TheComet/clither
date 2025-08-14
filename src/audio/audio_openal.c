@@ -4,6 +4,7 @@
 #include "clither/util/log.h"
 #include "clither/util/mem.h"
 #include "clither/util/tracker.h"
+#include "speex/speex.h"
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <stddef.h>
@@ -11,24 +12,41 @@
 
 #define INVALID_HANDLE ((ALuint) - 1)
 
+enum
+{
+    SPEEX_FRAME_SIZE = 160,
+    VOICE_SAMPLING_RATE = 8000
+};
+
 struct audio
 {
-    ALCdevice*  device;
+    ALCdevice*  out_dev;
+    ALCdevice*  in_dev;
     ALCcontext* context;
+
+    SpeexBits voice_enc_bits;
+    SpeexBits voice_dec_bits;
+    void*     voice_enc_state;
+    void*     voice_dec_state;
 
     const struct audio_decoder_interface* imusic_decoder;
     struct audio_decoder*                 music_decoder;
+    const char*                           music_filenames[MUSIC_COUNT];
 
-    const char* music_filenames[MUSIC_COUNT];
-    ALuint      sfx_buffers[SFX_COUNT];
-    ALuint      sfx_sources[SFX_COUNT];
+    ALuint voice_source;
+    ALuint voice_rb[16];
+    int    voice_rb_read, voice_rb_write;
 
     ALuint music_source;
     ALuint music_rb[4];
     int    music_rb_read, music_rb_write;
+
+    ALuint sfx_buffers[SFX_COUNT];
+    ALuint sfx_sources[SFX_COUNT];
 };
 
 static void audio_openal_stop_music(struct audio* a);
+static void audio_openal_stop_voice(struct audio* audio);
 
 #define CASE_RETURN(err)                                                       \
     case (err): return #err
@@ -141,14 +159,32 @@ static struct audio* audio_openal_create(void)
     if (a == NULL)
         goto alloc_audio_failed;
 
+    speex_bits_init(&a->voice_enc_bits);
+    speex_bits_init(&a->voice_dec_bits);
+    a->voice_enc_state =
+        speex_encoder_init(speex_lib_get_mode(SPEEX_MODEID_NB));
+    if (a->voice_enc_state == NULL)
+    {
+        log_err("Failed to initialize Speex encoder\n");
+        goto init_voice_encoder_failed;
+    }
+    track_mem(a->voice_enc_state, 0, "Speex Encoder State");
+    a->voice_dec_state =
+        speex_decoder_init(speex_lib_get_mode(SPEEX_MODEID_NB));
+    if (a->voice_dec_state == NULL)
+    {
+        log_err("Failed to initialize Speex decoder\n");
+        goto init_voice_decoder_failed;
+    }
+    track_mem(a->voice_dec_state, 0, "Speex Decoder State");
+
     alGetError();
 
-    devices = alcGetString(NULL, ALC_DEVICE_SPECIFIER);
+    devices = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
     device = devices;
     next = devices + 1;
     len = 0;
-
-    log_dbg("Available audio devices: ");
+    log_dbg("Available input audio devices: ");
     while (device && *device != '\0' && next && *next != '\0')
     {
         if (len)
@@ -160,18 +196,44 @@ static struct audio* audio_openal_create(void)
     }
     log_raw("\n");
 
-    defname = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
-    log_info("Using default audio device: %s\n", defname);
+    devices = alcGetString(NULL, ALC_DEVICE_SPECIFIER);
+    device = devices;
+    next = devices + 1;
+    len = 0;
+    log_dbg("Available output audio devices: ");
+    while (device && *device != '\0' && next && *next != '\0')
+    {
+        if (len)
+            log_raw(", ");
+        log_raw("%s", device);
+        len = strlen(device);
+        device += (len + 1);
+        next += (len + 2);
+    }
+    log_raw("\n");
 
-    a->device = alcOpenDevice(defname);
-    if (a->device == NULL)
+    defname = alcGetString(NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
+    log_info("Using default input device: %s\n", defname);
+    a->in_dev = alcCaptureOpenDevice(
+        NULL, VOICE_SAMPLING_RATE, AL_FORMAT_MONO16, SPEEX_FRAME_SIZE);
+    if (a->in_dev == NULL)
+    {
+        al_check_error();
+        goto open_capture_device_failed;
+    }
+    track_mem(a->in_dev, 0, "OpenAL Capture Device");
+
+    defname = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
+    log_info("Using default output device: %s\n", defname);
+    a->out_dev = alcOpenDevice(defname);
+    if (a->out_dev == NULL)
     {
         al_check_error();
         goto open_device_failed;
     }
-    track_mem(a->device, 0, "OpenAL Device");
+    track_mem(a->out_dev, 0, "OpenAL Output Device");
 
-    a->context = alcCreateContext(a->device, NULL);
+    a->context = alcCreateContext(a->out_dev, NULL);
     if (a->context == NULL)
     {
         al_check_error();
@@ -180,6 +242,16 @@ static struct audio* audio_openal_create(void)
     track_mem(a->context, 0, "OpenAL Context");
     alcMakeContextCurrent(a->context);
     al_check_error();
+
+    alGenSources(1, &a->voice_source);
+    audio_track_source(a->voice_source, "OpenAL Voice Source");
+    al_check_error();
+
+    alGenBuffers(CLITHER_ARRAY_SIZE(a->voice_rb), a->voice_rb);
+    audio_track_buf(a->voice_rb[0], "OpenAL Voice Buffers");
+    al_check_error();
+    a->voice_rb_read = 0;
+    a->voice_rb_write = 0;
 
     alGenSources(1, &a->music_source);
     audio_track_source(a->music_source, "OpenAL Music Source");
@@ -204,9 +276,18 @@ static struct audio* audio_openal_create(void)
     return a;
 
 create_context_failed:
-    untrack_mem(a->device);
-    alcCloseDevice(a->device);
+    untrack_mem(a->out_dev);
+    alcCloseDevice(a->out_dev);
 open_device_failed:
+    untrack_mem(a->in_dev);
+    alcCaptureCloseDevice(a->in_dev);
+open_capture_device_failed:
+    speex_decoder_destroy(a->voice_dec_state);
+init_voice_decoder_failed:
+    speex_encoder_destroy(a->voice_enc_state);
+init_voice_encoder_failed:
+    speex_bits_destroy(&a->voice_dec_bits);
+    speex_bits_destroy(&a->voice_enc_bits);
     mem_free(a);
 alloc_audio_failed:
     return NULL;
@@ -215,24 +296,41 @@ alloc_audio_failed:
 /* ------------------------------------------------------------------------- */
 static void audio_openal_destroy(struct audio* a)
 {
+    audio_openal_stop_music(a);
+    audio_openal_stop_voice(a);
+
     audio_untrack_buf(a->sfx_buffers[0]);
     alDeleteBuffers(CLITHER_ARRAY_SIZE(a->sfx_buffers), a->sfx_buffers);
     audio_untrack_source(a->sfx_sources[0]);
     alDeleteSources(CLITHER_ARRAY_SIZE(a->sfx_sources), a->sfx_sources);
 
-    audio_openal_stop_music(a);
-
     audio_untrack_buf(a->music_rb[0]);
     alDeleteBuffers(CLITHER_ARRAY_SIZE(a->music_rb), a->music_rb);
-
     audio_untrack_source(a->music_source);
     alDeleteSources(1, &a->music_source);
 
+    audio_untrack_buf(a->voice_rb[0]);
+    alDeleteBuffers(CLITHER_ARRAY_SIZE(a->voice_rb), a->voice_rb);
+    audio_untrack_source(a->voice_source);
+    alDeleteSources(1, &a->voice_source);
+
     untrack_mem(a->context);
+    alcMakeContextCurrent(NULL);
     alcDestroyContext(a->context);
 
-    untrack_mem(a->device);
-    alcCloseDevice(a->device);
+    untrack_mem(a->out_dev);
+    alcCloseDevice(a->out_dev);
+
+    untrack_mem(a->in_dev);
+    alcCaptureCloseDevice(a->in_dev);
+
+    untrack_mem(a->voice_enc_state);
+    speex_decoder_destroy(a->voice_dec_state);
+    untrack_mem(a->voice_dec_state);
+    speex_encoder_destroy(a->voice_enc_state);
+    speex_bits_destroy(&a->voice_dec_bits);
+    speex_bits_destroy(&a->voice_enc_bits);
+
     mem_free(a);
 }
 
@@ -268,8 +366,8 @@ static int load_sfx(struct audio* a, enum audio_sfx sfx, const char* filename)
 
     alBufferData(
         a->sfx_buffers[sfx],
-        iad->get_format(ad) == AUDIO_DECODER_MONO ? AL_FORMAT_MONO16
-                                                  : AL_FORMAT_STEREO16,
+        iad->get_format(ad) == AUDIO_MONO ? AL_FORMAT_MONO16
+                                          : AL_FORMAT_STEREO16,
         vec_data(buffer),
         vec_count(buffer) * sizeof(int16_t),
         iad->get_sample_rate(ad));
@@ -301,12 +399,111 @@ static int audio_openal_load_resource_pack(
 /* ------------------------------------------------------------------------- */
 static void audio_openal_unload_resource_pack(struct audio* a)
 {
+    int i;
+
 #define X(name, NAME) alBufferData(a->sfx_buffers[SFX_##NAME], 0, NULL, 0, 0);
     AUDIO_SFX_LIST
 #undef X
 
     audio_openal_stop_music(a);
-    a->music_filenames[MUSIC_MENU] = "";
+    for (i = 0; i != MUSIC_COUNT; ++i)
+        a->music_filenames[i] = "";
+}
+
+/* ------------------------------------------------------------------------- */
+static void audio_openal_start_voice(struct audio* a)
+{
+    alcCaptureStart(a->in_dev);
+    al_check_error();
+}
+
+/* ------------------------------------------------------------------------- */
+static void audio_openal_stop_voice(struct audio* a)
+{
+    alcCaptureStop(a->in_dev);
+    alGetError(); /* don't care */
+}
+
+/* ------------------------------------------------------------------------- */
+static void queue_voice_frame(struct audio* a, const void* data, int size)
+{
+    int16_t frame[SPEEX_FRAME_SIZE];
+    int     rc;
+
+    if ((a->voice_rb_write + 1) % CLITHER_ARRAY_SIZE(a->voice_rb) ==
+        a->voice_rb_read)
+    {
+        log_warn("OpenAL voice ring buffer is full, dropping frame\n");
+        return;
+    }
+
+    if (data == NULL)
+        rc = speex_decode_int(a->voice_dec_state, NULL, frame);
+    else
+    {
+        speex_bits_read_from(&a->voice_dec_bits, data, size);
+        rc = speex_decode_int(a->voice_dec_state, &a->voice_dec_bits, frame);
+    }
+    if (rc)
+    {
+        /* -1 for end of stream, -2 for corrupt stream */
+        return;
+    }
+
+    alBufferData(
+        a->voice_rb[a->voice_rb_write],
+        AL_FORMAT_MONO16,
+        frame,
+        SPEEX_FRAME_SIZE * sizeof(int16_t),
+        VOICE_SAMPLING_RATE);
+    al_check_error();
+
+    alSourceQueueBuffers(a->voice_source, 1, &a->voice_rb[a->voice_rb_write++]);
+    al_check_error();
+    a->voice_rb_write = a->voice_rb_write % CLITHER_ARRAY_SIZE(a->voice_rb);
+
+    alGetSourcei(a->voice_source, AL_SOURCE_STATE, &rc);
+    if (rc != AL_PLAYING)
+    {
+        alSourcePlay(a->voice_source);
+        al_check_error();
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static void
+audio_openal_queue_voice_frame(struct audio* a, const void* data, int size)
+{
+    queue_voice_frame(a, data, size);
+}
+
+/* ------------------------------------------------------------------------- */
+static void audio_openal_queue_missing_voice_frame(struct audio* a)
+{
+    queue_voice_frame(a, NULL, 0);
+}
+
+/* ------------------------------------------------------------------------- */
+static int
+audio_openal_record_voice_frame(struct audio* a, void* data, int capacity)
+{
+    ALint   result;
+    int16_t frame[SPEEX_FRAME_SIZE];
+
+    alcGetIntegerv(a->in_dev, ALC_CAPTURE_SAMPLES, 1, &result);
+    if (result < SPEEX_FRAME_SIZE)
+        return 0;
+
+    alcCaptureSamples(a->in_dev, frame, SPEEX_FRAME_SIZE);
+    speex_bits_reset(&a->voice_enc_bits);
+    speex_encode_int(a->voice_enc_state, frame, &a->voice_enc_bits);
+    return speex_bits_write(&a->voice_enc_bits, data, capacity);
+}
+
+/* ------------------------------------------------------------------------- */
+static void audio_openal_set_voice_volume(struct audio* a, uint8_t percent)
+{
+    alSourcef(a->voice_source, AL_GAIN, (float)percent / 100.0f);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -347,6 +544,7 @@ static void audio_openal_stop_music(struct audio* a)
 /* ------------------------------------------------------------------------- */
 static void audio_openal_set_music_volume(struct audio* a, uint8_t percent)
 {
+    alSourcef(a->music_source, AL_GAIN, (float)percent / 100.0f);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -359,15 +557,18 @@ static void audio_openal_play_sound(struct audio* a, enum audio_sfx sfx)
 /* ------------------------------------------------------------------------- */
 static void audio_openal_set_sound_volume(struct audio* a, uint8_t percent)
 {
+    int i;
+    for (i = 0; i != SFX_COUNT; ++i)
+        alSourcef(a->sfx_sources[i], AL_GAIN, (float)percent / 100.0f);
 }
 
 /* ------------------------------------------------------------------------- */
-static void audio_openal_update(struct audio* a)
+static void unqueue_buffers(struct audio* a)
 {
     ALint result;
 
-    alGetSourcei(a->music_source, AL_BUFFERS_PROCESSED, &result);
-    if (result > 0)
+    while (alGetSourcei(a->music_source, AL_BUFFERS_PROCESSED, &result),
+           result > 0)
     {
         alSourceUnqueueBuffers(
             a->music_source, 1, &a->music_rb[a->music_rb_read++]);
@@ -375,47 +576,64 @@ static void audio_openal_update(struct audio* a)
         al_check_error();
     }
 
-    if (a->music_decoder != NULL)
+    while (alGetSourcei(a->voice_source, AL_BUFFERS_PROCESSED, &result),
+           result > 0)
     {
-        alGetSourcei(a->music_source, AL_BUFFERS_QUEUED, &result);
-        if (result < CLITHER_ARRAY_SIZE(a->music_rb))
+        alSourceUnqueueBuffers(
+            a->voice_source, 1, &a->voice_rb[a->voice_rb_read++]);
+        a->voice_rb_read = a->voice_rb_read % CLITHER_ARRAY_SIZE(a->voice_rb);
+        al_check_error();
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+static void update_music(struct audio* a)
+{
+    ALint result;
+    alGetSourcei(a->music_source, AL_BUFFERS_QUEUED, &result);
+    if (result < CLITHER_ARRAY_SIZE(a->music_rb))
+    {
+        const struct pcm16_vec* buffer;
+        while (1)
         {
-            const struct pcm16_vec* buffer;
+            buffer = a->imusic_decoder->next_buffer(a->music_decoder);
+            if (buffer == NULL)
+                return;
+            if (vec_count(buffer) > 0)
+                break;
 
-            while (1)
-            {
-                buffer = a->imusic_decoder->next_buffer(a->music_decoder);
-                if (buffer == NULL)
-                    return;
-                if (vec_count(buffer) > 0)
-                    break;
-
-                a->imusic_decoder->reset(a->music_decoder);
-            }
-
-            alBufferData(
-                a->music_rb[a->music_rb_write],
-                a->imusic_decoder->get_format(a->music_decoder) ==
-                        AUDIO_DECODER_MONO
-                    ? AL_FORMAT_MONO16
-                    : AL_FORMAT_STEREO16,
-                vec_data(buffer),
-                vec_count(buffer) * sizeof(int16_t),
-                a->imusic_decoder->get_sample_rate(a->music_decoder));
-            al_check_error();
-
-            alSourceQueueBuffers(
-                a->music_source, 1, &a->music_rb[a->music_rb_write++]);
-
-            a->music_rb_write =
-                a->music_rb_write % CLITHER_ARRAY_SIZE(a->music_rb);
-            al_check_error();
+            a->imusic_decoder->rewind(a->music_decoder);
         }
 
-        alGetSourcei(a->music_source, AL_SOURCE_STATE, &result);
-        if (result != AL_PLAYING)
-            alSourcePlay(a->music_source);
+        alBufferData(
+            a->music_rb[a->music_rb_write],
+            a->imusic_decoder->get_format(a->music_decoder) == AUDIO_MONO
+                ? AL_FORMAT_MONO16
+                : AL_FORMAT_STEREO16,
+            vec_data(buffer),
+            vec_count(buffer) * sizeof(int16_t),
+            a->imusic_decoder->get_sample_rate(a->music_decoder));
+        al_check_error();
+
+        alSourceQueueBuffers(
+            a->music_source, 1, &a->music_rb[a->music_rb_write++]);
+        al_check_error();
+
+        a->music_rb_write = a->music_rb_write % CLITHER_ARRAY_SIZE(a->music_rb);
     }
+
+    alGetSourcei(a->music_source, AL_SOURCE_STATE, &result);
+    if (result != AL_PLAYING)
+        alSourcePlay(a->music_source);
+}
+
+/* ------------------------------------------------------------------------- */
+static void audio_openal_update(struct audio* a)
+{
+    unqueue_buffers(a);
+
+    if (a->music_decoder != NULL)
+        update_music(a);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -427,6 +645,12 @@ const struct audio_interface audio_openal = {
     audio_openal_destroy,
     audio_openal_load_resource_pack,
     audio_openal_unload_resource_pack,
+    audio_openal_start_voice,
+    audio_openal_stop_voice,
+    audio_openal_queue_voice_frame,
+    audio_openal_queue_missing_voice_frame,
+    audio_openal_record_voice_frame,
+    audio_openal_set_voice_volume,
     audio_openal_loop_music,
     audio_openal_stop_music,
     audio_openal_set_music_volume,

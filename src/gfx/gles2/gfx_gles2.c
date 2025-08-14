@@ -124,6 +124,13 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
             gfx->input_buffer.debug_gfx = (action == GLFW_PRESS);
             break;
         case GLFW_KEY_SPACE:
+            gfx->input_buffer.voice_toggled =
+                (action == GLFW_PRESS) || (action == GLFW_RELEASE);
+            if (action == GLFW_PRESS)
+                gfx->input_buffer.voice = 1;
+            if (action == GLFW_RELEASE)
+                gfx->input_buffer.voice = 0;
+            break;
         case GLFW_KEY_1:
             if (action == GLFW_PRESS)
                 gfx->input_buffer.boost = 1;
@@ -571,6 +578,20 @@ static void gfx_gles2_draw_world(
             0xA0FFFFFF,
             UI_ALIGN_CENTER,
             camera);
+
+        if (snake_is_speaking(snake))
+        {
+            uint8_t speaker[] = {0xF0, 0x9F, 0x95, 0x88, 0x00};
+            gfx_gles2_text_draw(
+                cstr_view((const char*)speaker),
+                &gfx->font,
+                snake->head.pos,
+                make_fpos(0, 0.2),
+                1.0 / 24,
+                0xA0FF8F00,
+                UI_ALIGN_CENTER,
+                camera);
+        }
     }
     gfx_gles2_text_end_draw();
 

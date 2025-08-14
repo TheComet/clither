@@ -20,9 +20,12 @@ struct input
 
     int16_t scroll; /* Mouse wheel (difference) */
 
-    unsigned boost : 1; /* Boost button is pressed */
-    unsigned shoot : 1; /* Shoot button is pressed */
-    unsigned split : 1; /* Split snake button is pressed */
+    unsigned voice_toggled : 1; /* Push to talk button was just pressed or
+                                   released */
+    unsigned voice : 1;         /* Push to talk button is held */
+    unsigned boost : 1;         /* Boost button is pressed */
+    unsigned shoot : 1;         /* Shoot button is pressed */
+    unsigned split : 1;         /* Split snake button is pressed */
 
     unsigned mouse_moved : 1;
     unsigned mouse_down : 1;

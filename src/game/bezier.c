@@ -673,7 +673,7 @@ void bezier_sample_begin(
 
     if (rb_count(segments) == 0)
     {
-        it->t = -1;
+        it->spacing_sq = -1;
         return;
     }
     it->segment_idx = rb_count(segments) - 1;
@@ -725,7 +725,7 @@ again:
 
         if (it->segment_idx == 0)
         {
-            it->t = -1;
+            it->spacing_sq = -1;
             return;
         }
         it->segment_idx--;
@@ -739,7 +739,7 @@ again:
     it->accumulated_length = q16_16_add(it->accumulated_length, q16_16_sqrt(dist_sq));
     if (it->accumulated_length >= it->snake_length)
     {
-        it->t = -1;
+        it->spacing_sq = -1;
         return;
     }
 }

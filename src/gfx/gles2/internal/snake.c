@@ -234,12 +234,11 @@ void gfx_gles2_draw_snake(
     {
         if (i % oversample_factor == 0)
         {
-            struct gfx_part_sample* ps =
-                gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
-            ps->pos = bezier_sample_pos(&sample);
-            ps->dir = bezier_tangent(
+            part_sample = gfx_part_sample_vec_emplace(&gfx_snake->part_samples);
+            part_sample->pos = bezier_sample_pos(&sample);
+            part_sample->dir = bezier_tangent(
                 bezier_sample_segment(&sample), bezier_sample_t(&sample));
-            ps->length = bezier_sample_length(&sample);
+            part_sample->length = bezier_sample_length(&sample);
         }
     }
 

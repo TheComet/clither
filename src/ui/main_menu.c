@@ -605,8 +605,8 @@ int main_menu_run(
 
     input_init(&input);
 
-    if (iaudio != NULL)
-        iaudio->loop_music(audio, MUSIC_MENU);
+    //if (iaudio != NULL)
+    //    iaudio->loop_music(audio, MUSIC_MENU);
 
     tick_cfg(&sim_tick, sim_tick_rate);
     while (1)

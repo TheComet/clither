@@ -49,6 +49,13 @@ struct audio_interface
         struct audio* audio, const struct resource_audio* res);
     void (*unload_resource_pack)(struct audio* audio);
 
+    void (*start_voice)(struct audio* audio);
+    void (*stop_voice)(struct audio* audio);
+    void (*queue_voice_frame)(struct audio* audio, const void* data, int size);
+    void (*queue_missing_voice_frame)(struct audio* audio);
+    int (*record_voice_frame)(struct audio* audio, void* data, int capacity);
+    void (*set_voice_volume)(struct audio* audio, uint8_t percent);
+
     void (*loop_music)(struct audio* audio, enum audio_music music);
     void (*stop_music)(struct audio* audio);
     void (*set_music_volume)(struct audio* audio, uint8_t percent);

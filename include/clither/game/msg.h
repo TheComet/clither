@@ -19,6 +19,8 @@ enum msg_type
     MSG_JOIN_DENY_SERVER_FULL,
     MSG_LEAVE,
 
+    MSG_VOICE,
+
     MSG_COMMANDS,
     MSG_FEEDBACK,
 
@@ -83,6 +85,14 @@ union parsed_payload
     {
         const char* error;
     } join_deny;
+
+    struct
+    {
+        const void* data;
+        uint16_t    snake_id;
+        uint8_t     sequence_number;
+        uint8_t     size;
+    } voice;
 
     struct
     {
@@ -227,6 +237,9 @@ struct msg* msg_join_deny_bad_protocol(const char* error);
 struct msg* msg_join_deny_bad_username(const char* error);
 struct msg* msg_join_deny_server_full(const char* error);
 struct msg* msg_leave(void);
+
+struct msg* msg_voice(
+    uint16_t snake_id, const void* data, uint8_t size, uint8_t sequence_number);
 
 void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq);
 int  msg_commands_unpack_into(

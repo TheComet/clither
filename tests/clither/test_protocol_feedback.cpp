@@ -4,7 +4,7 @@
 
 extern "C" {
 #include "clither/client/client.h"
-#include "clither/game/msg_vec.h"
+#include "clither/game/msg.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake_bmap.h"
 #include "clither/game/world.h"
@@ -112,7 +112,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world),
+        client_recv(&cl, &settings, &cl_world, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
 
     // The client has calculated a frame number based on sv_frame+rtt+(some
@@ -125,7 +125,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     auto RunServerClient = [this, &sv_frame]()
     {
         struct snake* cl_snake = snake_bmap_find(cl_world.snakes, cl.snake_id);
-        client_recv(&cl, &settings, &cl_world);
+        client_recv(&cl, &settings, &cl_world, NULL, NULL);
         SimClient();
         SimClient();
         SimClient();

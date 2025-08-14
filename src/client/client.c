@@ -224,12 +224,14 @@ packet_full:
 
 /* ------------------------------------------------------------------------- */
 static struct client_recv_result process_message(
-    struct client*         client,
-    const struct settings* settings,
-    struct world*          world,
-    enum msg_type          msg_type,
-    const uint8_t*         msg_data,
-    uint8_t                msg_len)
+    struct client*                client,
+    const struct settings*        settings,
+    struct world*                 world,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    enum msg_type                 msg_type,
+    const uint8_t*                msg_data,
+    uint8_t                       msg_len)
 {
     union parsed_payload pp;
 
@@ -326,7 +328,20 @@ static struct client_recv_result process_message(
             return client_recv_disconnected();
         }
 
-        case MSG_LEAVE:
+        case MSG_LEAVE: break;
+
+        case MSG_VOICE: {
+            struct snake* snake =
+                snake_bmap_find(world->snakes, pp.voice.snake_id);
+            if (snake == NULL)
+                return client_recv_ok();
+            snake_set_speaking(snake);
+
+            if (iaudio != NULL)
+                iaudio->queue_voice_frame(audio, pp.voice.data, pp.voice.size);
+            return client_recv_ok();
+        }
+
         case MSG_COMMANDS: break;
 
         case MSG_FEEDBACK: {
@@ -558,10 +573,12 @@ static struct client_recv_result process_message(
 
 /* ------------------------------------------------------------------------- */
 static struct client_recv_result unpack_packet(
-    struct client*           client,
-    const struct settings*   settings,
-    struct world*            world,
-    const struct net_packet* packet)
+    const struct audio_interface* iaudio,
+    struct audio*                 audio,
+    struct client*                client,
+    const struct settings*        settings,
+    struct world*                 world,
+    const struct net_packet*      packet)
 {
     int                       i;
     struct client_recv_result result = client_recv_ok();
@@ -589,7 +606,14 @@ static struct client_recv_result unpack_packet(
         result = client_recv_result_combine(
             result,
             process_message(
-                client, settings, world, msg_type, msg_data, msg_len));
+                client,
+                settings,
+                world,
+                iaudio,
+                audio,
+                msg_type,
+                msg_data,
+                msg_len));
         /* Want to stop processing messages if an error occurred, or if the
          * client disconnected. */
         if (result.error || result.disconnected)
@@ -603,7 +627,11 @@ static struct client_recv_result unpack_packet(
 
 /* ------------------------------------------------------------------------- */
 struct client_recv_result client_recv(
-    struct client* client, const struct settings* settings, struct world* world)
+    struct client*                client,
+    const struct settings*        settings,
+    struct world*                 world,
+    const struct audio_interface* iaudio,
+    struct audio*                 audio)
 {
     struct net_packet         packet;
     struct client_recv_result result = client_recv_ok();
@@ -624,7 +652,8 @@ struct client_recv_result client_recv(
         client->timeout_counter = 0;
 
         result = client_recv_result_combine(
-            result, unpack_packet(client, settings, world, &packet));
+            result,
+            unpack_packet(iaudio, audio, client, settings, world, &packet));
 
         /* Want to stop processing messages if an error occurred, or if the
          * client disconnected. */
@@ -898,12 +927,23 @@ int client_run(
         }
 #    endif
 
+        /* Speaking property gets set in client_recv() and picked up when
+         * rendering. We clear it here so the speaker icon disappears again if
+         * we aren't receiving voice */
+        {
+            int16_t       idx;
+            uint16_t      snake_id;
+            struct snake* snake;
+            bmap_for_each (world.snakes, idx, snake_id, snake)
+                (void)idx, (void)snake_id, snake_update_speaking(snake);
+        }
+
         /* Receive net data */
         net_update = tick_advance(&net_tick);
         if (client->state != CLIENT_DISCONNECTED)
         {
             struct client_recv_result result =
-                client_recv(client, settings, &world);
+                client_recv(client, settings, &world, iaudio, audio);
             if (result.error)
                 break;
 
@@ -1012,6 +1052,30 @@ int client_run(
                 debug_latency_idx = 0;
             }
 #    endif
+
+            /* Push to talk */
+            if (iaudio != NULL && input.voice_toggled)
+            {
+                if (input.voice)
+                    iaudio->start_voice(audio);
+                else
+                    iaudio->stop_voice(audio);
+            }
+            if (iaudio != NULL)
+            {
+                uint8_t data[255];
+                int     len;
+
+                if (input.voice)
+                    snake_set_speaking(snake);
+
+                while ((len = iaudio->record_voice_frame(
+                            audio, data, sizeof(data))) > 0)
+                {
+                    client_queue(
+                        client, msg_voice(client->snake_id, data, len, 0));
+                }
+            }
 
             if (net_update)
             {
