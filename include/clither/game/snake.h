@@ -112,7 +112,7 @@ struct snake
 
     unsigned hold : 1;
     unsigned dead : 1;
-    unsigned is_speaking : 4;
+    unsigned is_speaking : 3;
 };
 
 int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name);
@@ -139,7 +139,7 @@ snake_heads_are_equal(const struct snake_head* a, const struct snake_head* b)
 #define snake_is_dead(snake)  (snake)->dead
 
 #define snake_is_speaking(snake)  (snake)->is_speaking
-#define snake_set_speaking(snake) ((snake)->is_speaking = 15)
+#define snake_set_speaking(snake) ((snake)->is_speaking = 7)
 #define snake_update_speaking(snake)                                           \
     ((snake)->is_speaking =                                                    \
          (snake)->is_speaking > 0 ? (snake)->is_speaking - 1 : 0)

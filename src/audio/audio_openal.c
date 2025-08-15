@@ -215,7 +215,7 @@ static struct audio* audio_openal_create(void)
     defname = alcGetString(NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
     log_info("Using default input device: %s\n", defname);
     a->in_dev = alcCaptureOpenDevice(
-        NULL, VOICE_SAMPLING_RATE, AL_FORMAT_MONO16, SPEEX_FRAME_SIZE);
+        NULL, VOICE_SAMPLING_RATE, AL_FORMAT_MONO16, SPEEX_FRAME_SIZE * 32);
     if (a->in_dev == NULL)
     {
         al_check_error();

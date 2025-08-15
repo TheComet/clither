@@ -160,6 +160,7 @@ int snake_init(struct snake* snake, struct qwpos spawn_pos, const char* name)
 
     snake->hold = 0;
     snake->dead = 0;
+    snake->is_speaking = 0;
 
     return 0;
 }
