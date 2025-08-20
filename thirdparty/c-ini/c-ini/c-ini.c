@@ -984,26 +984,6 @@ static int parser_error(const struct parser* p, const char* fmt, ...)
     return -1;
 }
 
-enum token scan_until_section(struct parser* p)
-{
-    p->tail = p->head;
-    while (p->head != p->end)
-    {
-        if (memcmp(p->data + p->head, "SECTION", sizeof("SECTION") - 1) == 0)
-        {
-            p->value.str.source = p->data;
-            p->value.str.off = p->head;
-            p->value.str.len = sizeof("SECTION") - 1;
-            p->head += sizeof("SECTION") - 1;
-            return TOK_IDENTIFIER;
-        }
-
-        p->tail = ++p->head;
-    }
-
-    return TOK_END;
-}
-
 enum token scan_next(struct parser* p)
 {
     p->tail = p->head;
@@ -1040,6 +1020,30 @@ enum token scan_next(struct parser* p)
         return p->data[p->head++];
         CHAR_TOKEN_LIST
 #undef X
+
+        /* Hexadecimal */
+        if (p->end - p->head > 2 && p->data[p->head] == '0' &&
+            (p->data[p->head + 1] == 'x' || p->data[p->head + 1] == 'X'))
+        {
+            p->head += 2;
+            p->value.integer = 0;
+            for (; p->head != p->end &&
+                   (isdigit(p->data[p->head]) ||
+                    (p->data[p->head] >= 'A' && p->data[p->head] <= 'F') ||
+                    (p->data[p->head] >= 'a' && p->data[p->head] <= 'f'));
+                 ++p->head)
+            {
+                p->value.integer *= 16;
+                if (isdigit(p->data[p->head]))
+                    p->value.integer += p->data[p->head] - '0';
+                else if (p->data[p->head] >= 'A' && p->data[p->head] <= 'F')
+                    p->value.integer += p->data[p->head] - 'A';
+                else
+                    p->value.integer += p->data[p->head] - 'a';
+            }
+
+            return TOK_INTEGER;
+        }
 
         /* Number */
         if (isdigit(p->data[p->head]) || p->data[p->head] == '-')
@@ -1113,6 +1117,19 @@ enum token scan_next(struct parser* p)
     }
 
     return TOK_END;
+}
+
+enum token scan_until_section(struct parser* p)
+{
+    enum token tok;
+    while (1)
+    {
+        tok = scan_next(p);
+        if (tok == TOK_END || tok == TOK_ERROR)
+            return tok;
+        if (tok == TOK_IDENTIFIER && cstr_equal("SECTION", p->value.str))
+            return tok;
+    }
 }
 
 struct ll
@@ -2056,22 +2073,23 @@ static void gen_source_ini_parser(struct mstream* ms)
 {
     mstream_cstr(
         ms,
-        "struct strview\n"
+        "struct c_ini_strspan\n"
         "{\n"
         "    int off, len;\n"
         "};\n\n");
     mstream_cstr(
         ms,
-        "static struct strview strview(int off, int len)\n"
+        "static struct c_ini_strspan c_ini_strspan(int off, int len)\n"
         "{\n"
-        "    struct strview sv;\n"
+        "    struct c_ini_strspan sv;\n"
         "    sv.off = off;\n"
         "    sv.len = len;\n"
         "    return sv;\n"
         "}\n\n");
     mstream_cstr(
         ms,
-        "static int cstr_equal(const char* s1, struct strview s2, const char* "
+        "static int cstr_equal(const char* s1, struct c_ini_strspan s2, const "
+        "char* "
         "data)\n"
         "{\n"
         "    if ((int)strlen(s1) != s2.len)\n"
@@ -2100,11 +2118,11 @@ static void gen_source_ini_parser(struct mstream* ms)
     mstream_cstr(
         ms,
         "static void print_vflc(\n"
-        "    const char*     filename,\n"
-        "    const char*     source,\n"
-        "    struct strview loc,\n"
-        "    const char*     fmt,\n"
-        "    va_list         ap)\n"
+        "    const char*          filename,\n"
+        "    const char*          source,\n"
+        "    struct c_ini_strspan loc,\n"
+        "    const char*          fmt,\n"
+        "    va_list              ap)\n"
         "{\n"
         "    int i;\n"
         "    int l1, c1;\n"
@@ -2140,14 +2158,15 @@ static void gen_source_ini_parser(struct mstream* ms)
         "}\n\n");
     mstream_cstr(
         ms,
-        "static void print_excerpt(const char* source, struct strview loc)\n"
+        "static void print_excerpt(const char* source, struct c_ini_strspan "
+        "loc)\n"
         "{\n"
-        "    int             i;\n"
-        "    int             l1, c1, l2, c2;\n"
-        "    int             indent, max_indent;\n"
-        "    int             gutter_indent;\n"
-        "    int             line;\n"
-        "    struct strview block;\n\n");
+        "    int                  i;\n"
+        "    int                  l1, c1, l2, c2;\n"
+        "    int                  indent, max_indent;\n"
+        "    int                  gutter_indent;\n"
+        "    int                  line;\n"
+        "    struct c_ini_strspan block;\n\n");
     mstream_cstr(
         ms,
         "    /* Calculate line column as well as beginning of block. The goal "
@@ -2316,9 +2335,9 @@ static void gen_source_ini_parser(struct mstream* ms)
         "    int         head, tail, end;\n"
         "    union\n"
         "    {\n"
-        "        struct strview string;\n"
-        "        double          float_literal;\n"
-        "        int64_t         integer_literal;\n"
+        "        struct c_ini_strspan string;\n"
+        "        double               float_literal;\n"
+        "        int64_t              integer_literal;\n"
         "    } value;\n"
         "};\n\n");
     mstream_cstr(
@@ -2338,8 +2357,8 @@ static void gen_source_ini_parser(struct mstream* ms)
         "static int parser_error(struct c_ini_parser* p, const char* fmt, "
         "...)\n"
         "{\n"
-        "    va_list        ap;\n"
-        "    struct strview loc;\n"
+        "    va_list              ap;\n"
+        "    struct c_ini_strspan loc;\n"
         "    loc.off = p->tail;\n"
         "    loc.len = p->head - p->tail;\n"
         "    va_start(ap, fmt);\n"
@@ -2468,7 +2487,7 @@ static void gen_source_ini_parser(struct mstream* ms)
         "            if (p->head == p->end)\n"
         "                return parser_error(p, \"Missing closing quote on "
         "string\\n\");\n"
-        "            p->value.string = strview(tail, p->head++ - tail);\n"
+        "            p->value.string = c_ini_strspan(tail, p->head++ - tail);\n"
         "            return TOK_STRING;\n"
         "        }\n\n");
     mstream_cstr(
@@ -2482,7 +2501,8 @@ static void gen_source_ini_parser(struct mstream* ms)
         "            {\n"
         "                p->head++;\n"
         "            }\n"
-        "            p->value.string = strview(p->tail, p->head - p->tail);\n"
+        "            p->value.string = c_ini_strspan(p->tail, p->head - "
+        "p->tail);\n"
         "            return TOK_KEY;\n"
         "        }\n\n");
     mstream_cstr(
@@ -2775,6 +2795,7 @@ static void gen_source_deinit(struct mstream* ms, const struct section* section)
         "void %S_deinit(struct %S* s)\n{\n",
         section->struct_name,
         section->struct_name);
+    mstream_cstr(ms, "    (void)s;\n");
     for (key = section->keys; key; key = key->next)
     {
         switch (key->type)
@@ -2931,7 +2952,7 @@ static void gen_source_parse_key(
         case CDT_STR_FIXED:
             mstream_fmt(
                 ms,
-                "    struct strview value;\n"
+                "    struct c_ini_strspan value;\n"
                 "    if (scan_next(p) != TOK_STRING)\n"
                 "        return parser_error(p, \"Expected a string literal "
                 "for %S\\n\");\n",
@@ -3134,8 +3155,8 @@ gen_source_parse_section(struct mstream* ms, const struct section* section)
         "int "
         "%S_parse_section(struct %S* s, struct c_ini_parser* p)\n"
         "{\n"
-        "    enum token     tok;\n"
-        "    struct strview key;\n"
+        "    enum token           tok;\n"
+        "    struct c_ini_strspan key;\n"
         "\n"
         "    tok = scan_next(p);\n"
         "    while (1)\n"

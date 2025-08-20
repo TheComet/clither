@@ -14,7 +14,8 @@ set_target_properties (c_ini_generator PROPERTIES
     C_STANDARD 90
     C_EXTENSIONS NO)
 
-set (C_INI_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/c-ini")
+set (C_INI_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/c-ini" CACHE INTERNAL
+    "Directory where the c-ini header files are located")
 
 function (c_ini_generate target)
     cmake_parse_arguments (ARG
