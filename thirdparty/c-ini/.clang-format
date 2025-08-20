@@ -1,0 +1,80 @@
+﻿---
+AlignAfterOpenBracket: AlwaysBreak
+AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: true
+AccessModifierOffset: -4
+BinPackParameters: false
+BinPackArguments: false
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterExternBlock: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+BreakConstructorInitializers: BeforeComma
+BreakStringLiterals: true
+ColumnLimit: 80
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ForEachMacros: [
+    cmd_queue_for_each,
+    bmap_for_each,
+    bmap_for_each_range,
+    bmap_for_each_full,
+    bset_for_each,
+    bset_for_each_range,
+    bset_for_each_full,
+    hmap_for_each,
+    hmap_for_each_full,
+    hset_for_each,
+    hset_for_each_full,
+    if_input,
+    net_addr_hmap_for_each,
+    rb_for_each,
+    rb_for_each_r,
+    server_client_hmap_for_each,
+    strlist_for_each,
+    strlist_for_each_cstr,
+    ui_for_each,
+    ui_for_each_active,
+    vec_for_each,
+    vec_for_each_r,
+    vec_enumerate
+]
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^clither/'
+    Priority:        2
+    SortPriority:    2
+  - Regex:           '^((<|")(gtest|gmock|isl|json)/)'
+    Priority:        1
+  - Regex:           '.*'
+    Priority:        0
+    SortPriority:    0
+IndentWidth: 4
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+InsertNewlineAtEOF: true
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+...
