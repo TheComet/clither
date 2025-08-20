@@ -2835,6 +2835,8 @@ static void gen_source_deinit(struct mstream* ms, const struct section* section)
 static void gen_source_fwrite(struct mstream* ms, const struct section* section)
 {
     const struct key* key;
+    struct strview    api;
+
     mstream_fmt(
         ms,
         "int %S_fwrite(const struct %S* s, FILE* f)\n{\n",
@@ -2887,21 +2889,26 @@ static void gen_source_fwrite(struct mstream* ms, const struct section* section)
                 mstream_fmt(ms, "        fprintf(f, \"\\n\");\n", key->name);
                 break;
             case CDT_STRLIST_DYNAMIC:
-                mstream_fmt(ms, "    if (s->%S != NULL)\n", key->name);
+            case CDT_STRLIST_CUSTOM:
+                api = key->attr.strlist_api_prefix;
+                mstream_fmt(
+                    ms, "    if (%S_count(s->%S) > 0)\n", api, key->name);
                 mstream_fmt(ms, "        fprintf(f, \"%S = \");\n", key->name);
                 mstream_fmt(
                     ms,
-                    "    for (list = s->%S; *list; ++list)\n"
+                    "    for (i = 0; i != %S_count(s->%S); ++i)\n"
                     "    {\n"
-                    "        if (list != s->%S) fprintf(f, \", \");\n"
-                    "        fprintf(f, \"\\\"%%s\\\"\", *list);\n"
+                    "        if (i) fprintf(f, \", \");\n"
+                    "        fprintf(f, \"\\\"%%s\\\"\", %S_cstr(s->%S, i));\n"
                     "    }\n",
+                    api,
                     key->name,
+                    api,
                     key->name);
-                mstream_fmt(ms, "    if (s->%S != NULL)\n", key->name);
-                mstream_fmt(ms, "        fprintf(f, \"\\n\");\n", key->name);
+                mstream_fmt(
+                    ms, "    if (%S_count(s->%S) > 0)\n", api, key->name);
+                mstream_cstr(ms, "        fprintf(f, \"\\n\");\n");
                 break;
-            case CDT_STRLIST_CUSTOM: break;
             case CDT_BOOL:
                 mstream_fmt(
                     ms,
@@ -2938,6 +2945,7 @@ static void gen_source_fwrite(struct mstream* ms, const struct section* section)
 static void gen_source_parse_key(
     struct mstream* ms, const struct section* section, const struct key* key)
 {
+    struct strview api;
     mstream_fmt(
         ms,
         "static enum token parse_%S__%S(\n"
@@ -3049,11 +3057,12 @@ static void gen_source_parse_key(
             break;
         case CDT_STRLIST_DYNAMIC:
         case CDT_STRLIST_CUSTOM:
+            api = key->attr.strlist_api_prefix;
             mstream_fmt(
                 ms,
                 "    enum token tok;\n"
                 "    %S_clear(s->%S);\n",
-                key->attr.strlist_api_prefix);
+                api);
             mstream_fmt(
                 ms,
                 "    while (1)\n"
@@ -3067,7 +3076,8 @@ static void gen_source_parse_key(
                 "        if (%S_add(&s->%S, p->source + p->value.string.off, "
                 "p->value.string.len) != 0)\n"
                 "            return -1;\n",
-                key->attr.strlist_api_prefix);
+                api,
+                key->name);
             mstream_cstr(
                 ms,
                 "        tok = scan_next(p);\n"
