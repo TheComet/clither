@@ -624,6 +624,19 @@ endif ()
 # Dependencies
 ###############################################################################
 
+add_subdirectory ("thirdparty/c-ini")
+c_ini_generate (settings_ini
+    INPUT "include/clither/game/settings.h"
+    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/settings_ini.h
+    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/settings_ini.c)
+c_ini_generate (resource_pack_ini
+    INPUT "include/clither/game/resource_pack.h"
+    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/resource_pack_ini.h
+    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/resource_pack_ini.c)
+target_link_libraries (clither PRIVATE
+    settings_ini
+    resource_pack_ini)
+
 if (WIN32)
     target_link_libraries (clither PRIVATE ws2_32)
     if (CLITHER_BACKTRACE)

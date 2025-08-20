@@ -303,11 +303,12 @@ static struct client_recv_result process_message(
             snake_param_apply_settings(&snake->param, &settings->snake);
 
             /* Apply world settings from server */
-            settings_world_set_defaults(&settings_world);
+            settings_world_init(&settings_world);
             settings_world.inner_radius = pp.join_accept.world_inner_radius;
             settings_world.ring_start = pp.join_accept.world_ring_start;
             settings_world.ring_end = pp.join_accept.world_ring_end;
             world_update_settings(world, &settings_world);
+            settings_world_deinit(&settings_world);
 
             /* Server may also be running on a different tick rate */
             client->sim_tick_rate = pp.join_accept.sim_tick_rate;

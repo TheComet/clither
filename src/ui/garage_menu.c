@@ -240,7 +240,7 @@ struct ui* ui_create_garage_menu(const struct settings_snake* settings)
 
 #define X(name, NAME, def, min, max)                                           \
     ui->elements[SLIDER_##NAME].u.slider.value =                               \
-        unlerp(settings->name##_min, settings->name##_max, settings->name);
+        unlerp(min, max, settings->name);
     SNAKE_COSMETIC_PARAMS_LIST
 #undef X
 
@@ -310,10 +310,7 @@ int garage_menu_run(
             case UI_CMD_GARAGE: break;
             case UI_CMD_SNAKE_COSMETIC_PARAMS: {
 #define X(name, NAME, def, min, max)                                           \
-    settings->snake.name = lerp(                                               \
-        settings->snake.name##_min,                                            \
-        settings->snake.name##_max,                                            \
-        ui_cmd.snake_cosmetic_params.name);
+    settings->snake.name = lerp(min, max, ui_cmd.snake_cosmetic_params.name);
                 SNAKE_COSMETIC_PARAMS_LIST
 #undef X
                 snake_param_apply_settings(&snake->param, &settings->snake);

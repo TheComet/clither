@@ -31,7 +31,7 @@ public:
     {
         ASSERT_THAT(net_init(), Eq(0));
         ASSERT_THAT(server_init(&sv, "", "5555"), Eq(0));
-        settings_set_defaults(&settings);
+        settings_init(&settings);
         client_init(&cl);
         world_init(&cl_world);
         world_init(&sv_world);
@@ -43,6 +43,7 @@ public:
         world_deinit(&cl_world);
         world_deinit(&sv_world);
         client_deinit(&cl);
+        settings_deinit(&settings);
         server_deinit(&sv);
         net_deinit();
     }

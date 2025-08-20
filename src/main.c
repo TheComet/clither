@@ -82,6 +82,7 @@ int main(int argc, char* argv[])
 #endif
 
     str_init(&settings_file);
+    settings_init(&settings);
     if (args.settings_file)
     {
         if (str_set_cstr(&settings_file, args.settings_file) != 0)
@@ -96,18 +97,20 @@ int main(int argc, char* argv[])
         if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
             goto read_settings_failed;
     }
-
-    log_info("Reading settings from file \"%s\"\n", str_cstr(settings_file));
-    if (settings_load(&settings, str_cstr(settings_file)) != 0)
+    switch (settings_load(&settings, str_cstr(settings_file)))
     {
-        /* settings have default values, try to save it */
-        str_dirname(settings_file);
-        if (fs_make_path(str_cstr(settings_file)) == 0)
-        {
-            if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
-                goto read_settings_failed;
-            settings_save(&settings, str_cstr(settings_file));
-        }
+        case -1: goto read_settings_failed;
+        case 1: break;
+        case 0:
+            /* settings have default values, try to save it */
+            str_dirname(settings_file);
+            if (fs_make_path(str_cstr(settings_file)) == 0)
+            {
+                if (str_join_path_cstr(&settings_file, "settings.ini") != 0)
+                    goto read_settings_failed;
+                settings_save(&settings, str_cstr(settings_file));
+            }
+            break;
     }
     if (settings_apply_args(&settings, &args) != 0)
         goto read_settings_failed;
@@ -312,6 +315,7 @@ parse_resource_pack_failed:
 #endif
 
 read_settings_failed:
+    settings_deinit(&settings);
     str_deinit(settings_file);
 
 #if defined(CLITHER_LOG)
