@@ -5,7 +5,7 @@
 
 struct str;
 
-void        str_init(struct str** str);
+int         str_init(struct str** str);
 void        str_deinit(struct str* str);
 int         str_ensure_capacity(struct str** str, int capacity);
 int         str_capacity(const struct str* str);
@@ -16,7 +16,8 @@ void        str_pop_char(struct str* str);
 void        str_set_char(struct str* str, int index, char c);
 void        str_clear(struct str* str);
 void        str_set_len(struct str* str, int new_len);
-int         str_set(struct str** str, struct strview view);
+int         str_set(struct str** str, const char* data, int len);
+int         str_set_view(struct str** str, struct strview view);
 int         str_set_utf32(struct str** str, const uint32_t* utf32, int len);
 int         str_set_cstr(struct str** str, const char* cstr);
 const char* str_cstr(const struct str* str);

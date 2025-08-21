@@ -632,7 +632,8 @@ c_ini_generate (settings_ini
 c_ini_generate (resource_pack_ini
     INPUT "include/clither/game/resource_pack.h"
     OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/resource_pack_ini.h
-    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/resource_pack_ini.c)
+    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/resource_pack_ini.c
+    INCLUDE_FILES "clither/util/strlist.h")
 target_link_libraries (clither PRIVATE
     settings_ini
     resource_pack_ini)

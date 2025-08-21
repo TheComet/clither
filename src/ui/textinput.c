@@ -52,7 +52,7 @@ enum ui_cmd_type textinput_interact(
         &elem->u.textinput.input_buffer_utf8,
         vec_data(elem->u.textinput.input_buffer),
         vec_count(elem->u.textinput.input_buffer));
-    str_set(
+    str_set_view(
         &elem->u.textinput.text.str,
         str_view(elem->u.textinput.input_buffer_utf8));
 

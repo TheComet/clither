@@ -1,5 +1,6 @@
 #pragma once
 
+#include "clither/game/resource_pack_ini.h"
 #include "clither/util/hmap_str.h"
 
 struct str;
@@ -25,18 +26,20 @@ enum resource_layer_name
     RESOURCE_LAYER_COUNT
 };
 
+SECTION("shader")
 struct resource_shader
 {
+    struct str* target STRING(str);
     /*! List of source files that comprise the background shader. */
-    struct strlist* background;
+    struct strlist* background STRINGLIST(strlist);
     /*! List of source files that comprise the shadow shader. */
-    struct strlist* shadow;
+    struct strlist* shadow STRINGLIST(strlist);
     /*! List of source files that comprise the sprite shader. */
-    struct strlist* sprite;
+    struct strlist* sprite STRINGLIST(strlist);
     /*! List of source files that comprise the text shader. */
-    struct strlist* text;
+    struct strlist* text STRINGLIST(strlist);
     /*! List of source files that comprise the spine shader. */
-    struct strlist* spine;
+    struct strlist* spine STRINGLIST(strlist);
 };
 
 struct resource_background

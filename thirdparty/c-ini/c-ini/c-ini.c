@@ -1184,7 +1184,9 @@ enum c_data_type
     CDT_I32,
     CDT_U32,
 
-    CDT_FLOAT
+    CDT_FLOAT,
+
+    CDT_BITFIELD = (1 << 4)
 };
 
 enum value_type
@@ -1789,21 +1791,21 @@ static enum token parse_struct_known_data_type(
             case CDT_I16:
             case CDT_I32:
                 if (p->value.integer <= 8)
-                    c_type = CDT_I8;
+                    c_type = CDT_I8 | CDT_BITFIELD;
                 if (p->value.integer <= 16)
-                    c_type = CDT_I16;
+                    c_type = CDT_I16 | CDT_BITFIELD;
                 if (p->value.integer <= 32)
-                    c_type = CDT_I32;
+                    c_type = CDT_I32 | CDT_BITFIELD;
                 break;
             case CDT_U8:
             case CDT_U16:
             case CDT_U32:
                 if (p->value.integer <= 8)
-                    c_type = CDT_U8;
+                    c_type = CDT_U8 | CDT_BITFIELD;
                 if (p->value.integer <= 16)
-                    c_type = CDT_U16;
+                    c_type = CDT_U16 | CDT_BITFIELD;
                 if (p->value.integer <= 32)
-                    c_type = CDT_U32;
+                    c_type = CDT_U32 | CDT_BITFIELD;
                 break;
             default:
                 return parser_error(
@@ -2033,6 +2035,13 @@ static void gen_header(struct mstream* ms, const struct root* root)
         mstream_fmt(
             ms,
             "int %S_fwrite(const struct %S* s, FILE* f);\n",
+            section->struct_name,
+            section->struct_name);
+        mstream_fmt(
+            ms,
+            "int %S_for_each_value(struct %S* s, int (*on_value)(void* value, "
+            "int type, void*), void* user_ptr);\n",
+            section->struct_name,
             section->struct_name,
             section->struct_name);
         mstream_cstr(ms, "\n");
@@ -3304,6 +3313,33 @@ gen_source_parse_all(struct mstream* ms, const struct section* section)
     mstream_fmt(ms, "    return 0;\n", section->name);
     mstream_cstr(ms, "}\n\n");
 }
+
+static void
+gen_source_for_each_value(struct mstream* ms, const struct section* section)
+{
+    const struct key* key;
+    mstream_fmt(
+        ms,
+        "int %S_for_each_value(struct %S* s, int (*on_value)(void* value, "
+        "int type, void*), void* user_ptr)\n{\n",
+        section->struct_name,
+        section->struct_name,
+        section->struct_name);
+    for (key = section->keys; key; key = key->next)
+    {
+        if (key->type & CDT_BITFIELD)
+            continue;
+        mstream_fmt(
+            ms,
+            "    if (on_value(&s->%S, %d, user_ptr) != 0)\n"
+            "        return -1;\n",
+            key->name,
+            key->type);
+    }
+    mstream_cstr(ms, "    return 0;\n");
+    mstream_cstr(ms, "}\n\n");
+}
+
 static void
 gen_source(struct mstream* ms, const struct root* root, const struct cfg* cfg)
 {
@@ -3321,6 +3357,7 @@ gen_source(struct mstream* ms, const struct root* root, const struct cfg* cfg)
         gen_source_parse_section(ms, section);
         gen_source_parse(ms, section);
         gen_source_parse_all(ms, section);
+        gen_source_for_each_value(ms, section);
     }
 }
 

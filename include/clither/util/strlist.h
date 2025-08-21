@@ -15,9 +15,10 @@ struct strlist
     char data[1];
 };
 
-static void strlist_init(struct strlist** l)
+static int strlist_init(struct strlist** l)
 {
     *l = NULL;
+    return 0;
 }
 
 void strlist_deinit(struct strlist* l);
@@ -30,11 +31,16 @@ void mem_unown_strlist(struct strlist* l);
 #    define mem_unown_strlist(l)
 #endif
 
-int  strlist_add(struct strlist** l, struct strview str);
+int  strlist_add(struct strlist** l, const char* data, int len);
 int  strlist_add_cstr(struct strlist** l, const char* cstr);
 int  strlist_insert(struct strlist** l, int insert, const char* cstr);
 void strlist_erase(struct strlist* l, int idx);
 void strlist_clear(struct strlist* l);
+
+static int strlist_add_view(struct strlist** l, struct strview str)
+{
+    return strlist_add(l, str.data + str.off, str.len);
+}
 
 static struct strspan strlist_span(const struct strlist* l, int i)
 {
@@ -76,7 +82,7 @@ static int strlist_count(const struct strlist* l)
  */
 int strlist_lower_bound(const struct strlist* l, struct strview str);
 
-#define strlist_for_each_cstr(l, i, var)                                            \
+#define strlist_for_each_cstr(l, i, var)                                       \
     for (i = 0; (l) && i != (l)->count && ((var = strlist_cstr((l), i)), 1);   \
          ++i)
 #define strlist_for_each(l, i, var)                                            \

@@ -19,9 +19,10 @@ static int is_sep(char c)
 }
 
 /* ------------------------------------------------------------------------- */
-void str_init(struct str** str)
+int str_init(struct str** str)
 {
     str_impl_init((struct str_impl**)str);
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -130,19 +131,25 @@ void str_set_len(struct str* str, int new_len)
 }
 
 /* ------------------------------------------------------------------------- */
-int str_set(struct str** str, struct strview view)
+int str_set(struct str** str, const char* data, int len)
 {
     struct str_impl* impl;
 
-    if (str_ensure_capacity(str, view.len) != 0)
+    if (str_ensure_capacity(str, len) != 0)
         return -1;
     impl = (struct str_impl*)*str;
 
-    memcpy(impl->data, view.data + view.off, view.len);
-    impl->data[view.len] = '\0';
-    impl->count = view.len + 1;
+    memcpy(impl->data, data, len);
+    impl->data[len] = '\0';
+    impl->count = len + 1;
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int str_set_view(struct str** str, struct strview view)
+{
+    return str_set(str, view.data + view.off, view.len);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -192,7 +199,7 @@ int str_set_utf32(struct str** str, const uint32_t* utf32, int len)
 /* ------------------------------------------------------------------------- */
 int str_set_cstr(struct str** str, const char* cstr)
 {
-    return str_set(str, strview(cstr, 0, (int)strlen(cstr)));
+    return str_set(str, cstr, (int)strlen(cstr));
 }
 
 /* ------------------------------------------------------------------------- */

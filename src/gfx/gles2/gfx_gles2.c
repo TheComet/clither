@@ -289,7 +289,9 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
         pack->shaders, strview(GFX_NAME, 0, sizeof(GFX_NAME) - 1));
     if (shader == NULL)
         return log_err(
-            "No shader found for graphics backend \"%s\"\n", GFX_NAME);
+            "No shaders found for graphics backend \"%s\". This usually means "
+            "the  [shader] section is missing in pack.ini\n",
+            GFX_NAME);
 
     if (gfx_gles2_font_load(&gfx->font, &pack->text, shader) < 0)
         goto font_load_failed;

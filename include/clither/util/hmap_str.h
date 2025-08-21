@@ -60,7 +60,7 @@
     static void prefix##_kvs_set_key(                                          \
         struct prefix##_kvs* kvs, int##bits##_t slot, struct strview key)      \
     {                                                                          \
-        str_set(&kvs->keys[slot], key);                                        \
+        str_set_view(&kvs->keys[slot], key);                                   \
     }                                                                          \
     static int prefix##_kvs_keys_equal(struct strview k1, struct strview k2)   \
     {                                                                          \

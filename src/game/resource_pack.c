@@ -23,7 +23,7 @@ HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
             return parser_error(p, "Expected '=' after \"" #name "\"\n");      \
         if (scan_next_token(p) != TOK_STRING)                                  \
             return parser_error(p, "Expected a string value\n");               \
-        if (str_set(&food->name, p->value.string) != 0)                        \
+        if (str_set_view(&food->name, p->value.string) != 0)                   \
             return -1;                                                         \
         break;                                                                 \
     }
@@ -53,26 +53,6 @@ HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
             return -1;                                                         \
         break;                                                                 \
     }
-
-/* ------------------------------------------------------------------------- */
-static void resource_shader_init(struct resource_shader* res)
-{
-    strlist_init(&res->text);
-    strlist_init(&res->sprite);
-    strlist_init(&res->shadow);
-    strlist_init(&res->background);
-    strlist_init(&res->spine);
-}
-
-/* ------------------------------------------------------------------------- */
-static void resource_shader_deinit(struct resource_shader* res)
-{
-    strlist_deinit(res->spine);
-    strlist_deinit(res->background);
-    strlist_deinit(res->shadow);
-    strlist_deinit(res->sprite);
-    strlist_deinit(res->text);
-}
 
 /* ------------------------------------------------------------------------- */
 static void resource_background_init(struct resource_background* res)
@@ -434,7 +414,7 @@ scan_next_string:
     }
     else
     {
-        if (str_set(&str, p->value.string) != 0)
+        if (str_set_view(&str, p->value.string) != 0)
             goto error;
     }
 
@@ -454,78 +434,52 @@ error:
 }
 
 /* ------------------------------------------------------------------------- */
+static int on_section_shader(struct c_ini_parser* p, void* user_ptr)
+{
+    int                     result;
+    struct resource_shader  s;
+    struct resource_pack*   pack = user_ptr;
+    struct resource_shader* inserted = NULL;
+
+    resource_shader_init(&s);
+    result = resource_shader_parse_section(&s, p);
+    if (result < 0)
+        goto failed;
+
+    switch (resource_shader_hmap_emplace_or_get(
+        &pack->shaders, str_view(s.target), &inserted))
+    {
+        case HMAP_OOM: return -1;
+        case HMAP_NEW: *inserted = s; break;
+        case HMAP_EXISTS:
+            log_err(
+                "Shader target \"%s\" already exists\n", str_cstr(s.target));
+            goto failed;
+    }
+
+    return result;
+
+failed:
+    resource_shader_deinit(&s);
+    return -1;
+}
+
 static int parse_section_shader(
     struct parser*                p,
     struct resource_shader_hmap** shaders,
     const char*                   path_prefix)
 {
-    enum token              tok;
-    struct resource_shader* res = NULL;
+    enum token tok;
 
     while (1)
     {
         tok = scan_next_token(p);
-    reswitch_tok:
         switch (tok)
         {
             case TOK_ERROR: return -1;
             case TOK_END: return 0;
-
-            case TOK_KEY: {
-                struct strlist** shaderlist;
-                struct strview   key = p->value.string;
-                if (strview_eq_cstr(key, "target"))
-                {
-                    if (scan_next_token(p) != '=')
-                        return parser_error(p, "Expected '=' after key\n");
-                    if (scan_next_token(p) != TOK_STRING)
-                        return parser_error(p, "Expected a string value\n");
-                    switch (resource_shader_hmap_emplace_or_get(
-                        shaders, p->value.string, &res))
-                    {
-                        case HMAP_OOM: return -1;
-                        case HMAP_EXISTS:
-                            return parser_error(
-                                p,
-                                "Shader target \"%.*s\" already exists\n",
-                                key.len,
-                                key.data + key.off);
-                        case HMAP_NEW: resource_shader_init(res); break;
-                    }
-                    continue;
-                }
-
-                if (res == NULL)
-                    return parser_error(
-                        p,
-                        "You need to specify the shader target first. "
-                        "Example:\n"
-                        "target = \"gles2\"\n");
-
-                if (strview_eq_cstr(key, "shadow"))
-                    shaderlist = &res->shadow;
-                else if (strview_eq_cstr(key, "sprite"))
-                    shaderlist = &res->sprite;
-                else if (strview_eq_cstr(key, "background"))
-                    shaderlist = &res->background;
-                else if (strview_eq_cstr(key, "text"))
-                    shaderlist = &res->text;
-                else if (strview_eq_cstr(key, "spine"))
-                    shaderlist = &res->spine;
-                else
-                    return parser_error(
-                        p,
-                        "Unknown key \"%.*s\"\n",
-                        key.len,
-                        key.data + key.off);
-
-                if (scan_next_token(p) != '=')
-                    return parser_error(p, "Expected '=' after key\n");
-                tok = parse_string_list(p, shaderlist, path_prefix);
-                goto reswitch_tok;
-            }
-
-            default: return tok;
+            case '[': return tok;
+            default: continue;
         }
     }
 }
@@ -941,7 +895,7 @@ parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
                         return parser_error(p, "Expected '=' after key\n");
                     if (scan_next_token(p) != TOK_STRING)
                         return parser_error(p, "Expected a string value\n");
-                    if (str_set(&snake->head_sprite, p->value.string) != 0)
+                    if (str_set_view(&snake->head_sprite, p->value.string) != 0)
                         return -1;
                     break;
                 }
@@ -952,7 +906,7 @@ parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
                         return parser_error(p, "Expected '=' after key\n");
                     if (scan_next_token(p) != TOK_STRING)
                         return parser_error(p, "Expected a string value\n");
-                    if (str_set(&snake->tail_sprite, p->value.string) != 0)
+                    if (str_set_view(&snake->tail_sprite, p->value.string) != 0)
                         return -1;
                     break;
                 }
@@ -971,7 +925,7 @@ parse_section_snake(struct parser* p, struct resource_snake_hmap** snakes)
                         return parser_error(p, "Expected '=' after key\n");
                     if (scan_next_token(p) != TOK_STRING)
                         return parser_error(p, "Expected a string value\n");
-                    if (str_set(&snake->spine, p->value.string) != 0)
+                    if (str_set_view(&snake->spine, p->value.string) != 0)
                         return -1;
                     break;
                 }
@@ -1083,12 +1037,20 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
         goto open_pack_ini_failed;
     if (str_join_path_cstr(&pack->pack_ini, "pack.ini") != 0)
         goto open_pack_ini_failed;
-    log_dbg("Reading file \"%s\"\n", str_cstr(pack->pack_ini));
+    log_info("Reading file \"%s\"\n", str_cstr(pack->pack_ini));
     if (mfile_map_read(&mf, str_cstr(pack->pack_ini), 1))
         goto open_pack_ini_failed;
 
     parser_init(&p, &mf, str_cstr(pack->pack_ini));
     if (parse_ini(&p, pack, pack_path) != 0)
+        goto parse_error;
+
+    if (resource_shader_parse_all(
+            str_cstr(pack->pack_ini),
+            mf.address,
+            mf.size,
+            on_section_shader,
+            pack) != 0)
         goto parse_error;
 
     mfile_unmap(&mf);

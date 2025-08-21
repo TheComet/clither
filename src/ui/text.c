@@ -27,7 +27,7 @@ struct ui_element ui_text(
     struct ui_element elem;
     ui_element_init(&elem, UI_TEXT);
     str_init(&elem.u.text.str);
-    str_set(&elem.u.text.str, str);
+    str_set_view(&elem.u.text.str, str);
     elem.u.text.pos = pos;
     elem.u.text.color = style.color;
     elem.u.text.scale = style.size;

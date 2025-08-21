@@ -73,20 +73,20 @@ void mem_release_strlist(struct strlist* l)
 #endif
 
 /* ------------------------------------------------------------------------- */
-int strlist_add(struct strlist** l, struct strview str)
+int strlist_add(struct strlist** l, const char* data, int len)
 {
     struct strspan* ref;
-    if (grow(l, str.len) < 0)
+    if (grow(l, len) < 0)
         return -1;
 
     ref = &STRLIST_TABLE_PTR(*l)[-(*l)->count];
     ref->off = (*l)->str_used;
-    ref->len = str.len;
+    ref->len = len;
 
-    memcpy((*l)->data + ref->off, str.data + str.off, str.len);
-    (*l)->data[ref->off + str.len] = '\0';
+    memcpy((*l)->data + ref->off, data, len);
+    (*l)->data[ref->off + len] = '\0';
 
-    (*l)->str_used += str.len + EXTRA_PADDING;
+    (*l)->str_used += len + EXTRA_PADDING;
     (*l)->count++;
 
     return 0;
@@ -95,7 +95,7 @@ int strlist_add(struct strlist** l, struct strview str)
 /* ------------------------------------------------------------------------- */
 int strlist_add_cstr(struct strlist** l, const char* cstr)
 {
-    return strlist_add(l, strview(cstr, 0, (int)strlen(cstr)));
+    return strlist_add(l, cstr, (int)strlen(cstr));
 }
 
 /* ------------------------------------------------------------------------- */
