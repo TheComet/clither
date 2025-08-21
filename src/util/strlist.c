@@ -76,7 +76,7 @@ void mem_release_strlist(struct strlist* l)
 int strlist_add(struct strlist** l, const char* data, int len)
 {
     struct strspan* ref;
-    if (grow(l, len) < 0)
+    if (grow(l, len) != 0)
         return -1;
 
     ref = &STRLIST_TABLE_PTR(*l)[-(*l)->count];
@@ -85,7 +85,6 @@ int strlist_add(struct strlist** l, const char* data, int len)
 
     memcpy((*l)->data + ref->off, data, len);
     (*l)->data[ref->off + len] = '\0';
-
     (*l)->str_used += len + EXTRA_PADDING;
     (*l)->count++;
 
@@ -101,13 +100,13 @@ int strlist_add_cstr(struct strlist** l, const char* cstr)
 /* ------------------------------------------------------------------------- */
 int strlist_insert(struct strlist** l, int insert, const char* cstr)
 {
-    struct strspan* slotspan;
+    struct strspan* ref;
     struct strview  str = strview(cstr, 0, (int)strlen(cstr));
 
-    if (grow(l, str.len) < 0)
+    if (grow(l, str.len) != 0)
         return -1;
 
-    slotspan = &STRLIST_TABLE_PTR(*l)[-insert];
+    ref = &STRLIST_TABLE_PTR(*l)[-insert];
     if (insert < (*l)->count)
     {
         struct strspan* span;
@@ -115,9 +114,9 @@ int strlist_insert(struct strlist** l, int insert, const char* cstr)
 
         /* Move strings to make space for str.len+padding */
         memmove(
-            (*l)->data + slotspan->off + str.len + EXTRA_PADDING,
-            (*l)->data + slotspan->off,
-            (*l)->str_used - slotspan->off);
+            (*l)->data + ref->off + str.len + EXTRA_PADDING,
+            (*l)->data + ref->off,
+            (*l)->str_used - ref->off);
 
         /* Move span table */
         memmove(
@@ -126,19 +125,55 @@ int strlist_insert(struct strlist** l, int insert, const char* cstr)
             sizeof(struct strspan) * ((*l)->count - insert));
 
         /* Calculate new offsets */
-        for (span = slotspan - 1, i = (*l)->count - insert; i; i--, span--)
+        for (span = ref - 1, i = (*l)->count - insert; i; i--, span--)
             span->off += str.len + EXTRA_PADDING;
     }
     else
     {
-        slotspan->off = (*l)->str_used;
+        ref->off = (*l)->str_used;
     }
+    ref->len = str.len;
 
-    memcpy((*l)->data + slotspan->off, str.data + str.off, str.len);
-    slotspan->len = str.len;
-
+    memcpy((*l)->data + ref->off, str.data + str.off, str.len);
+    (*l)->data[ref->off + str.len] = '\0';
     (*l)->str_used += str.len + EXTRA_PADDING;
     (*l)->count++;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int strlist_set(struct strlist** l, int idx, const char* data, int len)
+{
+    struct strspan* ref;
+    int             bytes_added;
+
+    ref = &STRLIST_TABLE_PTR(*l)[-idx];
+    bytes_added = len - ref->len;
+
+    if (bytes_added > 0)
+        if (grow(l, bytes_added) != 0)
+            return -1;
+
+    {
+        struct strspan* span;
+        int             i;
+
+        /* Move strings to fill gap/make space */
+        memmove(
+            (*l)->data + ref->off + bytes_added,
+            (*l)->data + ref->off,
+            (*l)->str_used - ref->off);
+
+        /* Calculate new offsets */
+        for (span = ref - 1, i = (*l)->count - idx; i; i--, span--)
+            span->off += bytes_added;
+    }
+
+    ref->len = len;
+    memcpy((*l)->data + ref->off, data, len);
+    (*l)->data[ref->off + len] = '\0';
+    (*l)->str_used += bytes_added;
 
     return 0;
 }

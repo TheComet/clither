@@ -209,6 +209,13 @@ const char* str_cstr(const struct str* str)
 }
 
 /* ------------------------------------------------------------------------- */
+int str_eq_cstr(const struct str* str, const char* cstr)
+{
+    const struct str_impl* impl = (const struct str_impl*)str;
+    return strcmp(impl->data, cstr) == 0;
+}
+
+/* ------------------------------------------------------------------------- */
 int str_set_path_cstr(struct str** str, const char* path)
 {
     int              i;
@@ -260,6 +267,35 @@ int str_join_path(struct str** str, struct strview path)
 int str_join_path_cstr(struct str** str, const char* path)
 {
     return str_join_path(str, strview(path, 0, (int)strlen(path)));
+}
+
+/* ------------------------------------------------------------------------- */
+int str_join_path_prepend(struct str** str, struct strview path)
+{
+    struct str_impl* impl;
+    int              len = str_len(*str);
+    int              sep_len = 1;
+
+    if (is_sep(path.data[path.off + path.len - 1]))
+        sep_len = 0;
+
+    if (str_ensure_capacity(str, len + path.len + sep_len) != 0)
+        return -1;
+    impl = (struct str_impl*)*str;
+
+    /* Move with NULL terminator */
+    memmove(impl->data + path.len + sep_len, impl->data, len + 1);
+    memcpy(impl->data, path.data, path.len);
+    impl->data[path.len] = SEP;
+    impl->count = len + sep_len + path.len + 1;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int str_join_path_prepend_cstr(struct str** str, const char* path)
+{
+    return str_join_path_prepend(str, strview(path, 0, (int)strlen(path)));
 }
 
 /* ------------------------------------------------------------------------- */

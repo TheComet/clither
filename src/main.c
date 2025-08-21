@@ -134,12 +134,16 @@ int main(int argc, char* argv[])
 
 #if defined(CLITHER_AUDIO)
     iaudio = audio_backends[0];
-    if (iaudio->init() != 0)
-        goto init_audio_failed;
-    audio = iaudio->create();
-    if (audio == NULL)
-        goto create_audio_failed;
-    if (iaudio->load_resource_pack(audio, &pack->audio) != 0)
+    if (iaudio->init() == 0)
+    {
+        audio = iaudio->create();
+        if (audio == NULL)
+        {
+            iaudio->deinit();
+            iaudio = NULL;
+        }
+    }
+    if (audio != NULL && iaudio->load_resource_pack(audio, &pack->audio) != 0)
         goto load_audio_resources_failed;
 #endif
 
@@ -297,10 +301,8 @@ init_gfx_failed:
 load_audio_resources_failed:
     if (audio != NULL)
         iaudio->destroy(audio);
-create_audio_failed:
     if (iaudio != NULL)
         iaudio->deinit();
-init_audio_failed:
 #endif
 
 #if defined(CLITHER_GFX)

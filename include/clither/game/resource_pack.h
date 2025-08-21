@@ -4,6 +4,7 @@
 #include "clither/util/hmap_str.h"
 
 struct str;
+struct strlist;
 
 /*!
  * An object such as a snake part consists of multiple sprites layered on top
@@ -42,65 +43,81 @@ struct resource_shader
     struct strlist* spine STRINGLIST(strlist);
 };
 
+SECTION("background")
 struct resource_background
 {
-    struct strlist* textures;
+    struct strlist* textures STRINGLIST(strlist);
 };
 
+SECTION("text")
 struct resource_text
 {
-    struct str* font; /*! Font face filename to use for text rendering */
-    int         size;
-    int         dpi;
+    /*! Font face filename to use for text rendering */
+    struct str* font STRING(str);
+    int size         DEFAULT(72);
+    int dpi          DEFAULT(72);
 };
 
+SECTION("sprite")
 struct resource_layer
 {
-    struct strlist* textures;
-    int             tile_x, tile_y;
-    int             num_frames;
-    int             fps;
+    struct str* name  STRING(str);
+    struct str* layer STRING(str);
+
+    struct strlist* textures STRINGLIST(strlist);
+
+    int tile_x     DEFAULT(1);
+    int tile_y     DEFAULT(1);
+    int num_frames DEFAULT(1);
+    int            fps;
 };
 
 struct resource_sprite
 {
     struct resource_layer layer[RESOURCE_LAYER_COUNT];
 };
+
+SECTION("spine")
 struct resource_spine
 {
-    struct strlist* textures;
+    struct str* name         STRING(str);
+    struct strlist* textures STRINGLIST(strlist);
 };
 
+SECTION("food")
 struct resource_food
 {
-    struct str* sprite;
-    float       scale;
+    struct str* sprite STRING(str);
+    float scale        DEFAULT(1.0);
 };
 
+SECTION("audio")
 struct resource_audio
 {
-    struct str* menu_music;
+    struct str* menu_music STRING(str);
 
-    struct str* button_hover;
-    struct str* button_click;
-    struct str* button_back;
+    struct str* button_hover STRING(str);
+    struct str* button_click STRING(str);
+    struct str* button_back  STRING(str);
 
-    struct str* slider_click;
-    struct str* slider_drag;
-    struct str* slider_release;
+    struct str* slider_click   STRING(str);
+    struct str* slider_drag    STRING(str);
+    struct str* slider_release STRING(str);
 
-    struct str* textinput_type;
-    struct str* textinput_delete;
+    struct str* textinput_type   STRING(str);
+    struct str* textinput_delete STRING(str);
 
-    struct str* eat_food;
+    struct str* eat_food STRING(str);
 };
 
+SECTION("snake")
 struct resource_snake
 {
-    struct str*     head_sprite;
-    struct str*     tail_sprite;
-    struct strlist* body_sprites;
-    struct str*     spine;
+    struct str* name             STRING(str);
+    struct str* head_sprite      STRING(str);
+    struct str* tail_sprite      STRING(str);
+    struct strlist* body_sprites STRINGLIST(strlist);
+    struct str* spine            STRING(str);
 };
 
 HMAP_DECLARE_STR(extern, resource_shader_hmap, struct resource_shader, 16)

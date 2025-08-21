@@ -215,20 +215,18 @@ static struct audio* audio_openal_create(void)
     defname = alcGetString(NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
     log_info("Using default input device: %s\n", defname);
     a->in_dev = alcCaptureOpenDevice(
-        NULL, VOICE_SAMPLING_RATE, AL_FORMAT_MONO16, SPEEX_FRAME_SIZE * 32);
+        NULL, VOICE_SAMPLING_RATE, AL_FORMAT_MONO16, SPEEX_FRAME_SIZE);
     if (a->in_dev == NULL)
-    {
-        al_check_error();
-        goto open_capture_device_failed;
-    }
-    track_mem(a->in_dev, 0, "OpenAL Capture Device");
+        log_err("Failed to create OpenAL capture device\n");
+    else
+        track_mem(a->in_dev, 0, "OpenAL Capture Device");
 
     defname = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
     log_info("Using default output device: %s\n", defname);
     a->out_dev = alcOpenDevice(defname);
     if (a->out_dev == NULL)
     {
-        al_check_error();
+        log_err("Failed to create OpenAL output device\n");
         goto open_device_failed;
     }
     track_mem(a->out_dev, 0, "OpenAL Output Device");
@@ -236,7 +234,7 @@ static struct audio* audio_openal_create(void)
     a->context = alcCreateContext(a->out_dev, NULL);
     if (a->context == NULL)
     {
-        al_check_error();
+        log_err("Failed to create OpenAL context\n");
         goto create_context_failed;
     }
     track_mem(a->context, 0, "OpenAL Context");
@@ -279,11 +277,15 @@ create_context_failed:
     untrack_mem(a->out_dev);
     alcCloseDevice(a->out_dev);
 open_device_failed:
-    untrack_mem(a->in_dev);
-    alcCaptureCloseDevice(a->in_dev);
-open_capture_device_failed:
+    if (a->in_dev)
+    {
+        untrack_mem(a->in_dev);
+        alcCaptureCloseDevice(a->in_dev);
+    }
+    untrack_mem(a->voice_dec_state);
     speex_decoder_destroy(a->voice_dec_state);
 init_voice_decoder_failed:
+    untrack_mem(a->voice_enc_state);
     speex_encoder_destroy(a->voice_enc_state);
 init_voice_encoder_failed:
     speex_bits_destroy(&a->voice_dec_bits);
@@ -321,12 +323,15 @@ static void audio_openal_destroy(struct audio* a)
     untrack_mem(a->out_dev);
     alcCloseDevice(a->out_dev);
 
-    untrack_mem(a->in_dev);
-    alcCaptureCloseDevice(a->in_dev);
+    if (a->in_dev)
+    {
+        untrack_mem(a->in_dev);
+        alcCaptureCloseDevice(a->in_dev);
+    }
 
-    untrack_mem(a->voice_enc_state);
-    speex_decoder_destroy(a->voice_dec_state);
     untrack_mem(a->voice_dec_state);
+    speex_decoder_destroy(a->voice_dec_state);
+    untrack_mem(a->voice_enc_state);
     speex_encoder_destroy(a->voice_enc_state);
     speex_bits_destroy(&a->voice_dec_bits);
     speex_bits_destroy(&a->voice_enc_bits);
@@ -413,15 +418,21 @@ static void audio_openal_unload_resource_pack(struct audio* a)
 /* ------------------------------------------------------------------------- */
 static void audio_openal_start_voice(struct audio* a)
 {
-    alcCaptureStart(a->in_dev);
-    al_check_error();
+    if (a->in_dev)
+    {
+        alcCaptureStart(a->in_dev);
+        al_check_error();
+    }
 }
 
 /* ------------------------------------------------------------------------- */
 static void audio_openal_stop_voice(struct audio* a)
 {
-    alcCaptureStop(a->in_dev);
-    alGetError(); /* don't care */
+    if (a->in_dev)
+    {
+        alcCaptureStop(a->in_dev);
+        alGetError(); /* don't care */
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -489,6 +500,9 @@ audio_openal_record_voice_frame(struct audio* a, void* data, int capacity)
 {
     ALint   result;
     int16_t frame[SPEEX_FRAME_SIZE];
+
+    if (a->in_dev == NULL)
+        return 0;
 
     alcGetIntegerv(a->in_dev, ALC_CAPTURE_SAMPLES, 1, &result);
     if (result < SPEEX_FRAME_SIZE)

@@ -21,10 +21,12 @@ int         str_set_view(struct str** str, struct strview view);
 int         str_set_utf32(struct str** str, const uint32_t* utf32, int len);
 int         str_set_cstr(struct str** str, const char* cstr);
 const char* str_cstr(const struct str* str);
+int         str_eq_cstr(const struct str* str, const char* cstr);
 
 int         str_set_path_cstr(struct str** str, const char* path);
 int         str_join_path(struct str** str, struct strview path);
 int         str_join_path_cstr(struct str** str, const char* path);
+int         str_join_path_prepend_cstr(struct str** str, const char* path);
 void        str_dirname(struct str* str);
 const char* cstr_ext(const char* str);
 

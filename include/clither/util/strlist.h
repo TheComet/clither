@@ -34,12 +34,18 @@ void mem_unown_strlist(struct strlist* l);
 int  strlist_add(struct strlist** l, const char* data, int len);
 int  strlist_add_cstr(struct strlist** l, const char* cstr);
 int  strlist_insert(struct strlist** l, int insert, const char* cstr);
+int  strlist_set(struct strlist** l, int idx, const char* data, int len);
 void strlist_erase(struct strlist* l, int idx);
 void strlist_clear(struct strlist* l);
 
 static int strlist_add_view(struct strlist** l, struct strview str)
 {
     return strlist_add(l, str.data + str.off, str.len);
+}
+
+static int strlist_set_view(struct strlist** l, int idx, struct strview str)
+{
+    return strlist_set(l, idx, str.data + str.off, str.len);
 }
 
 static struct strspan strlist_span(const struct strlist* l, int i)
