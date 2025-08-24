@@ -494,8 +494,10 @@ set_property (DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY
     VS_STARTUP_PROJECT clither)
 
 # Visual studio should show the source files in their original hierarchy
-get_target_property (source_list clither SOURCES)
-source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
+if (MSVC)
+    get_target_property (source_list clither SOURCES)
+    source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
+endif ()
 
 install (
     TARGETS clither
