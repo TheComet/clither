@@ -3,6 +3,7 @@
 #include "./internal/snake.h"
 #include "GLFW/glfw3.h"
 #include "clither/game/camera.h"
+#include "clither/game/leaderboard.h"
 #include "clither/game/qwpos_vec.h"
 #include "clither/game/resource_pack.h"
 #include "clither/game/snake.h"
@@ -404,8 +405,8 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
 #endif
 
-    gfx->window =
-        glfwCreateWindow(initial_width, initial_height, "MechaSnek", NULL, NULL);
+    gfx->window = glfwCreateWindow(
+        initial_width, initial_height, "MechaSnek", NULL, NULL);
     if (gfx->window == NULL)
     {
         log_err("Failed to create Window\n");
@@ -723,6 +724,82 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
 }
 
 /* ------------------------------------------------------------------------- */
+static void
+gfx_gles2_draw_leaderboard(struct gfx* gfx, const struct leaderboard* board)
+{
+    int                 i;
+    float               usernames_width, scores_width, max_width;
+    char                score_buf[12 + 2]; /* int + ": " */
+    struct aspect_ratio ar = calculate_aspect_ratio(gfx);
+    struct strview      leaderboard_title = cstr_view("Leaderboard");
+
+    float       xpos, ypos;
+    const float scale = 1.0 / 96;
+    const float padding = 0.02;
+    struct fpos size =
+        gfx_gles2_text_screen_size(&gfx->font, leaderboard_title, scale);
+
+    max_width = size.x;
+    usernames_width = 0;
+    scores_width = 0;
+    for (i = 0; i != LEADERBOARD_ROW_COUNT; ++i)
+    {
+        size = gfx_gles2_text_screen_size(
+            &gfx->font, str_view(board->rows[i].username), scale);
+        if (usernames_width < size.x)
+            usernames_width = size.x;
+
+        sprintf(score_buf, ": %d", board->rows[i].score);
+        size =
+            gfx_gles2_text_screen_size(&gfx->font, cstr_view(score_buf), scale);
+        if (scores_width < size.x)
+            scores_width = size.x;
+    }
+    if (max_width < usernames_width + scores_width)
+        max_width = usernames_width + scores_width;
+
+    /* Align to right corner of screen */
+    xpos = 1.0 + ar.pad_x * 2.0 - max_width - padding;
+    ypos = 1.0 + ar.pad_y * 2.0 - scale * 6.0;
+
+    gfx_gles2_text_prepare_draw(&gfx->font, &ar);
+    gfx_gles2_text_draw_screen(
+        leaderboard_title,
+        &gfx->font,
+        make_fpos(xpos, ypos),
+        scale,
+        0xFFFFFFFF,
+        UI_ALIGN_LEFT);
+    ypos -= scale + padding + scale * 2.0;
+
+    for (i = 0; i != LEADERBOARD_ROW_COUNT; ++i)
+    {
+        if (board->rows[i].score == 0)
+            break;
+
+        gfx_gles2_text_draw_screen(
+            str_view(board->rows[i].username),
+            &gfx->font,
+            make_fpos(xpos, ypos),
+            scale,
+            0xFFFFFFFF,
+            UI_ALIGN_LEFT);
+
+        sprintf(score_buf, ": %d", board->rows[i].score);
+        gfx_gles2_text_draw_screen(
+            cstr_view(score_buf),
+            &gfx->font,
+            make_fpos(xpos + usernames_width, ypos),
+            scale,
+            0xFFFFFFFF,
+            UI_ALIGN_LEFT);
+
+        ypos -= scale + padding;
+    }
+    gfx_gles2_text_end_draw();
+}
+
+/* ------------------------------------------------------------------------- */
 static void gfx_gles2_draw_end(struct gfx* gfx)
 {
     gfx_gles2_text_clear_unused_from_cache(&gfx->font);
@@ -785,6 +862,7 @@ const struct gfx_interface gfx_gles2 = {
     &gfx_gles2_draw_begin,
     &gfx_gles2_draw_world,
     &gfx_gles2_draw_ui,
+    &gfx_gles2_draw_leaderboard,
     &gfx_gles2_draw_end,
 #if defined(CLITHER_GFX_DEBUG)
     &gfx_gles2_draw_debug_circle,

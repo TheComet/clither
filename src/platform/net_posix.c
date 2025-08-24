@@ -396,6 +396,7 @@ int net_accept(int sockfd, struct net_addr* addr)
         return -1;
     }
     addr->len = (int)addrlen;
+    track_fd(fd, "net_accept::fd");
     return fd;
 }
 #endif

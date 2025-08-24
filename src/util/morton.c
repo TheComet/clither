@@ -2,8 +2,8 @@
 #include <stdint.h>
 
 #if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wlong-long"
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wlong-long"
 #endif
 
 static uint64_t distribute64(uint32_t in)
@@ -63,7 +63,7 @@ static int32_t combine48s(uint64_t x)
 }
 
 #if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
+#    pragma GCC diagnostic pop
 #endif
 
 morton morton_encode_qwpos_generic(struct qwpos p)

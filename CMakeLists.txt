@@ -2,6 +2,7 @@ cmake_minimum_required (VERSION 3.22)
 
 if (NOT DEFINED CMAKE_BUILD_TYPE)
     set (CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel" FORCE)
+    message (FATAL_ERROR "Forcing Debug build")
 endif()
 message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
@@ -30,7 +31,7 @@ option (CLITHER_LOG_DEBUG "Enable log_dbg()" OFF)
 option (CLITHER_TESTS "Compile unit tests (requires C++)" ON)
 option (CLITHER_WEB_MENU "Optimize main menu for the web build" OFF)
 
-set (CLITHER_ASM_OPTIMIZATIONS "HOTPATCH" CACHE STRING "")
+set (CLITHER_ASM_OPTIMIZATIONS "OFF" CACHE STRING "")
 set_property (CACHE CLITHER_ASM_OPTIMIZATIONS
     PROPERTY STRINGS "OFF;HARDCODE;HOTPATCH;FUNCPTR")
 
@@ -119,6 +120,7 @@ list (APPEND ClitherSources
     "include/clither/game/cmd_rb.h"
     "include/clither/game/food.h"
     "include/clither/game/input.h"
+    "include/clither/game/leaderboard.h"
     "include/clither/game/mcd_wifi.h"
     "include/clither/game/msg.h"
     "include/clither/game/msg_vec.h"
@@ -190,6 +192,7 @@ list (APPEND ClitherSources
     "src/game/cmd_rb.c"
     "src/game/food.c"
     "src/game/input.c"
+    "src/game/leaderboard.c"
     "src/game/msg.c"
     "src/game/msg_vec.c"
     "src/game/projectile.c"
@@ -426,7 +429,6 @@ if (CLITHER_TESTS)
         "tests/clither/test_snake_rollback.cpp"
         "tests/clither/test_strlist.cpp"
         "tests/clither/test_strview.cpp"
-        "tests/clither/test_tick.cpp"
         "tests/clither/test_vec.cpp"
         "tests/clither/test_wrap.cpp")
     if (CLITHER_CLIENT AND CLITHER_SERVER)
@@ -442,10 +444,7 @@ endif ()
 if (CLITHER_BENCHMARKS)
     list (APPEND ClitherSources
         "benchmarks/benchmarks.cpp"
-        "benchmarks/clither/bench_hashmap.cpp"
-        "benchmarks/clither/bench_std_unordered_map.cpp"
-        "benchmarks/clither/bench_std_vector.cpp"
-        "benchmarks/clither/bench_vec.cpp")
+        "benchmarks/clither/bench_morton.cpp")
 endif ()
 
 ###############################################################################

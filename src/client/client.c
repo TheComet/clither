@@ -4,6 +4,7 @@
 #include "clither/game/bezier.h"
 #include "clither/game/camera.h"
 #include "clither/game/input.h"
+#include "clither/game/leaderboard.h"
 #include "clither/game/math.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
@@ -227,6 +228,7 @@ static struct client_recv_result process_message(
     struct client*                client,
     const struct settings*        settings,
     struct world*                 world,
+    struct leaderboard*           leaderboard,
     const struct audio_interface* iaudio,
     struct audio*                 audio,
     enum msg_type                 msg_type,
@@ -340,6 +342,25 @@ static struct client_recv_result process_message(
 
             if (iaudio != NULL)
                 iaudio->queue_voice_frame(audio, pp.voice.data, pp.voice.size);
+            return client_recv_ok();
+        }
+
+        case MSG_LEADERBOARD: {
+            if (leaderboard_set(
+                    leaderboard,
+                    pp.leaderboard.position - 1,
+                    pp.leaderboard.username,
+                    pp.leaderboard.score) != 0)
+                return client_recv_error();
+            return client_recv_ok();
+        }
+
+        case MSG_LEADERBOARD_CLEAR: {
+            int i;
+            for (i = pp.leaderboard_clear.position_from;
+                 i <= pp.leaderboard_clear.position_to;
+                 ++i)
+                leaderboard_clear(leaderboard, i - 1);
             return client_recv_ok();
         }
 
@@ -579,6 +600,7 @@ static struct client_recv_result unpack_packet(
     struct client*                client,
     const struct settings*        settings,
     struct world*                 world,
+    struct leaderboard*           leaderboard,
     const struct net_packet*      packet)
 {
     int                       i;
@@ -610,6 +632,7 @@ static struct client_recv_result unpack_packet(
                 client,
                 settings,
                 world,
+                leaderboard,
                 iaudio,
                 audio,
                 msg_type,
@@ -631,6 +654,7 @@ struct client_recv_result client_recv(
     struct client*                client,
     const struct settings*        settings,
     struct world*                 world,
+    struct leaderboard*           leaderboard,
     const struct audio_interface* iaudio,
     struct audio*                 audio)
 {
@@ -654,7 +678,8 @@ struct client_recv_result client_recv(
 
         result = client_recv_result_combine(
             result,
-            unpack_packet(iaudio, audio, client, settings, world, &packet));
+            unpack_packet(
+                iaudio, audio, client, settings, world, leaderboard, &packet));
 
         /* Want to stop processing messages if an error occurred, or if the
          * client disconnected. */
@@ -846,14 +871,15 @@ int client_run(
     const struct bot_interface*   ibot,
     struct bot*                   bot)
 {
-    struct world  world;
-    struct input  input;
-    struct cmd    cmd;
-    struct camera camera;
-    struct tick   sim_tick;
-    struct tick   net_tick;
-    int           tick_lag;
-    int           retval = -1;
+    struct world       world;
+    struct leaderboard leaderboard;
+    struct input       input;
+    struct cmd         cmd;
+    struct camera      camera;
+    struct tick        sim_tick;
+    struct tick        net_tick;
+    int                tick_lag = 0;
+    int                retval = -1;
 #    if defined(CLITHER_GFX_DEBUG)
     int debug_gfx_state = 0;
 
@@ -869,6 +895,7 @@ int client_run(
     input_init(&input);
     camera_init(&camera);
     world_init(&world);
+    leaderboard_init(&leaderboard);
     cmd = cmd_default();
 
     tick_cfg(&sim_tick, client->sim_tick_rate);
@@ -943,8 +970,8 @@ int client_run(
         net_update = tick_advance(&net_tick);
         if (client->state != CLIENT_DISCONNECTED)
         {
-            struct client_recv_result result =
-                client_recv(client, settings, &world, iaudio, audio);
+            struct client_recv_result result = client_recv(
+                client, settings, &world, &leaderboard, iaudio, audio);
             if (result.error)
                 break;
 
@@ -1122,6 +1149,7 @@ int client_run(
         {
             (*igfx)->draw_begin(*gfx);
             (*igfx)->draw_world(*gfx, &world, &camera);
+            (*igfx)->draw_leaderboard(*gfx, &leaderboard);
             (*igfx)->draw_end(*gfx);
         }
 
@@ -1149,6 +1177,7 @@ int client_run(
         client_send_pending_data(client);
     }
 
+    leaderboard_deinit(&leaderboard);
     world_deinit(&world);
     if (client->state != CLIENT_DISCONNECTED)
         client_disconnect(client);

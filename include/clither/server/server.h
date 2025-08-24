@@ -3,6 +3,7 @@
 #include "clither/config.h"
 #include <stdint.h>
 
+struct leaderboard;
 struct net_addr;
 struct net_addr_hmap;
 struct net_server;
@@ -51,6 +52,9 @@ int server_queue_snake_data(
     struct server* server, const struct world* world, uint16_t frame_number);
 
 int server_queue_food_data(struct server* server, const struct world* world);
+
+int server_queue_leaderboard(
+    struct server* server, const struct leaderboard* board);
 
 /*!
  * \brief Fills all pending data into UDP packets and sends them to all clients.

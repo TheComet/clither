@@ -120,6 +120,25 @@ int main(int argc, char* argv[])
         log_file_open(args.log_file);
 #endif
 
+#if defined(CLITHER_SERVER)
+    if (args.mode == MODE_SERVER)
+    {
+        struct thread* server_thread;
+
+        log_dbg("Starting server in background thread\n");
+        server_thread = thread_start(server_run, &settings.server);
+        if (server_thread == NULL)
+        {
+            retval = -1;
+            goto server_run;
+        }
+
+        retval = (intptr_t)thread_join(server_thread);
+        log_dbg("Joined background server thread\n");
+        goto server_run;
+    }
+#endif
+
 #if defined(CLITHER_GFX)
     pack = resource_pack_parse(args.pack);
     if (pack == NULL)
@@ -197,18 +216,7 @@ int main(int argc, char* argv[])
         case MODE_BENCHMARKS: break;
 #endif
 #if defined(CLITHER_SERVER)
-        case MODE_SERVER: {
-            struct thread* server_thread;
-
-            log_dbg("Starting server in background thread\n");
-            server_thread = thread_start(server_run, &settings.server);
-            if (server_thread == NULL)
-                break;
-
-            retval = (intptr_t)thread_join(server_thread);
-            log_dbg("Joined background server thread\n");
-            break;
-        }
+        case MODE_SERVER: break;
 #endif
 #if defined(CLITHER_CLIENT)
         case MODE_CLIENT: {
@@ -314,6 +322,10 @@ watch_resource_pack_failed:
     if (pack != NULL)
         resource_pack_destroy(pack);
 parse_resource_pack_failed:
+#endif
+
+#if defined(CLITHER_SERVER)
+server_run:
 #endif
 
 read_settings_failed:

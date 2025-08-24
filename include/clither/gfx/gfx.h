@@ -7,6 +7,7 @@
 struct camera;
 struct command;
 struct input;
+struct leaderboard;
 struct resource_pack;
 struct ui;
 struct world;
@@ -75,6 +76,7 @@ struct gfx_interface
         const struct world*  world,
         const struct camera* camera);
     void (*draw_ui)(struct gfx* gfx, const struct ui* ui);
+    void (*draw_leaderboard)(struct gfx* gfx, const struct leaderboard* board);
     void (*draw_end)(struct gfx* gfx);
 
 #if defined(CLITHER_GFX_DEBUG)

@@ -1,6 +1,5 @@
 #include "clither/audio/audio.h"
 #include "clither/game/resource_pack.h"
-#include "clither/game/resource_pack_ini.h"
 #include "clither/platform/fs.h"
 #include "clither/platform/mfile.h"
 #include "clither/util/log.h"
@@ -94,11 +93,13 @@ static int patch_str_paths(void* value, int type, void* user_ptr)
 
     pack = user_ptr;
     str = value;
+    if (str_len(*str) == 0)
+        return 0;
     return str_join_path_prepend_cstr(str, pack->path);
 }
 
 /* ------------------------------------------------------------------------- */
-static int patch_stringlist_paths(void* value, int type, void* user_ptr)
+static int patch_strlist_paths(void* value, int type, void* user_ptr)
 {
     int                         idx;
     const struct resource_pack* pack;
@@ -155,8 +156,7 @@ static int on_section_shader(struct c_ini_parser* p, void* user_ptr)
         case HMAP_OOM: goto failed;
     }
 
-    if (resource_shader_for_each_value(&shader, patch_stringlist_paths, pack) !=
-        0)
+    if (resource_shader_for_each_value(&shader, patch_strlist_paths, pack) != 0)
         goto failed;
 
     *inserted = shader;
@@ -217,8 +217,7 @@ static int on_section_layer(struct c_ini_parser* p, void* user_ptr)
         goto failed;
     }
 
-    if (resource_layer_for_each_value(&layer, patch_stringlist_paths, pack) !=
-        0)
+    if (resource_layer_for_each_value(&layer, patch_strlist_paths, pack) != 0)
         goto failed;
 
     sprite->layer[layer_idx] = layer;
@@ -253,8 +252,7 @@ static int on_section_spine(struct c_ini_parser* p, void* user_ptr)
         case HMAP_OOM: goto failed;
     }
 
-    if (resource_spine_for_each_value(&spine, patch_stringlist_paths, pack) !=
-        0)
+    if (resource_spine_for_each_value(&spine, patch_strlist_paths, pack) != 0)
         goto failed;
 
     *inserted = spine;
@@ -323,7 +321,7 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
     if (resource_background_parse(
             &pack->background, filename, mf.address, mf.size) != 0 ||
         resource_background_for_each_value(
-            &pack->background, patch_stringlist_paths, pack) != 0)
+            &pack->background, patch_strlist_paths, pack) != 0)
         goto parse_error;
 
     if (resource_text_parse(&pack->text, filename, mf.address, mf.size) != 0 ||
@@ -331,14 +329,13 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
         goto parse_error;
 
     if (resource_food_parse(&pack->food, filename, mf.address, mf.size) != 0 ||
-        resource_food_for_each_value(
-            &pack->food, patch_stringlist_paths, pack) != 0)
+        resource_food_for_each_value(&pack->food, patch_strlist_paths, pack) !=
+            0)
         goto parse_error;
 
     if (resource_audio_parse(&pack->audio, filename, mf.address, mf.size) !=
             0 ||
-        resource_audio_for_each_value(
-            &pack->audio, patch_stringlist_paths, pack) != 0)
+        resource_audio_for_each_value(&pack->audio, patch_str_paths, pack) != 0)
         goto parse_error;
 
     if (resource_shader_parse_all(

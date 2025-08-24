@@ -12,6 +12,7 @@ struct bot_interface;
 struct fs_watch;
 struct gfx;
 struct gfx_interface;
+struct leaderboard;
 struct msg;
 struct msg_vec;
 struct resource_pack;
@@ -120,6 +121,7 @@ struct client_recv_result client_recv(
     struct client*                client,
     const struct settings*        settings,
     struct world*                 world,
+    struct leaderboard*           leaderboard,
     const struct audio_interface* iaudio,
     struct audio*                 audio);
 

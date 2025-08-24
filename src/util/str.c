@@ -1,5 +1,6 @@
 #include "clither/util/str.h"
 #include "clither/util/vec.h"
+#include <stdio.h>
 
 #if defined(_WIN32)
 #    define SEP     '\\'
@@ -94,6 +95,33 @@ int str_append_char(struct str** str, char c)
 }
 
 /* ------------------------------------------------------------------------- */
+int str_append_cstr(struct str** str, const char* cstr)
+{
+    struct str_impl* impl;
+    int              len = str_len(*str);
+    int              clen = (int)strlen(cstr);
+
+    if (str_ensure_capacity(str, len + clen) != 0)
+        return -1;
+    impl = (struct str_impl*)*str;
+
+    memcpy(impl->data + len, cstr, clen);
+    impl->data[len + clen] = '\0';
+    impl->count = len + clen + 1;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int str_append_int(struct str** str, int value)
+{
+
+    char buf[12];
+    sprintf(buf, "%d", value);
+    return str_append_cstr(str, buf);
+}
+
+/* ------------------------------------------------------------------------- */
 void str_pop_char(struct str* str)
 {
     struct str_impl* impl = (struct str_impl*)str;
@@ -144,6 +172,13 @@ int str_set(struct str** str, const char* data, int len)
     impl->count = len + 1;
 
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int str_set_str(struct str** str, const struct str* other)
+{
+    const struct str_impl* impl = (const struct str_impl*)other;
+    return str_set(str, impl->data, impl->count - 1);
 }
 
 /* ------------------------------------------------------------------------- */

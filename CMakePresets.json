@@ -53,6 +53,20 @@
         "CLITHER_TESTS": false,
         "CLITHER_WEB_MENU": true
       }
+    },
+    {
+      "name": "bench",
+      "displayName": "Benchmarks",
+      "description": "Build benchmarks",
+      "binaryDir": "${sourceDir}/build-bench",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CMAKE_BUILD_TYPE": "Release",
+        "CLITHER_BENCHMARKS": true,
+        "CLITHER_DOC": false,
+        "CLITHER_LOG": false,
+        "CLITHER_TESTS": false
+      }
     }
   ]
 }

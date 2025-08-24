@@ -1,3 +1,4 @@
+#include "clither/game/leaderboard.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake_bmap.h"
 #include "clither/game/world.h"
@@ -19,10 +20,12 @@
 static void* server_instance_run(const void* arg)
 {
     struct world                  world;
+    struct leaderboard            leaderboard;
     struct server                 server;
     struct tick                   sim_tick;
     struct tick                   net_tick;
     uint16_t                      frame_number;
+    uint8_t                       leaderboard_update_counter;
     char                          log_prefix[] = "S:xxxxx ";
     const struct server_instance* instance = arg;
 
@@ -43,6 +46,8 @@ static void* server_instance_run(const void* arg)
     if (world_respawn_food(&world) != 0)
         goto world_spawn_food_failed;
 
+    leaderboard_init(&leaderboard);
+
     if (server_init(&server, instance->addr, instance->port) != 0)
         goto server_init_failed;
     net_log_host_ips();
@@ -53,6 +58,7 @@ static void* server_instance_run(const void* arg)
     tick_cfg(&sim_tick, instance->settings->server.sim_tick_rate);
     tick_cfg(&net_tick, instance->settings->server.net_tick_rate);
     frame_number = 0;
+    leaderboard_update_counter = 0;
     while (1)
     {
         struct snake* snake;
@@ -111,6 +117,16 @@ static void* server_instance_run(const void* arg)
                 break;
             if (server_queue_food_data(&server, &world) != 0)
                 break;
+
+            if (leaderboard_update_counter++ ==
+                instance->settings->server.net_tick_rate)
+            {
+                leaderboard_update_counter = 0;
+                leaderboard_update(&leaderboard, &world);
+                if (server_queue_leaderboard(&server, &leaderboard) != 0)
+                    break;
+            }
+
             if (server_send_pending_data(&server, &world) != 0)
                 break;
         }
@@ -126,6 +142,7 @@ static void* server_instance_run(const void* arg)
     log_info("Stopping server instance\n");
 
     server_deinit(&server);
+    leaderboard_deinit(&leaderboard);
     world_deinit(&world);
 
     trackers_deinit_tls();
@@ -133,6 +150,7 @@ static void* server_instance_run(const void* arg)
     return (void*)0;
 
 server_init_failed:
+    leaderboard_deinit(&leaderboard);
 world_spawn_food_failed:
     world_deinit(&world);
     trackers_deinit_tls();

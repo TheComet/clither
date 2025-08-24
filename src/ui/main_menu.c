@@ -605,8 +605,8 @@ int main_menu_run(
 
     input_init(&input);
 
-    //if (iaudio != NULL)
-    //    iaudio->loop_music(audio, MUSIC_MENU);
+    // if (iaudio != NULL)
+    //     iaudio->loop_music(audio, MUSIC_MENU);
 
     tick_cfg(&sim_tick, sim_tick_rate);
     while (1)
@@ -631,6 +631,8 @@ int main_menu_run(
                     ui_cmd.join.address,
                     ui_cmd.join.port,
                     ui_cmd.join.username);
+                if (settings->mcd.enable)
+                    ui_cmd.join.port = settings->mcd.bind_port;
                 if (client_connect(
                         &client,
                         settings,
@@ -682,6 +684,9 @@ int main_menu_run(
                 }
 
                 server_instance_wait_for_ready(&server);
+
+                if (settings->mcd.enable)
+                    ui_cmd.host.port = settings->mcd.bind_port;
 
                 /* The server should be running, so try to join as a client */
                 if (client_connect(

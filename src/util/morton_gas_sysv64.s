@@ -26,6 +26,22 @@ morton_encode_qwpos_asm:
   or      %rsi, %rax
   ret
 
+.globl morton_encode_qwaabb_asm 
+.type morton_encode_qwaabb_asm, @function
+morton_encode_qwaabb_asm:
+    # Arguments:
+    #   rdi = y,x  (struct qwpos)
+  movq      %rdi, -16(%rsp)
+  movdqu    -16(%rsp), %xmm2
+  pshufd    $216, %xmm2, %xmm0
+  movdqa    %xmm0, %xmm1
+  pclmulqdq $17, %xmm0, %xmm1
+  pclmulqdq $0, %xmm0, %xmm0
+  psllw     $1, %xmm1
+  por       %xmm1, %xmm0
+  movq      %xmm0, %rax
+  ret
+
 .globl morton_decode_qwpos_asm
 .type morton_decode_qwpos_asm, @function
 morton_decode_qwpos_asm:

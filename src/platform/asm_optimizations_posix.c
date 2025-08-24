@@ -10,8 +10,8 @@
 
 static int trampoline_hotpatch(void* trampoline, void* target, int pagesize)
 {
-    unsigned char* code = (unsigned char*)trampoline;
-    int32_t        rel_off = (intptr_t)target - ((intptr_t)trampoline + 5);
+    uint8_t* code = (unsigned char*)trampoline;
+    int32_t  jmp_target = (intptr_t)target - ((intptr_t)trampoline + 5);
 
     void* page_start = (void*)((uintptr_t)trampoline & ~(pagesize - 1));
     if (mprotect(page_start, pagesize, PROT_READ | PROT_WRITE | PROT_EXEC) != 0)
@@ -22,7 +22,7 @@ static int trampoline_hotpatch(void* trampoline, void* target, int pagesize)
     }
 
     code[0] = 0xE9; /* JMP rel32 */
-    memcpy(code + 1, &rel_off, sizeof(rel_off));
+    memcpy(&code[1], &jmp_target, sizeof(jmp_target));
 
     if (mprotect(page_start, pagesize, PROT_READ | PROT_EXEC) != 0)
     {

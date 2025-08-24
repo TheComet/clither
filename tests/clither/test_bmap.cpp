@@ -542,7 +542,7 @@ TEST_F(NAME, retain_half)
             obj_bmap,
             [](int16_t, obj*, void* user) { return (*(int*)user)++ % 2; },
             &counter),
-        Eq(0));
+        Eq(4));
     EXPECT_THAT(bmap_count(obj_bmap), Eq(4));
     EXPECT_THAT(counter, Eq(8));
     EXPECT_THAT(
@@ -553,6 +553,27 @@ TEST_F(NAME, retain_half)
         obj_bmap_find(obj_bmap, 4), Pointee(obj{(float)4, (float)4, (float)4}));
     EXPECT_THAT(
         obj_bmap_find(obj_bmap, 6), Pointee(obj{(float)6, (float)6, (float)6}));
+}
+
+TEST_F(NAME, retain_none)
+{
+    for (int16_t i = 0; i != 8; ++i)
+        obj_bmap_insert_new(&obj_bmap, i, obj{(float)i, (float)i, (float)i});
+
+    int counter = 0;
+    EXPECT_THAT(bmap_count(obj_bmap), Eq(8));
+    EXPECT_THAT(
+        obj_bmap_retain(
+            obj_bmap,
+            [](int16_t, obj*, void* counter) -> int
+            {
+                ++*(int*)counter;
+                return BMAP_ERASE;
+            },
+            &counter),
+        Eq(8));
+    EXPECT_THAT(bmap_count(obj_bmap), Eq(0));
+    EXPECT_THAT(counter, Eq(8));
 }
 
 TEST_F(NAME, retain_returning_error)

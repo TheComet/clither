@@ -1,6 +1,7 @@
 #include "clither/game/args.h"
 #include "clither/game/bezier_knot_rb.h"
 #include "clither/game/bezier_segment_rb.h"
+#include "clither/game/leaderboard.h"
 #include "clither/game/math.h"
 #include "clither/game/msg_vec.h"
 #include "clither/game/qwaabb_rb.h"
@@ -335,6 +336,41 @@ int server_queue_food_data(struct server* server, const struct world* world)
         }
     }
 
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+int server_queue_leaderboard(
+    struct server* server, const struct leaderboard* board)
+{
+    int16_t                i;
+    int                    slot;
+    const struct net_addr* addr;
+    struct server_client*  client;
+
+    for (i = 0; i != LEADERBOARD_ROW_COUNT; ++i)
+    {
+        server_client_hmap_for_each (server->clients, slot, addr, client)
+            if (board->rows[i].score > 0)
+            {
+                server_queue(
+                    client,
+                    msg_leaderboard(
+                        i + 1,
+                        str_cstr(board->rows[i].username),
+                        board->rows[i].score));
+            }
+            else
+            {
+                server_queue(
+                    client,
+                    msg_leaderboard_clear(i + 1, LEADERBOARD_ROW_COUNT));
+            }
+        if (board->rows[i].score == 0)
+            break;
+    }
+
+    (void)addr;
     return 0;
 }
 
@@ -691,7 +727,7 @@ static enum process_message_result process_message(
                 return PROCESS_MESSAGE_OK;
             }
 
-            if (pp.join_request.username_len >
+            if (strlen(pp.join_request.username) >
                 settings_server->max_username_len)
             {
                 struct net_packet response;
@@ -801,6 +837,12 @@ static enum process_message_result process_message(
                         pp.voice.sequence_number));
             }
             return PROCESS_MESSAGE_OK;
+        }
+
+        case MSG_LEADERBOARD:
+        case MSG_LEADERBOARD_CLEAR: {
+            log_warn("Server received unexpected message type %d\n", msg_type);
+            break;
         }
 
         case MSG_COMMANDS: {

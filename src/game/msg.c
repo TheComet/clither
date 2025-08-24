@@ -1,4 +1,5 @@
 #include "clither/game/cmd.h"
+#include "clither/game/leaderboard.h"
 #include "clither/game/math.h"
 #include "clither/game/msg.h"
 #include "clither/game/msg_vec.h"
@@ -14,6 +15,45 @@
 #define msg_size(extra_bytes) (offsetof(struct msg, payload) + (extra_bytes))
 
 #define alloc_msg(extra_bytes) mem_alloc(msg_size(extra_bytes))
+
+/* ------------------------------------------------------------------------- */
+static const char* msg_type_to_cstr(enum msg_type type)
+{
+    switch (type)
+    {
+        case MSG_JOIN_REQUEST: return "MSG_JOIN_REQUEST";
+        case MSG_JOIN_ACCEPT: return "MSG_JOIN_ACCEPT";
+        case MSG_JOIN_DENY_BAD_PROTOCOL: return "MSG_JOIN_DENY_BAD_PROTOCOL";
+        case MSG_JOIN_DENY_BAD_USERNAME: return "MSG_JOIN_DENY_BAD_USERNAME";
+        case MSG_JOIN_DENY_SERVER_FULL: return "MSG_JOIN_DENY_SERVER_FULL";
+        case MSG_LEAVE: return "MSG_LEAVE";
+        case MSG_VOICE: return "MSG_VOICE";
+        case MSG_LEADERBOARD: return "MSG_LEADERBOARD";
+        case MSG_LEADERBOARD_CLEAR: return "MSG_LEADERBOARD_CLEAR";
+        case MSG_COMMANDS: return "MSG_COMMANDS";
+        case MSG_FEEDBACK: return "MSG_FEEDBACK";
+        case MSG_SNAKE_USERNAME: return "MSG_SNAKE_USERNAME";
+        case MSG_SNAKE_USERNAME_ACK: return "MSG_SNAKE_USERNAME_ACK";
+        case MSG_SNAKE_COSMETIC_PARAMS: return "MSG_SNAKE_COSMETIC_PARAMS";
+        case MSG_SNAKE_COSMETIC_PARAMS_ACK:
+            return "MSG_SNAKE_COSMETIC_PARAMS_ACK";
+        case MSG_SNAKE_DESTROY: return "MSG_SNAKE_DESTROY";
+        case MSG_SNAKE_DESTROY_ACK: return "MSG_SNAKE_DESTROY_ACK";
+        case MSG_SNAKE_DEATH: return "MSG_SNAKE_DEATH";
+        case MSG_SNAKE_DEATH_ACK: return "MSG_SNAKE_DEATH_ACK";
+        case MSG_SNAKE_HEAD: return "MSG_SNAKE_HEAD";
+        case MSG_SNAKE_PARAM: return "MSG_SNAKE_PARAM";
+        case MSG_BEZIER: return "MSG_BEZIER";
+        case MSG_KNOT: return "MSG_KNOT";
+        case MSG_KNOT_ACK: return "MSG_KNOT_ACK";
+        case MSG_FOOD_CREATE: return "MSG_FOOD_CREATE";
+        case MSG_FOOD_CREATE_ACK: return "MSG_FOOD_CREATE_ACK";
+        case MSG_FOOD_DESTROY: return "MSG_FOOD_DESTROY";
+        case MSG_FOOD_DESTROY_ACK: return "MSG_FOOD_DESTROY_ACK";
+    }
+
+    return "";
+}
 
 /* ------------------------------------------------------------------------- */
 static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
@@ -39,9 +79,69 @@ static struct msg* msg_alloc(enum msg_type type, int8_t resend_period, int size)
 }
 
 /* ------------------------------------------------------------------------- */
+static struct msg* msg_alloc_string_payload(
+    enum msg_type type, int8_t resend_period, int extra_bytes, const char* str)
+{
+    int     len_i32 = (int)strlen(str);
+    uint8_t len = len_i32 > 254 ? 254 : (uint8_t)len_i32;
+
+    struct msg* m = msg_alloc(
+        type,
+        resend_period,
+        extra_bytes + /* Extra fields appear before the string payload */
+            sizeof(len) + len + 1); /* we need to include the null terminator */
+
+    /* we need to include the null terminator */
+    m->payload[extra_bytes] = len;
+    memcpy(&m->payload[extra_bytes + 1], str, len + 1);
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
 void msg_free(struct msg* m)
 {
     mem_free(m);
+}
+
+/* ------------------------------------------------------------------------- */
+static int parse_string_payload(
+    const char**   out_str,
+    enum msg_type  type,
+    const uint8_t* payload,
+    uint8_t        payload_len,
+    uint8_t        offset)
+{
+    uint8_t len;
+
+    if (payload_len < offset + 2 /* len + null terminator */)
+    {
+        log_warn(
+            "%s payload is too small: %d\n",
+            msg_type_to_cstr(type),
+            payload_len);
+        return -1;
+    }
+
+    len = payload[offset];
+    if (offset + len + 2 /* len + null */ > payload_len)
+    {
+        log_warn(
+            "%s string length points outside of payload\n",
+            msg_type_to_cstr(type));
+        return -2;
+    }
+
+    if (payload[offset + len + 1] != '\0')
+    {
+        log_warn(
+            "%s string is not properly NULL-terminated\n",
+            msg_type_to_cstr(type));
+        return -3;
+    }
+
+    *out_str = (char*)&payload[offset + 1];
+    return type;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -54,49 +154,25 @@ int msg_parse_payload(
     switch (type)
     {
         case MSG_JOIN_REQUEST: {
-            int i;
-            /*
-             * 2 bytes for protocol version
-             * 2 bytes for frame number
-             * 1 byte for name length
-             * 1 byte for string (minimum, strings are always null-terminated)
-             * n bytes for cosmetic parameters
-             */
-            if (payload_len < 6
-#define X(name, NAME, def, min, max) +1
-                SNAKE_COSMETIC_PARAMS_LIST
+            int     i, result;
+            uint8_t cosmetic_bytes = 0;
+#define X(name, NAME, def, min, max) cosmetic_bytes++;
+            SNAKE_COSMETIC_PARAMS_LIST
 #undef X
-            )
-            {
-                log_warn(
-                    "MSG_JOIN_REQUEST: Payload size %d too small\n",
-                    payload_len);
-                return -1;
-            }
+            result = parse_string_payload(
+                &pp->join_request.username,
+                type,
+                payload,
+                payload_len,
+                4 + cosmetic_bytes);
+            if (result < 0)
+                return result;
 
             pp->join_request.protocol_version =
                 (payload[0] << 8) | (payload[1] << 0);
             pp->join_request.frame = (payload[2] << 8) | (payload[3] << 0);
-            pp->join_request.username_len = payload[4];
-            pp->join_request.username = (const char*)&payload[5];
 
-            if (pp->join_request.username_len == 0)
-            {
-                log_warn("Name has zero length\n");
-                return -2;
-            }
-            if (5 + pp->join_request.username_len + 1 > payload_len)
-            {
-                log_warn("Name length points outside of payload\n");
-                return -3;
-            }
-            if (payload[5 + pp->join_request.username_len] != '\0')
-            {
-                log_warn("Name string is not properly null-terminated\n");
-                return -4;
-            }
-
-            i = 5 + pp->join_request.username_len + 1;
+            i = 4;
 #define X(name, NAME, def, min, max) pp->join_request.name = payload[i++];
             SNAKE_COSMETIC_PARAMS_LIST
 #undef X
@@ -141,33 +217,14 @@ int msg_parse_payload(
         case MSG_JOIN_DENY_BAD_PROTOCOL:
         case MSG_JOIN_DENY_BAD_USERNAME:
         case MSG_JOIN_DENY_SERVER_FULL: {
-            uint8_t error_len;
-
-            /* string length + null terminator must always be present */
-            if (payload_len < 2)
-            {
-                log_warn("MSG_JOIN_DENY payload is too small\n");
-                return -1;
-            }
-
-            error_len = payload[0];
-            if (1 + error_len + 1 > payload_len)
-            {
-                log_warn("Error string length points outside of payload\n");
-                return -2;
-            }
-
-            if (payload[1 + error_len] != '\0')
-            {
-                log_warn("Error string is not properly null-terminated\n");
-                return -3;
-            }
-
-            pp->join_deny.error = (const char*)&payload[1];
-            return type;
+            return parse_string_payload(
+                &pp->join_deny.error, type, payload, payload_len, 0);
         }
 
-        case MSG_LEAVE: return type;
+        case MSG_LEAVE: {
+            /* No payload */
+            return type;
+        }
 
         case MSG_VOICE: {
             if (payload_len < 4)
@@ -189,6 +246,43 @@ int msg_parse_payload(
                     payload_len - 4);
                 return -2;
             }
+
+            return type;
+        }
+
+        case MSG_LEADERBOARD: {
+            int result = parse_string_payload(
+                &pp->leaderboard.username, type, payload, payload_len, 5);
+            if (result < 0)
+                return result;
+
+            pp->leaderboard.score = (payload[0] << 24) | (payload[1] << 16) |
+                                    (payload[2] << 8) | (payload[3] << 0);
+            pp->leaderboard.position = payload[4];
+
+            if (pp->leaderboard.position < 1 ||
+                pp->leaderboard.position > LEADERBOARD_ROW_COUNT)
+            {
+                log_warn(
+                    "MSG_LEADERBOARD position is out of range: %d\n",
+                    pp->leaderboard.position);
+                return -4;
+            }
+
+            return type;
+        }
+
+        case MSG_LEADERBOARD_CLEAR: {
+            if (payload_len != 2)
+            {
+                log_warn(
+                    "MSG_LEADERBOARD_CLEAR invalid payload size: %d\n",
+                    payload_len);
+                return -1;
+            }
+
+            pp->leaderboard_clear.position_from = payload[0];
+            pp->leaderboard_clear.position_to = payload[1];
 
             return type;
         }
@@ -223,29 +317,12 @@ int msg_parse_payload(
         }
 
         case MSG_SNAKE_USERNAME: {
-            uint8_t username_len;
-
-            if (payload_len < 3)
-            {
-                log_warn("MSG_SNAKE_USERNAME payload is too small\n");
-                return -1;
-            }
+            int result = parse_string_payload(
+                &pp->snake_username.username, type, payload, payload_len, 2);
+            if (result < 0)
+                return result;
 
             pp->snake_username.snake_id = (payload[0] << 8) | (payload[1] << 0);
-
-            username_len = payload[2];
-            if (3 + username_len + 1 > payload_len)
-            {
-                log_warn("Username length points outside of payload\n");
-                return -2;
-            }
-            if (payload[3 + username_len] != '\0')
-            {
-                log_warn("Username string is not properly null-terminated\n");
-                return -3;
-            }
-            pp->snake_username.username = (const char*)&payload[3];
-
             return type;
         }
 
@@ -579,32 +656,26 @@ struct msg* msg_join_request(
     const char*                  username,
     const struct settings_snake* settings)
 {
-    int     i;
-    int     name_len_i32 = (int)strlen(username);
-    uint8_t name_len = name_len_i32 > 254 ? 254 : (uint8_t)name_len_i32;
+    int         i;
+    struct msg* m;
+    uint8_t     cosmetic_bytes = 0;
+#define X(name, NAME, def, min, max) cosmetic_bytes++;
+    SNAKE_COSMETIC_PARAMS_LIST
+#undef X
 
-    struct msg* m = msg_alloc(
+    m = msg_alloc_string_payload(
         MSG_JOIN_REQUEST,
         1,
         2 +     /* protocol version */
             2 + /* frame number */
-            1 + /* name length */
-            name_len +
-            1 /* we need to include the null terminator */
-#define X(name, NAME, def, min, max) +1
-            SNAKE_COSMETIC_PARAMS_LIST
-#undef X
-    );
+            cosmetic_bytes,
+        username);
 
     m->payload[0] = protocol_version >> 8;
     m->payload[1] = protocol_version & 0xFF;
     m->payload[2] = frame_number >> 8;
     m->payload[3] = frame_number & 0xFF;
-    m->payload[4] = name_len;
-    /* we need to include the null terminator */
-    memcpy(m->payload + 5, username, name_len + 1);
-
-    i = 5 + name_len + 1;
+    i = 4;
 #define X(name, NAME, def, min, max)                                           \
     m->payload[i++] = (uint8_t)(unlerp(min, max, settings->name) * 255);
     SNAKE_COSMETIC_PARAMS_LIST
@@ -667,26 +738,6 @@ struct msg* msg_join_accept(
 }
 
 /* ------------------------------------------------------------------------- */
-static struct msg* msg_alloc_string_payload(
-    enum msg_type type, int8_t resend_period, int extra_bytes, const char* str)
-{
-    int     len_i32 = (int)strlen(str);
-    uint8_t len = len_i32 > 254 ? 254 : (uint8_t)len_i32;
-
-    struct msg* m = msg_alloc(
-        type,
-        resend_period,
-        extra_bytes + /* Extra fields appear before the string payload */
-            sizeof(len) + len + 1); /* we need to include the null terminator */
-
-    /* we need to include the null terminator */
-    m->payload[extra_bytes] = len;
-    memcpy(&m->payload[extra_bytes + 1], str, len + 1);
-
-    return m;
-}
-
-/* ------------------------------------------------------------------------- */
 struct msg* msg_join_deny_bad_protocol(const char* error)
 {
     return msg_alloc_string_payload(MSG_JOIN_DENY_BAD_PROTOCOL, 0, 0, error);
@@ -729,6 +780,41 @@ struct msg* msg_voice(
     m->payload[2] = sequence_number;
     m->payload[3] = size;
     memcpy(&m->payload[4], data, size);
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg*
+msg_leaderboard(uint8_t position, const char* username, uint32_t score)
+{
+    struct msg* m = msg_alloc_string_payload(
+        MSG_LEADERBOARD,
+        0,
+        4 +    /* score */
+            1, /* position */
+        username);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = (score >> 24) & 0xFF;
+    m->payload[1] = (score >> 16) & 0xFF;
+    m->payload[2] = (score >> 8) & 0xFF;
+    m->payload[3] = (score >> 0) & 0xFF;
+    m->payload[4] = position;
+
+    return m;
+}
+
+/* ------------------------------------------------------------------------- */
+struct msg* msg_leaderboard_clear(uint8_t position_from, uint8_t position_to)
+{
+    struct msg* m = msg_alloc(MSG_LEADERBOARD_CLEAR, 0, 2);
+    if (m == NULL)
+        return NULL;
+
+    m->payload[0] = position_from;
+    m->payload[1] = position_to;
 
     return m;
 }

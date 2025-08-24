@@ -4,6 +4,7 @@
 
 extern "C" {
 #include "clither/client/client.h"
+#include "clither/game/leaderboard.h"
 #include "clither/game/msg.h"
 #include "clither/game/settings.h"
 #include "clither/game/snake_bmap.h"
@@ -34,7 +35,9 @@ public:
         settings_init(&settings);
         client_init(&cl);
         world_init(&cl_world);
+        leaderboard_init(&cl_leaderboard);
         world_init(&sv_world);
+        leaderboard_init(&sv_leaderboard);
         cl_cmd = cmd_default();
     }
 
@@ -42,7 +45,9 @@ public:
     {
         if (cl.state != CLIENT_DISCONNECTED)
             client_disconnect(&cl);
+        leaderboard_deinit(&cl_leaderboard);
         world_deinit(&cl_world);
+        leaderboard_deinit(&sv_leaderboard);
         world_deinit(&sv_world);
         client_deinit(&cl);
         settings_deinit(&settings);
@@ -91,12 +96,14 @@ public:
     }
 
 protected:
-    struct settings settings;
-    struct server   sv;
-    struct client   cl;
-    struct world    sv_world;
-    struct world    cl_world;
-    struct cmd      cl_cmd;
+    struct settings    settings;
+    struct server      sv;
+    struct client      cl;
+    struct world       sv_world;
+    struct leaderboard sv_leaderboard;
+    struct world       cl_world;
+    struct leaderboard cl_leaderboard;
+    struct cmd         cl_cmd;
 };
 
 TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
@@ -113,7 +120,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     ASSERT_THAT(server_send_pending_data(&sv, &sv_world), Eq(0));
     cl.frame_number += rtt;
     ASSERT_THAT(
-        client_recv(&cl, &settings, &cl_world, NULL, NULL),
+        client_recv(&cl, &settings, &cl_world, &cl_leaderboard, NULL, NULL),
         Eq(client_recv_tick_rate_changed()));
 
     // The client has calculated a frame number based on sv_frame+rtt+(some
@@ -126,7 +133,7 @@ TEST_F(NAME, server_holds_snake_until_catching_up_to_client_first_command_frame)
     auto RunServerClient = [this, &sv_frame]()
     {
         struct snake* cl_snake = snake_bmap_find(cl_world.snakes, cl.snake_id);
-        client_recv(&cl, &settings, &cl_world, NULL, NULL);
+        client_recv(&cl, &settings, &cl_world, &cl_leaderboard, NULL, NULL);
         SimClient();
         SimClient();
         SimClient();

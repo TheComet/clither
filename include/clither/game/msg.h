@@ -20,6 +20,8 @@ enum msg_type
     MSG_LEAVE,
 
     MSG_VOICE,
+    MSG_LEADERBOARD,
+    MSG_LEADERBOARD_CLEAR,
 
     MSG_COMMANDS,
     MSG_FEEDBACK,
@@ -62,7 +64,6 @@ union parsed_payload
         const char* username;
         uint16_t    protocol_version;
         uint16_t    frame;
-        uint8_t     username_len;
 #define X(name, NAME, def, min, max) uint8_t name;
         SNAKE_COSMETIC_PARAMS_LIST
 #undef X
@@ -93,6 +94,19 @@ union parsed_payload
         uint8_t     sequence_number;
         uint8_t     size;
     } voice;
+
+    struct
+    {
+        const char* username;
+        uint32_t    score;
+        uint8_t     position;
+    } leaderboard;
+
+    struct
+    {
+        uint8_t position_from;
+        uint8_t position_to;
+    } leaderboard_clear;
 
     struct
     {
@@ -240,6 +254,9 @@ struct msg* msg_leave(void);
 
 struct msg* msg_voice(
     uint16_t snake_id, const void* data, uint8_t size, uint8_t sequence_number);
+struct msg*
+msg_leaderboard(uint8_t position, const char* username, uint32_t score);
+struct msg* msg_leaderboard_clear(uint8_t position_from, uint8_t position_to);
 
 void msg_commands(struct msg_vec** msgs, const struct cmd_queue* cmdq);
 int  msg_commands_unpack_into(

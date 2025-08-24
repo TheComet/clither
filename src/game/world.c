@@ -170,11 +170,11 @@ int world_spawn_food_corpse(
     struct bezier_sample sample;
 
     for (bezier_sample_begin(
-             &sample, data->segments, SNAKE_PART_SPACING, snake_length(param));
+             &sample, data->segments, make_qw2(1, 4), snake_length(param));
          !bezier_sample_end(&sample);
          bezier_sample_next(&sample))
     {
-        for (i = 0; i != 10; ++i)
+        for (i = 0; i != 2; ++i)
         {
             qw           scale = qw_div(snake_scale(param), make_qw(4));
             qw           dx = qw_rescale(rng(w) & 0x7FFFFFFF, scale, 1 << 31);

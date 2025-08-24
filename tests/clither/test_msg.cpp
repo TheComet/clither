@@ -214,7 +214,7 @@ TEST_F(NAME, parse_join_request)
         Eq(MSG_JOIN_REQUEST));
     EXPECT_THAT(pp.join_request.protocol_version, Eq(0xAABB));
     EXPECT_THAT(pp.join_request.frame, Eq(0xCCDD));
-    EXPECT_THAT(pp.join_request.username_len, Eq(3));
+    EXPECT_THAT(strlen(pp.join_request.username), Eq(3));
     EXPECT_THAT(pp.join_request.username, StrEq("abc"));
     EXPECT_THAT(pp.join_request.username[3], Eq('\0'));
     EXPECT_THAT(pp.join_request.part_spacing, Eq(0x01));
