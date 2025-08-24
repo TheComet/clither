@@ -3088,7 +3088,8 @@ static void gen_source_parse_key(
                 ms,
                 "    enum token tok;\n"
                 "    %S_clear(s->%S);\n",
-                api);
+                api,
+                key->name);
             mstream_fmt(
                 ms,
                 "    while (1)\n"
