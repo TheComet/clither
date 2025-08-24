@@ -57,7 +57,8 @@ function (c_ini_generate target)
              --output-source ${ARG_OUTPUT_SOURCE}
         DEPENDS c_ini_generator ${ABSOLUTE_INPUT_FILES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating C-INI source files from ${ARG_INPUT}"
+        #COMMENT "Generating C-INI source files from ${ARG_INPUT}"
+        COMMENT "--input ${ABSOLUTE_INPUT_FILES} ${INCLUDE_FILES_ARG} ${ARG_INCLUDE_FILES} --output-header ${ARG_OUTPUT_HEADER} --output-source ${ARG_OUTPUT_SOURCE}"
         VERBATIM)
     add_library (${target} INTERFACE
         ${ARG_OUTPUT_HEADER}

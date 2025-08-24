@@ -3402,21 +3402,11 @@ static int write_if_different(const struct mstream* ms, const char* filename)
     return 0;
 }
 
-static int
-process_file(const struct mfile* mf, const char* filename, struct root* root)
-{
-    struct parser parser;
-    parser_init(&parser, mf, filename);
-    if (parse(&parser, root, file_is_source_file(filename)) != 0)
-        return -1;
-
-    return 0;
-}
-
 int main(int argc, char** argv)
 {
     struct mfile   mf;
     struct mstream ms;
+    struct parser  parser;
     struct cfg     cfg = {0};
     struct root    root = {0};
 
@@ -3430,7 +3420,8 @@ int main(int argc, char** argv)
     {
         if (mfile_map_stdin(&mf) != 0)
             return -1;
-        if (process_file(&mf, "<stdin>", &root) != 0)
+        parser_init(&parser, &mf, "<stdin>");
+        if (parse(&parser, &root, 0) != 0)
             return -1;
     }
     else
@@ -3438,9 +3429,11 @@ int main(int argc, char** argv)
         int i;
         for (i = 0; i != cfg.input_count; ++i)
         {
+            char is_source_file = file_is_source_file(cfg.input_fnames[i]);
             if (mfile_map_read(&mf, cfg.input_fnames[i], 0) != 0)
                 return -1;
-            if (process_file(&mf, cfg.input_fnames[i], &root) != 0)
+            parser_init(&parser, &mf, cfg.input_fnames[i]);
+            if (parse(&parser, &root, is_source_file) != 0)
                 return -1;
         }
     }
