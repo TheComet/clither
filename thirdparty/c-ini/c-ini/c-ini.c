@@ -1189,6 +1189,8 @@ enum c_data_type
     CDT_BITFIELD = (1 << 4)
 };
 
+#define cdt_switch(type) switch (type & ~CDT_BITFIELD)
+
 enum value_type
 {
     VT_INTEGER,
@@ -1281,7 +1283,7 @@ key_create(struct section* section, struct strview name, enum c_data_type type)
 static void
 attributes_set_default_for_type(struct attributes* attr, enum c_data_type type)
 {
-    switch (type)
+    cdt_switch(type)
     {
         case CDT_UNKNOWN: break;
         case CDT_STR_FIXED:
@@ -1330,12 +1332,16 @@ attributes_set_default_for_type(struct attributes* attr, enum c_data_type type)
             attr->default_value.type = VT_FLOAT;
             attr->default_value.value.floating = 0.0;
             break;
+        case CDT_BITFIELD: break;
     }
 
 #define SET_MIN_MAX(attr, min_value, max_value)                                \
-    attr->min.value.integer = min_value;                                       \
-    attr->max.value.integer = max_value;
-    switch (type)
+    do                                                                         \
+    {                                                                          \
+        attr->min.value.integer = min_value;                                   \
+        attr->max.value.integer = max_value;                                   \
+    } while (0)
+    cdt_switch(type)
     {
         case CDT_UNKNOWN: break;
         case CDT_STR_FIXED: break;
@@ -1355,8 +1361,12 @@ attributes_set_default_for_type(struct attributes* attr, enum c_data_type type)
             attr->min.value.floating = -DBL_MAX;
             attr->max.value.floating = DBL_MAX;
             break;
+        case CDT_BITFIELD: break;
     }
 #undef X
+
+    if (type & CDT_BITFIELD)
+        SET_MIN_MAX(attr, 0, 1);
 }
 
 static enum token
@@ -1461,7 +1471,7 @@ static int enforce_constrain_range(
     if (p->value.integer < min || p->value.integer > max)                      \
         return parser_error(                                                   \
             p, "Value in CONSTRAIN() must be in range %d to %d\n", min, max);
-    switch (type)
+    cdt_switch(type)
     {
         case CDT_UNKNOWN: return -1;
         case CDT_STR_FIXED: break;
@@ -1481,6 +1491,7 @@ static int enforce_constrain_range(
         case CDT_I32: CHECK_INT_RANGE(INT32_MIN, INT32_MAX); break;
         case CDT_U32: CHECK_INT_RANGE(0, UINT32_MAX); break;
         case CDT_FLOAT: break;
+        case CDT_BITFIELD: break;
     }
 #undef CHECK_INT_RANGE
     return 0;
@@ -1495,7 +1506,7 @@ static enum token parse_attribute_default(
         return parser_error(p, "Expected '(' after 'DEFAULT'\n");
 
     tok = scan_next(p);
-    switch (type)
+    cdt_switch(type)
     {
         case CDT_UNKNOWN: return -1;
         case CDT_STR_FIXED:
@@ -1580,6 +1591,7 @@ static enum token parse_attribute_default(
             else
                 attr->default_value.value.floating = (double)p->value.integer;
             break;
+        case CDT_BITFIELD: break;
     }
 
     if (enforce_constrain_range(p, tok, type) != 0)
@@ -1594,7 +1606,7 @@ static enum token parse_attribute_default(
 static int enforce_constrain_type(
     const struct parser* p, enum token tok, enum c_data_type type)
 {
-    switch (type)
+    cdt_switch(type)
     {
         case CDT_UNKNOWN: return -1;
         case CDT_STR_FIXED:
@@ -1629,6 +1641,7 @@ static int enforce_constrain_type(
                     "Type in CONSTRAIN() does not match declared type in "
                     "struct. Expected a float.\n");
             break;
+        case CDT_BITFIELD: break;
     }
 
     return 0;
@@ -2662,7 +2675,7 @@ static void gen_source_init(struct mstream* ms, const struct section* section)
     mstream_cstr(ms, "    memset(s, 0x00, sizeof *s);\n");
     for (key = section->keys; key; key = key->next)
     {
-        switch (key->type)
+        cdt_switch(key->type)
         {
             case CDT_UNKNOWN: break;
             case CDT_STR_FIXED:
@@ -2746,6 +2759,7 @@ static void gen_source_init(struct mstream* ms, const struct section* section)
                     key->name,
                     key->attr.default_value.value.floating);
                 break;
+            case CDT_BITFIELD: break;
         }
     }
     mstream_cstr(ms, "    return 0;\n\n    ");
@@ -2753,7 +2767,7 @@ static void gen_source_init(struct mstream* ms, const struct section* section)
     ll_reverse((struct ll**)&section->keys);
     for (key = section->keys; key; key = key->next)
     {
-        switch (key->type)
+        cdt_switch(key->type)
         {
             case CDT_UNKNOWN:
             case CDT_STR_FIXED: break;
@@ -2789,6 +2803,7 @@ static void gen_source_init(struct mstream* ms, const struct section* section)
             case CDT_I32:
             case CDT_U32:
             case CDT_FLOAT: break;
+            case CDT_BITFIELD: break;
         }
     }
     ll_reverse((struct ll**)&section->keys);
@@ -2807,7 +2822,7 @@ static void gen_source_deinit(struct mstream* ms, const struct section* section)
     mstream_cstr(ms, "    (void)s;\n");
     for (key = section->keys; key; key = key->next)
     {
-        switch (key->type)
+        cdt_switch(key->type)
         {
             case CDT_UNKNOWN: break;
             case CDT_STR_FIXED: break;
@@ -2836,6 +2851,7 @@ static void gen_source_deinit(struct mstream* ms, const struct section* section)
             case CDT_I32:
             case CDT_U32: break;
             case CDT_FLOAT: break;
+            case CDT_BITFIELD: break;
         }
     }
     mstream_cstr(ms, "}\n\n");
@@ -2857,7 +2873,7 @@ static void gen_source_fwrite(struct mstream* ms, const struct section* section)
     mstream_fmt(ms, "    fprintf(f, \"[%S]\\n\");\n", section->name);
     for (key = section->keys; key; key = key->next)
     {
-        switch (key->type)
+        cdt_switch(key->type)
         {
             case CDT_UNKNOWN: break;
             case CDT_STR_FIXED:
@@ -2945,6 +2961,7 @@ static void gen_source_fwrite(struct mstream* ms, const struct section* section)
                     key->name,
                     key->name);
                 break;
+            case CDT_BITFIELD: break;
         }
     }
     mstream_cstr(ms, "    fprintf(f, \"\\n\");\n");
@@ -2963,7 +2980,7 @@ static void gen_source_parse_key(
         section->struct_name,
         key->name,
         section->struct_name);
-    switch (key->type)
+    cdt_switch(key->type)
     {
         case CDT_UNKNOWN: break;
         case CDT_STR_FIXED:
@@ -3158,6 +3175,7 @@ static void gen_source_parse_key(
                 "    return scan_next(p);\n",
                 key->name);
             break;
+        case CDT_BITFIELD: break;
     }
     mstream_cstr(ms, "}\n\n");
 }
