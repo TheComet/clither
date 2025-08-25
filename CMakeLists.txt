@@ -2,7 +2,6 @@ cmake_minimum_required (VERSION 3.22)
 
 if (NOT DEFINED CMAKE_BUILD_TYPE)
     set (CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel" FORCE)
-    message (FATAL_ERROR "Forcing Debug build")
 endif()
 message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
@@ -56,6 +55,10 @@ set (CLITHER_BACKTRACE_SIZE "64" CACHE STRING "Sets the maximum stack size (dept
 option (CLITHER_SERVER "Build the server component. Requires threads." ON)
 cmake_dependent_option (CLITHER_SERVER_WEBSOCKETS "Enable WebSocket support" ON "CLITHER_SERVER" OFF)
 
+###############################################################################
+# Compiler config
+###############################################################################
+
 set (CLITHER_BUILD_BINDIR "${PROJECT_BINARY_DIR}/bin")
 set (CLITHER_BUILD_LIBDIR "${CLITHER_BUILD_BINDIR}/lib")
 set (CLITHER_BUILD_DOCDIR "${CLITHER_BUILD_BINDIR}/doc")
@@ -68,25 +71,15 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
     set (CLITHER_THREADLOCAL "__declspec(thread)")
     set (CLITHER_STATIC_ASSERT "_STATIC_ASSERT(condition)")
     set (CLITHER_HOTPATCH "__declspec(noinline)")
+    set (CLITHER_POPCOUNT "__popcnt")
 elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
     set (CLITHER_THREADLOCAL "__thread")
     #set (CLITHER_STATIC_ASSERT "_Static_assert(condition, \"(\" #condition \") failed\")")
     set (CLITHER_STATIC_ASSERT "{                \\\n        typedef char static_assertion[(condition) ? 1 : -1]; \\\n        static_assertion static_assertion_;                  \\\n        (void)static_assertion_;                             \\\n    }")
     set (CLITHER_HOTPATCH "__attribute__((noinline)) __attribute__((noclone))")
-else ()
-    message (FATAL_ERROR "Builtins not yet implemented for compiler: ${CMAKE_C_COMPILER_ID}\nYou could try to add them yourself (just check CMakeLists.txt at this location)")
-endif ()
-
-include (CheckCSourceCompiles)
-check_c_source_compiles ("int main(void) { return __popcnt(0xAAAA); }" MSVC_POPCOUNT)
-check_c_source_compiles ("int main(void) { return __builtin_popcount(0xAAAA); }" GCC_POPCOUNT)
-if (MSVC_POPCOUNT)
-    set (CLITHER_POPCOUNT "__popcnt")
-elseif (GCC_POPCOUNT)
     set (CLITHER_POPCOUNT "__builtin_popcount")
 else ()
-    message (WARNING "Could not detect a popcount intrinsic, falling back to slow implementation")
-    set (CLITHER_POPCOUNT OFF)
+    message (FATAL_ERROR "Builtins not yet implemented for compiler: ${CMAKE_C_COMPILER_ID}\nYou could try to add them yourself (just check CMakeLists.txt at this location)")
 endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -499,9 +492,19 @@ if (MSVC)
     source_group (TREE ${PROJECT_SOURCE_DIR} FILES ${source_list})
 endif ()
 
-install (
-    TARGETS clither
-    RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
+add_subdirectory ("thirdparty/c-ini")
+c_ini_generate (settings_ini
+    INPUT "include/clither/game/settings.h"
+    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/settings_ini.h
+    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/settings_ini.c)
+c_ini_generate (resource_pack_ini
+    INPUT "include/clither/game/resource_pack.h"
+    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/resource_pack_ini.h
+    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/resource_pack_ini.c
+    INCLUDE_FILES "clither/util/strlist.h")
+target_link_libraries (clither PRIVATE
+    settings_ini
+    resource_pack_ini)
 
 if (CLITHER_BOT_API_LUA)
     add_custom_command (
@@ -624,20 +627,6 @@ endif ()
 ###############################################################################
 # Dependencies
 ###############################################################################
-
-add_subdirectory ("thirdparty/c-ini")
-c_ini_generate (settings_ini
-    INPUT "include/clither/game/settings.h"
-    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/settings_ini.h
-    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/settings_ini.c)
-c_ini_generate (resource_pack_ini
-    INPUT "include/clither/game/resource_pack.h"
-    OUTPUT_HEADER ${PROJECT_BINARY_DIR}/include/clither/game/resource_pack_ini.h
-    OUTPUT_SOURCE ${PROJECT_BINARY_DIR}/src/game/resource_pack_ini.c
-    INCLUDE_FILES "clither/util/strlist.h")
-target_link_libraries (clither PRIVATE
-    settings_ini
-    resource_pack_ini)
 
 if (WIN32)
     target_link_libraries (clither PRIVATE ws2_32)
@@ -803,3 +792,11 @@ endif ()
 if (CLITHER_DOC)
     add_subdirectory ("doc/clither-doc")
 endif ()
+
+###############################################################################
+# Install targets
+###############################################################################
+
+install (
+    TARGETS clither
+    RUNTIME DESTINATION ${CLITHER_INSTALL_BINDIR})
