@@ -10,7 +10,6 @@ struct cmd_queue
 };
 
 void cmd_queue_init(struct cmd_queue* cmdq);
-
 void cmd_queue_deinit(struct cmd_queue* cmdq);
 
 /*!

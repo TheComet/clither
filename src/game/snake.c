@@ -174,10 +174,10 @@ void snake_deinit(struct snake* snake)
 
 /* ------------------------------------------------------------------------- */
 void snake_step_head(
-    struct snake_head*        head,
-    const struct snake_param* param,
-    struct cmd                command,
-    uint8_t                   sim_tick_rate)
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct cmd          command,
+    uint8_t             sim_tick_rate)
 {
     qw      dx, dy;
     uint8_t target_speed;
@@ -207,12 +207,18 @@ void snake_step_head(
         head->angle = target_angle;
 
     /* Integrate speed over time */
-    target_speed =
-        command.action == CMD_ACTION_BOOST
-            ? 255
-            : qw_sub(snake_max_speed(param), snake_min_speed(param)) *
-                  command.speed /
-                  qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    if (command.action == CMD_ACTION_BOOST &&
+        param->food_eaten > param->base_stats.min_food_for_boost)
+    {
+        target_speed = 255;
+        snake_param_update(param, param->upgrades, param->food_eaten - 1);
+    }
+    else
+    {
+        target_speed = qw_sub(snake_max_speed(param), snake_min_speed(param)) *
+                       command.speed /
+                       qw_sub(snake_boost_speed(param), snake_min_speed(param));
+    }
     if (head->speed - target_speed > snake_acceleration(param))
         head->speed -= snake_acceleration(param);
     else if (head->speed - target_speed < -snake_acceleration(param))
@@ -335,11 +341,11 @@ static int measure_unused_segments(
 
 /* ------------------------------------------------------------------------- */
 int snake_step(
-    struct snake_data*        data,
-    struct snake_head*        head,
-    const struct snake_param* param,
-    struct cmd                command,
-    uint8_t                   sim_tick_rate)
+    struct snake_data*  data,
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct cmd          command,
+    uint8_t             sim_tick_rate)
 {
     int need_new_segment;
 
@@ -396,14 +402,14 @@ void snake_remove_stale_segments_with_rollback_constraint(
 
 /* ------------------------------------------------------------------------- */
 void snake_ack_frame(
-    struct snake_data*        data,
-    struct snake_ack*         ack,
-    struct snake_head*        predicted_head,
-    const struct snake_head*  authoritative_head,
-    const struct snake_param* param,
-    struct cmd_queue*         cmdq,
-    uint16_t                  frame_number,
-    uint8_t                   sim_tick_rate)
+    struct snake_data*       data,
+    struct snake_ack*        ack,
+    struct snake_head*       predicted_head,
+    const struct snake_head* authoritative_head,
+    struct snake_param*      param,
+    struct cmd_queue*        cmdq,
+    uint16_t                 frame_number,
+    uint8_t                  sim_tick_rate)
 {
     uint16_t last_ackd_frame, predicted_frame;
 

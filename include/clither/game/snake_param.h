@@ -21,11 +21,12 @@ struct snake_param
 
     struct
     {
-        qa      turn_speed;
-        qw      min_speed;
-        qw      max_speed;
-        qw      boost_speed;
-        uint8_t acceleration;
+        qa       turn_speed;
+        qw       min_speed;
+        qw       max_speed;
+        qw       boost_speed;
+        uint16_t min_food_for_boost;
+        uint8_t  acceleration;
     } base_stats;
 
     struct

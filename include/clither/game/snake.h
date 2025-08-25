@@ -158,10 +158,10 @@ void snake_step_param(
 char snake_is_split(const struct snake_data* data);
 
 void snake_step_head(
-    struct snake_head*        head,
-    const struct snake_param* param,
-    struct cmd                command,
-    uint8_t                   sim_tick_rate);
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct cmd          command,
+    uint8_t             sim_tick_rate);
 
 /*!
  * \brief Steps the snake forward by 1 frame, using the given command.
@@ -182,11 +182,11 @@ void snake_step_head(
  * On the client-side, this is handled by snake_ack_frame() instead.
  */
 int snake_step(
-    struct snake_data*        data,
-    struct snake_head*        head,
-    const struct snake_param* param,
-    struct cmd                command,
-    uint8_t                   sim_tick_rate);
+    struct snake_data*  data,
+    struct snake_head*  head,
+    struct snake_param* param,
+    struct cmd          command,
+    uint8_t             sim_tick_rate);
 
 void snake_remove_stale_segments(struct snake_data* data, int stale_segments);
 
@@ -196,14 +196,14 @@ void snake_remove_stale_segments_with_rollback_constraint(
     int                     stale_segments);
 
 void snake_ack_frame(
-    struct snake_data*        data,
-    struct snake_ack*         ack,
-    struct snake_head*        predicted_head,
-    const struct snake_head*  authoritative_head,
-    const struct snake_param* param,
-    struct cmd_queue*         cmdq,
-    uint16_t                  frame_number,
-    uint8_t                   sim_tick_rate);
+    struct snake_data*       data,
+    struct snake_ack*        ack,
+    struct snake_head*       predicted_head,
+    const struct snake_head* authoritative_head,
+    struct snake_param*      param,
+    struct cmd_queue*        cmdq,
+    uint16_t                 frame_number,
+    uint8_t                  sim_tick_rate);
 
 /*!
  * \brief This is used to manage other player's snakes. The bezier knots are

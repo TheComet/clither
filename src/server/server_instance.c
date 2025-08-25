@@ -102,6 +102,9 @@ static void* server_instance_run(const void* arg)
                     &snake->param,
                     cmd,
                     instance->settings->server.sim_tick_rate));
+
+            /* We update the snakes in range every sim tick instead of every net
+             * tick because the kill checks use the proximity list */
             if (server_update_snakes_in_range(&server, &world) != 0)
                 break;
             if (server_kill_snake_checks(&server, &world) != 0)

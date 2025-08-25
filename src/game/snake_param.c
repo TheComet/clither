@@ -13,6 +13,7 @@ void snake_param_init(struct snake_param* param)
     param->base_stats.min_speed = make_qw2(1, 128);
     param->base_stats.max_speed = make_qw2(1, 48);
     param->base_stats.boost_speed = make_qw2(1, 16);
+    param->base_stats.min_food_for_boost = 120;
     param->base_stats.acceleration = 8;
 
     param->upgrades.boost = 0;
