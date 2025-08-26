@@ -6,8 +6,9 @@
 
 #define SNAKE_PART_SPACING make_qw2(1, 6)
 
-struct food_bmap;
 struct bezier_segment_rb;
+struct food_bmap;
+struct world;
 
 struct snake_head
 {
@@ -261,3 +262,8 @@ int snake_eat_food(
     struct snake_head*  head,
     struct snake_param* param,
     struct food_bmap*   food_bmap);
+
+void snake_damage_from_walls(
+    struct snake_head*  head,
+    struct snake_param* param,
+    const struct world* world);

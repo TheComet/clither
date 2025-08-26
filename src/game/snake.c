@@ -8,6 +8,7 @@
 #include "clither/game/qwpos_vec_rb.h"
 #include "clither/game/snake.h"
 #include "clither/game/snake_split_rb.h"
+#include "clither/game/world.h"
 #include "clither/game/wrap.h"
 #include "clither/util/log.h"
 #include "clither/util/morton.h"
@@ -208,7 +209,7 @@ void snake_step_head(
 
     /* Integrate speed over time */
     if (command.action == CMD_ACTION_BOOST &&
-        param->food_eaten > param->base_stats.min_food_for_boost)
+        param->food_eaten > param->base_stats.min_food_before_starvation)
     {
         target_speed = 255;
         snake_param_update(param, param->upgrades, param->food_eaten - 1);
@@ -1021,4 +1022,29 @@ int snake_eat_food(
     food_bmap_for_each_in_radius(
         food_bmap, mouth_pos, mouth_radius, remove_food_in_radius, param);
     return bmap_count(food_bmap) != count_before;
+}
+
+/* ------------------------------------------------------------------------- */
+void snake_damage_from_walls(
+    struct snake_head*  head,
+    struct snake_param* param,
+    const struct world* world)
+{
+    q16_16 dx = qw_to_q16_16(head->pos.x);
+    q16_16 dy = qw_to_q16_16(head->pos.y);
+    q16_16 dist_from_center_sq = q16_16_sq(dx) + q16_16_sq(dy);
+    q16_16 inner_radius_sq = q16_16_sq(qw_to_q16_16(world->inner_radius));
+    q16_16 ring_start_sq = q16_16_sq(qw_to_q16_16(world->ring_start));
+    q16_16 ring_end_sq = q16_16_sq(qw_to_q16_16(world->ring_end));
+
+    if (dist_from_center_sq >= ring_start_sq &&
+        dist_from_center_sq <= ring_end_sq)
+    {
+        return;
+    }
+
+    if (dist_from_center_sq <= inner_radius_sq)
+        return;
+
+    snake_param_update(param, param->upgrades, param->food_eaten - 1);
 }

@@ -531,6 +531,12 @@ int server_kill_snake_checks(struct server* server, struct world* world)
         victim_snake = snake_bmap_find(world->snakes, victim_client->snake_id);
         CLITHER_DEBUG_ASSERT(victim_snake != NULL);
 
+        if (victim_snake->param.food_eaten <
+            victim_snake->param.base_stats.min_food_before_starvation)
+        {
+            goto kill_snake;
+        }
+
         bmap_for_each (
             victim_client->snakes_in_proximity,
             attacker_idx,

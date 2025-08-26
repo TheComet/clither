@@ -1042,6 +1042,7 @@ int client_run(
                     if (iaudio != NULL)
                         iaudio->play_sound(audio, SFX_EAT_FOOD);
                 }
+                snake_damage_from_walls(&snake->head, &snake->param, &world);
                 snake_remove_stale_segments_with_rollback_constraint(
                     &snake->data,
                     &snake->remote.ack,

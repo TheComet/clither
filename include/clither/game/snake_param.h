@@ -25,7 +25,7 @@ struct snake_param
         qw       min_speed;
         qw       max_speed;
         qw       boost_speed;
-        uint16_t min_food_for_boost;
+        uint16_t min_food_before_starvation;
         uint8_t  acceleration;
     } base_stats;
 

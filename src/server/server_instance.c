@@ -94,6 +94,7 @@ static void* server_instance_run(const void* arg)
 
             cmd = cmd_queue_take_or_predict(&snake->cmdq, frame_number);
             snake_eat_food(&snake->head, &snake->param, world.food_bmap);
+            snake_damage_from_walls(&snake->head, &snake->param, &world);
             snake_remove_stale_segments(
                 &snake->data,
                 snake_step(
