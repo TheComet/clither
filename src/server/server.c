@@ -530,6 +530,8 @@ int server_kill_snake_checks(struct server* server, struct world* world)
 
         victim_snake = snake_bmap_find(world->snakes, victim_client->snake_id);
         CLITHER_DEBUG_ASSERT(victim_snake != NULL);
+        if (snake_is_held(victim_snake) || snake_is_dead(victim_snake))
+            continue;
 
         if (victim_snake->param.food_eaten <
             victim_snake->param.base_stats.min_food_before_starvation)
@@ -546,9 +548,6 @@ int server_kill_snake_checks(struct server* server, struct world* world)
             const struct snake* attacker_snake =
                 snake_bmap_find(world->snakes, attacker_snake_id);
             CLITHER_DEBUG_ASSERT(attacker_snake != NULL);
-
-            if (snake_is_held(victim_snake) || snake_is_dead(victim_snake))
-                continue;
 
             if (snake_head_collided(
                     victim_snake->head.pos,
@@ -834,6 +833,10 @@ static enum process_message_result process_message(
                 (void)slot, (void)other_addr;
                 if (other_client == client)
                     continue;
+                log_info(
+                    "Sending MSG_VOICE %d -> %d\n",
+                    client->snake_id,
+                    other_client->snake_id);
                 server_queue(
                     other_client,
                     msg_voice(

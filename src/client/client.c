@@ -336,6 +336,7 @@ static struct client_recv_result process_message(
         case MSG_VOICE: {
             struct snake* snake =
                 snake_bmap_find(world->snakes, pp.voice.snake_id);
+            log_info("Received MSG_VOICE\n");
             if (snake == NULL)
                 return client_recv_ok();
             snake_set_speaking(snake);
@@ -1101,6 +1102,7 @@ int client_run(
                 while ((len = iaudio->record_voice_frame(
                             audio, data, sizeof(data))) > 0)
                 {
+                    log_info("Sending MSG_VOICE\n");
                     client_queue(
                         client, msg_voice(client->snake_id, data, len, 0));
                 }

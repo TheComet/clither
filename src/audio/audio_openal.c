@@ -14,8 +14,19 @@
 
 enum
 {
+#if 1
+    SPEEX_MODE = SPEEX_MODEID_UWB,
+    SPEEX_FRAME_SIZE = 640,
+    VOICE_SAMPLING_RATE = 44100
+#elif 0
+    SPEEX_MODE = SPEEX_MODEID_WB,
+    SPEEX_FRAME_SIZE = 320,
+    VOICE_SAMPLING_RATE = 44100
+#else
+    SPEEX_MODE = SPEEX_MODEID_NB,
     SPEEX_FRAME_SIZE = 160,
     VOICE_SAMPLING_RATE = 8000
+#endif
 };
 
 struct audio
@@ -161,16 +172,16 @@ static struct audio* audio_openal_create(void)
 
     speex_bits_init(&a->voice_enc_bits);
     speex_bits_init(&a->voice_dec_bits);
-    a->voice_enc_state =
-        speex_encoder_init(speex_lib_get_mode(SPEEX_MODEID_NB));
+    a->voice_enc_state = speex_encoder_init(speex_lib_get_mode(SPEEX_MODE));
+    speex_encoder_ctl(a->voice_enc_state, SPEEX_GET_FRAME_SIZE, &i);
+    log_dbg("Speex frame size: %d\n", i);
     if (a->voice_enc_state == NULL)
     {
         log_err("Failed to initialize Speex encoder\n");
         goto init_voice_encoder_failed;
     }
     track_mem(a->voice_enc_state, 0, "Speex Encoder State");
-    a->voice_dec_state =
-        speex_decoder_init(speex_lib_get_mode(SPEEX_MODEID_NB));
+    a->voice_dec_state = speex_decoder_init(speex_lib_get_mode(SPEEX_MODE));
     if (a->voice_dec_state == NULL)
     {
         log_err("Failed to initialize Speex decoder\n");
