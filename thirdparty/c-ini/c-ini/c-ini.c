@@ -1000,6 +1000,7 @@ enum token scan_next(struct parser* p)
                 }
             if (p->head == p->end)
                 return parser_error(p, "Missing closing comment\n");
+            continue;
         }
         if (p->data[p->head] == '/' && p->data[p->head + 1] == '/')
         {
@@ -1010,8 +1011,7 @@ enum token scan_next(struct parser* p)
                     p->head++;
                     break;
                 }
-            if (p->head == p->end)
-                return parser_error(p, "Missing closing comment\n");
+            continue;
         }
 
         /* Single characters */
