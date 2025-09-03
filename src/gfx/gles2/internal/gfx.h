@@ -2,6 +2,7 @@
 
 #include "./background.h"
 #include "./food.h"
+#include "./obj.h"
 #include "./quad.h"
 #include "./rectangle.h"
 #include "./snake.h"
@@ -54,6 +55,7 @@ struct gfx
     struct gfx_snake             snake;
     struct gfx_food              food;
     struct gfx_rectangle_mat     rect;
+    struct gfx_obj               menu_obj;
 
 #if defined(CLITHER_GFX_DEBUG)
     struct gfx_debug debug;

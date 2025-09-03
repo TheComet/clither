@@ -286,6 +286,7 @@ static int
 gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
 {
     struct resource_snake*  snake;
+    struct resource_object* obj;
     struct resource_shader* shader = resource_shader_hmap_find(
         pack->shaders, strview(GFX_NAME, 0, sizeof(GFX_NAME) - 1));
     if (shader == NULL)
@@ -304,12 +305,13 @@ gfx_gles2_load_resource_pack(struct gfx* gfx, const struct resource_pack* pack)
     if (gfx_gles2_sprite_mat_load(&gfx->sprite_mat, shader) < 0)
         goto sprite_mat_load_failed;
 
-    snake = resource_snake_hmap_find(
-        pack->snakes, strview("snake", 0, sizeof("snake") - 1));
+    snake = resource_snake_hmap_find(pack->snakes, cstr_view("snake"));
     if (snake != NULL)
-    {
         gfx_gles2_snake_load(&gfx->snake, snake, pack, shader);
-    }
+
+    obj = resource_object_hmap_find(pack->objects, cstr_view("menu"));
+    if (gfx != NULL)
+        gfx_gles2_obj_load(&gfx->menu_obj, obj, shader);
 
     gfx_gles2_food_load(&gfx->food, pack);
 
@@ -339,6 +341,7 @@ static void gfx_gles2_unload_resource_pack(
     gfx_gles2_debug_unload(&gfx->debug);
 #endif
 
+    gfx_gles2_obj_unload(&gfx->menu_obj);
     gfx_gles2_food_unload(&gfx->food);
     gfx_gles2_snake_unload(&gfx->snake);
     gfx_gles2_sprite_mat_unload(&gfx->sprite_mat);
@@ -441,6 +444,7 @@ static struct gfx* gfx_gles2_create(int initial_width, int initial_height)
     gfx_gles2_snake_init(&gfx->snake);
     gfx_gles2_food_init(&gfx->food);
     gfx_gles2_rectangle_init(&gfx->rect);
+    gfx_gles2_obj_init(&gfx->menu_obj);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -610,6 +614,8 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
 {
     const struct ui_element* ui_elem;
     struct aspect_ratio      ar = calculate_aspect_ratio(gfx);
+
+    gfx_gles2_obj_draw(&gfx->menu_obj);
 
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)

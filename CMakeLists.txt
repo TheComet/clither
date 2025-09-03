@@ -289,6 +289,7 @@ if (CLITHER_GFX)
             "src/gfx/gles2/glad/src/gles2.c"
             "src/gfx/gles2/internal/background.c"
             "src/gfx/gles2/internal/food.c"
+            "src/gfx/gles2/internal/obj.c"
             "src/gfx/gles2/internal/quad.c"
             "src/gfx/gles2/internal/rectangle.c"
             "src/gfx/gles2/internal/shader.c"

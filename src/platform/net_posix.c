@@ -1,6 +1,5 @@
 #include "clither/platform/net.h"
 #include "clither/util/log.h"
-#include "clither/util/mem.h"
 #include "clither/util/tracker.h"
 #include <arpa/inet.h>
 #include <assert.h>

@@ -41,6 +41,15 @@ struct resource_shader
     struct strlist* text STRINGLIST(strlist);
     /*! List of source files that comprise the spine shader. */
     struct strlist* spine STRINGLIST(strlist);
+    /*! List of source files that comprise the wavefront obj shader. */
+    struct strlist* obj STRINGLIST(strlist);
+};
+
+SECTION("object")
+struct resource_object
+{
+    struct str* name STRING(str);
+    struct str* obj  STRING(str);
 };
 
 SECTION("background")
@@ -124,6 +133,7 @@ HMAP_DECLARE_STR(extern, resource_shader_hmap, struct resource_shader, 16)
 HMAP_DECLARE_STR(extern, resource_sprite_hmap, struct resource_sprite, 16)
 HMAP_DECLARE_STR(extern, resource_snake_hmap, struct resource_snake, 16)
 HMAP_DECLARE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
+HMAP_DECLARE_STR(extern, resource_object_hmap, struct resource_object, 16)
 
 struct resource_pack
 {
@@ -139,6 +149,7 @@ struct resource_pack
     struct resource_shader_hmap* shaders;
     struct resource_sprite_hmap* sprites;
     struct resource_snake_hmap*  snakes;
+    struct resource_object_hmap* objects;
 };
 
 struct resource_pack* resource_pack_parse(const char* pack_path);

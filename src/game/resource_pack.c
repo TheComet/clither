@@ -1,4 +1,3 @@
-#include "clither/audio/audio.h"
 #include "clither/game/resource_pack.h"
 #include "clither/platform/fs.h"
 #include "clither/platform/mfile.h"
@@ -6,7 +5,6 @@
 #include "clither/util/mem.h"
 #include "clither/util/str.h"
 #include "clither/util/strlist.h"
-#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,6 +12,7 @@ HMAP_DEFINE_STR(extern, resource_shader_hmap, struct resource_shader, 16)
 HMAP_DEFINE_STR(extern, resource_sprite_hmap, struct resource_sprite, 16)
 HMAP_DEFINE_STR(extern, resource_snake_hmap, struct resource_snake, 16)
 HMAP_DEFINE_STR(extern, resource_spine_hmap, struct resource_spine, 16)
+HMAP_DEFINE_STR(extern, resource_object_hmap, struct resource_object, 16)
 
 /* ------------------------------------------------------------------------- */
 static void resource_sprite_init(struct resource_sprite* res)
@@ -46,6 +45,7 @@ static void resource_pack_init(struct resource_pack* pack)
     resource_shader_hmap_init(&pack->shaders);
     resource_sprite_hmap_init(&pack->sprites);
     resource_snake_hmap_init(&pack->snakes);
+    resource_object_hmap_init(&pack->objects);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -57,6 +57,11 @@ static void resource_pack_deinit(struct resource_pack* pack)
     struct resource_sprite* sprite;
     struct resource_shader* shader;
     struct resource_spine*  spine;
+    struct resource_object* obj;
+
+    hmap_for_each (pack->objects, slot, name, obj)
+        (void)slot, (void)name, resource_object_deinit(obj);
+    resource_object_hmap_deinit(pack->objects);
 
     hmap_for_each (pack->snakes, slot, name, snake)
         (void)slot, (void)name, resource_snake_deinit(snake);
@@ -282,7 +287,7 @@ static int on_section_snake(struct c_ini_parser* p, void* user_ptr)
         case HMAP_NEW: break;
         case HMAP_EXISTS:
             log_err(
-                "Spine with name \"%s\" already exists\n",
+                "Snake with name \"%s\" already exists\n",
                 str_cstr(snake.name));
         case HMAP_OOM: goto failed;
     }
@@ -292,6 +297,40 @@ static int on_section_snake(struct c_ini_parser* p, void* user_ptr)
 
 failed:
     resource_snake_deinit(&snake);
+    return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+static int on_section_object(struct c_ini_parser* p, void* user_ptr)
+{
+    int                     result;
+    struct resource_object  obj;
+    struct resource_object* inserted;
+    struct resource_pack*   pack = user_ptr;
+
+    resource_object_init(&obj);
+    result = resource_object_parse_section(&obj, p);
+    if (result < 0)
+        goto failed;
+
+    switch (resource_object_hmap_emplace_or_get(
+        &pack->objects, str_view(obj.name), &inserted))
+    {
+        case HMAP_NEW: break;
+        case HMAP_EXISTS:
+            log_err(
+                "Object with name \"%s\" already exists\n", str_cstr(obj.name));
+        case HMAP_OOM: goto failed;
+    }
+
+    if (str_join_path_prepend_cstr(&obj.obj, pack->path) != 0)
+        goto failed;
+
+    *inserted = obj;
+    return result;
+
+failed:
+    resource_object_deinit(&obj);
     return -1;
 }
 
@@ -352,6 +391,10 @@ struct resource_pack* resource_pack_parse(const char* pack_path)
 
     if (resource_snake_parse_all(
             filename, mf.address, mf.size, on_section_snake, pack) != 0)
+        goto parse_error;
+
+    if (resource_object_parse_all(
+            filename, mf.address, mf.size, on_section_object, pack) != 0)
         goto parse_error;
 
     mfile_unmap(&mf);
