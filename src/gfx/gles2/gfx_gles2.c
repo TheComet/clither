@@ -616,6 +616,7 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
     struct aspect_ratio      ar = calculate_aspect_ratio(gfx);
 
     gfx_gles2_obj_draw(&gfx->menu_obj);
+    return;
 
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)

@@ -15,31 +15,22 @@ struct gfx_obj_vertex
 
 VEC_DECLARE(gfx_obj_vertex_vec, struct gfx_obj_vertex, 32)
 
-struct gfx_obj_mesh
+struct gfx_obj_submesh
 {
-    GLuint vbo;
-};
-
-struct gfx_obj_tex
-{
-    GLuint tex[MAX_TEXTURE_SAMPLERS];
-};
-
-struct gfx_obj_mat
-{
+    int    index_count;
     GLuint ibo;
     GLuint program;
+    GLuint tex[MAX_TEXTURE_SAMPLERS];
     GLuint sTex[MAX_TEXTURE_SAMPLERS];
+    GLuint sMvp;
 };
 
-VEC_DECLARE(gfx_obj_tex_vec, struct gfx_obj_tex, 8)
-VEC_DECLARE(gfx_obj_mat_vec, struct gfx_obj_mat, 8)
+VEC_DECLARE(gfx_obj_submesh_vec, struct gfx_obj_submesh, 8)
 
 struct gfx_obj
 {
-    struct gfx_obj_mesh     mesh;
-    struct gfx_obj_tex_vec* tex;
-    struct gfx_obj_mat_vec* mat;
+    GLuint                      vbo;
+    struct gfx_obj_submesh_vec* submeshes;
 };
 
 void gfx_gles2_obj_init(struct gfx_obj* obj);
