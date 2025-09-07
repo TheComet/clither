@@ -20,15 +20,16 @@
 #define VEC_ERASE  1
 
 #if defined(CLITHER_CAPACITY_WARNING)
-#    define VEC_CAPACITY_WARNING()                                             \
+#    define VEC_CAPACITY_WARNING(name, count, cap)                             \
         do                                                                     \
         {                                                                      \
-            log_warn("vec_realloc(): Close to maximum capacity!\n");           \
+            log_warn(                                                          \
+                name ": Close to maximum capacity! (%d/%d)\n", count, cap);    \
             log_backtrace();                                                   \
         } while (0)
 #else
 /* clang-format off */
-#    define VEC_CAPACITY_WARNING() do {} while (0)
+#    define VEC_CAPACITY_WARNING(name, count, cap) do {} while (0)
 /* clang-format on */
 #endif
 
@@ -271,7 +272,7 @@
         }                                                                      \
                                                                                \
         if (elems >= (1 << (bits - 2)))                                        \
-            VEC_CAPACITY_WARNING();                                            \
+            VEC_CAPACITY_WARNING(#prefix, elems, (1 << (bits - 1)));           \
                                                                                \
         header = offsetof(struct prefix, data);                                \
         data = sizeof(T) * elems;                                              \

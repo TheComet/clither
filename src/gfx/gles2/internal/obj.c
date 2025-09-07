@@ -6,7 +6,7 @@
 #include "clither/util/hmap.h"
 #include <ctype.h>
 
-VEC_DEFINE(gfx_obj_submesh_vec, struct gfx_obj_submesh, 8)
+VEC_DEFINE(gfx_obj_submesh_vec, struct gfx_obj_submesh, 16)
 VEC_DEFINE(gfx_obj_vertex_vec, struct gfx_obj_vertex, 32)
 
 VEC_DECLARE(float_vec, float, 32)
@@ -23,8 +23,7 @@ static const char vs[] =
     "void main()\n"
     "{\n"
     "    fTexCoord = vTexCoord;\n"
-    "    vec4 pos = vec4(vPosition * 0.5, 1.0) * sMvp;\n"
-    "    gl_Position = pos;\n"
+    "    gl_Position = vec4(vPosition, 1.0) * sMvp;\n"
     "}\n";
 static const char fs[] =
     "precision mediump float;\n"
@@ -133,6 +132,8 @@ enum token
     TOK_ERROR = -1,
     TOK_END = 0,
     TOK_SLASH = '/',
+    TOK_MINUS = '-',
+    TOK_NEWLINE = '\n',
     TOK_IDENT = 256,
     TOK_FLOAT,
     TOK_INTEGER
@@ -387,9 +388,12 @@ static enum token scan_next(struct parser* p)
 
         if (p->data[p->head] == '/')
             return p->data[p->head++];
+        if (p->data[p->head] == '\n')
+            return p->data[p->head++];
 
         /* Number */
-        if (isdigit(p->data[p->head]) || p->data[p->head] == '-')
+        if (isdigit(p->data[p->head]) ||
+            (p->data[p->head] == '-' && isdigit(p->data[p->head + 1])))
         {
             char is_neg = p->data[p->head] == '-';
             if (p->data[p->head] == '-')
@@ -426,6 +430,9 @@ static enum token scan_next(struct parser* p)
             return TOK_INTEGER;
         }
 
+        if (p->data[p->head] == '-')
+            return p->data[p->head++];
+
         /* Tag/Identifier [a-zA-Z_-][a-zA-Z0-9_-]* */
         if (isalpha(p->data[p->head]))
         {
@@ -456,6 +463,9 @@ static int parse_mtl(struct parser* p)
         if (tok == TOK_END || tok == TOK_ERROR)
             return tok;
 
+        if (tok == '\n')
+            continue;
+
         if (tok != TOK_IDENT)
             return parser_error(p, "Unexpected token.\n");
 
@@ -463,6 +473,8 @@ static int parse_mtl(struct parser* p)
         {
             if (scan_next(p) != TOK_IDENT)
                 return parser_error(p, "Expected a material name.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Kd"))
         {
@@ -475,6 +487,8 @@ static int parse_mtl(struct parser* p)
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(
                     p, "Expected RGB values for diffuse color.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Ka"))
         {
@@ -487,6 +501,8 @@ static int parse_mtl(struct parser* p)
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(
                     p, "Expected RGB values for ambient color.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Ks"))
         {
@@ -499,12 +515,16 @@ static int parse_mtl(struct parser* p)
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(
                     p, "Expected RGB values for specular color.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Ns"))
         {
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(
                     p, "Expected float for specular exponent.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Ke"))
         {
@@ -517,21 +537,29 @@ static int parse_mtl(struct parser* p)
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(
                     p, "Expected RGB values for emissive color.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Ni"))
         {
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(p, "Expected float for optical density.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "d"))
         {
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(p, "Expected float for dissolve (1-Tr).\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "Tr"))
         {
             if (scan_next(p) != TOK_FLOAT)
                 return parser_error(p, "Expected float for transparency.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "illum"))
         {
@@ -553,12 +581,66 @@ static int parse_mtl(struct parser* p)
              * 9. Transparency: Glass on, Reflection: Ray trace off
              * 10. Casts shadows onto invisible surfaces
              */
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "map_Kd"))
         {
             if (scan_next(p) != TOK_IDENT)
                 return parser_error(
-                    p, "Expected relative file name of a texture.\n");
+                    p, "Expected relative file name for diffuse texture.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
+        }
+        else if (strview_eq_cstr(p->value.str, "map_Ks"))
+        {
+            if (scan_next(p) != TOK_IDENT)
+                return parser_error(
+                    p, "Expected relative file name for specular texture.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
+        }
+        else if (strview_eq_cstr(p->value.str, "map_refl"))
+        {
+            if (scan_next(p) != TOK_IDENT)
+                return parser_error(
+                    p, "Expected relative file name for reflection texture.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
+        }
+        else if (strview_eq_cstr(p->value.str, "map_Bump"))
+        {
+            tok = scan_next(p);
+            if (tok == TOK_MINUS)
+            {
+                tok = scan_next(p);
+            }
+            if (tok != TOK_IDENT)
+                return parser_error(
+                    p, "Expected relative file name for bump map texture.\n");
+            if (strview_eq_cstr(p->value.str, "bm"))
+            {
+                if (scan_next(p) != TOK_FLOAT)
+                    return parser_error(
+                        p, "Expected value for 'bm' parameter.\n");
+                if (scan_next(p) != TOK_IDENT)
+                    return parser_error(
+                        p,
+                        "Expected relative file name for bump map texture.\n");
+            }
+            else
+            {
+            }
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
+        }
+        else if (strview_eq_cstr(p->value.str, "map_Ke"))
+        {
+            if (scan_next(p) != TOK_IDENT)
+                return parser_error(
+                    p, "Expected relative file name for emissive texture.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else
         {
@@ -654,11 +736,13 @@ static int parse_obj(
     while (1)
     {
         enum token tok = scan_next(p);
-    reswitch_tok:
         if (tok == TOK_END)
             break;
         if (tok == TOK_ERROR)
             return -1;
+
+        if (tok == '\n')
+            continue;
 
         if (tok != TOK_IDENT)
             return parser_error(p, "Unexpected token.\n");
@@ -669,23 +753,34 @@ static int parse_obj(
                 return parser_error(p, "Expected a file name.\n");
             if (parse_mtl_file(p->filename, p->value.str) != 0)
                 return -1;
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "usemtl"))
         {
-            if (scan_next(p) != TOK_IDENT)
-                return parser_error(p, "Expected a material name.\n");
+            tok = scan_next(p);
+            if (tok == TOK_IDENT)
+            {
+                tok = scan_next(p);
+            }
             if (create_submesh(&obj->submeshes, *index_buffer) != 0)
                 return -1;
+            if (tok != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "o"))
         {
             if (scan_next(p) != TOK_IDENT)
                 return parser_error(p, "Expected an object name.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "s"))
         {
             if (scan_next(p) != TOK_INTEGER)
                 return parser_error(p, "Expected an integer value.\n");
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "v"))
         {
@@ -708,6 +803,8 @@ static int parse_obj(
             {
                 return -1;
             }
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "vn"))
         {
@@ -730,6 +827,8 @@ static int parse_obj(
             {
                 return -1;
             }
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "vt"))
         {
@@ -746,6 +845,8 @@ static int parse_obj(
             if (float_vec_push(obj_uv, u) != 0 ||
                 float_vec_push(obj_uv, v) != 0)
                 return -1;
+            if (scan_next(p) != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
         }
         else if (strview_eq_cstr(p->value.str, "f"))
         {
@@ -821,7 +922,19 @@ static int parse_obj(
                 triangle[2] = *index;
 
             } while (tok == TOK_INTEGER);
-            goto reswitch_tok;
+            if (tok != '\n')
+                return parser_error(p, "Unexpected extra junk.\n");
+        }
+        else if (strview_eq_cstr(p->value.str, "l"))
+        {
+            while (1)
+            {
+                tok = scan_next(p);
+                if (tok == '\n')
+                    break;
+                if (tok != TOK_INTEGER)
+                    return parser_error(p, "Expected index.\n");
+            }
         }
         else
         {
@@ -862,6 +975,7 @@ int gfx_gles2_obj_load(
     struct index_buffer_vec*   index_buffer;
     struct gfx_obj_vertex_vec* vertex_buffer;
     struct index_hmap*         index_hmap;
+    struct gfx_obj_submesh*    mesh;
 
     float_vec_init(&obj_v);
     float_vec_init(&obj_n);
@@ -915,7 +1029,14 @@ int gfx_gles2_obj_load(
     return 0;
 
 parse_obj_failed:
-    mfile_unmap(&mf);
+    vec_for_each (obj->submeshes, mesh)
+    {
+        gfx_untrack_buf(mesh->ibo);
+        glDeleteBuffers(1, &mesh->ibo);
+        gfx_untrack_shader(mesh->ibo);
+        glDeleteProgram(mesh->program);
+    }
+    gfx_obj_submesh_vec_clear(obj->submeshes);
 open_obj_failed:
     index_hmap_deinit(index_hmap);
     gfx_obj_vertex_vec_deinit(vertex_buffer);
@@ -935,7 +1056,7 @@ void gfx_gles2_obj_unload(struct gfx_obj* obj)
     {
         gfx_untrack_buf(mesh->ibo);
         glDeleteBuffers(1, &mesh->ibo);
-        gfx_untrack_shader(mesh->ibo);
+        gfx_untrack_shader(mesh->program);
         glDeleteProgram(mesh->program);
     }
     gfx_obj_submesh_vec_clear(obj->submeshes);
@@ -948,149 +1069,130 @@ void gfx_gles2_obj_unload(struct gfx_obj* obj)
     }
 }
 
+/* clang-format off */
+#define M(mat, \
+        a, b, c, d, \
+        e, f, g, h, \
+        i, j, k, l, \
+        m, n, o, p) \
+    mat[0]  = a; mat[1]  = b; mat[2]  = c; mat[3]  = d; \
+    mat[4]  = e; mat[5]  = f; mat[6]  = g; mat[7]  = h; \
+    mat[8]  = i; mat[9]  = j; mat[10] = k; mat[11] = l; \
+    mat[12] = m; mat[13] = n; mat[14] = o; mat[15] = p
+/* clang-format on */
+
 /* ------------------------------------------------------------------------- */
-static void perspective_matrix(
-    GLfloat m[4][4],
-    GLfloat width,
-    GLfloat height,
-    GLfloat z_near,
-    GLfloat z_far,
-    GLfloat fov)
+static void mperspective(
+    GLfloat mat[16],
+    GLfloat aspect_ratio,
+    GLfloat fov,
+    GLfloat near,
+    GLfloat far)
 {
-    GLfloat ar = width / height;
-    GLfloat z_range = z_near - z_far;
-    GLfloat tan_half_fov = tanf((fov / 2.0) * M_PI / 180);
+    GLfloat n = near;
+    GLfloat f = far;
+    GLfloat t = n * tanf(M_PI / 180 * fov / 2.0);
+    GLfloat b = -t;
+    GLfloat r = t * aspect_ratio;
+    GLfloat l = -r;
 
-    m[0][0] = 1.0f / (tan_half_fov * ar);
-    m[0][1] = 0.0f;
-    m[0][2] = 0.0f;
-    m[0][3] = 0.0f;
-
-    m[1][0] = 0.0f;
-    m[1][1] = 1.0f / tan_half_fov;
-    m[1][2] = 0.0f;
-    m[1][3] = 0.0f;
-
-    m[2][0] = 0.0f;
-    m[2][1] = 0.0f;
-    m[2][2] = (-z_near - z_far) / z_range;
-    m[2][3] = 2.0f * z_far * z_near / z_range;
-
-    m[3][0] = 0.0f;
-    m[3][1] = 0.0f;
-    m[3][2] = 1.0f;
-    m[3][3] = 0.0f;
+    /* clang-format off */
+    M(mat,
+      2*n/(r-l), 0,          (r+l)/(r-l),  0,
+      0,         2*n/(t-b),  (t+b)/(t-b),  0,
+      0,         0,         -(f+n)/(f-n), -2*f*n/(f-n),
+      0,         0,         -1,            0
+    );
+    /* clang-format on */
 }
 
-static void zmat(GLfloat m[4][4], GLfloat z_rot)
+static void mzrot(GLfloat mat[16], GLfloat z_angle)
 {
-    m[0][0] = cos(z_rot);
-    m[0][1] = -sin(z_rot);
-    m[0][2] = 0.0f;
-    m[0][3] = 0.0f;
-
-    m[1][0] = sin(z_rot);
-    m[1][1] = cos(z_rot);
-    m[1][2] = 0.0f;
-    m[1][3] = 0.0f;
-
-    m[2][0] = 0.0f;
-    m[2][1] = 0.0f;
-    m[2][2] = 1.0f;
-    m[2][3] = 0.0f;
-
-    m[3][0] = 0.0f;
-    m[3][1] = 0.0f;
-    m[3][2] = 0.0f;
-    m[3][3] = 1.0f;
+    GLfloat a = z_angle;
+    /* clang-format off */
+    M(mat,
+      cos(a), -sin(a), 0, 0,
+      sin(a),  cos(a), 0, 0,
+      0,       0,      1, 0,
+      0,       0,      0, 1
+    );
+    /* clang-format on */
 }
 
-static void ymat(GLfloat m[4][4], GLfloat y_rot)
+static void myrot(GLfloat mat[16], GLfloat y_angle)
 {
-    m[0][0] = cos(y_rot);
-    m[0][1] = 0.0f;
-    m[0][2] = sin(y_rot);
-    m[0][3] = 0.0f;
-
-    m[1][0] = 0.0f;
-    m[1][1] = 1.0f;
-    m[1][2] = 0.0f;
-    m[1][3] = 0.0f;
-
-    m[2][0] = -sin(y_rot);
-    m[2][1] = 0.0f;
-    m[2][2] = cos(y_rot);
-    m[2][3] = 0.0f;
-
-    m[3][0] = 0.0f;
-    m[3][1] = 0.0f;
-    m[3][2] = 0.0f;
-    m[3][3] = 1.0f;
-}
-static void model_matrix(GLfloat m[4][4], GLfloat x, GLfloat y, GLfloat z)
-{
-    m[0][0] = 1.0f;
-    m[0][1] = 0.0f;
-    m[0][2] = 0.0f;
-    m[0][3] = x;
-
-    m[1][0] = 0.0f;
-    m[1][1] = 1.0f;
-    m[1][2] = 0.0f;
-    m[1][3] = y;
-
-    m[2][0] = 0.0f;
-    m[2][1] = 0.0f;
-    m[2][2] = 1.0f;
-    m[2][3] = z;
-
-    m[3][0] = 0.0f;
-    m[3][1] = 0.0f;
-    m[3][2] = 0.0f;
-    m[3][3] = 1.0f;
+    GLfloat a = y_angle;
+    /* clang-format off */
+    M(mat,
+      cos(a), 0, sin(a), 0,
+      0,      1, 0,      0,
+     -sin(a), 0, cos(a), 0,
+      0,      0, 0,      1
+    );
+    /* clang-format on */
 }
 
-static void
-mat_mul(GLfloat out[4][4], const GLfloat m1[4][4], const GLfloat m2[4][4])
+static void mxrot(GLfloat mat[16], GLfloat x_angle)
 {
-    int i, j, k;
-    for (i = 0; i < 4; i++)
-        for (j = 0; j < 4; j++)
-        {
-            out[i][j] = 0.0f;
-            for (k = 0; k < 4; k++)
-                out[i][j] += m1[i][k] * m2[k][j];
-        }
+    GLfloat a = x_angle;
+    /* clang-format off */
+    M(mat,
+      1, 0,       0,      0,
+      0, cos(a), -sin(a), 0,
+      0, sin(a),  cos(a), 0,
+      0, 0,       0,      1
+    );
+    /* clang-format on */
+}
+
+static void mtrans(GLfloat mat[16], GLfloat x, GLfloat y, GLfloat z)
+{
+    /* clang-format off */
+    M(mat,
+      1, 0, 0, x,
+      0, 1, 0, y,
+      0, 0, 1, z,
+      0, 0, 0, 1
+    );
+    /* clang-format on */
 }
 
 /* ------------------------------------------------------------------------- */
-void gfx_gles2_obj_draw(const struct gfx_obj* obj)
+static void mmul(GLfloat m1[16], const GLfloat m2[16])
+{
+    int i;
+    for (i = 0; i != 16; i += 4)
+    {
+        /* clang-format off */
+        GLfloat a = m1[i+0]*m2[0]+m1[i+1]*m2[4]+m1[i+2]*m2[8] +m1[i+3]*m2[12];
+        GLfloat b = m1[i+0]*m2[1]+m1[i+1]*m2[5]+m1[i+2]*m2[9] +m1[i+3]*m2[13];
+        GLfloat c = m1[i+0]*m2[2]+m1[i+1]*m2[6]+m1[i+2]*m2[10]+m1[i+3]*m2[14];
+        GLfloat d = m1[i+0]*m2[3]+m1[i+1]*m2[7]+m1[i+2]*m2[11]+m1[i+3]*m2[15];
+                    m1[i+0] = a;  m1[i+1] = b;  m1[i+2] = c;   m1[i+3] = d;
+        /* clang-format on */
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+void gfx_gles2_obj_draw(
+    const struct gfx_obj* obj, const struct aspect_ratio* ar)
 {
     const struct gfx_obj_submesh* mesh;
-    GLfloat                       model[4][4];
-    GLfloat                       view1[4][4];
-    GLfloat                       view2[4][4];
-    GLfloat                       view[4][4];
-    GLfloat                       proj[4][4];
-    GLfloat                       mv[4][4];
-    GLfloat                       mvp[4][4];
-    static GLfloat                zrot, yrot;
-    static GLfloat                zpos;
+    GLfloat                       mat[16];
+    GLfloat                       mvp[16];
+
+    static GLfloat zrot, yrot, xrot;
 
     zrot += M_PI * 0.003;
     yrot += M_PI * 0.005;
-    // zpos += 0.01;
+    xrot += M_PI * 0.0043;
 
-    model_matrix(model, 0, 0, zpos);
-    zmat(view1, zrot);
-    ymat(view2, yrot);
-    mat_mul(view, view1, view2);
-    perspective_matrix(proj, 640, 480, 1.0, 100, 90);
-    mat_mul(mv, model, view);
-    mat_mul(mvp, view, proj);
+    mperspective(mvp, ar->scale_x / ar->scale_y, 90, 0.1, 100);
 
-    glEnable(GL_DEPTH_TEST);
-    glClear(GL_DEPTH_BUFFER_BIT);
+    mtrans(mat, 0, 0, -3);
+    mmul(mvp, mat);
+    mxrot(mat, M_PI/3);
+    mmul(mvp, mat);
 
     glBindBuffer(GL_ARRAY_BUFFER, obj->vbo);
     glEnableVertexAttribArray(0);
@@ -1114,7 +1216,7 @@ void gfx_gles2_obj_draw(const struct gfx_obj* obj)
     {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ibo);
         glUseProgram(mesh->program);
-        glUniformMatrix4fv(mesh->sMvp, 1, GL_FALSE, &view[0][0]);
+        glUniformMatrix4fv(mesh->sMvp, 1, GL_FALSE, mvp);
         glDrawElements(GL_TRIANGLES, mesh->index_count, GL_UNSIGNED_INT, NULL);
     }
 

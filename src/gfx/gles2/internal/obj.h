@@ -4,6 +4,7 @@
 #include "clither/util/vec.h"
 #include "glad/gles2.h"
 
+struct aspect_ratio;
 struct resource_object;
 struct resource_shader;
 
@@ -25,7 +26,7 @@ struct gfx_obj_submesh
     GLuint sMvp;
 };
 
-VEC_DECLARE(gfx_obj_submesh_vec, struct gfx_obj_submesh, 8)
+VEC_DECLARE(gfx_obj_submesh_vec, struct gfx_obj_submesh, 16)
 
 struct gfx_obj
 {
@@ -41,4 +42,5 @@ int  gfx_gles2_obj_load(
      const struct resource_shader* shader);
 void gfx_gles2_obj_unload(struct gfx_obj* obj);
 
-void gfx_gles2_obj_draw(const struct gfx_obj* obj);
+void gfx_gles2_obj_draw(
+    const struct gfx_obj* obj, const struct aspect_ratio* ar);

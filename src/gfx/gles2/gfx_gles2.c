@@ -479,6 +479,7 @@ static void gfx_gles2_destroy(struct gfx* gfx)
     gfx_gles2_debug_deinit(&gfx->debug);
 #endif
 
+    gfx_gles2_obj_deinit(&gfx->menu_obj);
     gfx_gles2_rectangle_deinit(&gfx->rect);
     gfx_gles2_food_deinit(&gfx->food);
     gfx_gles2_snake_deinit(&gfx->snake);
@@ -615,9 +616,6 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
     const struct ui_element* ui_elem;
     struct aspect_ratio      ar = calculate_aspect_ratio(gfx);
 
-    gfx_gles2_obj_draw(&gfx->menu_obj);
-    return;
-
     ui_for_each_active (ui, ui_elem)
         switch (ui_elem->type)
         {
@@ -728,6 +726,11 @@ static void gfx_gles2_draw_ui(struct gfx* gfx, const struct ui* ui)
             case UI_SLIDER: break;
         }
     gfx_gles2_text_end_draw();
+
+    glEnable(GL_DEPTH_TEST);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    gfx_gles2_obj_draw(&gfx->menu_obj, &ar);
+    glDisable(GL_DEPTH_TEST);
 }
 
 /* ------------------------------------------------------------------------- */
